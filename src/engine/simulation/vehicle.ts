@@ -1,4 +1,4 @@
-import type { CargoKind, CorridorTraffic, LoadEntry, NodeQueues, RoutingContext, Vehicle } from "./types";
+import type { CargoKind, LoadEntry, NodeQueues, RoutingContext, SegmentTraffic, Vehicle } from "./types";
 import { findPath } from "./routing";
 
 function cargoAmount(cargo: LoadEntry[]): number {
@@ -51,24 +51,24 @@ function loadAt(vehicle: Vehicle, nodeId: string, queues: NodeQueues): void {
   }
 }
 
-function findCorridorId(context: RoutingContext, fromNode: string, toNode: string): string | null {
+function findSegmentId(context: RoutingContext, fromNode: string, toNode: string): string | null {
   const edges = context.graph.get(fromNode);
   if (!edges) return null;
   const edge = edges.find((candidate) => candidate.to === toNode);
-  return edge ? edge.corridorId : null;
+  return edge ? edge.segmentId : null;
 }
 
 function recordCrossing(
-  traffic: Map<string, CorridorTraffic>,
-  corridorId: string,
+  traffic: Map<string, SegmentTraffic>,
+  segmentId: string,
   capacity: number,
   delivered: number,
   cargoAtArrivalAfterUnload: number,
 ): void {
-  let entry = traffic.get(corridorId);
+  let entry = traffic.get(segmentId);
   if (!entry) {
     entry = { deliveredRecently: 0, potentialRecently: 0, loadFractionSum: 0, sampleCount: 0 };
-    traffic.set(corridorId, entry);
+    traffic.set(segmentId, entry);
   }
   entry.potentialRecently += capacity;
   entry.deliveredRecently += delivered;
@@ -125,7 +125,7 @@ export function tickVehicle(
   vehicle: Vehicle,
   queues: NodeQueues,
   context: RoutingContext,
-  corridorTraffic: Map<string, CorridorTraffic>,
+  segmentTraffic: Map<string, SegmentTraffic>,
   dt: number,
 ): void {
   const pathLength = vehicle.path.length;
@@ -149,13 +149,13 @@ export function tickVehicle(
       distanceToTravel -= remainingOnEdge;
       vehicle.edgeProgress = 0;
 
-      const corridorId = findCorridorId(context, fromNode, toNode);
+      const segmentId = findSegmentId(context, fromNode, toNode);
       const deliveredHere = sumAmountTo(vehicle.cargo, toNode);
       unloadAt(vehicle, toNode);
       const cargoAfterUnload = cargoAmount(vehicle.cargo);
       loadAt(vehicle, toNode, queues);
-      if (corridorId) {
-        recordCrossing(corridorTraffic, corridorId, vehicle.capacity, deliveredHere, cargoAfterUnload);
+      if (segmentId) {
+        recordCrossing(segmentTraffic, segmentId, vehicle.capacity, deliveredHere, cargoAfterUnload);
       }
 
       vehicle.pathIndex = (vehicle.pathIndex + 1) % pathLength;

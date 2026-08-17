@@ -34,7 +34,10 @@ export interface Vehicle {
   cargo: LoadEntry[];
 }
 
-export interface CorridorTraffic {
+// Traffic is tracked per segment, not per corridor -- a segment is the
+// actual typed/levelled/maintained traversable unit (docs/rebuild-plan.md
+// §5), so it's what "which link is the bottleneck" needs to point at.
+export interface SegmentTraffic {
   deliveredRecently: number;
   potentialRecently: number;
   loadFractionSum: number;
@@ -43,7 +46,7 @@ export interface CorridorTraffic {
 
 export interface RoutingEdge {
   to: string;
-  corridorId: string;
+  segmentId: string;
   weight: number;
 }
 
@@ -56,7 +59,7 @@ export interface RoutingContext {
 
 export interface PathResult {
   nodeIds: string[];
-  corridorIds: string[];
+  segmentIds: string[];
   distance: number;
 }
 
@@ -65,6 +68,6 @@ export interface SimulationState {
   demand: DemandPair[];
   queues: NodeQueues;
   vehicles: Vehicle[];
-  corridorTraffic: Map<string, CorridorTraffic>;
+  segmentTraffic: Map<string, SegmentTraffic>;
   routing: RoutingContext;
 }

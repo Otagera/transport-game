@@ -19,12 +19,12 @@ export function generateMap(seed: number): GeneratedMap {
     throw new Error(`Map generation produced zero nodes for seed ${seed}.`);
   }
 
-  const { corridors, infrastructure } = generateInheritedNetwork(nodes);
+  const { corridors, segments } = generateInheritedNetwork(nodes);
 
   assertFullyConnected(
     nodes.map((node) => node.id),
-    corridors.map((corridor) => corridor.nodeIds),
+    segments.map((segment) => [segment.fromNodeId, segment.toNodeId]),
   );
 
-  return { seed, terrain, nodes, corridors, infrastructure };
+  return { seed, terrain, nodes, corridors, segments };
 }

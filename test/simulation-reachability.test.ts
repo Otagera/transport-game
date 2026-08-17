@@ -14,8 +14,10 @@ function disconnectedFixture(): GeneratedMap {
       { id: "b", kind: "village", x: 3, y: 0 },
       { id: "c", kind: "village", x: 10, y: 10 },
     ],
-    corridors: [{ id: "c-ab", nodeIds: ["a", "b"], polyline: [{ x: 0, y: 0 }, { x: 3, y: 0 }] }],
-    infrastructure: [],
+    corridors: [{ id: "corridor-ab", nodeIds: ["a", "b"], polyline: [{ x: 0, y: 0 }, { x: 3, y: 0 }] }],
+    segments: [
+      { id: "s-ab", corridorId: "corridor-ab", fromNodeId: "a", toNodeId: "b", type: "road", level: "ground", condition: 1, provenance: "inherited" },
+    ],
   };
 }
 

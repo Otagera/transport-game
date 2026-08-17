@@ -18,7 +18,7 @@ describe("simulation integration", () => {
       tick(state, 1 / 30);
     }
 
-    const totalDelivered = [...state.corridorTraffic.values()].reduce(
+    const totalDelivered = [...state.segmentTraffic.values()].reduce(
       (sum, traffic) => sum + traffic.deliveredRecently,
       0,
     );

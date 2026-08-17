@@ -51,12 +51,13 @@ function render(map: GeneratedMap): string {
     grid.push(row);
   }
 
-  for (const corridor of map.corridors) {
-    const infra = map.infrastructure.find((i) => i.corridorId === corridor.id);
-    const marker = infra?.type === "rail" ? "=" : "-";
-    for (const [x, y] of corridor.polyline.length === 2
-      ? bresenham(corridor.polyline[0]!.x, corridor.polyline[0]!.y, corridor.polyline[1]!.x, corridor.polyline[1]!.y)
-      : []) {
+  const positions = new Map(map.nodes.map((node) => [node.id, node]));
+  for (const segment of map.segments) {
+    const from = positions.get(segment.fromNodeId);
+    const to = positions.get(segment.toNodeId);
+    if (!from || !to) continue;
+    const marker = segment.type === "rail" ? "=" : "-";
+    for (const [x, y] of bresenham(from.x, from.y, to.x, to.y)) {
       if (x >= 0 && x < MAP_WIDTH && y >= 0 && y < MAP_HEIGHT) {
         grid[y]![x] = marker;
       }
@@ -64,7 +65,8 @@ function render(map: GeneratedMap): string {
   }
 
   for (const node of map.nodes) {
-    const marker = node.kind === "settlement" ? "S" : node.kind === "village" ? "v" : "j";
+    const marker =
+      node.kind === "settlement" ? "S" : node.kind === "village" ? "v" : node.kind === "junction" ? "j" : "x";
     grid[node.y]![node.x] = marker;
   }
 
@@ -78,8 +80,8 @@ for (const seed of seedsToRender) {
   const map = generateMap(seed);
   const settlements = map.nodes.filter((n) => n.kind === "settlement").length;
   const villages = map.nodes.filter((n) => n.kind === "village").length;
-  const rail = map.infrastructure.filter((i) => i.type === "rail").length;
-  const road = map.infrastructure.filter((i) => i.type === "road").length;
+  const rail = map.segments.filter((s) => s.type === "rail").length;
+  const road = map.segments.filter((s) => s.type === "road").length;
   console.log(`\n=== seed ${seed} (${settlements} settlements, ${villages} villages, ${rail} rail, ${road} road) ===`);
   console.log(render(map));
 }

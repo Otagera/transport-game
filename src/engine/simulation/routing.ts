@@ -9,14 +9,14 @@ export function buildRoutingContext(map: GeneratedMap): RoutingContext {
     graph.set(node.id, []);
   }
 
-  for (const corridor of map.corridors) {
-    const [a, b] = corridor.nodeIds;
+  for (const segment of map.segments) {
+    const { fromNodeId: a, toNodeId: b } = segment;
     const posA = positions.get(a);
     const posB = positions.get(b);
     if (!posA || !posB) continue;
     const weight = Math.hypot(posA.x - posB.x, posA.y - posB.y);
-    graph.get(a)!.push({ to: b, corridorId: corridor.id, weight });
-    graph.get(b)!.push({ to: a, corridorId: corridor.id, weight });
+    graph.get(a)!.push({ to: b, segmentId: segment.id, weight });
+    graph.get(b)!.push({ to: a, segmentId: segment.id, weight });
   }
 
   return { graph, positions };
@@ -33,7 +33,7 @@ function heuristic(a: { x: number; y: number }, b: { x: number; y: number }): nu
 // which is also an admissible heuristic here.
 export function findPath(context: RoutingContext, fromId: string, toId: string): PathResult | null {
   if (fromId === toId) {
-    return { nodeIds: [fromId], corridorIds: [], distance: 0 };
+    return { nodeIds: [fromId], segmentIds: [], distance: 0 };
   }
   if (!context.graph.has(fromId) || !context.graph.has(toId)) {
     return null;
@@ -45,7 +45,7 @@ export function findPath(context: RoutingContext, fromId: string, toId: string):
   }
 
   const open = new Set<string>([fromId]);
-  const cameFrom = new Map<string, { node: string; corridorId: string }>();
+  const cameFrom = new Map<string, { node: string; segmentId: string }>();
   const gScore = new Map<string, number>([[fromId, 0]]);
   const fScore = new Map<string, number>([[fromId, heuristic(context.positions.get(fromId)!, goal)]]);
 
@@ -65,15 +65,15 @@ export function findPath(context: RoutingContext, fromId: string, toId: string):
 
     if (current === toId) {
       const nodeIds: string[] = [current];
-      const corridorIds: string[] = [];
+      const segmentIds: string[] = [];
       let cursor = current;
       while (cameFrom.has(cursor)) {
         const step = cameFrom.get(cursor)!;
         nodeIds.unshift(step.node);
-        corridorIds.unshift(step.corridorId);
+        segmentIds.unshift(step.segmentId);
         cursor = step.node;
       }
-      return { nodeIds, corridorIds, distance: gScore.get(toId) ?? Infinity };
+      return { nodeIds, segmentIds, distance: gScore.get(toId) ?? Infinity };
     }
 
     open.delete(current);
@@ -82,7 +82,7 @@ export function findPath(context: RoutingContext, fromId: string, toId: string):
     for (const edge of context.graph.get(current) ?? []) {
       const tentativeG = currentG + edge.weight;
       if (tentativeG < (gScore.get(edge.to) ?? Infinity)) {
-        cameFrom.set(edge.to, { node: current, corridorId: edge.corridorId });
+        cameFrom.set(edge.to, { node: current, segmentId: edge.segmentId });
         gScore.set(edge.to, tentativeG);
         const point = context.positions.get(edge.to);
         fScore.set(edge.to, tentativeG + (point ? heuristic(point, goal) : 0));

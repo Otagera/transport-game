@@ -17,10 +17,13 @@ function fixtureMap(): GeneratedMap {
       { id: "d", kind: "settlement", x: 3, y: 4 },
     ],
     corridors: [
-      { id: "c-ab", nodeIds: ["a", "b"], polyline: [{ x: 0, y: 0 }, { x: 3, y: 0 }] },
-      { id: "c-bc", nodeIds: ["b", "c"], polyline: [{ x: 3, y: 0 }, { x: 6, y: 0 }] },
+      { id: "corridor-ab", nodeIds: ["a", "b"], polyline: [{ x: 0, y: 0 }, { x: 3, y: 0 }] },
+      { id: "corridor-bc", nodeIds: ["b", "c"], polyline: [{ x: 3, y: 0 }, { x: 6, y: 0 }] },
     ],
-    infrastructure: [],
+    segments: [
+      { id: "s-ab", corridorId: "corridor-ab", fromNodeId: "a", toNodeId: "b", type: "road", level: "ground", condition: 1, provenance: "inherited" },
+      { id: "s-bc", corridorId: "corridor-bc", fromNodeId: "b", toNodeId: "c", type: "road", level: "ground", condition: 1, provenance: "inherited" },
+    ],
   };
 }
 
@@ -30,7 +33,7 @@ describe("findPath", () => {
     const result = findPath(context, "a", "c");
     expect(result).not.toBeNull();
     expect(result!.nodeIds).toEqual(["a", "b", "c"]);
-    expect(result!.corridorIds).toEqual(["c-ab", "c-bc"]);
+    expect(result!.segmentIds).toEqual(["s-ab", "s-bc"]);
     expect(result!.distance).toBeCloseTo(6, 5);
   });
 
@@ -41,6 +44,6 @@ describe("findPath", () => {
 
   test("returns a trivial zero-distance result for the same node", () => {
     const context = buildRoutingContext(fixtureMap());
-    expect(findPath(context, "a", "a")).toEqual({ nodeIds: ["a"], corridorIds: [], distance: 0 });
+    expect(findPath(context, "a", "a")).toEqual({ nodeIds: ["a"], segmentIds: [], distance: 0 });
   });
 });

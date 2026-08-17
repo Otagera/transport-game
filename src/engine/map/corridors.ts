@@ -1,4 +1,4 @@
-import type { BuiltInfrastructure, Corridor, MapNode } from "./types";
+import type { Corridor, MapNode, Segment } from "./types";
 
 function distance(a: MapNode, b: MapNode): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
@@ -11,16 +11,17 @@ function distance(a: MapNode, b: MapNode): number {
 // module's. Every settlement-to-settlement link is tagged rail (the
 // colonial spine); anything touching a village is a road -- so the rail
 // network, by construction, does not reach every village. That's the
-// brownfield premise, not a bug.
+// brownfield premise, not a bug. Each MST edge is one corridor with
+// exactly one segment (the generator never produces multi-node chains).
 export function generateInheritedNetwork(nodes: MapNode[]): {
   corridors: Corridor[];
-  infrastructure: BuiltInfrastructure[];
+  segments: Segment[];
 } {
   const corridors: Corridor[] = [];
-  const infrastructure: BuiltInfrastructure[] = [];
+  const segments: Segment[] = [];
 
   if (nodes.length < 2) {
-    return { corridors, infrastructure };
+    return { corridors, segments };
   }
 
   const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -62,9 +63,13 @@ export function generateInheritedNetwork(nodes: MapNode[]): {
     });
 
     const isRail = bestFrom.kind === "settlement" && bestTo.kind === "settlement";
-    infrastructure.push({
+    segments.push({
+      id: `segment-${corridorId}`,
       corridorId,
+      fromNodeId: bestFrom.id,
+      toNodeId: bestTo.id,
       type: isRail ? "rail" : "road",
+      level: "ground",
       condition: isRail ? 0.6 : 0.75,
       provenance: "inherited",
     });
@@ -73,5 +78,5 @@ export function generateInheritedNetwork(nodes: MapNode[]): {
     remaining.delete(bestTo.id);
   }
 
-  return { corridors, infrastructure };
+  return { corridors, segments };
 }

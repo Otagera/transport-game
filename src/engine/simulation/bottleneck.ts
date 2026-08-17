@@ -1,4 +1,4 @@
-import type { CorridorTraffic } from "./types";
+import type { SegmentTraffic } from "./types";
 
 export interface BottleneckMetrics {
   health: number;
@@ -14,7 +14,7 @@ function clamp01(value: number): number {
 // rendering exists -- engine only computes the numbers). Full congestion
 // modeling (capacity scaling, free first slot, per-vehicle weight) is
 // Module 7's job, not this one's.
-export function computeBottleneckMetrics(traffic: CorridorTraffic): BottleneckMetrics {
+export function computeBottleneckMetrics(traffic: SegmentTraffic): BottleneckMetrics {
   const health = traffic.potentialRecently > 0 ? clamp01(traffic.deliveredRecently / traffic.potentialRecently) : 1;
   const utilisation = traffic.sampleCount > 0 ? clamp01(traffic.loadFractionSum / traffic.sampleCount) : 0;
   return { health, utilisation };

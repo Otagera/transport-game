@@ -21,13 +21,13 @@ export function createSimulation(map: GeneratedMap, vehicleSpecs: VehicleSpec[] 
     createVehicle(spec.id, spec.waypoints, routing, spec.speed, spec.capacity, queues),
   );
 
-  return { map, demand, queues, vehicles, corridorTraffic: new Map(), routing };
+  return { map, demand, queues, vehicles, segmentTraffic: new Map(), routing };
 }
 
 export function tick(state: SimulationState, dt: number): void {
   growQueues(state, dt);
   for (const vehicle of state.vehicles) {
-    tickVehicle(vehicle, state.queues, state.routing, state.corridorTraffic, dt);
+    tickVehicle(vehicle, state.queues, state.routing, state.segmentTraffic, dt);
   }
 }
 

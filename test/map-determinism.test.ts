@@ -11,7 +11,7 @@ describe("map generation determinism", () => {
     expect(Array.from(a.terrain.settlementDensity)).toEqual(Array.from(b.terrain.settlementDensity));
     expect(a.nodes).toEqual(b.nodes);
     expect(a.corridors).toEqual(b.corridors);
-    expect(a.infrastructure).toEqual(b.infrastructure);
+    expect(a.segments).toEqual(b.segments);
   });
 
   test("different seeds produce different terrain", () => {

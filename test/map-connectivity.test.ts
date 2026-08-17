@@ -31,11 +31,10 @@ describe("map connectivity across seeds", () => {
     for (const seed of SEEDS) {
       const map = generateMap(seed);
       const railNodeIds = new Set<string>();
-      for (const infra of map.infrastructure) {
-        if (infra.type !== "rail") continue;
-        const corridor = map.corridors.find((c) => c.id === infra.corridorId)!;
-        railNodeIds.add(corridor.nodeIds[0]);
-        railNodeIds.add(corridor.nodeIds[1]);
+      for (const segment of map.segments) {
+        if (segment.type !== "rail") continue;
+        railNodeIds.add(segment.fromNodeId);
+        railNodeIds.add(segment.toNodeId);
       }
       const villages = map.nodes.filter((node) => node.kind === "village");
       if (villages.some((village) => !railNodeIds.has(village.id))) {

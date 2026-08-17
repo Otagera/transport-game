@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { buildRoutingContext } from "@engine/simulation/routing";
 import { createVehicle, tickVehicle } from "@engine/simulation/vehicle";
 import type { GeneratedMap } from "@engine/map/types";
-import type { CorridorTraffic, NodeQueues } from "@engine/simulation/types";
+import type { NodeQueues, SegmentTraffic } from "@engine/simulation/types";
 
 function fixtureMap(): GeneratedMap {
   return {
@@ -12,8 +12,10 @@ function fixtureMap(): GeneratedMap {
       { id: "a", kind: "settlement", x: 0, y: 0 },
       { id: "b", kind: "village", x: 4, y: 0 },
     ],
-    corridors: [{ id: "c-ab", nodeIds: ["a", "b"], polyline: [{ x: 0, y: 0 }, { x: 4, y: 0 }] }],
-    infrastructure: [],
+    corridors: [{ id: "corridor-ab", nodeIds: ["a", "b"], polyline: [{ x: 0, y: 0 }, { x: 4, y: 0 }] }],
+    segments: [
+      { id: "s-ab", corridorId: "corridor-ab", fromNodeId: "a", toNodeId: "b", type: "road", level: "ground", condition: 1, provenance: "inherited" },
+    ],
   };
 }
 
@@ -39,23 +41,23 @@ describe("createVehicle", () => {
 });
 
 describe("tickVehicle", () => {
-  test("delivers cargo on arrival and records corridor traffic", () => {
+  test("delivers cargo on arrival and records segment traffic", () => {
     const context = buildRoutingContext(fixtureMap());
     const queues: NodeQueues = new Map([
       ["a", new Map([["b:passengers", 5]])],
       ["b", new Map()],
     ]);
     const vehicle = createVehicle("v1", ["a", "b"], context, 4, 10, queues);
-    const traffic: Map<string, CorridorTraffic> = new Map();
+    const traffic: Map<string, SegmentTraffic> = new Map();
 
     // speed 4 * dt 1s = 4 units = exactly one edge (a -> b, length 4).
     tickVehicle(vehicle, queues, context, traffic, 1);
 
     expect(vehicle.cargo).toEqual([]);
-    const corridorStats = traffic.get("c-ab")!;
-    expect(corridorStats).toBeDefined();
-    expect(corridorStats.deliveredRecently).toBe(5);
-    expect(corridorStats.potentialRecently).toBe(10);
+    const segmentStats = traffic.get("s-ab")!;
+    expect(segmentStats).toBeDefined();
+    expect(segmentStats.deliveredRecently).toBe(5);
+    expect(segmentStats.potentialRecently).toBe(10);
   });
 
   test("a vehicle with fewer than two path nodes does nothing", () => {
@@ -63,7 +65,7 @@ describe("tickVehicle", () => {
     const vehicle = createVehicle("v1", ["a", "b"], context, 4, 10);
     vehicle.path = ["a"];
     const queues: NodeQueues = new Map([["a", new Map()]]);
-    const traffic: Map<string, CorridorTraffic> = new Map();
+    const traffic: Map<string, SegmentTraffic> = new Map();
     expect(() => tickVehicle(vehicle, queues, context, traffic, 1)).not.toThrow();
   });
 });
