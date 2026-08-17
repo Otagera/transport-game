@@ -38,6 +38,33 @@ describe("createVehicle", () => {
     expect(vehicle.cargo).toEqual([{ from: "a", to: "b", kind: "passengers", amount: 5 }]);
     expect(queues.get("a")!.get("b:passengers")).toBe(0);
   });
+
+  test("defaults to carrying passengers", () => {
+    const context = buildRoutingContext(fixtureMap());
+    const vehicle = createVehicle("v1", ["a", "b"], context, 1, 10);
+    expect(vehicle.carries).toBe("passengers");
+  });
+
+  test("a goods vehicle ignores queued passenger demand and loads produce/supplies instead", () => {
+    const context = buildRoutingContext(fixtureMap());
+    const queues: NodeQueues = new Map([
+      ["a", new Map([["b:passengers", 5], ["b:produce", 3]])],
+      ["b", new Map()],
+    ]);
+    const vehicle = createVehicle("v1", ["a", "b"], context, 1, 10, queues, "goods");
+    expect(vehicle.cargo).toEqual([{ from: "a", to: "b", kind: "produce", amount: 3 }]);
+    expect(queues.get("a")!.get("b:passengers")).toBe(5); // untouched
+  });
+
+  test("a passenger vehicle ignores queued goods demand", () => {
+    const context = buildRoutingContext(fixtureMap());
+    const queues: NodeQueues = new Map([
+      ["a", new Map([["b:produce", 3], ["b:supplies", 2]])],
+      ["b", new Map()],
+    ]);
+    const vehicle = createVehicle("v1", ["a", "b"], context, 1, 10, queues, "passengers");
+    expect(vehicle.cargo).toEqual([]);
+  });
 });
 
 describe("tickVehicle", () => {

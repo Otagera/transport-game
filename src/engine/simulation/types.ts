@@ -32,6 +32,19 @@ export interface Vehicle {
   speed: number;
   capacity: number;
   cargo: LoadEntry[];
+  // What this vehicle is built to carry -- a goods vehicle never loads
+  // passenger demand and vice versa (docs/rebuild-plan.md §5: paratransit
+  // is passengers-only because goods need capital an okada doesn't have,
+  // generalized here to any vehicle).
+  carries: "passengers" | "goods";
+}
+
+// Revenue accrues on unload, not on carriage (docs/rebuild-plan.md §5) --
+// this is what a tick reports so the economy layer can turn it into
+// money without engine/simulation needing to know about fares itself.
+export interface DeliveryEvent {
+  kind: CargoKind;
+  amount: number;
 }
 
 // Traffic is tracked per segment, not per corridor -- a segment is the

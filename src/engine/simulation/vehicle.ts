@@ -1,4 +1,4 @@
-import type { CargoKind, LoadEntry, NodeQueues, RoutingContext, SegmentTraffic, Vehicle } from "./types";
+import type { CargoKind, DeliveryEvent, LoadEntry, NodeQueues, RoutingContext, SegmentTraffic, Vehicle } from "./types";
 import { findPath } from "./routing";
 
 function cargoAmount(cargo: LoadEntry[]): number {
@@ -9,18 +9,20 @@ function cargoAmount(cargo: LoadEntry[]): number {
   return total;
 }
 
-function sumAmountTo(cargo: LoadEntry[], nodeId: string): number {
-  let total = 0;
-  for (const entry of cargo) {
-    if (entry.to === nodeId) {
-      total += entry.amount;
-    }
-  }
-  return total;
+function unloadAt(vehicle: Vehicle, nodeId: string): LoadEntry[] {
+  const delivered = vehicle.cargo.filter((entry) => entry.to === nodeId);
+  vehicle.cargo = vehicle.cargo.filter((entry) => entry.to !== nodeId);
+  return delivered;
 }
 
-function unloadAt(vehicle: Vehicle, nodeId: string): void {
-  vehicle.cargo = vehicle.cargo.filter((entry) => entry.to !== nodeId);
+// Paratransit is passengers-only (docs/rebuild-plan.md §5); goods need
+// capital an okada doesn't have. Generalized here as "what this vehicle
+// is built to carry" rather than a paratransit-specific rule, since
+// Module 6 is where vehicle carries becomes a real, content-driven
+// distinction -- not just a decorative catalog field.
+function isCompatibleCargo(carries: Vehicle["carries"], kind: CargoKind): boolean {
+  if (carries === "passengers") return kind === "passengers";
+  return kind === "produce" || kind === "supplies";
 }
 
 // Opportunistic loading, no manifests (docs/rebuild-plan.md §5): at each
@@ -43,6 +45,7 @@ function loadAt(vehicle: Vehicle, nodeId: string, queues: NodeQueues): void {
     if (amount <= 0) continue;
     const [destination, kind] = key.split(":") as [string, CargoKind];
     if (!ahead.has(destination)) continue;
+    if (!isCompatibleCargo(vehicle.carries, kind)) continue;
 
     const take = Math.min(amount, free);
     vehicle.cargo.push({ from: nodeId, to: destination, kind, amount: take });
@@ -93,6 +96,7 @@ export function createVehicle(
   speed: number,
   capacity: number,
   queues?: NodeQueues,
+  carries: Vehicle["carries"] = "passengers",
 ): Vehicle {
   if (waypoints.length < 2) {
     throw new Error(`Vehicle "${id}" needs at least two waypoints.`);
@@ -110,7 +114,7 @@ export function createVehicle(
   }
   path.pop(); // closing the loop duplicates waypoints[0] at the end
 
-  const vehicle: Vehicle = { id, path, pathIndex: 1, edgeProgress: 0, speed, capacity, cargo: [] };
+  const vehicle: Vehicle = { id, path, pathIndex: 1, edgeProgress: 0, speed, capacity, cargo: [], carries };
   if (queues) {
     loadAt(vehicle, path[0]!, queues);
   }
@@ -127,12 +131,13 @@ export function tickVehicle(
   context: RoutingContext,
   segmentTraffic: Map<string, SegmentTraffic>,
   dt: number,
-): void {
+): DeliveryEvent[] {
   const pathLength = vehicle.path.length;
   if (pathLength < 2) {
-    return;
+    return [];
   }
 
+  const deliveries: DeliveryEvent[] = [];
   let distanceToTravel = vehicle.speed * dt;
 
   while (distanceToTravel > 0) {
@@ -150,8 +155,12 @@ export function tickVehicle(
       vehicle.edgeProgress = 0;
 
       const segmentId = findSegmentId(context, fromNode, toNode);
-      const deliveredHere = sumAmountTo(vehicle.cargo, toNode);
-      unloadAt(vehicle, toNode);
+      const delivered = unloadAt(vehicle, toNode);
+      let deliveredHere = 0;
+      for (const entry of delivered) {
+        deliveredHere += entry.amount;
+        deliveries.push({ kind: entry.kind, amount: entry.amount });
+      }
       const cargoAfterUnload = cargoAmount(vehicle.cargo);
       loadAt(vehicle, toNode, queues);
       if (segmentId) {
@@ -161,4 +170,6 @@ export function tickVehicle(
       vehicle.pathIndex = (vehicle.pathIndex + 1) % pathLength;
     }
   }
+
+  return deliveries;
 }
