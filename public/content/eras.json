@@ -1,0 +1,26 @@
+[
+  {
+    "id": "post-independence",
+    "name": "Post-Independence",
+    "order": 0,
+    "palette": { "primary": "#8a6d3b", "secondary": "#c9b28a", "accent": "#2e7d32" }
+  },
+  {
+    "id": "oil-boom",
+    "name": "Oil Boom",
+    "order": 1,
+    "palette": { "primary": "#1b5e20", "secondary": "#ffca28", "accent": "#37474f" }
+  },
+  {
+    "id": "informal",
+    "name": "Informal",
+    "order": 2,
+    "palette": { "primary": "#6d4c41", "secondary": "#ff7043", "accent": "#fdd835" }
+  },
+  {
+    "id": "modern",
+    "name": "Modern",
+    "order": 3,
+    "palette": { "primary": "#263238", "secondary": "#00acc1", "accent": "#eceff1" }
+  }
+]

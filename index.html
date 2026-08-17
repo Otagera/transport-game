@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transport Game</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #1a1a1a; overflow: hidden; }
+      #scene { position: fixed; inset: 0; display: block; }
+      #status {
+        position: fixed;
+        left: 8px;
+        bottom: 8px;
+        font: 12px/1.4 monospace;
+        color: #ddd;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 4px 8px;
+        border-radius: 4px;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="status"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
