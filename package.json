@@ -8,7 +8,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:bundle": "node scripts/verify-prod-bundle.mjs"
   },
   "dependencies": {
     "three": "^0.185.1",
@@ -18,6 +19,7 @@
     "@types/bun": "^1.3.14",
     "@types/node": "^26.2.0",
     "@types/three": "^0.185.4",
+    "preact": "^10.29.8",
     "typescript": "^5.7",
     "vite": "^8.2.1"
   }

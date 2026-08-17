@@ -3,6 +3,7 @@ import { createWorld, tickWorld } from "@engine/world";
 import { loadContent } from "@content/loader";
 import { EraListSchema } from "@content/schema";
 import { createScene } from "@render/scene";
+import { createDefaultStyleSpec } from "@render/style";
 import { createStatusBar } from "@ui/statusBar";
 
 async function bootstrap(): Promise<void> {
@@ -15,12 +16,15 @@ async function bootstrap(): Promise<void> {
   const eras = await loadContent(EraListSchema, "/content/eras.json");
   const currentEraName = eras[0]?.name ?? "unknown";
 
-  const { renderer, scene, camera, resize } = createScene(canvas);
+  const style = createDefaultStyleSpec();
+  const sceneHandle = createScene(canvas, style);
   const world = createWorld();
   const accumulator = new Accumulator(SIM_DT);
   const statusBar = createStatusBar(statusEl);
 
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", sceneHandle.resize);
+
+  await maybeMountDevTools(canvas, style, sceneHandle);
 
   let last = performance.now();
   let framesSinceSample = 0;
@@ -43,11 +47,45 @@ async function bootstrap(): Promise<void> {
 
     statusBar.render({ tick: world.tickCount, fps, era: currentEraName });
 
-    renderer.render(scene, camera);
+    sceneHandle.render();
     requestAnimationFrame(frame);
   }
 
   requestAnimationFrame(frame);
+}
+
+// Kept out of bootstrap() as its own function so the `import.meta.env.DEV`
+// guard is a single, easy-to-verify branch: in a production build this
+// evaluates to `false` at build time, and Rollup dead-code-eliminates the
+// whole body -- the dynamic imports of @dev/* (and Preact) included.
+async function maybeMountDevTools(
+  canvas: HTMLCanvasElement,
+  style: ReturnType<typeof createDefaultStyleSpec>,
+  sceneHandle: ReturnType<typeof createScene>,
+): Promise<void> {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("tune") !== "1") {
+    return;
+  }
+
+  const [{ mountTuningPanel }, { installGreyscaleTest }] = await Promise.all([
+    import("@dev/tuningPanel"),
+    import("@dev/greyscaleTest"),
+  ]);
+
+  const panelContainer = document.createElement("div");
+  document.body.appendChild(panelContainer);
+  mountTuningPanel(panelContainer, style, (regen) => {
+    if (regen) {
+      sceneHandle.regenerateGeometry(style);
+    } else {
+      sceneHandle.applyStyle(style);
+    }
+  });
+  installGreyscaleTest(canvas);
 }
 
 bootstrap().catch((error: unknown) => {
