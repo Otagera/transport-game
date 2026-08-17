@@ -2,15 +2,21 @@ import { Accumulator, SIM_DT } from "@engine/loop";
 import { createWorld, tickWorld } from "@engine/world";
 import { loadContent } from "@content/loader";
 import { EraListSchema } from "@content/schema";
+import { generateMap } from "@engine/map/generate";
 import { createScene } from "@render/scene";
 import { createDefaultStyleSpec } from "@render/style";
+import { createNetworkGroup } from "@render/network";
+import { createAuthoringController } from "@render/authoring";
 import { createStatusBar } from "@ui/statusBar";
+
+const DEFAULT_MAP_SEED = 1;
 
 async function bootstrap(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>("#scene");
   const statusEl = document.querySelector<HTMLDivElement>("#status");
-  if (!canvas || !statusEl) {
-    throw new Error("Missing #scene canvas or #status element in index.html");
+  const costPanelEl = document.querySelector<HTMLDivElement>("#cost-panel");
+  if (!canvas || !statusEl || !costPanelEl) {
+    throw new Error("Missing #scene canvas, #status, or #cost-panel element in index.html");
   }
 
   const eras = await loadContent(EraListSchema, "/content/eras.json");
@@ -21,6 +27,12 @@ async function bootstrap(): Promise<void> {
   const world = createWorld();
   const accumulator = new Accumulator(SIM_DT);
   const statusBar = createStatusBar(statusEl);
+
+  const map = generateMap(DEFAULT_MAP_SEED);
+  const groundMesh = sceneHandle.setTerrain(map);
+  const networkHandle = createNetworkGroup(map);
+  sceneHandle.scene.add(networkHandle.group);
+  createAuthoringController(sceneHandle, groundMesh, map, networkHandle, costPanelEl);
 
   window.addEventListener("resize", sceneHandle.resize);
 

@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { StyleSpec } from "./style";
+import type { GeneratedMap } from "../engine/map/types";
+import { createTerrainTexture } from "./terrain";
 
 export interface SceneHandle {
   renderer: THREE.WebGLRenderer;
@@ -13,6 +15,12 @@ export interface SceneHandle {
   applyStyle: (style: StyleSpec) => void;
   /** Rebuild: base slab and placeholder geometry/count changed. */
   regenerateGeometry: (style: StyleSpec) => void;
+  /**
+   * Replaces the placeholder diorama slab with a real terrain-textured
+   * ground plane sized to the map, and frames the camera to it. Returns
+   * the ground mesh for raycasting (Module 4 authoring).
+   */
+  setTerrain: (map: GeneratedMap) => THREE.Mesh;
 }
 
 function keyLightPosition(style: StyleSpec, distance: number): THREE.Vector3 {
@@ -25,9 +33,9 @@ function keyLightPosition(style: StyleSpec, distance: number): THREE.Vector3 {
   );
 }
 
-function cameraPosition(style: StyleSpec, distance: number): THREE.Vector3 {
-  const elevation = THREE.MathUtils.degToRad(style.camera.elevationDeg);
-  const azimuth = THREE.MathUtils.degToRad(style.camera.azimuthDeg);
+function cameraPosition(elevationDeg: number, azimuthDeg: number, distance: number): THREE.Vector3 {
+  const elevation = THREE.MathUtils.degToRad(elevationDeg);
+  const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
   return new THREE.Vector3(
     distance * Math.cos(elevation) * Math.cos(azimuth),
     distance * Math.sin(elevation),
@@ -68,7 +76,7 @@ export function createScene(canvas: HTMLCanvasElement, style: StyleSpec): SceneH
     0.1,
     500,
   );
-  camera.position.copy(cameraPosition(style, 40));
+  camera.position.copy(cameraPosition(style.camera.elevationDeg, style.camera.azimuthDeg, 40));
   camera.lookAt(0, 0, 0);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -174,7 +182,7 @@ export function createScene(canvas: HTMLCanvasElement, style: StyleSpec): SceneH
     }
   }
 
-  const baseHalfHeight = style.camera.viewSize / 2;
+  let baseHalfHeight = style.camera.viewSize / 2;
 
   function resize(): void {
     const width = window.innerWidth;
@@ -191,8 +199,46 @@ export function createScene(canvas: HTMLCanvasElement, style: StyleSpec): SceneH
     renderer.render(scene, camera);
   }
 
+  function setTerrain(map: GeneratedMap): THREE.Mesh {
+    if (baseMesh) {
+      scene.remove(baseMesh);
+      disposeMesh(baseMesh);
+    }
+    for (const placeholder of placeholders) {
+      placeholderGroup.remove(placeholder);
+      disposeMesh(placeholder);
+    }
+    placeholders.length = 0;
+
+    const texture = createTerrainTexture(map);
+    const geometry = new THREE.PlaneGeometry(map.terrain.width, map.terrain.height);
+    const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    baseMesh = mesh;
+
+    const halfSize = Math.max(map.terrain.width, map.terrain.height) / 2;
+    keyLight.shadow.camera.left = -halfSize;
+    keyLight.shadow.camera.right = halfSize;
+    keyLight.shadow.camera.top = halfSize;
+    keyLight.shadow.camera.bottom = -halfSize;
+    keyLight.shadow.camera.updateProjectionMatrix();
+
+    baseHalfHeight = halfSize * 0.8;
+    camera.position.copy(cameraPosition(style.camera.elevationDeg, style.camera.azimuthDeg, halfSize * 3));
+    controls.target.set(0, 0, 0);
+    controls.minZoom = 0.3;
+    controls.maxZoom = 8;
+    controls.update();
+    resize();
+
+    return mesh;
+  }
+
   regenerateGeometry(style);
   resize();
 
-  return { renderer, scene, camera, controls, resize, render, applyStyle, regenerateGeometry };
+  return { renderer, scene, camera, controls, resize, render, applyStyle, regenerateGeometry, setTerrain };
 }

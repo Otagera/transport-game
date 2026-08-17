@@ -18,11 +18,25 @@
         border-radius: 4px;
         pointer-events: none;
       }
+      #cost-panel {
+        position: fixed;
+        right: 8px;
+        top: 8px;
+        font: 12px/1.5 monospace;
+        color: #eee;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 8px 10px;
+        border-radius: 4px;
+        pointer-events: none;
+        display: none;
+        min-width: 180px;
+      }
     </style>
   </head>
   <body>
     <canvas id="scene"></canvas>
     <div id="status"></div>
+    <div id="cost-panel"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
