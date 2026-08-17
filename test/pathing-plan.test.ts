@@ -49,13 +49,34 @@ describe("planCorridor", () => {
     expect(plan!.breakdown.nodes).toBe(0);
   });
 
-  test("straight mode returns null when the direct line crosses water", () => {
+  test("straight mode bridges a single water cell on the direct line", () => {
     const terrain = makeTerrain(10, 10, [[5, 5]]);
     const plan = planCorridor(
       terrain,
       [
         { x: 0, y: 0 },
         { x: 9, y: 9 },
+      ],
+      "straight",
+      new Set(),
+    );
+    expect(plan).not.toBeNull();
+    expect(plan!.segmentLevels).toContain("elevated");
+    expect(plan!.chainPoints.some((c) => c.isBridgeBank)).toBe(true);
+    expect(plan!.breakdown.water).toBeGreaterThan(0);
+  });
+
+  test("straight mode returns null when the water is wider than the max bridge span", () => {
+    // Water runs 16 cells wide *along* the straight line's own direction
+    // (x=2..17 at y=0), so the crossing itself needs span 16 > 14.
+    const waterCells: Array<[number, number]> = [];
+    for (let x = 2; x <= 17; x += 1) waterCells.push([x, 0]);
+    const terrain = makeTerrain(20, 5, waterCells);
+    const plan = planCorridor(
+      terrain,
+      [
+        { x: 0, y: 0 },
+        { x: 19, y: 0 },
       ],
       "straight",
       new Set(),
@@ -75,6 +96,45 @@ describe("planCorridor", () => {
       new Set(),
     );
     expect(plan).not.toBeNull();
+  });
+
+  test("a leg with two separate water bodies produces two bridge banks pairs", () => {
+    const terrain = makeTerrain(20, 5, [
+      [5, 0],
+      [6, 0],
+      [13, 0],
+    ]);
+    const plan = planCorridor(
+      terrain,
+      [
+        { x: 0, y: 0 },
+        { x: 19, y: 0 },
+      ],
+      "straight",
+      new Set(),
+    );
+    expect(plan).not.toBeNull();
+    const bridgeCount = plan!.segmentLevels.filter((level) => level === "elevated").length;
+    expect(bridgeCount).toBe(2);
+    expect(plan!.chainPoints.filter((c) => c.isBridgeBank).length).toBe(4);
+  });
+
+  test("auto mode's ground runs still get simplified and smoothed around a bridge", () => {
+    const terrain = makeTerrain(20, 5, [
+      [10, 0],
+      [10, 1],
+    ]);
+    const plan = planCorridor(
+      terrain,
+      [
+        { x: 0, y: 0 },
+        { x: 19, y: 4 },
+      ],
+      "auto",
+      new Set(),
+    );
+    expect(plan).not.toBeNull();
+    expect(plan!.polyline.length).toBeGreaterThan(plan!.chainPoints.length);
   });
 
   test("the breakdown's total matches the sum of its own categories", () => {

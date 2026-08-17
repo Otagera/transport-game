@@ -24,10 +24,15 @@ function generateId(prefix: string): string {
 
 // Pure: returns a new GeneratedMap with the built corridor appended, never
 // mutating the input -- so the caller's undo is just "go back to holding
-// the previous reference." One node per waypoint (existing nodes reused
-// via `existingNodeId`, new ones get the `vertex` kind, never named,
+// the previous reference." One node per chain point (existing nodes
+// reused via `existingNodeId`, new ones -- including auto-inserted
+// bridge banks -- get the `vertex` kind, never named,
 // docs/rebuild-plan.md §5); one segment per consecutive pair in that
-// chain, independently typed and levelled ground-only for now.
+// chain, independently typed and levelled per plan.segmentLevels.
+// `plan.chainPoints` is longer than `waypoints` whenever the route
+// crossed water: `waypoints` supplies existingNodeId for the player's
+// own points (in order, isBridgeBank === false), bridge banks are
+// always new.
 export function commitCorridor(
   map: GeneratedMap,
   waypoints: WaypointSpec[],
@@ -36,14 +41,19 @@ export function commitCorridor(
 ): GeneratedMap {
   const newNodes: MapNode[] = [];
   const nodeIds: string[] = [];
+  let waypointCursor = 0;
 
-  for (const waypoint of waypoints) {
-    if (waypoint.existingNodeId) {
-      nodeIds.push(waypoint.existingNodeId);
-      continue;
+  for (const chainPoint of plan.chainPoints) {
+    if (!chainPoint.isBridgeBank) {
+      const waypoint = waypoints[waypointCursor]!;
+      waypointCursor += 1;
+      if (waypoint.existingNodeId) {
+        nodeIds.push(waypoint.existingNodeId);
+        continue;
+      }
     }
     const id = generateId("node");
-    newNodes.push({ id, kind: "vertex", x: waypoint.point.x, y: waypoint.point.y });
+    newNodes.push({ id, kind: "vertex", x: chainPoint.point.x, y: chainPoint.point.y });
     nodeIds.push(id);
   }
 
@@ -58,7 +68,7 @@ export function commitCorridor(
       fromNodeId: nodeIds[i]!,
       toNodeId: nodeIds[i + 1]!,
       type: infrastructureType,
-      level: "ground",
+      level: plan.segmentLevels[i]!,
       condition: 1,
       provenance: "built",
     });
