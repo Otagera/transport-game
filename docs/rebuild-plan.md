@@ -80,7 +80,7 @@ running tens of cells between them. This is the scale that felt playable.
   coverage. Different genre, more crowded, and the hook stops being the hook.
 - **Nested scales.** No drilling from region into city.
 
-### The finish line — decide before starting
+### The finish line — decided
 
 This was never answered last time and it is why scope kept expanding.
 
@@ -88,7 +88,21 @@ This was never answered last time and it is why scope kept expanding.
 - *A personal sandbox* → needs neither, and can stay open-ended.
 - *A foundation to extract an engine from* → stop at "the systems work".
 
-**Answer this first.** It changes what "done" means for every module below.
+**Answered: a personal sandbox, and a foundation to extract an engine from.**
+Not "something others play." Concretely, this means:
+
+- No onboarding, no authored goal, no stopping point to design toward. The
+  "Onboarding, goals" deferred trigger in §7 ("when someone other than the
+  author plays it") does not fire — drop it, don't schedule it.
+- "Done" for a module means *the systems work and hold up under play*, not
+  *polished for a stranger*. Favor clean, modular boundaries (the engine/
+  purity rule in §4 matters *more* under this answer, not less, since it's
+  the seam an engine extraction would cut along) over onboarding-flavored
+  affordances like tutorials or guided goals.
+- §9's standing test ("is this a game someone else could play?") is
+  superseded by this answer for planning purposes — treat it as "does this
+  hold up as a sandbox, and would the relevant system survive being lifted
+  out on its own?"
 
 ---
 
@@ -583,7 +597,7 @@ somewhere *in order to* grow it.
 | Corridor failure state | When decay is visibly biting and repair needs to compete with expansion |
 | Paratransit on dirt roads | After failure state, sharing a usable-set concept |
 | Real-world map import | When the generator is proven and recognition is worth the OSM work |
-| Onboarding, goals | When someone other than the author plays it |
+| ~~Onboarding, goals~~ | Dropped: §2 answered "personal sandbox," not "something others play" |
 | LTM traffic model | Only if spillback would change a player decision |
 | Scripting / events | When there is a concrete thing JSON cannot express |
 
@@ -591,7 +605,8 @@ somewhere *in order to* grow it.
 
 ## 8. Open questions
 
-- **The finish line.** §2. Answer before Module 3.
+- ~~**The finish line.**~~ Answered in §2: a personal sandbox and a
+  foundation to extract an engine from.
 - **Do settlements need visual richness**, or is the map's problem terrain, water
   and lighting rather than what sits on it?
 - **What is a ferry for?** In the old build it ended at ~8% of crossings with one
