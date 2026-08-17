@@ -15,6 +15,12 @@ const SNAP_RADIUS = 1.2;
 
 export interface AuthoringController {
   dispose: () => void;
+  getMap: () => GeneratedMap;
+}
+
+export interface BuildEvent {
+  map: GeneratedMap;
+  nodeIds: string[];
 }
 
 // The interactive authoring loop for Module 4: click to place waypoints,
@@ -29,6 +35,8 @@ export function createAuthoringController(
   initialMap: GeneratedMap,
   networkHandle: NetworkHandle,
   costPanelEl: HTMLElement,
+  onBuild?: (event: BuildEvent) => void,
+  onMapChanged?: (map: GeneratedMap) => void,
 ): AuthoringController {
   let map = initialMap;
   const history: GeneratedMap[] = [];
@@ -163,6 +171,9 @@ export function createAuthoringController(
     history.push(cloneMap(map));
     map = commitCorridor(map, waypoints, plan, infrastructureType);
     networkHandle.update(map);
+    const builtCorridor = map.corridors[map.corridors.length - 1]!;
+    onBuild?.({ map, nodeIds: builtCorridor.nodeIds });
+    onMapChanged?.(map);
     waypoints.length = 0;
     refreshPreview(null);
   }
@@ -172,6 +183,7 @@ export function createAuthoringController(
     if (!previous) return;
     map = previous;
     networkHandle.update(map);
+    onMapChanged?.(map);
     waypoints.length = 0;
     refreshPreview(null);
   }
@@ -212,5 +224,5 @@ export function createAuthoringController(
     window.removeEventListener("keydown", handleKeyDown);
   }
 
-  return { dispose };
+  return { dispose, getMap: () => map };
 }

@@ -31,12 +31,40 @@
         display: none;
         min-width: 180px;
       }
+      #fleet-hint {
+        position: fixed;
+        left: 8px;
+        bottom: 34px;
+        font: 12px/1.4 monospace;
+        color: #ffe08a;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 4px 8px;
+        border-radius: 4px;
+        pointer-events: none;
+      }
+      #pnl-panel {
+        position: fixed;
+        left: 8px;
+        top: 8px;
+        font: 12px/1.6 monospace;
+        color: #eee;
+        background: rgba(0, 0, 0, 0.75);
+        padding: 8px 10px;
+        border-radius: 4px;
+        pointer-events: none;
+        display: none;
+        min-width: 220px;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
     </style>
   </head>
   <body>
     <canvas id="scene"></canvas>
     <div id="status"></div>
     <div id="cost-panel"></div>
+    <div id="fleet-hint"></div>
+    <div id="pnl-panel"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
