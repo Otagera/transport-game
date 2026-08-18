@@ -1,7 +1,10 @@
-import { h, render } from "preact";
 import type { StyleSpec } from "@render/style";
 
-interface FieldDef {
+// The Module 1 style spec's editable surface, lifted out of the panel that
+// used to be the whole of src/dev/. It is data, not markup, so the Tuning
+// tab is a loop rather than a hand-written form -- and adding a value to
+// StyleSpec means adding one entry here, not a new component.
+export interface FieldDef {
   label: string;
   kind: "color" | "range";
   min?: number;
@@ -12,7 +15,7 @@ interface FieldDef {
   set: (style: StyleSpec, value: string) => void;
 }
 
-const fields: FieldDef[] = [
+export const STYLE_FIELDS: FieldDef[] = [
   {
     label: "Background",
     kind: "color",
@@ -164,95 +167,3 @@ const fields: FieldDef[] = [
     },
   },
 ];
-
-const panelStyle = {
-  position: "fixed",
-  top: "8px",
-  right: "8px",
-  width: "220px",
-  maxHeight: "calc(100vh - 16px)",
-  overflowY: "auto",
-  background: "rgba(20, 20, 20, 0.85)",
-  color: "#eee",
-  font: "11px/1.4 monospace",
-  padding: "8px",
-  borderRadius: "6px",
-  boxSizing: "border-box",
-} as const;
-
-const rowStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "2px",
-  marginBottom: "6px",
-} as const;
-
-export interface TuningPanelHandle {
-  destroy: () => void;
-}
-
-export function mountTuningPanel(
-  container: HTMLElement,
-  style: StyleSpec,
-  onChange: (regen: boolean) => void,
-): TuningPanelHandle {
-  function renderPanel(): void {
-    render(view(), container);
-  }
-
-  function handleInput(field: FieldDef, event: Event): void {
-    field.set(style, (event.target as HTMLInputElement).value);
-    onChange(field.regen);
-    renderPanel();
-  }
-
-  function fieldRow(field: FieldDef) {
-    const value = field.get(style);
-    return h(
-      "label",
-      { style: rowStyle },
-      h("span", null, field.kind === "range" ? `${field.label}: ${value}` : field.label),
-      h("input", {
-        type: field.kind,
-        min: field.min,
-        max: field.max,
-        step: field.step,
-        value: String(value),
-        onInput: (event: Event) => handleInput(field, event),
-      }),
-    );
-  }
-
-  function view() {
-    return h(
-      "div",
-      { style: panelStyle },
-      h("div", { style: { fontWeight: "bold", marginBottom: "8px" } }, "Tuning (?tune=1)"),
-      ...fields.map((field) => fieldRow(field)),
-      h(
-        "button",
-        {
-          style: { width: "100%", padding: "4px", marginTop: "4px" },
-          onClick: () => exportStyle(style),
-        },
-        "Export JSON",
-      ),
-    );
-  }
-
-  renderPanel();
-
-  return {
-    destroy: () => {
-      render(null, container);
-    },
-  };
-}
-
-function exportStyle(style: StyleSpec): void {
-  const json = JSON.stringify(style, null, 2);
-  console.log(json);
-  navigator.clipboard?.writeText(json).catch(() => {
-    // Clipboard access can be denied by the browser; the console.log above is the fallback.
-  });
-}

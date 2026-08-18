@@ -1,7 +1,7 @@
 import { Accumulator, SIM_DT } from "@engine/loop";
 import { loadContent } from "@content/loader";
 import { EraListSchema, VehicleDefListSchema } from "@content/schema";
-import type { Era } from "@content/schema";
+import type { Era, VehicleDef } from "@content/schema";
 import { generateMap } from "@engine/map/generate";
 import { pruneCorridor } from "@engine/map/prune";
 import { restoreSegmentCondition } from "@engine/map/decay";
@@ -266,7 +266,7 @@ async function bootstrap(): Promise<void> {
 
   window.addEventListener("resize", sceneHandle.resize);
 
-  await maybeMountDevTools(canvas, style, sceneHandle);
+  await maybeMountDevTools(canvas, style, sceneHandle, eras, vehicleCatalog);
 
   let last = performance.now();
   let framesSinceSample = 0;
@@ -349,28 +349,38 @@ async function maybeMountDevTools(
   canvas: HTMLCanvasElement,
   style: ReturnType<typeof createDefaultStyleSpec>,
   sceneHandle: ReturnType<typeof createScene>,
+  eras: Era[],
+  catalog: VehicleDef[],
 ): Promise<void> {
   if (!import.meta.env.DEV) {
     return;
   }
+  // `?tune=1` is kept as an alias for `?studio=1` rather than retired:
+  // Module 1's workflow (and the muscle memory around it) still opens the
+  // same style controls, now as the studio's first tab.
   const params = new URLSearchParams(window.location.search);
-  if (params.get("tune") !== "1") {
+  if (params.get("studio") !== "1" && params.get("tune") !== "1") {
     return;
   }
 
-  const [{ mountTuningPanel }, { installGreyscaleTest }] = await Promise.all([
-    import("@dev/tuningPanel"),
+  const [{ mountStudio }, { installGreyscaleTest }] = await Promise.all([
+    import("@dev/Studio"),
     import("@dev/greyscaleTest"),
   ]);
 
   const panelContainer = document.createElement("div");
   document.body.appendChild(panelContainer);
-  mountTuningPanel(panelContainer, style, (regen) => {
-    if (regen) {
-      sceneHandle.regenerateGeometry(style);
-    } else {
-      sceneHandle.applyStyle(style);
-    }
+  mountStudio(panelContainer, {
+    style,
+    eras,
+    catalog,
+    onStyleChange: (regen: boolean) => {
+      if (regen) {
+        sceneHandle.regenerateGeometry(style);
+      } else {
+        sceneHandle.applyStyle(style);
+      }
+    },
   });
   installGreyscaleTest(canvas);
 }
