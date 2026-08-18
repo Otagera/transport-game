@@ -217,7 +217,10 @@ full multi-node map without more routes; a dedicated two-node synthetic scenario
 economy, and paratransit all continued running correctly concurrently throughout. No
 console errors beyond the pre-existing harmless favicon 404.
 
-## Module 10 — Save/load and scenarios (not started)
+## Module 10 — Save/load and scenarios (not started, owned elsewhere)
+**Being worked by a different agent.** Do not start it here. See
+[handoff-module-10.md](handoff-module-10.md) for what Modules 11–12 changed that the
+save format and the warm-forward have to account for.
 Last module in `rebuild-plan.md`'s build order. Module 11 landed ahead of it and did
 **not** implement it: `ScenarioSchema` exists in `content/schema.ts` and the studio's
 Scenario Lab tab authors and validates one, but nothing *applies* a scenario yet — that
@@ -373,8 +376,178 @@ studio surface; adding a tab means adding a string, or the gate stops being an a
 
 No console errors in any run beyond the pre-existing harmless favicon 404.
 
-**Not done, and deliberately so:** authored profiles are not yet *applied* to built
-corridors — `Profile2DDef` is authored, validated and swept in the studio, but
-`render/network.ts` still draws segments as lines and decks. Wiring a profile onto a real
-corridor (and its `decayRateMultiplier` into `decaySegments`) is the natural next step and
-was outside this module's brief.
+## Module 11b — Profiles applied to the map ✅
+The follow-up Module 11 listed as not done. Authored cross-sections are now what the map
+is actually made of.
+
+- **Content:** `public/content/profiles.json` — feeder-road, trunk-road, expressway,
+  colonial-rail, standard-gauge. Generated *through* `crossSectionOutline`, and
+  `test/content-profiles.test.ts` re-derives every outline and width from the elements, so
+  a hand-edited profile whose silhouette stops matching its own parts fails the build. A
+  costlier profile must also last longer, asserted rather than assumed — otherwise paying
+  more would be a pure tax.
+- **`Segment.profileId?: string`** — an opaque key, never the content type, exactly as
+  `VehicleEconomics.defId` is.
+- **Resolution is by fallback, not by stamping** (`render/profileCatalog.ts`): a segment
+  with no profile, or one naming a profile a mod has since removed, still renders and
+  still decays at the base rate. `main.ts` declares what the *inherited* network was built
+  to (neglected colonial rail, cheap feeder roads — the brownfield premise), which is the
+  bootstrap layer's documented job.
+- **Decay:** `decaySegments` takes a plain `Map<profileId, multiplier>` and **composes**
+  it with the era multiplier rather than replacing it — an Informal-era decay spike should
+  still bite an expressway less than a laterite feeder, which is the whole point of
+  authoring the difference.
+- **Cost:** priced through `sumStepCosts`, never around it. `costPerMeter` is applied
+  **relative to `REFERENCE_COST_PER_METRE`**, because the map has no stated cell size:
+  inventing a metres-per-cell scale to make it absolute would silently rebalance every
+  number Modules 4–9 were tuned against, to buy precision the model does not have. The
+  reference profile leaves existing pricing exactly where it was. It scales the per-length
+  terms only, never `nodes` — a junction is a junction whichever surface meets there.
+- **Authoring:** `T` cycles the profiles valid for the current infrastructure type (reset
+  on the road/rail toggle, since they are separate lists and a carried index would
+  silently pick an unrelated profile). The receipt updates live.
+- **Rendering:** `render/corridorGeometry.ts` splits a corridor's single smoothed polyline
+  into per-segment runs. Until now `network.ts` drew straight lines node to node and **none
+  of the whole-chain smoothing Module 4 paid for had ever been visible** — sweeping a
+  cross-section made that impossible to ignore, since a profile swept along a straight line
+  fans out at a corner.
+
+**Two real bugs found by looking at the result, not by testing it:**
+
+1. **The orthographic camera was non-uniformly scaled.** `scene.ts`'s `resize()` updated
+   `camera.left`/`right` from `baseHalfHeight` but never `top`/`bottom`, which stayed at
+   whatever the constructor set from `style.camera.viewSize`. The moment `setTerrain`
+   raised `baseHalfHeight` to frame a real map, the world rendered ~2.7× horizontally
+   squashed at a 1400×950 canvas. Pre-existing since **Module 4**; it survived because
+   nothing on screen was round enough to give it away. Spotted as node spheres drawing as
+   vertical ellipses — a visual saying something the model doesn't mean, the failure class
+   §5 calls the single most reliable rule in the project.
+2. **Literally-correct asphalt is invisible asphalt.** The studio's material palette was
+   picked for a lit close-up preview against a dark editor background. On the map, real
+   asphalt (~`0x3a3a3e`) sits exactly where era-tinted terrain already is, and the roads
+   vanished. Re-valued for albedo separation (§5: "the scene read flat because large areas
+   shared an albedo, not because the lighting was wrong"), keeping value structure *within*
+   a profile so light ballast against dark sleepers is what makes rail read as rail. The
+   studio's swatches now derive from the renderer's palette rather than restating it.
+
+**Live-verified** (screenshots actually looked at, not just asserted on): the whole 48×48
+map frames correctly with round node markers; roads render at real cross-section width and
+rail reads as ballast-and-sleepers when zoomed; a bridge built across water renders the
+swept deck with its fascia band and shadow; cycling `T` while previewing moves the receipt
+through feeder-road ₦194 / trunk-road ₦297 / expressway ₦750 with `nodes: 50` unchanged
+throughout, confirming the profile scales the per-length terms and not the point cost; the
+Inspector reports `profile feeder-road (inherited) · cross-section 7.2 m · decay rate
+1.60x`. The Condition overlay shows the colonial rail spine as the worst thing on the map,
+which is correct and not a decay artifact — `corridors.ts` has started inherited rail at
+condition 0.6 and roads at 0.75 since Module 2. That is the brownfield premise rendering
+itself.
+
+**Still not done:** sleepers sweep as a continuous band rather than discrete cross-ties. A
+swept cross-section cannot express repetition *along* the alignment at all, so this is a
+limit of the representation rather than a tuning gap. At the diorama's middle-distance
+register the continuous band still separates rail from road by width and surface
+treatment, which is what §5 asks of the channel.
+
+## Module 11c — Asset Modder crash on a real `.glb` ✅
+Reported from actual use: loading `Train_Track_01.glb` printed `RangeError: Maximum call
+stack size exceeded`.
+
+`btoa(String.fromCharCode(...new Uint8Array(buffer)))` spreads every byte as a separate
+function argument, so it throws once the file exceeds the engine's argument limit —
+measured here between 64 KB and 128 KB in V8. **The Module 11 live verification used a
+678-byte hand-built glTF**, three orders of magnitude below the threshold, so it passed
+while the first real model anyone loaded blew the stack. A fixture small enough to be
+convenient was the whole reason this shipped.
+
+Replaced with a chunked encoder in `src/dev/encodeMesh.ts`. `FileReader.readAsDataURL`
+would also work and is native, but Bun has no `FileReader`, so it could not have a
+regression test pointed at it; `test/dev-encode-mesh.test.ts` now straddles the failing
+threshold deliberately (64 KB / 128 KB / 1 MB / 5 MB) against `Buffer`'s own encoding.
+
+**The quieter bug underneath it was worse.** `setMeshName(file.name)` ran *before* the
+throwing line, so the panel reported "Loaded Train_Track_01.glb" while no bytes had been
+captured — which is exactly what the report showed, both messages at once. "Write mod
+package" would then have written a `vehicle.json` whose `mesh` named a file the server was
+never given, producing a mod that looks fine on disk and fails later, somewhere else.
+Fixed on both sides: the client encodes before touching any state and only claims `mesh`
+when it holds the bytes, and the writer refuses the whole write if `vehicle.mesh` names a
+file it wasn't sent. The mesh filename also gets the allowlist treatment the mod id
+already had, since it likewise becomes a path on disk.
+
+Re-verified against a real 501 KB **binary** `.glb` — the earlier fixture was JSON
+`.gltf`, so the GLB container path had never been exercised either. Loads clean, anchors
+place on the mesh, and the written mesh is byte-for-byte the size of the source.
+
+## Module 12 — Ambient private traffic ✅
+The prosperity loop closed: the network develops villages into settlements, the growth
+that implies puts private cars on the road, and the corridors that enabled the growth
+start to choke. Road transit becomes a victim of its own success, and grade-separated rail
+is the only way out.
+
+**No car agents.** `C_ambient` is a per-segment *load*, not a population — a private
+commuter is not something the simulation moves, it is something that makes the road
+narrower. Same reasoning as aggregate demand queues (architecture.md hard rule 4), and it
+costs one number per segment per tick. `render/network.ts` draws instanced cars *from*
+that number; deleting the renderer would change how the game looks and nothing about how
+it plays.
+
+`ambientTraffic` joins the five existing era modifiers as content (`eras.json`), so the
+whole curve is tunable without touching code — starting values 0.02 / 0.18 / 0.08 / 0.38
+across the four eras. Required rather than optional-with-a-default: an era that forgot to
+say how motorised it is would silently render as empty roads, and a missing mechanic that
+looks like a working one is the worst kind.
+
+**Attenuation is measured from each segment's midpoint, not its endpoints — and that
+distinction is the whole mechanic.** Measured at the endpoints, a 24-cell
+settlement-to-settlement highway has both ends at distance zero and therefore carries full
+traffic along its entire length: prosperity would degrade every road on the map uniformly,
+a flat tax with nothing to route around. Measured at the midpoint, short approaches stay
+busy and the open middle of a long intercity run stays clear. Caught by looking at the
+first render, not by a test.
+
+**Rail's immunity is structural, not a filter.** Rail segments are excluded when the
+ambient geometry is built, so there is no code path in which a railway acquires car
+traffic. The strategic payoff depends on that being absolute: if rail took even a
+fraction, there would be no infrastructure immune to the late-game hazard and the mechanic
+would stop being a decision. It is visible on the map — under Corridor stress, roads carry
+ribbons and the colonial spine carries none.
+
+**The runaway safeguard.** Ambient traffic closes a genuine vicious loop: cars slow the
+player's buses → queues clear more slowly → the unserved EMA rises → paratransit spawns →
+paratransit adds *more* load to the same road. Every step is individually correct, which
+is what makes it dangerous. Queue depth cannot tell "service collapsed" apart from "the
+road got slower"; the rolling player-served share can, so `trySpawnParatransit` damps its
+threshold by `engine/growth`'s `playerServiceEMA` for that origin. It **damps rather than
+blocks** — paratransit filling any gap the player leaves is the hook, and a hard cutoff at
+moderate service would turn the antagonist into a subsystem that politely waits its turn.
+
+A test asserting era pressure and service damping "compose" initially failed, and the
+**test** was wrong, not the code: Informal-era pressure is strong enough to break through
+service that would block a spawn in a calmer era. That is the correct reading of "rail
+collapse, paratransit takeover" — the damping exists to stop a feedback loop, not to let a
+competent player switch the antagonist off.
+
+**A legibility regression caught in the same session it was introduced.** The Corridor
+stress overlay drew a ribbon wherever load was above zero, which was fine while vehicles
+were the only thing on the road. Ambient traffic puts non-zero load on *every* road in
+every motorised era, so the overlay ribboned the entire network — "colouring every corridor
+destroys the signal" (§5), in one change. Now gated at `FREE_SLOT_WEIGHT`: a free-flowing
+link is not an answer to "which link is the bottleneck?"
+
+**Two smaller cleanups the work forced.** `SimulationState` publishes `segmentLoads`
+(total) and `ambientLoads` (the private-car share) once per tick, so the number that slows
+a bus and the number the overlay draws are literally the same object. And `rebuildFromMap`
+consolidates the map/routing/ambient-geometry rebuild that `render/fleet.ts` was doing by
+hand at two separate call sites.
+
+**Live-verified**: instanced cars render and move along real corridor centrelines at a
+steady 60 fps; under Corridor stress the dense settlement cluster shows stressed
+approaches while long intercity runs show nothing, and the rail spine shows nothing at
+all. Verified by temporarily raising the starting era's factor to stand in for a grown
+Modern network, then reverting — the committed content is unchanged.
+
+**Not calibrated, deliberately.** The numbers are starting points, not gospel (§5:
+"analytical models are wrong on first contact, every time; the error is usually
+calibration, not structure"). They live in content precisely so a playtest can move them
+without a code change. What has *not* been felt is a real Modern-era game with genuinely
+grown settlements — that needs a warm-forward, which is Module 10's job.

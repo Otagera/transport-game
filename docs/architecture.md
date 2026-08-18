@@ -86,15 +86,24 @@ test/              One file per engine module + a handful of render-adjacent one
 once per animation frame; the callback may run zero or more `dt`-sized simulation steps
 depending on how much real time elapsed. Inside that callback, in order:
 
-1. `tick(simulation, dt, economy, paratransit, eraModifiers)` — the one integration
-   point (`engine/simulation/simulate.ts`) that threads economy, paratransit, and era
-   modifiers together. It grows demand queues, decays segment condition, moves every
-   vehicle, applies operating costs, and runs paratransit spawn/reap.
+1. `tick(simulation, dt, economy?, paratransit?, eraModifiers?, growth?, profileDecayById?)`
+   — the one integration point (`engine/simulation/simulate.ts`) that threads economy,
+   paratransit, era modifiers, growth and profile decay together. It grows demand queues,
+   decays segment condition, computes the tick's total road occupancy (vehicles **plus**
+   ambient private traffic), moves every vehicle, applies operating costs, and runs
+   paratransit spawn/reap. Returns any `PromotionEvent[]` the tick produced.
+
+   Every optional argument is optional on purpose: `tick(state, dt)` alone is a pure
+   physical-movement simulation, which is what most engine tests run. Each extra argument
+   is a plain value or a plain `Map`, never a content type.
 2. `advanceEraTimeline(eraTimeline, dt)` — may return an `EraTransition`, which
    `main.ts` reacts to (see Module 8 in status.md).
 
-`engine/economy`, `engine/paratransit`, and `engine/eras` are all optional/separate from
-`SimulationState` on purpose — `engine/simulation` stays about physical movement only.
+`engine/economy`, `engine/paratransit`, `engine/eras` and `engine/growth` are all
+optional/separate from `SimulationState` on purpose — `engine/simulation` stays about
+physical movement only. Anything derived from map topology (`routing`, `ambientGeometry`)
+is rebuilt in one place, `simulate.ts`'s `rebuildFromMap`, so a map change cannot leave
+half the caches stale.
 
 ## Recurring patterns worth knowing before touching code
 
