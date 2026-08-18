@@ -6,7 +6,7 @@ conversation should read first to know where things stand, before diving into so
 `git log`. Pair with [architecture.md](architecture.md) for the stable "how it's shaped"
 reference.
 
-Current test count: **231 passing** across 39 files (`bun test`). All of typecheck /
+Current test count: **240 passing** across 40 files (`bun test`). All of typecheck /
 test / build / verify:bundle pass as of the last commit on this list.
 
 ## Module 0 — Foundation ✅
@@ -277,6 +277,10 @@ Three actions, all of which **stay available at negative funds**:
   actually bought back; `maintenanceCost` prices exactly that. Maintenance pricing lives
   in `pathing/cost.ts` because that module is the only place geometry may become
   currency.
+
+`test/ui-inspector.test.ts` pins this down against `funds = -5000`: if a later change
+routes these three through `canAfford` "for consistency" with purchases, that is what
+should fail.
 
 Keeping all three usable in debt is a **deliberate, documented exception** to
 `economy/state.ts`'s "spending is blocked when it isn't affordable", which still governs
