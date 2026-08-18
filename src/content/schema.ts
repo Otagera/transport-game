@@ -39,6 +39,34 @@ export const EraListSchema = z.array(EraSchema);
 // "still purchasable in every later era." `runsOn` exists for a future
 // era to differentiate (e.g. an electric Modern-era bus) -- it costs
 // nothing now, same "field costs nothing later" pattern as Segment.level.
+// Module 11 additions, all optional so the hand-written catalog in
+// public/content/vehicles.json keeps validating unchanged:
+//
+// - `congestionWeight` closes a real gap. "An okada occupying the same
+//   road space as a bus is plainly wrong" (docs/rebuild-plan.md §5) was
+//   modelled in engine/simulation/congestion.ts from Module 7, but
+//   nothing ever supplied a value: every player vehicle used
+//   createVehicle's default of 1, so an okada and a BRT weighed the same
+//   on a segment. Defaulting to 1 keeps that exact behaviour for any def
+//   that doesn't say otherwise.
+// - `mesh` and `anchors` exist for mod packages authored in the studio's
+//   Asset Modder tab. A def with no mesh renders as the built-in marker,
+//   so they cost nothing when absent.
+export const AnchorSchema = z.object({ x: z.number(), y: z.number(), z: z.number() });
+
+export const VehicleAnchorsSchema = z.object({
+  /** Wheel contact points -- wheel placement and turning radius. */
+  axlePositions: z.array(AnchorSchema).default([]),
+  /** Where passengers board and alight. */
+  boardingDoors: z.array(AnchorSchema).default([]),
+  /** Where goods stack visually. */
+  cargoNodes: z.array(AnchorSchema).default([]),
+  /** Exhaust and dust origins. */
+  particleEmitters: z.array(AnchorSchema).default([]),
+});
+
+export type VehicleAnchors = z.infer<typeof VehicleAnchorsSchema>;
+
 export const VehicleDefSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -50,6 +78,9 @@ export const VehicleDefSchema = z.object({
   runsOn: z.string(),
   eraIn: z.string(),
   eraOut: z.string().nullable(),
+  congestionWeight: z.number().positive().default(1),
+  mesh: z.string().optional(),
+  anchors: VehicleAnchorsSchema.optional(),
 });
 
 export type VehicleDef = z.infer<typeof VehicleDefSchema>;

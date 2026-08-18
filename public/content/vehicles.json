@@ -1,9 +1,9 @@
 [
-  { "id": "okada", "name": "Okada", "carries": "passengers", "capacity": 1, "speed": 6, "purchaseCost": 25, "operatingCostPerSecond": 0.05, "runsOn": "petrol", "eraIn": "informal", "eraOut": null },
-  { "id": "keke", "name": "Keke", "carries": "passengers", "capacity": 3, "speed": 4.5, "purchaseCost": 75, "operatingCostPerSecond": 0.15, "runsOn": "petrol", "eraIn": "informal", "eraOut": null },
-  { "id": "danfo", "name": "Danfo", "carries": "passengers", "capacity": 14, "speed": 3.5, "purchaseCost": 200, "operatingCostPerSecond": 0.4, "runsOn": "petrol", "eraIn": "post-independence", "eraOut": null },
-  { "id": "bolekaja", "name": "Bolekaja", "carries": "passengers", "capacity": 20, "speed": 3, "purchaseCost": 450, "operatingCostPerSecond": 0.9, "runsOn": "petrol", "eraIn": "post-independence", "eraOut": "oil-boom" },
-  { "id": "lorry", "name": "Lorry", "carries": "goods", "capacity": 30, "speed": 2.5, "purchaseCost": 550, "operatingCostPerSecond": 1.1, "runsOn": "petrol", "eraIn": "post-independence", "eraOut": null },
-  { "id": "molue", "name": "Molue", "carries": "passengers", "capacity": 44, "speed": 2.5, "purchaseCost": 650, "operatingCostPerSecond": 1.3, "runsOn": "petrol", "eraIn": "oil-boom", "eraOut": "informal" },
-  { "id": "brt", "name": "BRT", "carries": "passengers", "capacity": 80, "speed": 3, "purchaseCost": 1600, "operatingCostPerSecond": 3.2, "runsOn": "petrol", "eraIn": "modern", "eraOut": null }
+  { "id": "okada", "name": "Okada", "carries": "passengers", "capacity": 1, "speed": 6, "purchaseCost": 25, "operatingCostPerSecond": 0.05, "runsOn": "petrol", "eraIn": "informal", "eraOut": null, "congestionWeight": 0.3 },
+  { "id": "keke", "name": "Keke", "carries": "passengers", "capacity": 3, "speed": 4.5, "purchaseCost": 75, "operatingCostPerSecond": 0.15, "runsOn": "petrol", "eraIn": "informal", "eraOut": null, "congestionWeight": 0.5 },
+  { "id": "danfo", "name": "Danfo", "carries": "passengers", "capacity": 14, "speed": 3.5, "purchaseCost": 200, "operatingCostPerSecond": 0.4, "runsOn": "petrol", "eraIn": "post-independence", "eraOut": null, "congestionWeight": 1 },
+  { "id": "bolekaja", "name": "Bolekaja", "carries": "passengers", "capacity": 20, "speed": 3, "purchaseCost": 450, "operatingCostPerSecond": 0.9, "runsOn": "petrol", "eraIn": "post-independence", "eraOut": "oil-boom", "congestionWeight": 1.2 },
+  { "id": "lorry", "name": "Lorry", "carries": "goods", "capacity": 30, "speed": 2.5, "purchaseCost": 550, "operatingCostPerSecond": 1.1, "runsOn": "petrol", "eraIn": "post-independence", "eraOut": null, "congestionWeight": 1.5 },
+  { "id": "molue", "name": "Molue", "carries": "passengers", "capacity": 44, "speed": 2.5, "purchaseCost": 650, "operatingCostPerSecond": 1.3, "runsOn": "petrol", "eraIn": "oil-boom", "eraOut": "informal", "congestionWeight": 1.8 },
+  { "id": "brt", "name": "BRT", "carries": "passengers", "capacity": 80, "speed": 3, "purchaseCost": 1600, "operatingCostPerSecond": 3.2, "runsOn": "petrol", "eraIn": "modern", "eraOut": null, "congestionWeight": 2.2 }
 ]

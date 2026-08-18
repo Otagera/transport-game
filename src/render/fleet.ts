@@ -99,7 +99,21 @@ export function createFleetController(
     const id = `vehicle-${nextVehicleIdCounter}`;
     nextVehicleIdCounter += 1;
 
-    const vehicle = createVehicle(id, pendingRoute, simulation.routing, def.speed, def.capacity, simulation.queues, def.carries);
+    const vehicle = createVehicle(
+      id,
+      pendingRoute,
+      simulation.routing,
+      def.speed,
+      def.capacity,
+      simulation.queues,
+      def.carries,
+      // Threaded from the def rather than left at createVehicle's default
+      // of 1: an okada and a BRT occupying the same road space equally
+      // was exactly the thing congestion weighting exists to prevent
+      // (docs/rebuild-plan.md §5), and until now no player vehicle ever
+      // supplied a value.
+      def.congestionWeight,
+    );
     simulation.vehicles.push(vehicle);
     registerPurchase(economy, id, def.purchaseCost, def.operatingCostPerSecond, def.id);
     pendingRoute = null;

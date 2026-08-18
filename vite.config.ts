@@ -1,5 +1,7 @@
 import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "node:url";
+// @ts-expect-error -- plain .mjs dev-server plugin, no types to import
+import { studioModWriter } from "./scripts/studio-mod-writer.mjs";
 
 // Preact JSX, configured at the bundler rather than per-file: the only
 // .tsx in the tree is dev-only studio UI (src/dev/), which is dynamically
@@ -7,6 +9,7 @@ import { fileURLToPath, URL } from "node:url";
 // production bundle -- the transform setting costs the shipped build
 // nothing. `automatic` runtime means no `h` import in every component.
 export default defineConfig({
+  plugins: [studioModWriter()],
   oxc: {
     jsx: { runtime: "automatic", importSource: "preact" },
   },

@@ -89,4 +89,20 @@ describe("content schema", () => {
       expect(changed).toBe(true);
     }
   });
+
+  // "An okada occupying the same road space as a bus is plainly wrong"
+  // (docs/rebuild-plan.md §5). Module 7 modelled that, but until Module 11
+  // no def supplied a weight, so every player vehicle used the default of
+  // 1 and the model had nothing to bite on. This asserts the catalog
+  // actually expresses the distinction rather than merely being allowed to.
+  test("congestion weight rises with capacity across the catalog", () => {
+    const vehiclesPath = join(import.meta.dir, "..", "public", "content", "vehicles.json");
+    const vehicles = VehicleDefListSchema.parse(JSON.parse(readFileSync(vehiclesPath, "utf8")));
+    const byCapacity = [...vehicles].sort((a, b) => a.capacity - b.capacity);
+
+    for (let i = 1; i < byCapacity.length; i += 1) {
+      expect(byCapacity[i]!.congestionWeight).toBeGreaterThanOrEqual(byCapacity[i - 1]!.congestionWeight);
+    }
+    expect(byCapacity.at(0)!.congestionWeight).toBeLessThan(byCapacity.at(-1)!.congestionWeight);
+  });
 });
