@@ -1,5 +1,6 @@
 import type { CargoKind, DeliveryEvent, LoadEntry, NodeQueues, RoutingContext, SegmentTraffic, Vehicle } from "./types";
 import { findPath } from "./routing";
+import { congestionFactor } from "./congestion";
 
 function cargoAmount(cargo: LoadEntry[]): number {
   let total = 0;
@@ -64,7 +65,7 @@ function findSegmentId(context: RoutingContext, fromNode: string, toNode: string
 function recordCrossing(
   traffic: Map<string, SegmentTraffic>,
   segmentId: string,
-  capacity: number,
+  effectiveCapacity: number,
   delivered: number,
   cargoAtArrivalAfterUnload: number,
 ): void {
@@ -73,9 +74,9 @@ function recordCrossing(
     entry = { deliveredRecently: 0, potentialRecently: 0, loadFractionSum: 0, sampleCount: 0 };
     traffic.set(segmentId, entry);
   }
-  entry.potentialRecently += capacity;
+  entry.potentialRecently += effectiveCapacity;
   entry.deliveredRecently += delivered;
-  entry.loadFractionSum += (cargoAtArrivalAfterUnload + delivered) / capacity;
+  entry.loadFractionSum += (cargoAtArrivalAfterUnload + delivered) / effectiveCapacity;
   entry.sampleCount += 1;
 }
 
@@ -97,6 +98,7 @@ export function createVehicle(
   capacity: number,
   queues?: NodeQueues,
   carries: Vehicle["carries"] = "passengers",
+  congestionWeight = 1,
 ): Vehicle {
   if (waypoints.length < 2) {
     throw new Error(`Vehicle "${id}" needs at least two waypoints.`);
@@ -114,47 +116,105 @@ export function createVehicle(
   }
   path.pop(); // closing the loop duplicates waypoints[0] at the end
 
-  const vehicle: Vehicle = { id, path, pathIndex: 1, edgeProgress: 0, speed, capacity, cargo: [], carries };
+  const vehicle: Vehicle = {
+    id,
+    path,
+    pathIndex: 1,
+    edgeProgress: 0,
+    speed,
+    capacity,
+    cargo: [],
+    carries,
+    congestionWeight,
+    lifecycle: "cyclic",
+  };
   if (queues) {
     loadAt(vehicle, path[0]!, queues);
   }
   return vehicle;
 }
 
+// A one-shot paratransit vehicle: a straight point-to-point path (not a
+// closed loop), passengers-only, removed once it reaches the end instead
+// of running forever (docs/rebuild-plan.md §5: "cyclic paratransit drains
+// queues to a comfortable equilibrium and removes the pressure to
+// build. Measured, not assumed.").
+export function createOneShotVehicle(
+  id: string,
+  fromNodeId: string,
+  toNodeId: string,
+  context: RoutingContext,
+  speed: number,
+  capacity: number,
+  congestionWeight: number,
+  queues: NodeQueues,
+): Vehicle | null {
+  const result = findPath(context, fromNodeId, toNodeId);
+  if (!result || result.nodeIds.length < 2) {
+    return null;
+  }
+
+  const vehicle: Vehicle = {
+    id,
+    path: result.nodeIds,
+    pathIndex: 1,
+    edgeProgress: 0,
+    speed,
+    capacity,
+    cargo: [],
+    carries: "passengers",
+    congestionWeight,
+    lifecycle: "one-shot",
+  };
+  loadAt(vehicle, fromNodeId, queues);
+  return vehicle;
+}
+
+export function hasCompletedTrip(vehicle: Vehicle): boolean {
+  return vehicle.lifecycle === "one-shot" && vehicle.pathIndex >= vehicle.path.length;
+}
+
 // Vehicles move along corridors as progress values on a graph -- no
 // forces, no collisions (docs/rebuild-plan.md §3, rejected: physics
-// engines). The while loop lets a large dt cross more than one edge in a
-// single call without losing sub-edge progress.
+// engines). The outer loop lets a large dt cross more than one edge in a
+// single call without losing sub-edge progress; it now consumes a *time*
+// budget rather than a distance budget, since congestion makes effective
+// speed vary edge to edge within the same call.
 export function tickVehicle(
   vehicle: Vehicle,
   queues: NodeQueues,
   context: RoutingContext,
   segmentTraffic: Map<string, SegmentTraffic>,
+  segmentLoads: Map<string, number>,
   dt: number,
 ): DeliveryEvent[] {
   const pathLength = vehicle.path.length;
-  if (pathLength < 2) {
+  if (pathLength < 2 || hasCompletedTrip(vehicle)) {
     return [];
   }
 
   const deliveries: DeliveryEvent[] = [];
-  let distanceToTravel = vehicle.speed * dt;
+  let timeRemaining = dt;
 
-  while (distanceToTravel > 0) {
+  while (timeRemaining > 0) {
     const fromIndex = (vehicle.pathIndex - 1 + pathLength) % pathLength;
     const fromNode = vehicle.path[fromIndex]!;
     const toNode = vehicle.path[vehicle.pathIndex]!;
     const edgeLength = nodeDistance(context, fromNode, toNode);
-    const remainingOnEdge = (1 - vehicle.edgeProgress) * edgeLength;
+    const segmentId = findSegmentId(context, fromNode, toNode);
+    const factor = segmentId ? congestionFactor(segmentLoads.get(segmentId) ?? 0) : 1;
+    const effectiveSpeed = vehicle.speed * factor;
 
-    if (distanceToTravel < remainingOnEdge) {
-      vehicle.edgeProgress += distanceToTravel / edgeLength;
-      distanceToTravel = 0;
+    const remainingDistanceOnEdge = (1 - vehicle.edgeProgress) * edgeLength;
+    const distanceThisStep = effectiveSpeed * timeRemaining;
+
+    if (distanceThisStep < remainingDistanceOnEdge) {
+      vehicle.edgeProgress += distanceThisStep / edgeLength;
+      timeRemaining = 0;
     } else {
-      distanceToTravel -= remainingOnEdge;
+      timeRemaining -= remainingDistanceOnEdge / effectiveSpeed;
       vehicle.edgeProgress = 0;
 
-      const segmentId = findSegmentId(context, fromNode, toNode);
       const delivered = unloadAt(vehicle, toNode);
       let deliveredHere = 0;
       for (const entry of delivered) {
@@ -162,9 +222,19 @@ export function tickVehicle(
         deliveries.push({ kind: entry.kind, amount: entry.amount });
       }
       const cargoAfterUnload = cargoAmount(vehicle.cargo);
-      loadAt(vehicle, toNode, queues);
+
+      const arrivedAtEnd = vehicle.lifecycle === "one-shot" && vehicle.pathIndex === pathLength - 1;
+      if (!arrivedAtEnd) {
+        loadAt(vehicle, toNode, queues);
+      }
+
       if (segmentId) {
-        recordCrossing(segmentTraffic, segmentId, vehicle.capacity, deliveredHere, cargoAfterUnload);
+        recordCrossing(segmentTraffic, segmentId, vehicle.capacity * factor, deliveredHere, cargoAfterUnload);
+      }
+
+      if (arrivedAtEnd) {
+        vehicle.pathIndex = pathLength; // sentinel: trip complete, see hasCompletedTrip
+        return deliveries;
       }
 
       vehicle.pathIndex = (vehicle.pathIndex + 1) % pathLength;

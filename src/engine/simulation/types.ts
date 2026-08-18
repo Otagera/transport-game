@@ -37,6 +37,16 @@ export interface Vehicle {
   // is passengers-only because goods need capital an okada doesn't have,
   // generalized here to any vehicle).
   carries: "passengers" | "goods";
+  // An okada occupying the same road space as a bus is plainly wrong
+  // (docs/rebuild-plan.md §5) -- this is how much of a segment's
+  // congestion capacity one vehicle actually uses.
+  congestionWeight: number;
+  // Player vehicles run cyclic routes; paratransit is one-shot (docs/
+  // rebuild-plan.md §5) -- cyclic paratransit drains queues to a
+  // comfortable equilibrium and removes the pressure to build. A
+  // one-shot vehicle's path is not a closed loop; it's removed once it
+  // reaches the end instead of wrapping back to the start.
+  lifecycle: "cyclic" | "one-shot";
 }
 
 // Revenue accrues on unload, not on carriage (docs/rebuild-plan.md §5) --

@@ -78,7 +78,7 @@ describe("tickVehicle", () => {
     const traffic: Map<string, SegmentTraffic> = new Map();
 
     // speed 4 * dt 1s = 4 units = exactly one edge (a -> b, length 4).
-    tickVehicle(vehicle, queues, context, traffic, 1);
+    tickVehicle(vehicle, queues, context, traffic, new Map(), 1);
 
     expect(vehicle.cargo).toEqual([]);
     const segmentStats = traffic.get("s-ab")!;
@@ -93,6 +93,6 @@ describe("tickVehicle", () => {
     vehicle.path = ["a"];
     const queues: NodeQueues = new Map([["a", new Map()]]);
     const traffic: Map<string, SegmentTraffic> = new Map();
-    expect(() => tickVehicle(vehicle, queues, context, traffic, 1)).not.toThrow();
+    expect(() => tickVehicle(vehicle, queues, context, traffic, new Map(), 1)).not.toThrow();
   });
 });
