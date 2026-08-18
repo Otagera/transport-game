@@ -82,6 +82,7 @@ function fixture(options: { withVehicle?: boolean; funds?: number } = {}): Fixtu
         { id: "danfo", name: "Danfo", carries: "passengers", capacity: 14, speed: 3.5, purchaseCost: 200, operatingCostPerSecond: 0.4, runsOn: "petrol", eraIn: "post-independence", eraOut: null, congestionWeight: 1 },
       ],
       stranded: () => new Set<string>(),
+      profileFor: () => undefined,
     },
   };
 }

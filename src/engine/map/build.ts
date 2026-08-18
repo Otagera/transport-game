@@ -38,6 +38,7 @@ export function commitCorridor(
   waypoints: WaypointSpec[],
   plan: CorridorPlan,
   infrastructureType: InfrastructureType,
+  profileId?: string,
 ): GeneratedMap {
   const newNodes: MapNode[] = [];
   const nodeIds: string[] = [];
@@ -71,6 +72,7 @@ export function commitCorridor(
       level: plan.segmentLevels[i]!,
       condition: 1,
       provenance: "built",
+      profileId,
     });
   }
 

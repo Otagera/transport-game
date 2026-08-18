@@ -1,0 +1,698 @@
+[
+  {
+    "id": "feeder-road",
+    "surfaceType": "road",
+    "width": 7.2,
+    "costPerMeter": 7,
+    "decayRateMultiplier": 1.6,
+    "crossSectionVertices": [
+      {
+        "x": -3.6,
+        "y": 0
+      },
+      {
+        "x": -2.5,
+        "y": 0.1
+      },
+      {
+        "x": 2.5,
+        "y": 0.1
+      },
+      {
+        "x": 3.6,
+        "y": 0
+      },
+      {
+        "x": 3.6,
+        "y": -0.4
+      },
+      {
+        "x": 2.5,
+        "y": -0.4
+      },
+      {
+        "x": -2.5,
+        "y": -0.4
+      },
+      {
+        "x": -3.6,
+        "y": -0.4
+      }
+    ],
+    "elements": [
+      {
+        "id": "carriageway",
+        "material": "asphalt",
+        "vertices": [
+          {
+            "x": -2.5,
+            "y": 0
+          },
+          {
+            "x": 2.5,
+            "y": 0
+          },
+          {
+            "x": 2.5,
+            "y": 0.1
+          },
+          {
+            "x": -2.5,
+            "y": 0.1
+          }
+        ],
+        "channels": {
+          "friction": 0.7,
+          "decay": 1.2
+        }
+      },
+      {
+        "id": "ditch-left",
+        "material": "ditch",
+        "vertices": [
+          {
+            "x": -3.6,
+            "y": -0.4
+          },
+          {
+            "x": -2.5,
+            "y": -0.4
+          },
+          {
+            "x": -2.5,
+            "y": 0
+          },
+          {
+            "x": -3.6,
+            "y": 0
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 0.3
+        }
+      },
+      {
+        "id": "ditch-right",
+        "material": "ditch",
+        "vertices": [
+          {
+            "x": 2.5,
+            "y": -0.4
+          },
+          {
+            "x": 3.6,
+            "y": -0.4
+          },
+          {
+            "x": 3.6,
+            "y": 0
+          },
+          {
+            "x": 2.5,
+            "y": 0
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 0.3
+        }
+      }
+    ]
+  },
+  {
+    "id": "trunk-road",
+    "surfaceType": "road",
+    "width": 8.6,
+    "costPerMeter": 12,
+    "decayRateMultiplier": 1,
+    "crossSectionVertices": [
+      {
+        "x": -4.3,
+        "y": 0
+      },
+      {
+        "x": -3.72,
+        "y": 0.3
+      },
+      {
+        "x": -3.5,
+        "y": 0.3
+      },
+      {
+        "x": 3.5,
+        "y": 0.3
+      },
+      {
+        "x": 3.72,
+        "y": 0.3
+      },
+      {
+        "x": 4.3,
+        "y": 0
+      },
+      {
+        "x": 4.3,
+        "y": -0.12
+      },
+      {
+        "x": 3.72,
+        "y": -0.12
+      },
+      {
+        "x": 3.5,
+        "y": 0
+      },
+      {
+        "x": -3.5,
+        "y": 0
+      },
+      {
+        "x": -3.72,
+        "y": -0.12
+      },
+      {
+        "x": -4.3,
+        "y": -0.12
+      }
+    ],
+    "elements": [
+      {
+        "id": "carriageway",
+        "material": "asphalt",
+        "vertices": [
+          {
+            "x": -3.5,
+            "y": 0
+          },
+          {
+            "x": 3.5,
+            "y": 0
+          },
+          {
+            "x": 3.5,
+            "y": 0.14
+          },
+          {
+            "x": -3.5,
+            "y": 0.14
+          }
+        ],
+        "channels": {
+          "friction": 0.85,
+          "decay": 1
+        }
+      },
+      {
+        "id": "curb-left",
+        "material": "curb",
+        "vertices": [
+          {
+            "x": -3.72,
+            "y": 0
+          },
+          {
+            "x": -3.5,
+            "y": 0
+          },
+          {
+            "x": -3.5,
+            "y": 0.3
+          },
+          {
+            "x": -3.72,
+            "y": 0.3
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 1
+        }
+      },
+      {
+        "id": "curb-right",
+        "material": "curb",
+        "vertices": [
+          {
+            "x": 3.5,
+            "y": 0
+          },
+          {
+            "x": 3.72,
+            "y": 0
+          },
+          {
+            "x": 3.72,
+            "y": 0.3
+          },
+          {
+            "x": 3.5,
+            "y": 0.3
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 1
+        }
+      },
+      {
+        "id": "gutter-left",
+        "material": "gutter",
+        "vertices": [
+          {
+            "x": -4.3,
+            "y": -0.12
+          },
+          {
+            "x": -3.72,
+            "y": -0.12
+          },
+          {
+            "x": -3.72,
+            "y": 0
+          },
+          {
+            "x": -4.3,
+            "y": 0
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 0.6
+        }
+      },
+      {
+        "id": "gutter-right",
+        "material": "gutter",
+        "vertices": [
+          {
+            "x": 3.72,
+            "y": -0.12
+          },
+          {
+            "x": 4.3,
+            "y": -0.12
+          },
+          {
+            "x": 4.3,
+            "y": 0
+          },
+          {
+            "x": 3.72,
+            "y": 0
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 0.6
+        }
+      }
+    ]
+  },
+  {
+    "id": "expressway",
+    "surfaceType": "road",
+    "width": 14.6,
+    "costPerMeter": 34,
+    "decayRateMultiplier": 0.7,
+    "crossSectionVertices": [
+      {
+        "x": -7.3,
+        "y": 0.32
+      },
+      {
+        "x": -7,
+        "y": 0.32
+      },
+      {
+        "x": -1.2,
+        "y": 0.16
+      },
+      {
+        "x": -0.4,
+        "y": 0.9
+      },
+      {
+        "x": 0.4,
+        "y": 0.9
+      },
+      {
+        "x": 1.2,
+        "y": 0.16
+      },
+      {
+        "x": 7,
+        "y": 0.32
+      },
+      {
+        "x": 7.3,
+        "y": 0.32
+      },
+      {
+        "x": 7.3,
+        "y": 0
+      },
+      {
+        "x": 7,
+        "y": 0
+      },
+      {
+        "x": 1.2,
+        "y": 0
+      },
+      {
+        "x": 0.4,
+        "y": 0
+      },
+      {
+        "x": -0.4,
+        "y": 0
+      },
+      {
+        "x": -1.2,
+        "y": 0
+      },
+      {
+        "x": -7,
+        "y": 0
+      },
+      {
+        "x": -7.3,
+        "y": 0
+      }
+    ],
+    "elements": [
+      {
+        "id": "carriageway-left",
+        "material": "asphalt",
+        "vertices": [
+          {
+            "x": -7,
+            "y": 0
+          },
+          {
+            "x": -1.2,
+            "y": 0
+          },
+          {
+            "x": -1.2,
+            "y": 0.16
+          },
+          {
+            "x": -7,
+            "y": 0.16
+          }
+        ],
+        "channels": {
+          "friction": 0.9,
+          "decay": 0.8
+        }
+      },
+      {
+        "id": "carriageway-right",
+        "material": "asphalt",
+        "vertices": [
+          {
+            "x": 1.2,
+            "y": 0
+          },
+          {
+            "x": 7,
+            "y": 0
+          },
+          {
+            "x": 7,
+            "y": 0.16
+          },
+          {
+            "x": 1.2,
+            "y": 0.16
+          }
+        ],
+        "channels": {
+          "friction": 0.9,
+          "decay": 0.8
+        }
+      },
+      {
+        "id": "median",
+        "material": "barrier",
+        "vertices": [
+          {
+            "x": -0.4,
+            "y": 0
+          },
+          {
+            "x": 0.4,
+            "y": 0
+          },
+          {
+            "x": 0.4,
+            "y": 0.9
+          },
+          {
+            "x": -0.4,
+            "y": 0.9
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 1.8
+        }
+      },
+      {
+        "id": "curb-left",
+        "material": "curb",
+        "vertices": [
+          {
+            "x": -7.3,
+            "y": 0
+          },
+          {
+            "x": -7,
+            "y": 0
+          },
+          {
+            "x": -7,
+            "y": 0.32
+          },
+          {
+            "x": -7.3,
+            "y": 0.32
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 1.2
+        }
+      },
+      {
+        "id": "curb-right",
+        "material": "curb",
+        "vertices": [
+          {
+            "x": 7,
+            "y": 0
+          },
+          {
+            "x": 7.3,
+            "y": 0
+          },
+          {
+            "x": 7.3,
+            "y": 0.32
+          },
+          {
+            "x": 7,
+            "y": 0.32
+          }
+        ],
+        "channels": {
+          "structuralIntegrity": 1.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "colonial-rail",
+    "surfaceType": "rail",
+    "width": 4.4,
+    "costPerMeter": 16,
+    "decayRateMultiplier": 1.3,
+    "crossSectionVertices": [
+      {
+        "x": -2.2,
+        "y": 0.35
+      },
+      {
+        "x": -1.3,
+        "y": 0.5
+      },
+      {
+        "x": 1.3,
+        "y": 0.5
+      },
+      {
+        "x": 2.2,
+        "y": 0.35
+      },
+      {
+        "x": 2.2,
+        "y": 0
+      },
+      {
+        "x": 1.3,
+        "y": 0.35
+      },
+      {
+        "x": -1.3,
+        "y": 0.35
+      },
+      {
+        "x": -2.2,
+        "y": 0
+      }
+    ],
+    "elements": [
+      {
+        "id": "ballast",
+        "material": "ballast",
+        "vertices": [
+          {
+            "x": -2.2,
+            "y": 0
+          },
+          {
+            "x": 2.2,
+            "y": 0
+          },
+          {
+            "x": 2.2,
+            "y": 0.35
+          },
+          {
+            "x": -2.2,
+            "y": 0.35
+          }
+        ],
+        "channels": {
+          "decay": 0.9,
+          "structuralIntegrity": 1
+        }
+      },
+      {
+        "id": "sleepers",
+        "material": "sleeper",
+        "vertices": [
+          {
+            "x": -1.3,
+            "y": 0.35
+          },
+          {
+            "x": 1.3,
+            "y": 0.35
+          },
+          {
+            "x": 1.3,
+            "y": 0.5
+          },
+          {
+            "x": -1.3,
+            "y": 0.5
+          }
+        ],
+        "channels": {
+          "friction": 0.4,
+          "decay": 1.3
+        }
+      }
+    ]
+  },
+  {
+    "id": "standard-gauge",
+    "surfaceType": "rail",
+    "width": 5.6,
+    "costPerMeter": 30,
+    "decayRateMultiplier": 0.7,
+    "crossSectionVertices": [
+      {
+        "x": -2.8,
+        "y": 0.45
+      },
+      {
+        "x": -1.5,
+        "y": 0.62
+      },
+      {
+        "x": 1.5,
+        "y": 0.62
+      },
+      {
+        "x": 2.8,
+        "y": 0.45
+      },
+      {
+        "x": 2.8,
+        "y": 0
+      },
+      {
+        "x": 1.5,
+        "y": 0.45
+      },
+      {
+        "x": -1.5,
+        "y": 0.45
+      },
+      {
+        "x": -2.8,
+        "y": 0
+      }
+    ],
+    "elements": [
+      {
+        "id": "ballast",
+        "material": "ballast",
+        "vertices": [
+          {
+            "x": -2.8,
+            "y": 0
+          },
+          {
+            "x": 2.8,
+            "y": 0
+          },
+          {
+            "x": 2.8,
+            "y": 0.45
+          },
+          {
+            "x": -2.8,
+            "y": 0.45
+          }
+        ],
+        "channels": {
+          "decay": 0.7,
+          "structuralIntegrity": 1.4
+        }
+      },
+      {
+        "id": "sleepers",
+        "material": "sleeper",
+        "vertices": [
+          {
+            "x": -1.5,
+            "y": 0.45
+          },
+          {
+            "x": 1.5,
+            "y": 0.45
+          },
+          {
+            "x": 1.5,
+            "y": 0.62
+          },
+          {
+            "x": -1.5,
+            "y": 0.62
+          }
+        ],
+        "channels": {
+          "friction": 0.5,
+          "decay": 0.9
+        }
+      }
+    ]
+  }
+]

@@ -45,6 +45,13 @@ export interface Segment {
   level: SegmentLevel;
   condition: number;
   provenance: InfrastructureProvenance;
+  // Which authored cross-section this segment was built to (Module 11).
+  // A plain string, never the content type: engine/ stays content-unaware
+  // and treats this as an opaque key, exactly as it treats a vehicle def
+  // id in economy/types.ts. Undefined means "whatever the bootstrap layer
+  // considers the default for this infrastructure type" -- the generator
+  // places inherited road and rail without knowing content exists.
+  profileId?: string;
 }
 
 export interface TerrainField {

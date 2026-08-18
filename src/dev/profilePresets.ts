@@ -1,4 +1,5 @@
 import type { ProfileElement, ProfileMaterial } from "@content/schema";
+import { MATERIAL_COLORS } from "@render/studioProfile";
 
 // Canonical starting shapes, in metres, measured from the centreline at
 // (0, 0): x runs across the alignment, y up from the ground plane. They
@@ -24,15 +25,13 @@ export const PROFILE_PRESETS: Preset[] = [
   { material: "sleeper", label: "Sleepers", x: [-1.4, 1.4], y: [0.4, 0.56], channels: { friction: 0.5, decay: 1.2 } },
 ];
 
-export const MATERIAL_SWATCHES: Record<ProfileMaterial, string> = {
-  asphalt: "#3a3a3e",
-  curb: "#b8b4ac",
-  gutter: "#8f8b84",
-  ditch: "#5a5142",
-  barrier: "#d7d2c6",
-  ballast: "#6b625a",
-  sleeper: "#4a3a2c",
-};
+// Derived from the renderer's own palette rather than restated: two
+// copies of "what colour is asphalt" is precisely the kind of duplication
+// that drifts, and the editor showing a different colour from the map
+// would make the studio lie about what it is authoring.
+export const MATERIAL_SWATCHES: Record<ProfileMaterial, string> = Object.fromEntries(
+  Object.entries(MATERIAL_COLORS).map(([material, color]) => [material, `#${color.toString(16).padStart(6, "0")}`]),
+) as Record<ProfileMaterial, string>;
 
 let nextElementId = 0;
 

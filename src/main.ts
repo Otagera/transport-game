@@ -1,6 +1,6 @@
 import { Accumulator, SIM_DT } from "@engine/loop";
 import { loadContent } from "@content/loader";
-import { EraListSchema, VehicleDefListSchema } from "@content/schema";
+import { EraListSchema, Profile2DDefListSchema, VehicleDefListSchema } from "@content/schema";
 import type { Era, VehicleDef } from "@content/schema";
 import { generateMap } from "@engine/map/generate";
 import { pruneCorridor } from "@engine/map/prune";
@@ -19,6 +19,7 @@ import { createScene } from "@render/scene";
 import { createCameraController } from "@render/camera";
 import { createDefaultStyleSpec } from "@render/style";
 import { createNetworkGroup } from "@render/network";
+import { createProfileCatalog } from "@render/profileCatalog";
 import { createOverlayLayer } from "@render/overlayLayer";
 import { createVehicleFleetRenderer } from "@render/vehicles";
 import { createAuthoringController, type InteractionMode } from "@render/authoring";
@@ -36,6 +37,14 @@ import * as THREE from "three";
 const DEFAULT_MAP_SEED = 1;
 const STARTING_FUNDS = 1000;
 const FARE_TABLE = { passengers: 5, produce: 3, supplies: 2 };
+// The brownfield premise (docs/rebuild-plan.md §1): the player inherits a
+// colonial rail spine built for export and some pre-built roads. The
+// generator places both without knowing content exists, so this is the
+// bootstrap layer saying what that inherited network was built to -- a
+// neglected colonial line and cheap feeder roads, not the best of each.
+// Declared here rather than stamped onto the generated map so a segment
+// naming a profile that later disappears from content still renders.
+const INHERITED_PROFILES = { road: "feeder-road", rail: "colonial-rail" } as const;
 // Reachability is an all-pairs A* sweep; it answers a question that
 // changes only when the graph does, so it is refreshed on a slow timer
 // rather than per frame.
@@ -63,10 +72,12 @@ async function bootstrap(): Promise<void> {
   const overlayPickerEl = requireElement("overlay-picker");
   const modeHintEl = requireElement("mode-hint");
 
-  const [eras, vehicleCatalog] = await Promise.all([
+  const [eras, vehicleCatalog, profiles] = await Promise.all([
     loadContent(EraListSchema, "/content/eras.json"),
     loadContent(VehicleDefListSchema, "/content/vehicles.json"),
+    loadContent(Profile2DDefListSchema, "/content/profiles.json"),
   ]);
+  const profileCatalog = createProfileCatalog(profiles, INHERITED_PROFILES);
   const eraContentById = new Map(eras.map((era) => [era.id, era]));
   const eraTimeline = createEraTimeline(eras.map(toEraDef));
   const currentEraContent = (): Era => eraContentById.get(currentEra(eraTimeline).id)!;
@@ -79,7 +90,7 @@ async function bootstrap(): Promise<void> {
 
   const map = generateMap(DEFAULT_MAP_SEED);
   const groundMesh = sceneHandle.setTerrain(map);
-  const networkHandle = createNetworkGroup(map);
+  const networkHandle = createNetworkGroup(map, profileCatalog);
   sceneHandle.scene.add(networkHandle.group);
   const overlayLayer = createOverlayLayer();
   sceneHandle.scene.add(overlayLayer.group);
@@ -125,6 +136,7 @@ async function bootstrap(): Promise<void> {
     () => currentEraContent().modifiers.buildCost,
     () => currentEraContent().railAvailable,
     () => interactionMode,
+    (type) => profileCatalog.buildable(type),
   );
 
   let stranded: ReadonlySet<string> = new Set<string>();
@@ -139,6 +151,7 @@ async function bootstrap(): Promise<void> {
       growth: () => growth,
       catalog: () => vehicleCatalog,
       stranded: () => stranded,
+      profileFor: (segment) => profileCatalog.resolve(segment),
     },
     {
       sellVehicle(vehicleId: string): void {
@@ -278,7 +291,15 @@ async function bootstrap(): Promise<void> {
     last = now;
 
     accumulator.advance(elapsed, (dt) => {
-      const promotions = tick(simulation, dt, economy, paratransit, currentEra(eraTimeline).modifiers, growth);
+      const promotions = tick(
+        simulation,
+        dt,
+        economy,
+        paratransit,
+        currentEra(eraTimeline).modifiers,
+        growth,
+        profileCatalog.decayMultipliers,
+      );
       if (promotions.length > 0) handlePromotions(promotions);
 
       const transition = advanceEraTimeline(eraTimeline, dt);

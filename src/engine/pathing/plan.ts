@@ -109,6 +109,7 @@ export function planCorridor(
   mode: AlignmentMode,
   existingWaypointIndices: Set<number>,
   buildCostMultiplier: number = 1,
+  profileMultiplier: number = 1,
 ): CorridorPlan | null {
   if (waypoints.length < 2) {
     return null;
@@ -173,6 +174,6 @@ export function planCorridor(
   }
   newNodeCount += chainPoints.filter((c) => c.isBridgeBank).length;
 
-  const breakdown = sumStepCosts(steps, newNodeCount, buildCostMultiplier);
+  const breakdown = sumStepCosts(steps, newNodeCount, buildCostMultiplier, profileMultiplier);
   return { chainPoints, segmentLevels, polyline, breakdown };
 }

@@ -1,5 +1,7 @@
 import * as THREE from "three";
+import type { Profile2DDef } from "../content/schema";
 import type { GeneratedMap, InfrastructureType } from "../engine/map/types";
+import { profileCostMultiplier } from "../engine/pathing/cost";
 import type { AlignmentMode } from "../engine/pathing/plan";
 import { planCorridor } from "../engine/pathing/plan";
 import { commitCorridor, type WaypointSpec } from "../engine/map/build";
@@ -63,13 +65,39 @@ export function createAuthoringController(
   // keyboard shortcuts, since `1`/`2`/`3`/`R`/Enter mean nothing while
   // inspecting and would silently mutate the pending draw.
   getInteractionMode: () => InteractionMode = () => "build",
+  // Which cross-sections may be built with, for an infrastructure type. A
+  // live getter for the same reason the era ones are: content is loaded
+  // asynchronously and the catalog can be swapped after construction.
+  getBuildableProfiles: (type: InfrastructureType) => Profile2DDef[] = () => [],
 ): AuthoringController {
   let map = initialMap;
   const history: GeneratedMap[] = [];
 
   let mode: AlignmentMode = "auto";
   let infrastructureType: InfrastructureType = "road";
+  let profileIndex = 0;
   const waypoints: WaypointSpec[] = [];
+
+  // The profile is *the* thing that makes a corridor cost what it costs
+  // beyond terrain, so it has to be chosen before building, visible in
+  // the receipt while choosing, and priced through the same cost function
+  // as everything else (architecture.md hard rule 3) -- never applied as
+  // a separate adjustment afterwards.
+  function selectedProfile(): Profile2DDef | undefined {
+    const available = getBuildableProfiles(infrastructureType);
+    if (available.length === 0) return undefined;
+    return available[profileIndex % available.length];
+  }
+
+  function selectedProfileMultiplier(): number {
+    const profile = selectedProfile();
+    return profile ? profileCostMultiplier(profile.costPerMeter) : 1;
+  }
+
+  function profileLabel(): string {
+    const profile = selectedProfile();
+    return profile ? `${profile.id} (${profile.width}m)` : "no profile";
+  }
 
   const ghostPreview = createGhostPreview();
   sceneHandle.scene.add(ghostPreview.group);
@@ -132,7 +160,14 @@ export function createAuthoringController(
       if (w.existingNodeId) existingIndices.add(i);
     });
 
-    const plan = planCorridor(map.terrain, previewPoints, mode, existingIndices, getBuildCostMultiplier());
+    const plan = planCorridor(
+      map.terrain,
+      previewPoints,
+      mode,
+      existingIndices,
+      getBuildCostMultiplier(),
+      selectedProfileMultiplier(),
+    );
     if (!plan) {
       ghostPreview.update(points, previewPoints, map.terrain.width, map.terrain.height, false);
       costPanel.render({
@@ -154,7 +189,7 @@ export function createAuthoringController(
       infrastructureType,
       breakdown: plan.breakdown,
       valid: true,
-      hint: `Enter build · Esc cancel · Ctrl/Cmd+Z undo · 1/2/3 mode · ${railHint}`,
+      hint: `${profileLabel()} · T profile · Enter build · Esc cancel · Ctrl/Cmd+Z undo · 1/2/3 mode · ${railHint}`,
     });
   }
 
@@ -194,11 +229,18 @@ export function createAuthoringController(
       if (w.existingNodeId) existingIndices.add(i);
     });
 
-    const plan = planCorridor(map.terrain, points, mode, existingIndices, getBuildCostMultiplier());
+    const plan = planCorridor(
+      map.terrain,
+      points,
+      mode,
+      existingIndices,
+      getBuildCostMultiplier(),
+      selectedProfileMultiplier(),
+    );
     if (!plan) return;
 
     history.push(cloneMap(map));
-    map = commitCorridor(map, waypoints, plan, infrastructureType);
+    map = commitCorridor(map, waypoints, plan, infrastructureType, selectedProfile()?.id);
     networkHandle.update(map);
     const builtCorridor = map.corridors[map.corridors.length - 1]!;
     onBuild?.({ map, nodeIds: builtCorridor.nodeIds });
@@ -235,12 +277,21 @@ export function createAuthoringController(
     } else if (event.key === "3") {
       mode = "curve";
       refreshPreview(null);
+    } else if (event.key.toLowerCase() === "t") {
+      const available = getBuildableProfiles(infrastructureType);
+      if (available.length > 0) {
+        profileIndex = (profileIndex + 1) % available.length;
+        refreshPreview(null);
+      }
     } else if (event.key.toLowerCase() === "r") {
       // Rail goes dark through Informal (docs/rebuild-plan.md §5) --
       // toggling *to* rail is blocked when the current era has no rail;
       // toggling back to road always works, so a player never gets stuck.
       if (infrastructureType === "road" && !getRailAvailable()) return;
       infrastructureType = infrastructureType === "road" ? "rail" : "road";
+      // Road and rail profiles are separate lists, so an index carried
+      // across the toggle would silently select an unrelated profile.
+      profileIndex = 0;
       refreshPreview(null);
     }
   }
@@ -261,6 +312,7 @@ export function createAuthoringController(
   function reconcileEraGating(): void {
     if (infrastructureType === "rail" && !getRailAvailable()) {
       infrastructureType = "road";
+      profileIndex = 0;
       refreshPreview(null);
     }
   }

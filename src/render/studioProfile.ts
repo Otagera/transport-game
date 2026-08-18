@@ -22,6 +22,17 @@ export interface Vec2 {
 }
 
 export const DEFAULT_SAMPLES_PER_SEGMENT = 8;
+
+// Cross-sections are authored in metres; the map is a grid of cells with
+// no stated metre scale (docs/rebuild-plan.md §2 fixes the *register* --
+// "regional", corridors tens of cells long -- but never a cell size).
+// This is therefore a **visual** scale, chosen so a trunk road lands at
+// roughly the width the Module 5 bridge deck already established
+// (BRIDGE_DECK_WIDTH = 0.55 world units), not a derived conversion. It is
+// deliberately NOT reused for pricing: engine/pathing/cost.ts prices
+// costPerMeter relative to a reference profile precisely so that no
+// invented metre scale leaks into currency.
+export const WORLD_UNITS_PER_METRE = 0.075;
 const PIER_SPACING = 6;
 const PIER_HALF_WIDTH = 0.35;
 const FASCIA_DEPTH = 0.6;
@@ -146,17 +157,43 @@ export interface SweptProfile {
   dispose: () => void;
 }
 
-const MATERIAL_COLORS: Record<ProfileElement["material"], number> = {
-  asphalt: 0x3a3a3e,
-  curb: 0xb8b4ac,
-  gutter: 0x8f8b84,
-  ditch: 0x5a5142,
-  barrier: 0xd7d2c6,
-  ballast: 0x6b625a,
-  sleeper: 0x4a3a2c,
+/** Highest point of a profile's cross-section, in metres. */
+export function profileCrownHeight(profile: Profile2DDef): number {
+  let crown = 0;
+  for (const element of profile.elements) {
+    for (const vertex of element.vertices) {
+      if (vertex.y > crown) crown = vertex.y;
+    }
+  }
+  return crown;
+}
+
+// Albedo separation before lighting (docs/rebuild-plan.md §5): "the scene
+// read flat because large areas shared an albedo, not because the lighting
+// was wrong." These are deliberately NOT realistic asphalt values. Real
+// asphalt sits around 0x3a3a3e, which is exactly where this map's terrain
+// already is once an era palette tints it -- a literally-correct road is
+// an invisible road here, and the corridor is the thing the player is
+// meant to be reading.
+//
+// Within a profile the values still separate from each other, because
+// that is the surface-treatment channel doing its job: light ballast
+// against dark sleepers is what makes rail read as rail rather than as a
+// narrow road (docs/rebuild-plan.md §5, "road and rail need a distinct
+// visual channel -- width, surface treatment, sleepers").
+export const MATERIAL_COLORS: Record<ProfileElement["material"], number> = {
+  asphalt: 0x8b8b91,
+  curb: 0xd6d2c8,
+  gutter: 0x6f6b64,
+  ditch: 0x463f34,
+  barrier: 0xe6e1d4,
+  ballast: 0x9a8f83,
+  sleeper: 0x40311f,
 };
 
 export interface SweepOptions {
+  /** Scales the cross-section from metres into world units. */
+  metreScale?: number;
   /**
    * Chain indices whose *following* segment is elevated, as
    * `pathing/plan.ts`'s segmentLevels reports them. Elevated runs get a
@@ -175,19 +212,21 @@ export function buildSweptProfile(
   const group = new THREE.Group();
   const disposables: Array<{ dispose: () => void }> = [];
   const centerline = resampleCenterline(chainPoints, options.samplesPerSegment);
+  const metreScale = options.metreScale ?? 1;
 
   // Each element sweeps separately rather than as one merged solid, so a
   // curb reads as a curb: material is a per-element fact, and merging
   // would throw away exactly the distinction the profile exists to make.
   for (const element of profile.elements) {
-    const geometry = sweepCrossSection(element.vertices, centerline);
+    const scaled = element.vertices.map((vertex) => ({ x: vertex.x * metreScale, y: vertex.y * metreScale }));
+    const geometry = sweepCrossSection(scaled, centerline);
     const material = new THREE.MeshStandardMaterial({ color: MATERIAL_COLORS[element.material], roughness: 0.85 });
     group.add(new THREE.Mesh(geometry, material));
     disposables.push(geometry, material);
   }
 
   for (const span of options.elevatedSpans ?? []) {
-    for (const object of elevatedStructure(span.from, span.to, profile.width)) {
+    for (const object of elevatedStructure(span.from, span.to, profile.width * metreScale)) {
       group.add(object);
       disposables.push(object.geometry, object.material as THREE.Material);
     }

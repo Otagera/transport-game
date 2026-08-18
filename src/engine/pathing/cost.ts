@@ -48,10 +48,37 @@ export interface CostBreakdown {
   total: number;
 }
 
+// A profile's costPerMeter is expressed *relative to a reference*, not as
+// an absolute price. The map has no stated metre scale -- it is a grid of
+// cells at "regional" scale (docs/rebuild-plan.md §2) and nothing anywhere
+// says how many metres a cell is. Inventing one here to make costPerMeter
+// absolute would silently rebalance every number Modules 4-9 were tuned
+// against, to buy precision the model does not actually have. So a
+// profile costing twice as much per metre costs twice as much to build,
+// and the reference profile leaves the existing balance exactly where it
+// was.
+export const REFERENCE_COST_PER_METRE = 12;
+
+export function profileCostMultiplier(costPerMeter: number): number {
+  return costPerMeter / REFERENCE_COST_PER_METRE;
+}
+
 // buildCostMultiplier (docs/rebuild-plan.md §6 Module 8) scales every
 // field uniformly, not just `total` -- the breakdown must keep summing to
 // its own total, since the UI shows it as a receipt.
-export function sumStepCosts(steps: StepCost[], newNodeCount: number, buildCostMultiplier: number = 1): CostBreakdown {
+//
+// profileMultiplier scales only the per-length terms, never `nodes`.
+// costPerMeter is a price per metre of alignment and has no claim on a
+// point cost: a junction is a junction whichever surface meets there. It
+// does scale gradient, water and density along with base, because a wider
+// road needs a wider cutting and a wider bridge -- the earthworks follow
+// the cross-section, they are not independent of it.
+export function sumStepCosts(
+  steps: StepCost[],
+  newNodeCount: number,
+  buildCostMultiplier: number = 1,
+  profileMultiplier: number = 1,
+): CostBreakdown {
   let base = 0;
   let gradient = 0;
   let water = 0;
@@ -63,10 +90,11 @@ export function sumStepCosts(steps: StepCost[], newNodeCount: number, buildCostM
     density += step.density;
   }
   const nodes = newNodeCount * NODE_COST;
-  base *= buildCostMultiplier;
-  gradient *= buildCostMultiplier;
-  water *= buildCostMultiplier;
-  density *= buildCostMultiplier;
+  const perLength = buildCostMultiplier * profileMultiplier;
+  base *= perLength;
+  gradient *= perLength;
+  water *= perLength;
+  density *= perLength;
   const scaledNodes = nodes * buildCostMultiplier;
   return { base, gradient, water, density, nodes: scaledNodes, total: base + gradient + water + density + scaledNodes };
 }

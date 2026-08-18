@@ -1,5 +1,5 @@
-import type { VehicleDef } from "../content/schema";
-import type { GeneratedMap } from "../engine/map/types";
+import type { Profile2DDef, VehicleDef } from "../content/schema";
+import type { GeneratedMap, Segment } from "../engine/map/types";
 import { planCorridorPrune } from "../engine/map/prune";
 import { maintenanceCost } from "../engine/pathing/cost";
 import { computeBottleneckMetrics } from "../engine/simulation/bottleneck";
@@ -67,6 +67,8 @@ export interface InspectorSources {
   growth: () => GrowthState;
   catalog: () => VehicleDef[];
   stranded: () => ReadonlySet<string>;
+  /** Resolved cross-section, falling back to the inherited default. */
+  profileFor: (segment: Segment) => Profile2DDef | undefined;
 }
 
 export interface Inspector {
@@ -216,6 +218,7 @@ function segmentSnapshot(
   const span = segmentSpanCells(simulation.map, segment.fromNodeId, segment.toNodeId);
   const price = maintenanceCost(span, 1 - segment.condition);
 
+  const profile = sources.profileFor(segment);
   const rows: InspectorRow[] = [
     { label: "type", value: `${segment.type} · ${segment.level}` },
     { label: "provenance", value: segment.provenance },
@@ -224,6 +227,15 @@ function segmentSnapshot(
     { label: "health", value: percent(metrics.health), tone: metrics.health < 0.6 ? "bad" : "good" },
     { label: "utilisation", value: percent(metrics.utilisation) },
   ];
+  if (profile) {
+    rows.push(
+      { label: "profile", value: `${profile.id}${segment.profileId === undefined ? " (inherited)" : ""}` },
+      { label: "cross-section", value: `${profile.width} m` },
+      // Surfaced next to condition on purpose: this is *why* this
+      // segment is rotting faster or slower than the one beside it.
+      { label: "decay rate", value: `${profile.decayRateMultiplier.toFixed(2)}x` },
+    );
+  }
 
   const actions: InspectorAction[] = [
     price <= 0

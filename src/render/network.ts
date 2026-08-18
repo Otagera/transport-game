@@ -1,9 +1,18 @@
 import * as THREE from "three";
-import type { GeneratedMap, NodeKind } from "../engine/map/types";
+import type { GeneratedMap, NodeKind, Segment } from "../engine/map/types";
 import { computeBottleneckMetrics } from "../engine/simulation/bottleneck";
 import type { SegmentTraffic } from "../engine/simulation/types";
 import type { Selection } from "../ui/selection";
+import { segmentCenterlines, straightCenterline, type GridPoint } from "./corridorGeometry";
 import { gridToWorld } from "./gridCoords";
+import type { ProfileCatalog } from "./profileCatalog";
+import {
+  WORLD_UNITS_PER_METRE,
+  buildSweptProfile,
+  profileCrownHeight,
+  sweepCrossSection,
+  type SweptProfile,
+} from "./studioProfile";
 
 export interface NetworkSignalInput {
   segmentTraffic: Map<string, SegmentTraffic>;
@@ -16,6 +25,8 @@ export interface NetworkHandle {
   group: THREE.Group;
   /** Rebuilds geometry. Call when the map itself changed. */
   update: (map: GeneratedMap) => void;
+  /** Swaps in the profile catalog and rebuilds. */
+  setProfileCatalog: (catalog: ProfileCatalog) => void;
   /** Recolours in place -- no geometry churn. Safe per frame. */
   updateSignals: (input: NetworkSignalInput) => void;
 }
@@ -38,6 +49,15 @@ const NEUTRAL_RAIL = 0x2b2b2b;
 const DIMMED_ROAD = 0x5a5a5a;
 const DIMMED_RAIL = 0x232323;
 const SELECTION_COLOR = 0xfff0a0;
+// The signal strip: a painted centreline stripe carrying hue and
+// brightness. Once a segment's *body* is an authored cross-section, the
+// body's colours belong to its materials (asphalt is asphalt), so the two
+// display channels move onto their own mark rather than repainting the
+// road a different substance. This is the same separation the overlay
+// layer makes, one level down.
+const SIGNAL_STRIP_HALF_WIDTH = 0.09;
+const SIGNAL_STRIP_LIFT = 0.03;
+const GROUND_Y = 0.02;
 const UTILISATION_FLOOR = 0.02;
 // Brightness = utilisation, the second of the two channels. Floored well
 // above zero so a barely-used segment still reads as coloured rather than
@@ -101,49 +121,117 @@ export function segmentSignalColor(health: number, utilisation: number): THREE.C
   return hue.multiplyScalar(brightness);
 }
 
-export function createNetworkGroup(map: GeneratedMap): NetworkHandle {
+export function createNetworkGroup(map: GeneratedMap, initialCatalog?: ProfileCatalog): NetworkHandle {
   const group = new THREE.Group();
   const segmentMaterials = new Map<string, { material: THREE.Material & { color: THREE.Color }; isRail: boolean }>();
   const nodeMaterials = new Map<string, { material: THREE.MeshStandardMaterial; kind: NodeKind }>();
+  const sweptProfiles: SweptProfile[] = [];
+  let catalog: ProfileCatalog | undefined = initialCatalog;
+  let currentMap: GeneratedMap = map;
 
   function clear(): void {
     for (const child of [...group.children]) {
       group.remove(child);
       disposeObject(child);
     }
+    for (const swept of sweptProfiles) swept.dispose();
+    sweptProfiles.length = 0;
     segmentMaterials.clear();
     nodeMaterials.clear();
   }
 
+  function toWorld(points: GridPoint[], y: number, width: number, height: number): THREE.Vector3[] {
+    return points.map((point) => {
+      const world = gridToWorld(point.x, point.y, width, height);
+      return new THREE.Vector3(world.x, y, world.z);
+    });
+  }
+
+  // Hue and brightness ride on their own thin strip above the
+  // carriageway, swept along the same centreline as the body so it
+  // follows every curve the profile does.
+  function addSignalStrip(segmentId: string, centerline: THREE.Vector3[], crownY: number, isRail: boolean): void {
+    const section = [
+      { x: -SIGNAL_STRIP_HALF_WIDTH, y: crownY },
+      { x: SIGNAL_STRIP_HALF_WIDTH, y: crownY },
+      { x: SIGNAL_STRIP_HALF_WIDTH, y: crownY + 0.012 },
+      { x: -SIGNAL_STRIP_HALF_WIDTH, y: crownY + 0.012 },
+    ];
+    const geometry = sweepCrossSection(section, centerline);
+    const material = new THREE.MeshBasicMaterial({ color: isRail ? NEUTRAL_RAIL : NEUTRAL_ROAD });
+    group.add(new THREE.Mesh(geometry, material));
+    segmentMaterials.set(segmentId, { material, isRail });
+  }
+
+  function addFallbackLine(segment: Segment, centerline: THREE.Vector3[], isRail: boolean): void {
+    const geometry = new THREE.BufferGeometry().setFromPoints(centerline);
+    const material = new THREE.LineBasicMaterial({ color: isRail ? NEUTRAL_RAIL : NEUTRAL_ROAD });
+    group.add(new THREE.Line(geometry, material));
+    segmentMaterials.set(segment.id, { material, isRail });
+  }
+
   function update(current: GeneratedMap): void {
     clear();
+    currentMap = current;
 
     const nodeById = new Map(current.nodes.map((node) => [node.id, node]));
     const { width, height } = current.terrain;
+
+    // One split per corridor, not per segment: splitting is O(polyline)
+    // and every segment of a corridor needs the same result.
+    const centerlinesBySegment = new Map<string, GridPoint[]>();
+    for (const corridor of current.corridors) {
+      for (const [segmentId, run] of segmentCenterlines(current, corridor)) {
+        centerlinesBySegment.set(segmentId, run);
+      }
+    }
 
     for (const segment of current.segments) {
       const from = nodeById.get(segment.fromNodeId);
       const to = nodeById.get(segment.toNodeId);
       if (!from || !to) continue;
-      const a = gridToWorld(from.x, from.y, width, height);
-      const b = gridToWorld(to.x, to.y, width, height);
       const isRail = segment.type === "rail";
-      const color = isRail ? NEUTRAL_RAIL : NEUTRAL_ROAD;
+      const grid = centerlinesBySegment.get(segment.id) ?? straightCenterline(current, segment);
+      if (!grid || grid.length < 2) continue;
 
-      if (segment.level === "elevated") {
-        const deck = createBridgeDeck(a, b, color);
-        group.add(deck);
-        segmentMaterials.set(segment.id, { material: deck.material as THREE.MeshStandardMaterial, isRail });
+      const profile = catalog?.resolve(segment);
+      const elevated = segment.level === "elevated";
+      const deckY = elevated ? BRIDGE_DECK_HEIGHT : GROUND_Y;
+
+      if (!profile) {
+        // Degrades to the pre-profile rendering rather than blanking the
+        // segment: content can be missing, the map still has to read.
+        const a = gridToWorld(from.x, from.y, width, height);
+        const b = gridToWorld(to.x, to.y, width, height);
+        if (elevated) {
+          const deck = createBridgeDeck(a, b, isRail ? NEUTRAL_RAIL : NEUTRAL_ROAD);
+          group.add(deck);
+          segmentMaterials.set(segment.id, { material: deck.material as THREE.MeshStandardMaterial, isRail });
+        } else {
+          addFallbackLine(segment, toWorld(grid, 0.15, width, height), isRail);
+        }
         continue;
       }
 
-      const geometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(a.x, 0.15, a.z),
-        new THREE.Vector3(b.x, 0.15, b.z),
-      ]);
-      const material = new THREE.LineBasicMaterial({ color });
-      group.add(new THREE.Line(geometry, material));
-      segmentMaterials.set(segment.id, { material, isRail });
+      // A bridge deck stays straight bank to bank and is never smoothed
+      // (pathing/plan.ts), so an elevated segment sweeps its two ends
+      // only -- and gets the fascia and piers that make it read as a
+      // bridge rather than a dam.
+      const centerGrid = elevated ? [grid[0]!, grid[grid.length - 1]!] : grid;
+      const centerline = toWorld(centerGrid, deckY, width, height);
+      const swept = buildSweptProfile(profile, centerline, {
+        metreScale: WORLD_UNITS_PER_METRE,
+        elevatedSpans: elevated ? [{ from: centerline[0]!, to: centerline[centerline.length - 1]! }] : [],
+      });
+      group.add(swept.group);
+      sweptProfiles.push(swept);
+
+      addSignalStrip(
+        segment.id,
+        centerline,
+        profileCrownHeight(profile) * WORLD_UNITS_PER_METRE + SIGNAL_STRIP_LIFT,
+        isRail,
+      );
     }
 
     for (const node of current.nodes) {
@@ -188,6 +276,11 @@ export function createNetworkGroup(map: GeneratedMap): NetworkHandle {
     }
   }
 
+  function setProfileCatalog(next: ProfileCatalog): void {
+    catalog = next;
+    update(currentMap);
+  }
+
   update(map);
-  return { group, update, updateSignals };
+  return { group, update, setProfileCatalog, updateSignals };
 }

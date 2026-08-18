@@ -54,9 +54,14 @@ export function tick(
   paratransit?: ParatransitState,
   eraModifiers?: EraModifiers,
   growth?: GrowthState,
+  // profileId -> decay multiplier. A plain Map, not the content type
+  // (architecture.md hard rule 2). Passed per tick rather than held on
+  // SimulationState because it is derived from loaded content, and
+  // SimulationState is meant to be the physical world only.
+  profileDecayById?: ReadonlyMap<string, number>,
 ): PromotionEvent[] {
   const generatedByNode = growQueues(state, dt, eraModifiers?.demand ?? 1, growth);
-  decaySegments(state.map, dt, eraModifiers?.decay ?? 1);
+  decaySegments(state.map, dt, eraModifiers?.decay ?? 1, profileDecayById);
 
   // Computed once per tick, before any vehicle moves, so every vehicle
   // sees the same congestion snapshot this tick rather than reacting to

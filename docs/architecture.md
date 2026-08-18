@@ -50,6 +50,8 @@ one is the resulting map.
 src/
   content/        Zod schemas + loader for public/content/*.json
                   (eras, vehicles, scenarios, 2D profiles)
+                  NB: schemas only -- resolving a profile for a segment is
+                  render/profileCatalog.ts, the bootstrap layer's job
   engine/         Pure TypeScript, no DOM/three.js. Fully unit tested.
     eras/         EraTimeline: advances through eras over real time
     economy/      Funds, fares, operating costs, obsolescence, P&L
@@ -67,7 +69,7 @@ src/
                   Modder, Scenario Lab. Dead-code-eliminated from production via
                   `import.meta.env.DEV` (see verify:bundle below)
   main.ts         Bootstrap: loads content, wires every controller, owns the frame loop
-public/content/    eras.json, vehicles.json — the actual game content
+public/content/    eras.json, vehicles.json, profiles.json — the actual game content
 public/mods/       Mod packages written by the Asset Modder tab (vehicle.json + mesh)
 docs/
   rebuild-plan.md The original design doc: goals, module order, Findings (§5)
@@ -126,6 +128,18 @@ depending on how much real time elapsed. Inside that callback, in order:
   impossible to hit with a ray, and this version is unit-testable with no WebGL context.
   `render/vehicles.ts` shares `vehicleGridPosition` with it, so the marker you see and
   the thing you click cannot disagree.
+- **Corridors render as swept cross-sections.** Each segment's body is its authored
+  `Profile2DDef` swept along its share of the corridor's smoothed polyline
+  (`render/corridorGeometry.ts` splits the one into the other). Because the body's
+  colours now belong to its *materials*, hue and brightness move onto a thin signal strip
+  above the carriageway — the two display channels keep their own mark rather than
+  repainting the road a different substance. A segment whose profile can't be resolved
+  degrades to the pre-profile line rendering; missing content must never blank the map.
+- **The metre scale is visual only.** `WORLD_UNITS_PER_METRE` in `render/studioProfile.ts`
+  exists so a cross-section authored in metres lands at roughly the width Module 5's
+  bridge deck established. It is deliberately **not** reused for pricing: the map has no
+  stated cell size, so `pathing/cost.ts` prices `costPerMeter` *relative* to
+  `REFERENCE_COST_PER_METRE` and no invented scale leaks into currency.
 - **Overlays are additive and mutually exclusive.** `render/overlayLayer.ts` draws into
   its own group on a 0.25s timer (every overlay is a whole-map aggregate; per-frame
   disposal churn would dwarf the simulation), and always calls the engine's own function

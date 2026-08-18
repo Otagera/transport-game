@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { BASE_COST_PER_CELL, MAINTENANCE_FRACTION_OF_BUILD, maintenanceCost } from "@engine/pathing/cost";
+import {
+  BASE_COST_PER_CELL,
+  MAINTENANCE_FRACTION_OF_BUILD,
+  REFERENCE_COST_PER_METRE,
+  maintenanceCost,
+  profileCostMultiplier,
+  sumStepCosts,
+} from "@engine/pathing/cost";
 import { MIN_CONDITION, decaySegments, restoreSegmentCondition } from "@engine/map/decay";
 import type { GeneratedMap } from "@engine/map/types";
 
@@ -58,5 +65,46 @@ describe("restoreSegmentCondition", () => {
 
   test("an unknown segment id restores nothing rather than throwing mid-transaction", () => {
     expect(restoreSegmentCondition(fixtureMap(), "nope")).toBe(0);
+  });
+});
+
+describe("profileCostMultiplier", () => {
+  test("the reference profile costs exactly what the pre-profile pricing did", () => {
+    expect(profileCostMultiplier(REFERENCE_COST_PER_METRE)).toBe(1);
+  });
+
+  test("twice the cost per metre is twice the price -- it is a ratio, not an absolute", () => {
+    expect(profileCostMultiplier(REFERENCE_COST_PER_METRE * 2)).toBe(2);
+  });
+});
+
+describe("sumStepCosts with a profile multiplier", () => {
+  const steps = [{ base: 100, gradient: 40, water: 20, density: 10 }];
+
+  test("scales the per-length terms", () => {
+    const doubled = sumStepCosts(steps, 0, 1, 2);
+    expect(doubled.base).toBe(200);
+    expect(doubled.gradient).toBe(80);
+    expect(doubled.water).toBe(40);
+    expect(doubled.density).toBe(20);
+  });
+
+  // costPerMeter is a price per metre of alignment and has no claim on a
+  // point cost: a junction is a junction whichever surface meets there.
+  test("does not scale node cost, which the era multiplier still does", () => {
+    expect(sumStepCosts(steps, 2, 1, 5).nodes).toBe(sumStepCosts(steps, 2, 1, 1).nodes);
+    expect(sumStepCosts(steps, 2, 3, 1).nodes).toBe(sumStepCosts(steps, 2, 1, 1).nodes * 3);
+  });
+
+  test("the breakdown still sums to its own total -- it is shown as a receipt", () => {
+    const breakdown = sumStepCosts(steps, 3, 1.5, 2.5);
+    expect(breakdown.total).toBeCloseTo(
+      breakdown.base + breakdown.gradient + breakdown.water + breakdown.density + breakdown.nodes,
+      6,
+    );
+  });
+
+  test("era and profile multipliers compose on the per-length terms", () => {
+    expect(sumStepCosts(steps, 0, 2, 3).base).toBe(sumStepCosts(steps, 0, 1, 1).base * 6);
   });
 });

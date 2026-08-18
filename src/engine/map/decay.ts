@@ -11,9 +11,27 @@ export const BASE_DECAY_PER_SECOND = 0.002;
 export const MIN_CONDITION = 0.3;
 export const MIN_CONDITION_SPEED_FACTOR = 0.6;
 
-export function decaySegments(map: GeneratedMap, dt: number, decayMultiplier: number): void {
+// `profileDecayById` is a plain Map<profileId, multiplier>, never the
+// content type -- same discipline as the era modifiers (architecture.md,
+// "content-aware code stays out of engine/"). A segment with no profile,
+// or one naming a profile that isn't in the map, decays at the base rate:
+// an unknown profile must not silently freeze or accelerate decay.
+//
+// The two multipliers compose rather than one overriding the other: an
+// Informal-era decay spike should still bite a well-built expressway less
+// than a laterite feeder, which is the whole point of authoring the
+// difference.
+export function decaySegments(
+  map: GeneratedMap,
+  dt: number,
+  decayMultiplier: number,
+  profileDecayById?: ReadonlyMap<string, number>,
+): void {
   for (const segment of map.segments) {
-    segment.condition = Math.max(MIN_CONDITION, segment.condition - BASE_DECAY_PER_SECOND * decayMultiplier * dt);
+    const profileMultiplier =
+      (segment.profileId !== undefined ? profileDecayById?.get(segment.profileId) : undefined) ?? 1;
+    const rate = BASE_DECAY_PER_SECOND * decayMultiplier * profileMultiplier;
+    segment.condition = Math.max(MIN_CONDITION, segment.condition - rate * dt);
   }
 }
 

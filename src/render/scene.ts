@@ -184,6 +184,17 @@ export function createScene(canvas: HTMLCanvasElement, style: StyleSpec): SceneH
 
   let baseHalfHeight = style.camera.viewSize / 2;
 
+  // All four planes are derived from the same baseHalfHeight. Updating
+  // only left/right (which is what this did until Module 11) leaves
+  // top/bottom at whatever the constructor set from style.camera.viewSize,
+  // so the moment setTerrain raises baseHalfHeight to frame a real map the
+  // frustum stops being square-scaled and the whole world renders
+  // horizontally squashed -- ~2.7x at a 1400x950 canvas. It shows up as
+  // node spheres drawn as vertical ellipses, which is how it was finally
+  // spotted: a visual saying something the model doesn't mean
+  // (docs/rebuild-plan.md §5). Pre-existing since Module 4; nothing on
+  // screen was round enough to give it away until profiles put real
+  // cross-section width on the map.
   function resize(): void {
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -191,6 +202,8 @@ export function createScene(canvas: HTMLCanvasElement, style: StyleSpec): SceneH
     const currentAspect = width / height;
     camera.left = -baseHalfHeight * currentAspect;
     camera.right = baseHalfHeight * currentAspect;
+    camera.top = baseHalfHeight;
+    camera.bottom = -baseHalfHeight;
     camera.updateProjectionMatrix();
   }
 
