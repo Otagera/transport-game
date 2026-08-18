@@ -55,3 +55,26 @@ export const VehicleDefSchema = z.object({
 export type VehicleDef = z.infer<typeof VehicleDefSchema>;
 
 export const VehicleDefListSchema = z.array(VehicleDefSchema);
+
+// Module 10: scenarios as content, not code (docs/rebuild-plan.md §5,
+// "Content is data"). A scenario is a starting point for tuning, not a
+// curated layout -- seedFleet just says how many of a def to start with;
+// applyScenario decides where they run.
+export const SeedFleetEntrySchema = z.object({
+  defId: z.string(),
+  count: z.number().int().positive(),
+});
+
+export const ScenarioSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  mapSeed: z.number().int(),
+  startingEraId: z.string(),
+  startingFunds: z.number().nonnegative(),
+  warmForwardDays: z.number().nonnegative(),
+  seedFleet: z.array(SeedFleetEntrySchema),
+});
+
+export type Scenario = z.infer<typeof ScenarioSchema>;
+
+export const ScenarioListSchema = z.array(ScenarioSchema);
