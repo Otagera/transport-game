@@ -24,7 +24,7 @@ let nextVehicleIdCounter = 0;
 // the simulation's graph until then, and a newly bought vehicle needs
 // that graph to plan its route.
 // eraIn/eraOut close the purchase catalog without despawning owned stock
-// (docs/rebuild-plan.md §5, "graceful obsolescence"): getCurrentEraId is a
+// (docs/principles.md §3, "graceful obsolescence"): getCurrentEraId is a
 // live getter, not a value captured at construction, since the era
 // timeline advances on its own after this controller is built. The
 // catalog itself stays the full static list -- Module 8's "catalog
@@ -108,7 +108,7 @@ export function createFleetController(
       // Threaded from the def rather than left at createVehicle's default
       // of 1: an okada and a BRT occupying the same road space equally
       // was exactly the thing congestion weighting exists to prevent
-      // (docs/rebuild-plan.md §5), and until now no player vehicle ever
+      // (docs/principles.md §3), and until now no player vehicle ever
       // supplied a value.
       def.congestionWeight,
     );
@@ -134,8 +134,8 @@ export function createFleetController(
   window.addEventListener("keydown", handleKeyDown);
   renderHint();
 
-  // Rising maintenance on obsolete stock (docs/rebuild-plan.md §6 Module
-  // 8): a vehicle is obsolete once the era timeline moves past its def's
+  // Rising maintenance on obsolete stock (docs/principles.md §3): a
+  // vehicle is obsolete once the era timeline moves past its def's
   // eraOut. Owned stock keeps running -- this only marks it, it never
   // despawns it (graceful obsolescence).
   function markObsoleteStock(): void {

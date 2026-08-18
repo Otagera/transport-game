@@ -1,7 +1,7 @@
 import type { DemandPair, RoutingContext } from "./types";
 import { findPath } from "./routing";
 
-// Stranded is reachability-based (docs/rebuild-plan.md §5): a node that
+// Stranded is reachability-based (docs/principles.md §3): a node that
 // originates demand but cannot reach ANY of its demand destinations via the
 // current graph -- not "has no built edge at all."
 export function computeStranded(demand: DemandPair[], context: RoutingContext): Set<string> {

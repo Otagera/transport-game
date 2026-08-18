@@ -1,7 +1,7 @@
 // One question asked of the whole map at a time (docs/module-11-studio-
 // and-ia.md §1). Exactly one is active, `None` included -- overlays that
 // stack stop being readable, and "show relationships, not just state"
-// (docs/rebuild-plan.md §5) only works if the relationship on screen is
+// (docs/principles.md §3) only works if the relationship on screen is
 // unambiguous about which one it is.
 //
 // This module owns the *state and the picker*. The three.js layer that

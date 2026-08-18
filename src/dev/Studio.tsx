@@ -8,7 +8,7 @@ import { ScenarioLab } from "./ScenarioLab";
 import { TuningTab } from "./TuningTab";
 import { drawer, tabBar, tabButton } from "./studioChrome";
 
-// One dev-only surface, four tabs (docs/module-11-studio-and-ia.md §2).
+// One dev-only surface, four tabs (docs/architecture/dev-studio.md §1).
 // Everything authored here is Zod-validated against src/content/schema.ts
 // before it counts as content -- the studio's job is to make authored
 // facts schema-correct by construction, so the failure mode of

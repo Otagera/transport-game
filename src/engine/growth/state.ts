@@ -3,15 +3,15 @@ import type { GrowableTier, GrowthState, NodeDemandSample, NodeGrowthState, Prom
 
 export const INITIAL_DEMAND_MULTIPLIER = 1;
 
-// D_max bounded by tier, independent of D itself (docs/rebuild-plan.md
-// §5) -- a constant per tier, not derived from the variable it caps, or
+// D_max bounded by tier, independent of D itself (docs/principles.md
+// §3) -- a constant per tier, not derived from the variable it caps, or
 // the logistic cap chases D and growth is uncapped exponential wearing a
 // logistic's clothing. "Starting points, not gospel": tuned for a
 // compressed, testable playthrough, not a real urbanization timescale.
 export const D_MAX: Record<GrowableTier, number> = { village: 2.5, settlement: 6 };
 
 // The promotion threshold must sit early in the growth curve, not near
-// the cap (docs/rebuild-plan.md §5): a logistic curve halves its rate
+// the cap (docs/principles.md §3): a logistic curve halves its rate
 // well before the cap, so the old build's ~58%-of-cap threshold arrived
 // too late to be felt. Measured as a fraction of the *growable range*
 // above INITIAL_DEMAND_MULTIPLIER, not of D_MAX outright -- a flat
@@ -25,8 +25,8 @@ export const GROWTH_EMA_TAU_SECONDS = 10;
 // Below this rolling player-served share, growth is zero regardless of
 // how strong paratransit service is -- the necessary-condition gate.
 export const PLAYER_SERVICE_EPSILON = 0.02;
-// Paratransit counts toward service at a discount (docs/rebuild-plan.md
-// §5, ~0.5): informal service sustains a place, player service develops
+// Paratransit counts toward service at a discount (docs/principles.md
+// §3, ~0.5): informal service sustains a place, player service develops
 // it.
 export const PARATRANSIT_SERVICE_DISCOUNT = 0.5;
 export const BASE_GROWTH_RATE_PER_SECOND = 0.05;
@@ -95,7 +95,7 @@ function updateNode(node: NodeGrowthState, sample: NodeDemandSample, dt: number)
   node.serviceRatioEMA = clamp01(node.playerServiceEMA + PARATRANSIT_SERVICE_DISCOUNT * node.paratransitServiceEMA);
 
   // Growth requires player service as a necessary condition, not just a
-  // weighted contributor (docs/rebuild-plan.md §5): however high
+  // weighted contributor (docs/principles.md §3): however high
   // paratransit's discounted contribution pushes serviceRatioEMA, growth
   // stays exactly zero unless a sustained share of demand was actually
   // player-served.
@@ -130,7 +130,7 @@ export function updateGrowthState(growth: GrowthState, samples: NodeDemandSample
 }
 
 // Growth must be visible on the map without reading a number (docs/
-// rebuild-plan.md §5): mutates the node's kind in place, same pattern as
+// docs/principles.md §3): mutates the node's kind in place, same pattern as
 // decaySegments mutating Segment.condition -- the caller re-renders from
 // this same GeneratedMap afterward, which is what makes the promotion
 // show up as a marker/color change for free.

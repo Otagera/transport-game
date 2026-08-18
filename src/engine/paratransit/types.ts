@@ -5,7 +5,7 @@ export interface ActiveParatransit {
 
 export interface ParatransitState {
   elapsedSeconds: number;
-  // Sustained state gates decisions (docs/rebuild-plan.md §5): a rolling
+  // Sustained state gates decisions (docs/principles.md §3): a rolling
   // EMA per demand pair, not a single-tick queue-depth check.
   pairUnservedEMA: Map<string, number>;
   pairLastSpawnSeconds: Map<string, number>;

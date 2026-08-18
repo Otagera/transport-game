@@ -46,7 +46,7 @@ const NODE_COLORS: Record<NodeKind, number> = {
 };
 
 // Streets are neutral by default and take the health hue only where
-// service actually runs (docs/rebuild-plan.md §5): "colouring every
+// service actually runs (docs/principles.md §3): "colouring every
 // corridor green makes the whole map a lattice and destroys the signal."
 // So an unused segment is grey no matter how healthy it technically is --
 // health is a question you must act on, and there is nothing to act on
@@ -161,7 +161,7 @@ const BRIDGE_DECK_WIDTH = 0.55;
 
 // A bridge is an elevated deck with real clearance and a fixed-depth
 // fascia band, not a flat line -- "a bridge reads as a bridge rather
-// than a dam" (docs/rebuild-plan.md §6 Module 5). castShadow is what
+// than a dam" (docs/principles.md §3). castShadow is what
 // sells "elevated": the shadow lands on the terrain/water below with a
 // visible gap, instead of the deck touching down.
 export function createBridgeDeck(
@@ -184,7 +184,7 @@ export function createBridgeDeck(
 }
 
 /**
- * Hue = health, brightness = utilisation (docs/rebuild-plan.md §5). Two
+ * Hue = health, brightness = utilisation (docs/principles.md §3). Two
  * channels, two meanings, never conflated -- which is also why every other
  * map-wide question lives in render/overlayLayer.ts's separate additive
  * group instead of borrowing one of these.
@@ -340,8 +340,8 @@ export function createNetworkGroup(map: GeneratedMap, initialCatalog?: ProfileCa
 
     for (const node of current.nodes) {
       const position = gridToWorld(node.x, node.y, width, height);
-      // A promoted village growing into a settlement (docs/rebuild-plan.md
-      // §6 Module 9) must be visible on the map without reading a number
+      // A promoted village growing into a settlement (docs/architecture/engine.md
+      // §growth/) must be visible on the map without reading a number
       // -- the color change alone is subtle, so settlement also renders
       // larger than village.
       const radius = node.kind === "vertex" ? 0.12 : node.kind === "settlement" ? 0.32 : 0.25;

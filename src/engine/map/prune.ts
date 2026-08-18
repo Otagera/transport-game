@@ -2,7 +2,7 @@ import type { GeneratedMap, MapNode } from "./types";
 
 // "Per-route P&L with worst-first sorting is what makes the economy
 // diagnosable. Three playthroughs ended in undiagnosable debt without it"
-// (docs/rebuild-plan.md §5). Diagnosing a bleeding corridor is only half
+// (docs/principles.md §3). Diagnosing a bleeding corridor is only half
 // of that -- the other half is being able to act on the diagnosis, which
 // means removing infrastructure, not only vehicles.
 //

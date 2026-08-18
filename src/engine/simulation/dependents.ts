@@ -2,7 +2,7 @@ import type { RoutingContext, Vehicle } from "./types";
 
 // Pruning a corridor out from under a running vehicle would leave it on a
 // path whose edges no longer exist -- a silently wrong state rather than a
-// crash, which is the exact failure class docs/rebuild-plan.md §5 warns
+// crash, which is the exact failure class docs/principles.md §3 warns
 // about at the display boundary. So the Inspector asks this first and
 // refuses the prune while anything still depends on it, naming the
 // blockers, rather than silently liquidating a fleet the player didn't

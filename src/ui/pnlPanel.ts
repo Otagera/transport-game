@@ -6,11 +6,11 @@ export interface PnLPanel {
   dispose(): void;
 }
 
-// Per-route P&L, worst-first (docs/rebuild-plan.md §6 Module 6): "you can
+// Per-route P&L, worst-first (docs/principles.md §3): "you can
 // tell which route is bleeding in under ten seconds." No cached state --
 // the whole table is rebuilt from `rows` every call.
 //
-// Select-and-focus (docs/module-11-studio-and-ia.md §1): a List that only
+// Select-and-focus (docs/architecture/render-and-ui.md §2): a List that only
 // ranks tells you *which* route is bleeding but not *where* it is, and
 // hunting for it on the map is where the ten seconds actually go. Clicking
 // a row selects that vehicle (populating the Inspector) and flies the

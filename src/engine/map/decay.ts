@@ -2,7 +2,7 @@ import type { GeneratedMap } from "./types";
 
 // Module 8: segment condition ticks down over real time, era-scaled, with
 // a minor speed penalty -- deliberately NOT the full deferred "Corridor
-// failure state" (docs/rebuild-plan.md), just enough that decay is a
+// failure state" (docs/principles.md §4), just enough that decay is a
 // mechanical fact the player feels, not only a number sitting unused on
 // Segment (it existed since Module 4 but nothing ever read or wrote it
 // past creation time). Floors well above zero: decay is friction, not a

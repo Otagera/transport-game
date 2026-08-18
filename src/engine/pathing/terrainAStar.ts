@@ -41,7 +41,7 @@ export function isWater(terrain: TerrainField, x: number, y: number): boolean {
 // if either cell adjoining the shared corner is water. Both endpoints can
 // be land while the diagonal step still visually clips a water corner --
 // disallowing it keeps pathing cost, water measurement, and rendered
-// geometry in agreement (docs/rebuild-plan.md §5).
+// geometry in agreement (docs/principles.md §3).
 function cornerBlocked(terrain: TerrainField, x: number, y: number, dx: number, dy: number): boolean {
   return isWater(terrain, x + dx, y) || isWater(terrain, x, y + dy);
 }

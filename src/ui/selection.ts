@@ -1,5 +1,5 @@
 // The one piece of state the Inspector, the Lists, the Moments and the
-// map all read (docs/module-11-studio-and-ia.md §1). It exists as its own
+// map all read (docs/architecture/render-and-ui.md §2). It exists as its own
 // tiny store rather than living inside the Inspector because *four* homes
 // need to agree on it: a list row, a moment, and a map click must all be
 // able to say "this is the thing now," and the Inspector must be able to

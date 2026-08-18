@@ -14,7 +14,7 @@ const VEHICLE_COLORS: Record<Vehicle["carries"], number> = {
   goods: 0x8866ff,
 };
 // Paratransit reads as a distinct, informal presence -- not a smaller
-// version of a player vehicle (docs/rebuild-plan.md: "the player's
+// version of a player vehicle (docs/principles.md §1: "the player's
 // planned network competes with an emergent one").
 const PARATRANSIT_COLOR = 0xffd23f;
 

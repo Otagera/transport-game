@@ -1,4 +1,4 @@
-// Node kinds (docs/rebuild-plan.md §5, "Nodes, chains, levels"): `vertex`
+// Node kinds (docs/principles.md §3, "Nodes, chains, levels"): `vertex`
 // is a fourth kind for unlabeled bend points -- a separate enum value, not
 // a flag on `junction`, so every switch site is a compile error until
 // handled. The generator (engine/map) never places vertices, only the
@@ -12,7 +12,7 @@ export interface MapNode {
   y: number;
 }
 
-// A corridor is a chain of nodes (docs/rebuild-plan.md §5): terrain facts
+// A corridor is a chain of nodes (docs/principles.md §3): terrain facts
 // only -- which nodes it connects, in order, and the physical path between
 // them. One geometry representation for the whole chain, including a
 // straight two-node corridor (a two-point polyline). Segment stays

@@ -41,7 +41,7 @@ import * as THREE from "three";
 const DEFAULT_MAP_SEED = 1;
 const STARTING_FUNDS = 1000;
 const FARE_TABLE = { passengers: 5, produce: 3, supplies: 2 };
-// The brownfield premise (docs/rebuild-plan.md §1): the player inherits a
+// The brownfield premise (docs/principles.md §1): the player inherits a
 // colonial rail spine built for export and some pre-built roads. The
 // generator places both without knowing content exists, so this is the
 // bootstrap layer saying what that inherited network was built to -- a
@@ -180,7 +180,7 @@ async function bootstrap(): Promise<void> {
 
   // Save/scenario restoration happens before any scene/network/authoring
   // controller is built, and mutates simulation/economy/paratransit/growth/
-  // eraTimeline in place (docs/handoff-module-10.md): `map` below is read
+  // eraTimeline in place (docs/architecture/engine.md §save/): `map` below is read
   // back off `simulation.map` afterward rather than the freshly generated
   // one, so the scene is built from whatever topology actually won --
   // restored corridors and promotions, an authored scenario's clean map,
@@ -228,7 +228,7 @@ async function bootstrap(): Promise<void> {
   sceneHandle.scene.add(fleetRenderer.group);
 
   // The one piece of state four homes have to agree on
-  // (docs/module-11-studio-and-ia.md §1).
+  // (docs/architecture/render-and-ui.md §2).
   const selection = createSelectionStore();
   const eraBanner = createEraBanner(eraBannerEl, (subject) => selection.select(subject));
   const pnlPanel = createPnLPanel(pnlPanelEl, (vehicleId) => selection.select({ kind: "vehicle", id: vehicleId }));
@@ -320,7 +320,7 @@ async function bootstrap(): Promise<void> {
     cameraController.focusOn(gridToWorld(grid.x, grid.y, width, height));
   });
 
-  // Cheap, high-leverage visual era identity (docs/rebuild-plan.md §5):
+  // Cheap, high-leverage visual era identity (docs/principles.md §3):
   // background + fill light tint from the era's palette. Applied once at
   // startup, then again on every transition.
   function applyEraPalette(era: Era): void {
@@ -343,8 +343,8 @@ async function bootstrap(): Promise<void> {
     eraBanner.show(`Era: ${toContent.name}`);
   }
 
-  // Growth must be visible on the map without reading a number (docs/
-  // rebuild-plan.md §6 Module 9): tick() already mutated the promoted
+  // Growth must be visible on the map without reading a number
+  // (docs/architecture/engine.md §growth/): tick() already mutated the promoted
   // node's kind in place on `simulation.map`, so re-running the network
   // renderer from that same map is what turns it into a marker/color
   // change -- no separate "apply promotion visually" step needed. The
@@ -408,7 +408,7 @@ async function bootstrap(): Promise<void> {
 
   window.addEventListener("resize", sceneHandle.resize);
 
-  // docs/rebuild-plan.md §6 Module 10: "window.dev console API for era,
+  // docs/architecture/dev-studio.md §2: "window.dev console API for era,
   // funds, warm, save, load." A separate surface from the ?studio=1 UI --
   // installed whenever the build is DEV regardless of that query param, so
   // it's reachable from the console alone. era/funds/warm act live, since
@@ -556,7 +556,7 @@ async function bootstrap(): Promise<void> {
   requestAnimationFrame(frame);
 }
 
-// Module 10's console API (docs/rebuild-plan.md §6): "you can reach any
+// Module 10's console API (docs/architecture/dev-studio.md §2): "you can reach any
 // era in seconds for tuning." Built in bootstrap(), where it can close
 // over live state, and installed here alongside the studio so both
 // DEV-only surfaces share one gate.

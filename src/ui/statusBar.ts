@@ -3,7 +3,7 @@ import { money } from "./format";
 // The Strip: ambient state, never behind a click (docs/module-11-studio-
 // and-ia.md §1). Funds, burn rate and era are the three things a player
 // must never have to ask for -- "balance without rate is unreadable"
-// (docs/rebuild-plan.md §5) is the whole reason the rate lives here rather
+// (docs/principles.md §3) is the whole reason the rate lives here rather
 // than in the P&L list.
 //
 // Frame rate and tick count are *diagnostics*, not ambient game state, so

@@ -18,8 +18,8 @@ function testEras(): EraDef[] {
 }
 
 // A dedicated map with a profileId already set, mirroring the shape of a
-// built corridor (Module 11b). This is the field docs/handoff-module-10.md
-// §2.3 warns drops silently -- rendering fine while the corridor reverts
+// built corridor (Module 11b). This is the field docs/architecture/engine.md
+// §save/ warns drops silently -- rendering fine while the corridor reverts
 // to the wrong cross-section, decay rate and cost basis.
 function twoNodeMapWithProfile(): ReturnType<typeof generateMap> {
   return {

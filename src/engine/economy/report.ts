@@ -5,7 +5,7 @@ export interface RoutePnL extends RouteLedgerEntry {
   net: number;
 }
 
-// Per-route P&L, worst-first sorted (docs/rebuild-plan.md §6 Module 6):
+// Per-route P&L, worst-first sorted (docs/principles.md §3):
 // "you can tell which route is bleeding in under ten seconds." Cost here
 // is ongoing operating cost only, not the one-time purchase price -- a
 // route's day-to-day burn is a different question than whether buying

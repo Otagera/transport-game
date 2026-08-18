@@ -10,7 +10,7 @@ export type AlignmentMode = "auto" | "straight" | "curve";
 // A forced chain node: either one of the player's own waypoints, or a
 // bank point the water rule inserted automatically. "The generator never
 // places vertices; only the player and the water rule do"
-// (docs/rebuild-plan.md §5) -- this is that water rule, for bridges.
+// (docs/principles.md §3) -- this is that water rule, for bridges.
 export interface ChainPoint {
   point: GridPoint;
   isBridgeBank: boolean;
@@ -70,7 +70,7 @@ function collapseWaterRuns(terrain: TerrainField, cells: GridPoint[]): GridPoint
 // (bridges included, per terrainAStar.ts); "straight" and "curve" both
 // hold the literal line the player drew -- "straight does not mean
 // ignore terrain; it means hold this line and tell me what holding it
-// costs" (docs/rebuild-plan.md §5).
+// costs" (docs/principles.md §3).
 function planLeg(terrain: TerrainField, from: GridPoint, to: GridPoint, mode: AlignmentMode): GridPoint[] | null {
   if (mode === "auto") {
     const result = findTerrainPath(terrain, from, to);
@@ -82,7 +82,7 @@ function planLeg(terrain: TerrainField, from: GridPoint, to: GridPoint, mode: Al
 
 // The one place a raw point sequence turns into cost -- used for every
 // alignment mode, so a transition never gets priced two different ways
-// (docs/rebuild-plan.md §5: "the A* cost function IS the build price").
+// (docs/principles.md §3: "the A* cost function IS the build price").
 function costForRawChain(terrain: TerrainField, points: GridPoint[]): StepCost[] {
   const steps: StepCost[] = [];
   for (let i = 1; i < points.length; i += 1) {

@@ -109,7 +109,7 @@ describe("Inspector snapshot", () => {
 });
 
 // The load-bearing claim of the whole Inspector: these three actions are
-// the only levers a player in debt has, and docs/rebuild-plan.md §5
+// the only levers a player in debt has, and docs/principles.md §3
 // records three playthroughs ending in undiagnosable debt. If a later
 // change routes them through canAfford "for consistency" with purchases,
 // this is what should fail.

@@ -11,8 +11,8 @@ export interface TuningTabProps {
 
 // Module 1's tuning panel, unchanged in behaviour and now one tab among
 // four. Still bound directly to the single mutable StyleSpec object rather
-// than a copy: the whole point of the style spec (docs/rebuild-plan.md §6
-// Module 1) is that there is exactly one of it, and a tab holding its own
+// than a copy: the whole point of the style spec (docs/architecture/render-and-ui.md
+// §1) is that there is exactly one of it, and a tab holding its own
 // draft would immediately become a second source of truth.
 export function TuningTab({ style, onChange, onDirty }: TuningTabProps) {
   function handleInput(field: FieldDef, event: Event): void {

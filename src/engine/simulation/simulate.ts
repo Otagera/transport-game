@@ -61,12 +61,12 @@ export function rebuildFromMap(state: SimulationState, map: GeneratedMap): void 
 // movement, engine/economy about money, engine/paratransit about the
 // informal sector's own spawning, engine/growth about tier promotion --
 // this is the one place all four get threaded together. `eraModifiers` is
-// threaded the same way (docs/rebuild-plan.md §6 Module 8): simulate.ts
+// threaded the same way (docs/architecture/engine.md §eras/): simulate.ts
 // is the one integration point that knows about eras at all --
 // economy/pathing/paratransit/growth each take a plain multiplier, never
 // the EraModifiers type itself, so those submodules stay decoupled from
-// engine/eras. Returns any promotions this tick produced (docs/
-// rebuild-plan.md §6 Module 9) so a caller that owns rendering can react
+// engine/eras. Returns any promotions this tick produced
+// (docs/architecture/engine.md §growth/) so a caller that owns rendering can react
 // (re-render the map, show a notification) without engine/simulation
 // needing to know either exists.
 export function tick(

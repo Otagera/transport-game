@@ -217,7 +217,7 @@ describe("trySpawnParatransit player-service damping", () => {
 
   // It damps, it does not block. A hard cutoff at moderate service would
   // turn the antagonist into a subsystem that politely waits its turn
-  // (docs/rebuild-plan.md §1, "The hook").
+  // (docs/principles.md §1, "The hook").
   test("high enough sustained demand still breaks through good service", () => {
     const paratransit = createParatransitState();
     const state = fixtureState(SPAWN_EMA_THRESHOLD * 40);

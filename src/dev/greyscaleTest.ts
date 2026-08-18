@@ -1,4 +1,4 @@
-// Acceptance check (docs/rebuild-plan.md §6 Module 1): the scene must read
+// Acceptance check (docs/architecture/render-and-ui.md §1): the scene must read
 // in value alone. Press 'g' to toggle. CSS filter is enough here — this is
 // a dev-time diagnostic, not a shipped rendering feature.
 export function installGreyscaleTest(canvas: HTMLCanvasElement): void {

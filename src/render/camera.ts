@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-// Select-and-focus (docs/module-11-studio-and-ia.md §1): clicking a row in
+// Select-and-focus (docs/architecture/render-and-ui.md §2): clicking a row in
 // a List must both select the entity and bring it on screen. A hard jump
 // makes the player re-orient from scratch every time -- the whole point of
-// the diorama register (docs/rebuild-plan.md §5, "Visual direction") is
+// the diorama register (docs/principles.md §3, "Visual direction") is
 // that the world is one legible object, and teleporting the camera breaks
 // that continuity. So this eases.
 //

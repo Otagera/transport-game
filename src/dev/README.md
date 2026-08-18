@@ -21,4 +21,4 @@ Tabs:
 | Scenario Lab | `ScenarioLab.tsx` | `Scenario` |
 
 Every export is Zod-validated against `src/content/schema.ts` before it leaves the tab.
-See [docs/module-11-studio-and-ia.md](../../docs/module-11-studio-and-ia.md).
+See [docs/architecture/dev-studio.md](../../docs/architecture/dev-studio.md).

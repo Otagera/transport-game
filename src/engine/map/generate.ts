@@ -5,7 +5,7 @@ import { generateInheritedNetwork } from "./corridors";
 import { assertFullyConnected } from "./connectivity";
 import type { GeneratedMap } from "./types";
 
-// Regional scale (docs/rebuild-plan.md §2): settlements spread across a
+// Regional scale (docs/principles.md §2): settlements spread across a
 // large map, corridors running tens of cells between them.
 export const MAP_WIDTH = 48;
 export const MAP_HEIGHT = 48;

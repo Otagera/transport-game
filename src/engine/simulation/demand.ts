@@ -25,7 +25,7 @@ function nearestSettlement(village: MapNode, settlements: MapNode[]): MapNode | 
   return nearest;
 }
 
-// Demand pairs are static topology (docs/rebuild-plan.md §5); growth scales
+// Demand pairs are static topology (docs/principles.md §3); growth scales
 // the rate, not the graph -- so this runs once per map, not per tick.
 export function generateDemandPairs(map: GeneratedMap): DemandPair[] {
   const inhabited = map.nodes.filter((node) => node.kind !== "junction");

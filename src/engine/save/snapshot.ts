@@ -13,7 +13,7 @@ import { SAVE_FORMAT_VERSION } from "./types";
 import type { RestoreResult, SaveFile } from "./types";
 
 // Everything not listed here is derived and deliberately left out (see
-// types.ts's SaveFile doc and docs/handoff-module-10.md §2.2/§2.4):
+// types.ts's SaveFile doc and docs/architecture/engine.md §save/):
 // terrain regenerates from `map.seed`, and `demand`/`routing`/
 // `ambientGeometry`/`segmentLoads`/`ambientLoads` are recomputed by
 // rebuildFromMap and the next tick().
@@ -90,7 +90,7 @@ export function restoreIntoState(
   };
 
   // Sets map/routing/ambientGeometry together -- the one route to a
-  // routing rebuild outside the engine (docs/handoff-module-10.md §2.4).
+  // routing rebuild outside the engine (docs/architecture/engine.md §save/).
   rebuildFromMap(simulation, map);
   simulation.demand = generateDemandPairs(map);
   simulation.queues = new Map(save.queues.map(([nodeId, inner]) => [nodeId, new Map(inner)]));

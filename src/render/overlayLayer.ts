@@ -11,7 +11,7 @@ import { gridToWorld } from "./gridCoords";
 // The overlay layer is *additive*: its own group drawn above the base
 // network, never a recolour of it. That is what protects the base map's
 // two-channel contract -- hue = health, brightness = utilisation
-// (docs/rebuild-plan.md §5) -- from an overlay that needs to say something
+// (docs/principles.md §3) -- from an overlay that needs to say something
 // those channels are not for. While an overlay is active the base network
 // is dimmed to neutral by the caller, so exactly one thing on screen is
 // speaking in colour at a time.
@@ -197,7 +197,7 @@ export function createOverlayLayer(): OverlayLayerHandle {
       mesh.position.set(position.x, 0.06, position.z);
       group.add(mesh);
 
-      // Stranded is reachability-based (docs/rebuild-plan.md §5), so it is
+      // Stranded is reachability-based (docs/principles.md §3), so it is
       // its own mark rather than "the reddest end of the served ramp": a
       // node can be well-connected and still reach nothing it needs.
       if (context.stranded.has(node.id)) {
@@ -229,7 +229,7 @@ export function createOverlayLayer(): OverlayLayerHandle {
       // road -- but ambient private traffic puts a non-zero load on every
       // road in every motorised era, so that guard would ribbon the entire
       // network and "colouring every corridor destroys the signal"
-      // (docs/rebuild-plan.md §5). A free-flowing link is not an answer to
+      // (docs/principles.md §3). A free-flowing link is not an answer to
       // "which link is the bottleneck?"
       if (load <= FREE_SLOT_WEIGHT) return;
       addRibbon(a, b, healthColor(factor), 0.14 + (1 - factor) * 0.4, OVERLAY_Y);

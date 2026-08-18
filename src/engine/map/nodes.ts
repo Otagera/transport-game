@@ -16,7 +16,7 @@ function distance(ax: number, ay: number, bx: number, by: number): number {
   return Math.hypot(ax - bx, ay - by);
 }
 
-// Every inhabited node originates demand (docs/rebuild-plan.md §5), so
+// Every inhabited node originates demand (docs/principles.md §3), so
 // placement must not skip low-density spots entirely -- villages are placed
 // from the same density-sorted candidate pool as settlements, just with a
 // tighter spacing requirement.

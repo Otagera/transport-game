@@ -27,7 +27,7 @@ function catmullRom(p0: GridPoint, p1: GridPoint, p2: GridPoint, p3: GridPoint, 
 // Smoothing the WHOLE chain as one spline -- not per-segment -- is what
 // gives tangent continuity across interior nodes for free. Smoothing per
 // segment independently produces a kink at every join
-// (docs/rebuild-plan.md §5); there's only one curve here, so there's
+// (docs/principles.md §3); there's only one curve here, so there's
 // nothing to stitch.
 export function smoothChain(points: GridPoint[], samplesPerSegment: number): GridPoint[] {
   if (points.length < 3) {
@@ -73,7 +73,7 @@ function turnAngle(a: GridPoint, b: GridPoint, c: GridPoint): number {
 
 // Smoothing must not change corridor type: clamp back to the traversable
 // set -- both vertices and segments -- with a raw-path fallback if the
-// smoothed curve would leave it (docs/rebuild-plan.md §5). Also applies
+// smoothed curve would leave it (docs/principles.md §3). Also applies
 // the turning-radius constraint across the whole curve, not just at the
 // original joins.
 export function clampToTraversable(terrain: TerrainField, smoothed: GridPoint[], raw: GridPoint[]): GridPoint[] {

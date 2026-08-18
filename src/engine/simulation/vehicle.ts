@@ -17,7 +17,7 @@ function unloadAt(vehicle: Vehicle, nodeId: string): LoadEntry[] {
   return delivered;
 }
 
-// Paratransit is passengers-only (docs/rebuild-plan.md §5); goods need
+// Paratransit is passengers-only (docs/principles.md §3); goods need
 // capital an okada doesn't have. Generalized here as "what this vehicle
 // is built to carry" rather than a paratransit-specific rule, since
 // Module 6 is where vehicle carries becomes a real, content-driven
@@ -27,11 +27,11 @@ function isCompatibleCargo(carries: Vehicle["carries"], kind: CargoKind): boolea
   return kind === "produce" || kind === "supplies";
 }
 
-// Opportunistic loading, no manifests (docs/rebuild-plan.md §5): at each
+// Opportunistic loading, no manifests (docs/principles.md §3): at each
 // node the vehicle loads queued demand whose destination lies ahead on its
 // remaining route -- not a full lookahead across the wrap-around.
 // pickupEvents is optional and only populated by tickVehicle's ongoing
-// loads (docs/rebuild-plan.md §6 Module 9) -- a vehicle's one-time initial
+// loads (docs/architecture/engine.md §growth/) -- a vehicle's one-time initial
 // load at creation doesn't feed growth's service-ratio accounting, since
 // that's a bootstrap event, not sustained service.
 function loadAt(vehicle: Vehicle, nodeId: string, queues: NodeQueues, pickupEvents?: PickupEvent[]): void {
@@ -142,7 +142,7 @@ export function createVehicle(
 
 // A one-shot paratransit vehicle: a straight point-to-point path (not a
 // closed loop), passengers-only, removed once it reaches the end instead
-// of running forever (docs/rebuild-plan.md §5: "cyclic paratransit drains
+// of running forever (docs/principles.md §3: "cyclic paratransit drains
 // queues to a comfortable equilibrium and removes the pressure to
 // build. Measured, not assumed.").
 export function createOneShotVehicle(
@@ -181,7 +181,7 @@ export function hasCompletedTrip(vehicle: Vehicle): boolean {
 }
 
 // Vehicles move along corridors as progress values on a graph -- no
-// forces, no collisions (docs/rebuild-plan.md §3, rejected: physics
+// forces, no collisions (docs/principles.md §2, rejected: physics
 // engines). The outer loop lets a large dt cross more than one edge in a
 // single call without losing sub-edge progress; it now consumes a *time*
 // budget rather than a distance budget, since congestion makes effective

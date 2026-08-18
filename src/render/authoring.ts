@@ -45,7 +45,7 @@ export interface BuildEvent {
 // pathing/build logic it calls into (planCorridor, commitCorridor) is
 // pure engine code.
 // getBuildCostMultiplier/getRailAvailable are live getters, not values
-// captured once (docs/rebuild-plan.md §6 Module 8): both change as the
+// captured once (docs/architecture/render-and-ui.md §3): both change as the
 // era timeline advances on its own after this controller is built, and
 // every preview/build call must reflect whichever era is current right
 // now, not whichever was current when authoring started.
@@ -202,7 +202,7 @@ export function createAuthoringController(
     if (getInteractionMode() !== "build") return;
     const grid = pointerToGrid(event);
     if (!grid) return;
-    // Wet waypoints must not create nodes (docs/rebuild-plan.md §5) -- no
+    // Wet waypoints must not create nodes (docs/principles.md §3) -- no
     // bridges yet, so a water click is simply rejected.
     if (isWater(map.terrain, grid.x, grid.y)) return;
 
@@ -284,7 +284,7 @@ export function createAuthoringController(
         refreshPreview(null);
       }
     } else if (event.key.toLowerCase() === "r") {
-      // Rail goes dark through Informal (docs/rebuild-plan.md §5) --
+      // Rail goes dark through Informal (docs/principles.md §3) --
       // toggling *to* rail is blocked when the current era has no rail;
       // toggling back to road always works, so a player never gets stuck.
       if (infrastructureType === "road" && !getRailAvailable()) return;
@@ -306,7 +306,7 @@ export function createAuthoringController(
   }
 
   // A designed absence must be visible in advance, not ambush the player
-  // (docs/rebuild-plan.md §5) -- if rail becomes unavailable mid-draw
+  // (docs/principles.md §3) -- if rail becomes unavailable mid-draw
   // (era transitions while the player is mid-authoring), fall back to
   // road immediately rather than leaving an uncommittable rail preview.
   function reconcileEraGating(): void {

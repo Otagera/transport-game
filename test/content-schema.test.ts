@@ -33,7 +33,7 @@ describe("content schema", () => {
       expect(sortedByCapacity[i]!.purchaseCost).toBeGreaterThan(sortedByCapacity[i - 1]!.purchaseCost);
     }
 
-    // docs/rebuild-plan.md §5: "1 BRT ≈ 8 danfos is a meaningful ratio."
+    // docs/principles.md §3: "1 BRT ≈ 8 danfos is a meaningful ratio."
     const brt = vehicles.find((v) => v.id === "brt")!;
     const danfo = vehicles.find((v) => v.id === "danfo")!;
     expect(brt.purchaseCost / danfo.purchaseCost).toBeCloseTo(8, 1);
@@ -91,7 +91,7 @@ describe("content schema", () => {
   });
 
   // "An okada occupying the same road space as a bus is plainly wrong"
-  // (docs/rebuild-plan.md §5). Module 7 modelled that, but until Module 11
+  // (docs/principles.md §3). Module 7 modelled that, but until Module 11
   // no def supplied a weight, so every player vehicle used the default of
   // 1 and the model had nothing to bite on. This asserts the catalog
   // actually expresses the distinction rather than merely being allowed to.

@@ -34,7 +34,7 @@ describe("profiles.json", () => {
   // ever hand-edited, this is what catches an outline that no longer
   // matches the parts it is supposed to enclose -- a silhouette that lies
   // about the shape is exactly the display-boundary failure class
-  // docs/rebuild-plan.md §5 calls the most reliable rule in the project.
+  // docs/principles.md §3 calls the most reliable rule in the project.
   test("every profile's outline and width are consistent with its own elements", () => {
     for (const profile of profiles) {
       const outline = crossSectionOutline(profile.elements);

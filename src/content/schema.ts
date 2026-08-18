@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-// Matches docs/rebuild-plan.md §6 Module 8: four compressed eras,
+// Matches docs/principles.md §3 (Eras): four compressed eras,
 // Post-Independence -> Oil Boom -> Informal -> Modern. Era identity must
-// be expressed mechanically, not only in prices (docs/rebuild-plan.md
-// §5) -- `modifiers` is that mechanical expression; `palette` is the
+// be expressed mechanically, not only in prices (docs/principles.md
+// §3) -- `modifiers` is that mechanical expression; `palette` is the
 // (cheap, high-leverage) visual one.
 export const EraSchema = z.object({
   id: z.string(),
@@ -29,7 +29,7 @@ export const EraSchema = z.object({
     ambientTraffic: z.number().nonnegative(),
   }),
   // Rail goes dark through Informal and returns as standard gauge in
-  // Modern (docs/rebuild-plan.md §5) -- historically exact, but a
+  // Modern (docs/principles.md §3) -- historically exact, but a
   // designed absence must be visible in advance, not ambush the player.
   railAvailable: z.boolean(),
 });
@@ -38,7 +38,7 @@ export type Era = z.infer<typeof EraSchema>;
 
 export const EraListSchema = z.array(EraSchema);
 
-// Per-def purchase costs are essential (docs/rebuild-plan.md §5): with
+// Per-def purchase costs are essential (docs/principles.md §3): with
 // one flat cost, every roster comparison is meaningless -- capex held
 // artificially equal. eraIn/eraOut close the purchase catalog without
 // despawning owned stock (graceful obsolescence); eraOut: null means
@@ -49,7 +49,7 @@ export const EraListSchema = z.array(EraSchema);
 // public/content/vehicles.json keeps validating unchanged:
 //
 // - `congestionWeight` closes a real gap. "An okada occupying the same
-//   road space as a bus is plainly wrong" (docs/rebuild-plan.md §5) was
+//   road space as a bus is plainly wrong" (docs/principles.md §3) was
 //   modelled in engine/simulation/congestion.ts from Module 7, but
 //   nothing ever supplied a value: every player vehicle used
 //   createVehicle's default of 1, so an okada and a BRT weighed the same
@@ -93,7 +93,7 @@ export type VehicleDef = z.infer<typeof VehicleDefSchema>;
 
 export const VehicleDefListSchema = z.array(VehicleDefSchema);
 
-// Module 10: scenarios as content, not code (docs/rebuild-plan.md §5,
+// Module 10: scenarios as content, not code (docs/principles.md §3,
 // "Content is data"). A scenario is a starting point for tuning, not a
 // curated layout -- seedFleet just says how many of a def to start with;
 // applyScenario decides where they run.
@@ -122,7 +122,7 @@ export const ScenarioListSchema = z.array(ScenarioSchema);
 //
 // "Road and rail need a distinct visual channel -- width, surface
 // treatment, sleepers. Not hue or brightness, which are taken"
-// (docs/rebuild-plan.md §5). A profile IS that third channel, made
+// (docs/principles.md §3). A profile IS that third channel, made
 // authorable: the difference between a road and a railway becomes a
 // difference in geometry rather than a difference in colour, which the
 // two-channel contract has no room left for.

@@ -54,7 +54,7 @@ export class UnionFind {
   }
 }
 
-// The hard assert (docs/rebuild-plan.md §6 Module 2): generation must fail
+// The hard assert (docs/architecture/engine.md §map/): generation must fail
 // loud, not silently ship a disconnected map. The network builder is
 // constructed to always produce a spanning tree, so this should never
 // actually throw -- it exists to catch a bug in that construction, not to

@@ -1,0 +1,108 @@
+# Dev studio and the `window.dev` console
+
+Everything under `src/dev/`, plus `window.dev` (installed from `main.ts`). Both are
+DEV-only surfaces that must be dead-code-eliminated from the production bundle — see
+§3 below for how that's actually verified, and a real leak it caught.
+
+## 1. The studio (`?studio=1`)
+
+One dev-only Preact surface, four tabs:
+
+```
+[ Tuning ] [ Profile Studio ] [ Asset Modder ] [ Scenario Lab ]
+```
+
+- **Tuning** — the original Module 1 style-spec panel (sliders bound to the
+  `StyleSpec`, live where possible, regenerating geometry where needed, exporting JSON
+  to paste into content). `?tune=1` is kept as an alias that opens the studio on this
+  tab, so the original workflow and muscle memory around it keep working.
+- **Profile Studio** — an SVG cross-section canvas ruled at 1m with the centre at
+  `(0,0)`, preset elements dragged by their vertex handles, and a live 3D sweep
+  (`render/studioProfile.ts`, see [render-and-ui.md](render-and-ui.md)). The preview
+  sweeps an S-curve with an elevated run rather than a straight test piece, because a
+  straight piece hides exactly the failures that matter — fan-out at curvature, frame
+  flip at an inflection. Exports a `Profile2DDef` (see [content.md](content.md)).
+- **Asset Modder** — drag a `.glb`/`.gltf` in, click the mesh to drop anchor gizmos
+  (axle positions, boarding doors, cargo nodes, particle emitters — **placed by
+  clicking, not typed**, since a boarding door written as `[0.8, 0.4, -1.2]` is
+  unverifiable until something stands in the wrong place at runtime), fill in the
+  `VehicleDef` form, write a mod package. Imported models are normalised to a fixed
+  framed size so anchors mean the same thing regardless of whether the source was
+  authored in centimetres or metres.
+- **Scenario Lab** — authors and live-validates a `Scenario` against `ScenarioSchema`
+  (see [content.md](content.md)), exports it as JSON. It deliberately does not *apply*
+  a scenario — that needed the warm-forward pass, which is `engine/save/scenario.ts`'s
+  `applyScenario`/`warmForward` (see [engine.md](engine.md)); this tab only authors the
+  definition.
+
+`scripts/studio-mod-writer.mjs` is a Vite plugin with `apply: "serve"` — not a
+runtime-gated path but one that **doesn't exist in a production build at all** —
+writing `vehicle.json` plus the mesh into `public/mods/<mod_id>/`, with a download
+fallback when no dev server is running.
+
+**Bug caught live, Module 11c.** `btoa(String.fromCharCode(...new
+Uint8Array(buffer)))` spreads every byte as a separate function argument, so it throws
+`RangeError: Maximum call stack size exceeded` once a file exceeds the engine's
+argument limit (measured between 64KB and 128KB in V8). The Module 11 live verification
+had used a 678-byte hand-built glTF fixture, three orders of magnitude below the
+threshold — the first real model anyone loaded blew the stack. Replaced with a chunked
+encoder (`src/dev/encodeMesh.ts`); `test/dev-encode-mesh.test.ts` straddles the failing
+threshold deliberately (64KB / 128KB / 1MB / 5MB) against `Buffer`'s own encoding.
+`FileReader.readAsDataURL` would also work and is native, but Bun has no `FileReader`,
+so it couldn't have a regression test pointed at it.
+
+**A quieter bug underneath that one was worse.** `setMeshName(file.name)` ran *before*
+the throwing line, so the panel reported "Loaded Train_Track_01.glb" while no bytes had
+actually been captured — exactly what the original bug report showed, both messages at
+once. "Write mod package" would then have written a `vehicle.json` whose `mesh` named a
+file the server was never sent, producing a mod that looks fine on disk and fails
+later, somewhere else. Fixed on both sides: the client encodes before touching any
+state and only claims `mesh` when it holds the bytes, and the writer refuses the whole
+write if `vehicle.mesh` names a file it wasn't sent.
+
+## 2. `window.dev` — the console API (Module 10)
+
+A separate surface from `?studio=1`, installed whenever the build is DEV **regardless**
+of that query param, so it's reachable from the browser console alone:
+`window.dev.{era, funds, warm, save, load, scenario}`.
+
+- **`era(id)` / `funds(amount)` / `warm(days)` act live** — none of them change
+  map/terrain identity, so there's no need to reload. `era()` sets
+  `eraTimeline.currentIndex` directly (so, unlike live play advancing through
+  `advanceEraTimeline`, it can jump *backward* too) and synthesizes an `EraTransition`
+  through the same reaction pipeline a real transition uses. `warm()` calls
+  `engine/save/scenario.ts`'s `warmForward` synchronously, then re-runs the same render
+  refresh a live transition would trigger.
+- **`save()` / `load()` / `scenario(id)` reload the page.** Hot-swapping a running
+  scene's map/terrain would need new `setMap`/`setGroundMesh` methods and risks stale
+  closures in raycasting/network/authoring — instead, `load()`/`scenario()` stash a
+  one-shot `BootOverride` into `sessionStorage` and call `location.reload()`.
+  `bootstrap()` consumes that override and calls `restoreIntoState`/`applyScenario`
+  **before** constructing `sceneHandle`/`networkHandle`/`authoringController`/
+  `fleetController`, then reads `map` back off `simulation.map` (not the freshly
+  generated one) so the scene is built from whatever topology actually won. Actual save
+  bytes persist in `localStorage`; the boot-override pointer lives in `sessionStorage`
+  since it must not survive past the one reload it triggers.
+
+## 3. Why this stays out of production, and a real leak it caught
+
+`scripts/verify-prod-bundle.mjs` runs after `vite build` and asserts a string belonging
+to each DEV-only surface (`"preact"`, `"Asset Modder"`, `"GLTFLoader"`,
+`"transport-game: dev console ready"`, the boot-override storage key, …) is **absent**
+from the built JS. This is an assertion against the actual bundle, not a promise about
+a code path — adding a new dev-only surface means adding a string here, or the gate
+stops being real.
+
+**Bug caught by `verify:bundle` itself, not by review, Module 10.** The first version
+of `window.dev`'s object literal was constructed **unconditionally** at the top of
+`bootstrap()`, with only its *installation onto `window`* gated by
+`import.meta.env.DEV` inside `maybeMountDevTools`. An object literal built at a
+function's top level is never dead code no matter what its methods reference — so
+`createSnapshot`/`restoreIntoState` and the boot-override storage-key string shipped
+into the production bundle regardless of that inner gate. `verify:bundle` failed
+immediately on the exact string. Fixed by moving the *entire* `devApi` construction
+(and the `maybeMountDevTools` call using it) inside its own top-level
+`if (import.meta.env.DEV) { ... }` in `bootstrap()`, where Rollup can actually prove it
+unreachable in a production build and strip it. The lesson generalises: **gating the
+installation of a DEV-only object is not the same as gating its construction** — only
+the latter is guaranteed to tree-shake.

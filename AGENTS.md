@@ -1,18 +1,19 @@
 # Transport game
 
-A ground-up rebuild of a transport-infrastructure game. The previous build was lost before reaching a
-remote — Module 0 (repo + remote from commit one) is the first priority for exactly that reason.
+A transport-infrastructure game. The original module build order (0 through 12) is complete —
+see [docs/status.md](docs/status.md) for current state.
 
-**Full design plan, architecture rules, and hard-won findings from the first attempt:**
-[docs/rebuild-plan.md](docs/rebuild-plan.md). Read §5 (Findings) before writing simulation, economy,
-pathing, or paratransit code — it's the part that cost the most to (re)learn.
+**Read [docs/status.md](docs/status.md) first** to see where things stand. Then:
 
-**Quick context for a new conversation:** [docs/architecture.md](docs/architecture.md) (module
-boundaries, file map, recurring patterns — the stable "how it's shaped" reference) and
-[docs/status.md](docs/status.md) (per-module build log — what's done, what's pending, key decisions
-and bugs caught along the way). Read status.md first to see where things stand.
+- [docs/principles.md](docs/principles.md) — design premise, scope, and §3 (Findings), the
+  hard-won lessons from building this twice. **Read Findings before writing simulation, economy,
+  pathing, paratransit, or growth code** — it's the part that cost the most to (re)learn.
+- [docs/architecture/index.md](docs/architecture/index.md) — hard rules, directory map, the tick
+  loop, build/verify pipeline — then follow into `engine.md` / `render-and-ui.md` / `content.md` /
+  `dev-studio.md` for the subsystem you're touching.
 
-As modules get built, add their own docs under `docs/` rather than growing this file.
+As new work gets built, update status.md and the relevant architecture deep-dive rather than
+growing this file.
 
 ## Delegating to OpenCode
 
@@ -24,9 +25,9 @@ off the orchestrating agent's own usage.
   unless a task needs stronger judgment.
 - **Do not use other OpenCode models without asking first** — most are metered per-token and only the
   human knows which ones are pre-approved.
-- **Reserve for Claude (don't delegate):** anything touching the Findings section or the Module 0–2
-  build order in `docs/rebuild-plan.md`, `engine/` boundary decisions, demand/economy/growth model
-  logic, or any change whose correctness rides on the reasoning already paid for in that document.
+- **Reserve for Claude (don't delegate):** anything touching `docs/principles.md` §3 (Findings),
+  `engine/` boundary decisions, demand/economy/growth model logic, or any change whose correctness
+  rides on the reasoning already paid for in that document.
   Delegate mechanical, well-specified slices of an already-decided design, not design decisions.
 - **Coordination:** sequential only, one task at a time — dispatch, review the diff, run gates, commit,
   then dispatch the next. No parallel dispatches against the same working tree.

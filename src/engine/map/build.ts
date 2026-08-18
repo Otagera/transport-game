@@ -27,7 +27,7 @@ function generateId(prefix: string): string {
 // the previous reference." One node per chain point (existing nodes
 // reused via `existingNodeId`, new ones -- including auto-inserted
 // bridge banks -- get the `vertex` kind, never named,
-// docs/rebuild-plan.md §5); one segment per consecutive pair in that
+// docs/principles.md §3); one segment per consecutive pair in that
 // chain, independently typed and levelled per plan.segmentLevels.
 // `plan.chainPoints` is longer than `waypoints` whenever the route
 // crossed water: `waypoints` supplies existingNodeId for the player's

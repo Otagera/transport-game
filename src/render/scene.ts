@@ -192,7 +192,7 @@ export function createScene(canvas: HTMLCanvasElement, style: StyleSpec): SceneH
   // horizontally squashed -- ~2.7x at a 1400x950 canvas. It shows up as
   // node spheres drawn as vertical ellipses, which is how it was finally
   // spotted: a visual saying something the model doesn't mean
-  // (docs/rebuild-plan.md §5). Pre-existing since Module 4; nothing on
+  // (docs/principles.md §3). Pre-existing since Module 4; nothing on
   // screen was round enough to give it away until profiles put real
   // cross-section width on the map.
   function resize(): void {

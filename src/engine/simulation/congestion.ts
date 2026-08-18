@@ -6,7 +6,7 @@ export const MIN_CONGESTION_FACTOR = 0.15;
 
 // Sum of congestion weight for every vehicle currently on each segment
 // (their current edge). Per-vehicle weight, not a flat count per vehicle
-// (docs/rebuild-plan.md §5): an okada occupying the same road space as a
+// (docs/principles.md §3): an okada occupying the same road space as a
 // bus is plainly wrong and inflates the congestion effect.
 export function computeSegmentLoads(vehicles: Vehicle[], context: RoutingContext): Map<string, number> {
   const loads = new Map<string, number>();
@@ -198,7 +198,7 @@ export function computeAmbientLoads(
  * downstream -- vehicle speed, the paratransit operator's "is this jam
  * worth joining" check, and the Corridor stress overlay -- reads the same
  * number. A display that recomputed its own idea of load would be exactly
- * the drift docs/rebuild-plan.md §5 warns about at the display boundary.
+ * the drift docs/principles.md §3 warns about at the display boundary.
  */
 export function addLoads(base: Map<string, number>, extra: ReadonlyMap<string, number>): Map<string, number> {
   const total = new Map(base);

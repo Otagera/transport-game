@@ -2,7 +2,7 @@ import type { GridPoint } from "./terrainAStar";
 
 // Supercover DDA: every grid cell a line segment passes through, including
 // cells only clipped at a corner -- not endpoint or interval sampling,
-// which misses corner clips (docs/rebuild-plan.md §5). When the line
+// which misses corner clips (docs/principles.md §3). When the line
 // crosses exactly through a lattice corner, both edge-adjacent cells are
 // included, which is what distinguishes supercover from plain Bresenham
 // (which would arbitrarily pick one).

@@ -6,8 +6,8 @@ import type { ProfileElement, Profile2DDef } from "../content/schema";
 // The centreline is resampled through a Catmull-Rom curve for the same
 // reason pathing/smoothing.ts smooths the *whole* chain at once rather
 // than per segment: smoothing joins independently leaves a visible kink at
-// every one of them (docs/architecture.md, "Supercover DDA + whole-chain
-// Catmull-Rom"). A profile sweep makes those kinks far more obvious than a
+// every one of them (docs/architecture/engine.md §pathing/, "supercover DDA
+// + whole-chain Catmull-Rom"). A profile sweep makes those kinks far more obvious than a
 // line ever did, because the cross-section fans out at the corner.
 //
 // This module is pure geometry and has no dev-only dependency: the Profile
@@ -24,7 +24,7 @@ export interface Vec2 {
 export const DEFAULT_SAMPLES_PER_SEGMENT = 8;
 
 // Cross-sections are authored in metres; the map is a grid of cells with
-// no stated metre scale (docs/rebuild-plan.md §2 fixes the *register* --
+// no stated metre scale (docs/principles.md §2 fixes the *register* --
 // "regional", corridors tens of cells long -- but never a cell size).
 // This is therefore a **visual** scale, chosen so a trunk road lands at
 // roughly the width the Module 5 bridge deck already established
@@ -168,7 +168,7 @@ export function profileCrownHeight(profile: Profile2DDef): number {
   return crown;
 }
 
-// Albedo separation before lighting (docs/rebuild-plan.md §5): "the scene
+// Albedo separation before lighting (docs/principles.md §3): "the scene
 // read flat because large areas shared an albedo, not because the lighting
 // was wrong." These are deliberately NOT realistic asphalt values. Real
 // asphalt sits around 0x3a3a3e, which is exactly where this map's terrain
@@ -179,7 +179,7 @@ export function profileCrownHeight(profile: Profile2DDef): number {
 // Within a profile the values still separate from each other, because
 // that is the surface-treatment channel doing its job: light ballast
 // against dark sleepers is what makes rail read as rail rather than as a
-// narrow road (docs/rebuild-plan.md §5, "road and rail need a distinct
+// narrow road (docs/principles.md §3, "road and rail need a distinct
 // visual channel -- width, surface treatment, sleepers").
 export const MATERIAL_COLORS: Record<ProfileElement["material"], number> = {
   asphalt: 0x8b8b91,
@@ -198,7 +198,7 @@ export interface SweepOptions {
    * Chain indices whose *following* segment is elevated, as
    * `pathing/plan.ts`'s segmentLevels reports them. Elevated runs get a
    * bank-to-bank deck fascia and support piers -- "a bridge reads as a
-   * bridge rather than a dam" (docs/rebuild-plan.md §6 Module 5).
+   * bridge rather than a dam" (docs/principles.md §3).
    */
   elevatedSpans?: Array<{ from: THREE.Vector3; to: THREE.Vector3 }>;
   samplesPerSegment?: number;

@@ -12,7 +12,7 @@ import { escapeHtml, money, percent } from "./format";
 import type { Selection, SelectionStore } from "./selection";
 
 // The Inspector is the only home for per-entity fact and per-entity
-// action (docs/module-11-studio-and-ia.md §1). Its defining rule is the
+// action (docs/architecture/render-and-ui.md §2). Its defining rule is the
 // negative one: **it is empty when nothing is selected.** No default
 // summary, no "here's the map overall" fallback -- a fallback would make
 // it a second Strip, and then two homes disagree about the same number.
@@ -20,7 +20,7 @@ import type { Selection, SelectionStore } from "./selection";
 // Actions are never gated on funds. Pruning a corridor, selling a vehicle
 // and maintaining a segment are the three levers a player in debt has to
 // climb out; disabling them when funds go negative is precisely the
-// undiagnosable-debt spiral docs/rebuild-plan.md §5 records three
+// undiagnosable-debt spiral docs/principles.md §3 records three
 // playthroughs dying to. This is a deliberate exception to
 // economy/state.ts's "spending is blocked when it isn't affordable" rule,
 // which continues to govern *purchases* -- buying a vehicle adds ongoing
@@ -132,7 +132,7 @@ function vehicleSnapshot(
   }
 
   // Paratransit is not the player's to sell -- it is a system that exists
-  // whether they like it or not (docs/rebuild-plan.md, "The hook").
+  // whether they like it or not (docs/principles.md §1, "The hook").
   const actions: InspectorAction[] =
     vehicle.lifecycle === "one-shot" || !econ
       ? []
@@ -183,7 +183,7 @@ function nodeSnapshot(nodeId: string, sources: InspectorSources): InspectorSnaps
     );
   }
   // Stranded is reachability-based, not "has no built edge"
-  // (docs/rebuild-plan.md §5) -- a road to nowhere doesn't un-strand a
+  // (docs/principles.md §3) -- a road to nowhere doesn't un-strand a
   // node, so this row can read "stranded" on a node with connections.
   if (isStranded) {
     rows.push({ label: "stranded", value: "reaches no destination", tone: "bad" });

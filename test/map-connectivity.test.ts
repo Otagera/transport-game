@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { generateMap } from "@engine/map/generate";
 
-// docs/rebuild-plan.md §6 Module 2 "Done when": several seeds produce maps
+// docs/architecture/engine.md §map/: several seeds produce maps
 // that look like places and are provably connected.
 const SEEDS = Array.from({ length: 25 }, (_, i) => i * 97 + 1);
 

@@ -7,7 +7,7 @@ import type { ParatransitState } from "./types";
 export const SPAWN_EMA_THRESHOLD = 4;
 export const SPAWN_EMA_TIME_CONSTANT_SECONDS = 8;
 export const PAIR_CAP = 2;
-// Cap per corridor, not only per demand pair (docs/rebuild-plan.md §5):
+// Cap per corridor, not only per demand pair (docs/principles.md §3):
 // many pairs route over one corridor; without this, 20+ informal
 // vehicles accumulate on one link and collapse throughput to ~10%.
 export const CORRIDOR_CAP = 6;
@@ -18,7 +18,7 @@ export const SPAWN_COOLDOWN_SECONDS = 5;
 export const MIN_SPAWN_CONGESTION_FACTOR = 0.25;
 
 // Damping on the spawn threshold by how well the player already serves the
-// origin (docs/rebuild-plan.md §5: sustained state gates decisions).
+// origin (docs/principles.md §3: sustained state gates decisions).
 //
 // Without this, ambient traffic closes a vicious loop: private cars slow
 // the player's buses, slower buses clear queues more slowly, deeper queues
@@ -36,7 +36,7 @@ export const MIN_SPAWN_CONGESTION_FACTOR = 0.25;
 // informal sector steps in.
 //
 // It damps rather than blocks, deliberately. Paratransit filling any gap
-// the player leaves is the hook (docs/rebuild-plan.md §1) -- a hard cutoff
+// the player leaves is the hook (docs/principles.md §1) -- a hard cutoff
 // at moderate service would turn the antagonist into a subsystem that
 // politely waits its turn.
 export const PLAYER_SERVICE_DAMPING = 3;
@@ -54,7 +54,7 @@ function emaUpdate(previous: number, instantaneous: number, dt: number, tau: num
   return previous + (instantaneous - previous) * alpha;
 }
 
-// Sustained state gates decisions (docs/rebuild-plan.md §5): a rolling
+// Sustained state gates decisions (docs/principles.md §3): a rolling
 // EMA of queue depth per passengers-only pair, not a single-tick check.
 export function updateUnservedEMA(paratransit: ParatransitState, state: SimulationState, dt: number): void {
   paratransit.elapsedSeconds += dt;
@@ -77,12 +77,12 @@ function segmentIdsAlongPath(path: string[], context: RoutingContext): string[] 
   return segmentIds;
 }
 
-// One-shot spawning on sustained unserved demand (docs/rebuild-plan.md
-// §6 Module 7). At most one spawn per call -- called once per tick, this
+// One-shot spawning on sustained unserved demand (docs/architecture/engine.md
+// §paratransit/). At most one spawn per call -- called once per tick, this
 // naturally rate-limits spawning even if several pairs cross threshold
 // in the same tick, rather than stampeding.
 // paratransitPressure divides the threshold, not multiplies caps: a
-// higher-pressure era (docs/rebuild-plan.md §6 Module 8, e.g. Informal)
+// higher-pressure era (docs/architecture/engine.md §eras/, e.g. Informal)
 // makes the informal sector trigger sooner on the same unserved demand --
 // caps stay fixed, since they exist for perf/gameplay-pacing reasons
 // unrelated to era flavor.
@@ -155,7 +155,7 @@ export function trySpawnParatransit(
   return null;
 }
 
-// The loop needs an exit (docs/rebuild-plan.md §6 Module 7 "Done when"):
+// The loop needs an exit (docs/principles.md §3, Congestion):
 // a completed one-shot vehicle is removed and its cap slots freed, so a
 // pair that's actually being served can spawn again once its EMA rises
 // again rather than staying permanently capped out.

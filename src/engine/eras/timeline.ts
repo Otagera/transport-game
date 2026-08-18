@@ -17,7 +17,7 @@ export interface EraTransition {
   to: EraDef;
 }
 
-// Eras advance over time (docs/rebuild-plan.md §6 Module 8), not by
+// Eras advance over time (docs/architecture/engine.md §eras/), not by
 // player action -- four compressed eras, not a fifth to loop into.
 // Advances at most one step per call; with the small, fixed SIM_DT this
 // codebase always ticks at, a call can never need to skip more than one

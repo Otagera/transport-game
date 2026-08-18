@@ -8,7 +8,7 @@ export interface ScenarioLabProps {
   catalog: VehicleDef[];
 }
 
-// Scenarios are content, not code (docs/rebuild-plan.md §5, "Content is
+// Scenarios are content, not code (docs/principles.md §3, "Content is
 // data"). This tab authors one and validates it against the same
 // ScenarioSchema the loader will, so an exported scenario is known-good
 // before it is ever pasted into public/content/ -- rather than discovered

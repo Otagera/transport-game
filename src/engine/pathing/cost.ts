@@ -5,7 +5,7 @@ export const GRADIENT_COST_FACTOR = 40;
 export const DENSITY_COST_FACTOR = 6;
 export const NODE_COST = 25;
 
-// docs/rebuild-plan.md §5 "Bridges": premium scales linearly with span
+// docs/principles.md §3 "Bridges": premium scales linearly with span
 // (not exponentially -- exponential would make splitting one long
 // crossing into several short ones cheaper than a single span, handing
 // the discount to whoever clicks most; flat-linear is neutral to
@@ -21,7 +21,7 @@ export interface StepCost {
   density: number;
 }
 
-// The A* cost function IS the build price (docs/rebuild-plan.md §5): this
+// The A* cost function IS the build price (docs/principles.md §3): this
 // is the one function both the pathfinder's search and the cost-breakdown
 // preview call -- never two functions that could drift apart. That bug
 // class was hit four separate times in the previous build.
@@ -50,7 +50,7 @@ export interface CostBreakdown {
 
 // A profile's costPerMeter is expressed *relative to a reference*, not as
 // an absolute price. The map has no stated metre scale -- it is a grid of
-// cells at "regional" scale (docs/rebuild-plan.md §2) and nothing anywhere
+// cells at "regional" scale (docs/principles.md §2) and nothing anywhere
 // says how many metres a cell is. Inventing one here to make costPerMeter
 // absolute would silently rebalance every number Modules 4-9 were tuned
 // against, to buy precision the model does not actually have. So a
@@ -63,7 +63,7 @@ export function profileCostMultiplier(costPerMeter: number): number {
   return costPerMeter / REFERENCE_COST_PER_METRE;
 }
 
-// buildCostMultiplier (docs/rebuild-plan.md §6 Module 8) scales every
+// buildCostMultiplier (docs/architecture/engine.md §pathing/) scales every
 // field uniformly, not just `total` -- the breakdown must keep summing to
 // its own total, since the UI shows it as a receipt.
 //
@@ -100,7 +100,7 @@ export function sumStepCosts(
 }
 
 // Maintenance pricing lives here for the same reason build pricing does
-// (docs/rebuild-plan.md §5, architecture.md hard rule 3): this module is
+// (docs/principles.md §3, architecture.md hard rule 3): this module is
 // the only place geometry is allowed to become currency. Restoring a
 // segment is priced off the same BASE_COST_PER_CELL its construction was,
 // scaled by how much condition is actually being bought back -- so a

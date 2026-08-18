@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
 
-// Hard rule (docs/rebuild-plan.md §4): engine/ imports nothing from
+// Hard rule (docs/architecture/index.md, hard rule 1): engine/ imports nothing from
 // render/, content/, ui/, dev/, or three.js. Pure simulation.
 //
 // ui/ and dev/ were added to the list in Module 11, which gave both of

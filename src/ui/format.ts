@@ -1,7 +1,7 @@
 // Shared display formatting. One naira formatter, not one per panel: the
 // Strip and the Lists showing the same number in two different roundings
 // is exactly the "a visual must not say something the model doesn't mean"
-// failure (docs/rebuild-plan.md §5), just in miniature.
+// failure (docs/principles.md §3), just in miniature.
 export function money(amount: number): string {
   return `₦${Math.round(amount).toLocaleString()}`;
 }

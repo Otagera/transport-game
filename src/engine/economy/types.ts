@@ -1,7 +1,7 @@
 import type { CargoKind } from "../simulation/types";
 
-// Fares are global per cargo kind, not per route (docs/rebuild-plan.md
-// §5): a transport authority sets fares by policy, which keeps demand
+// Fares are global per cargo kind, not per route (docs/principles.md
+// §3): a transport authority sets fares by policy, which keeps demand
 // elasticity well-defined.
 export type FareTable = Record<CargoKind, number>;
 
@@ -9,7 +9,7 @@ export interface VehicleEconomics {
   purchaseCost: number;
   operatingCostPerSecond: number;
   purchasedAtSeconds: number;
-  // Module 8, graceful obsolescence (docs/rebuild-plan.md §5): a vehicle
+  // Module 8, graceful obsolescence (docs/principles.md §3): a vehicle
   // whose def falls outside the current era's eraIn/eraOut window keeps
   // running -- it is never force-despawned -- but costs rising maintenance
   // the longer it stays obsolete. `defId` is what a transition handler
@@ -35,7 +35,7 @@ export interface EconomyState {
   // Smoothed $/second rates, not a cumulative-since-start average -- a
   // cumulative average is sluggish to reflect a recent change (pruning a
   // bad route), diluted by all prior history. Sustained state gates
-  // decisions here too (docs/rebuild-plan.md §5: "EMAs, never a single
+  // decisions here too (docs/principles.md §3: "EMAs, never a single
   // tick" -- the same pattern used for spawn/despawn/growth elsewhere).
   incomeRateEMA: number;
   costRateEMA: number;

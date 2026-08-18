@@ -4,7 +4,7 @@ function distance(a: MapNode, b: MapNode): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-// The inherited network only (docs/rebuild-plan.md §6 Module 2) -- the
+// The inherited network only (docs/architecture/engine.md §map/) -- the
 // player authors corridors from Module 4 onward. This is a straight-line
 // Prim's MST over Euclidean distance, deliberately not terrain-aware
 // pathing: that A*-over-terrain machinery is Module 4's job, not this

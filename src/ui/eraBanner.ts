@@ -13,9 +13,9 @@ export interface EraBanner {
 
 const VISIBLE_MS = 4000;
 
-// Moments: brief, self-dismissing events (docs/module-11-studio-and-ia.md
-// §1). Deliberately scoped down from the full "sorted deltas by
-// magnitude" banner in docs/rebuild-plan.md §5 Findings -- that's a
+// Moments: brief, self-dismissing events (docs/architecture/render-and-ui.md
+// §2). Deliberately scoped down from the full "sorted deltas by
+// magnitude" banner in docs/principles.md §3 Findings -- that's a
 // finding about a richer treatment, not a Module 8 requirement. This is
 // just "a designed absence [or arrival] must be visible in advance, not
 // ambush the player."

@@ -4,7 +4,7 @@ import type { FareTable, RouteLedgerEntry, VehicleEconomics } from "../economy/t
 import type { ActiveParatransit } from "../paratransit/types";
 import type { NodeGrowthState } from "../growth/types";
 
-// docs/rebuild-plan.md §6 Module 10: "versioned format, old versions
+// docs/architecture/engine.md §save/: "versioned format, old versions
 // rejected clearly." Bump this whenever SaveFile's shape changes, and
 // restoreIntoState refuses anything that doesn't match exactly -- no
 // partial/best-effort load of an older save.
@@ -16,7 +16,7 @@ export const SAVE_FORMAT_VERSION = 1;
 // where an absent field means "assume the common case" -- they are wrong
 // for a save, where an absent field means "this save predates it" and
 // must fail the version check, not silently backfill a plausible value.
-// See docs/handoff-module-10.md §2.1.
+// See docs/architecture/engine.md §save/ and docs/architecture/content.md.
 export interface SavedMap {
   seed: number;
   nodes: MapNode[];

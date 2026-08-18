@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { segmentSignalColor } from "@render/network";
 
 // Hue = health, brightness = utilisation. Two channels, two meanings,
-// never conflated (docs/rebuild-plan.md §5). These assertions exist so a
+// never conflated (docs/principles.md §3). These assertions exist so a
 // later "let's make it pop" tweak can't quietly start encoding health in
 // brightness or utilisation in hue -- which is the "a visual must not say
 // something the model doesn't mean" failure the Findings call the single

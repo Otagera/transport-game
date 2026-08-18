@@ -11,7 +11,7 @@ import type { EraModifiers, EraTimeline } from "../eras/types";
 
 export const SECONDS_PER_WARM_DAY = 30;
 
-// Content is data (docs/rebuild-plan.md §5): a scenario is authored in
+// Content is data (docs/principles.md §3): a scenario is authored in
 // public/content/scenarios.json and validated by @content/schema's
 // ScenarioSchema. engine/ never imports content types directly (hard rule
 // 2) -- this is the plain mirrored shape, same pattern as EraDef. The
@@ -47,7 +47,7 @@ let seedVehicleCounter = 0;
 // nodes on the map's already-connected inherited network -- no corridor
 // authoring needed, since generateMap guarantees full connectivity
 // (Module 2). A scenario is a starting point for tuning, not a curated
-// layout (docs/handoff-module-10.md §5): seedFleet only says how many of
+// layout (docs/architecture/engine.md §save/): seedFleet only says how many of
 // a def to start with, this decides where they run.
 //
 // Registered as real purchases (funds deducted, ledger/vehicleEconomics
@@ -102,7 +102,7 @@ export function applyScenario(
 // Runs real ticks rather than skipping time, so a warm-forward produces an
 // economy, a paratransit sector, and grown settlements that actually
 // exist for the target era -- not a clock set forward over an empty
-// world (docs/handoff-module-10.md §3). Reproducible from the same seed:
+// world (docs/architecture/engine.md §save/). Reproducible from the same seed:
 // nothing in the tick path but paratransit spawn-id derivation uses
 // randomness, and that derives from `paratransit.elapsedSeconds`, which is
 // deterministic.

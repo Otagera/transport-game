@@ -9,7 +9,7 @@ const BURN_RATE_TIME_CONSTANT_SECONDS = 10;
 // Module 8, graceful obsolescence: maintenance ramps 2%/sec obsolete,
 // capped at 3x -- rising, so staying obsolete is a real cost, but capped
 // so it never becomes an unrecoverable death spiral for a single vehicle
-// (docs/rebuild-plan.md §5: no game over).
+// (docs/principles.md §3: no game over).
 const OBSOLESCENCE_RAMP_PER_SECOND = 0.02;
 const OBSOLESCENCE_MAX_MULTIPLIER = 3;
 
@@ -26,8 +26,8 @@ export function createEconomyState(fareTable: FareTable, startingFunds: number):
 }
 
 // Spending is blocked when it isn't affordable; billing (operating cost)
-// is unconditional and keeps applying regardless (docs/rebuild-plan.md
-// §5: "Spending blocked, billing continues"). Debt itself is allowed --
+// is unconditional and keeps applying regardless (docs/principles.md
+// §3: "Spending blocked, billing continues"). Debt itself is allowed --
 // no interest, no game over -- it just accumulates from ongoing costs
 // outrunning revenue, not from being allowed to overspend on a purchase.
 export function canAfford(state: EconomyState, cost: number): boolean {
@@ -69,7 +69,7 @@ function obsolescenceMultiplier(econ: VehicleEconomics, elapsedSeconds: number):
   return Math.min(OBSOLESCENCE_MAX_MULTIPLIER, 1 + OBSOLESCENCE_RAMP_PER_SECOND * secondsObsolete);
 }
 
-// Depreciated resale (docs/rebuild-plan.md §5): without this, a player in
+// Depreciated resale (docs/principles.md §3): without this, a player in
 // debt liquidates the fleet and is instantly solvent. Floors at
 // MIN_RESALE_FRACTION rather than depreciating to zero.
 export function sellVehicle(state: EconomyState, vehicleId: string): number {
@@ -92,7 +92,7 @@ function emaUpdate(previous: number, instantaneous: number, dt: number, tau: num
   return previous + (instantaneous - previous) * alpha;
 }
 
-// Operating cost is per-tick and unconditional (docs/rebuild-plan.md §5)
+// Operating cost is per-tick and unconditional (docs/principles.md §3)
 // -- it applies even if funds go negative doing so. The era fuel
 // multiplier is applied live here, not baked into operatingCostPerSecond
 // at purchase time (Module 8): a fuel-price era transition must bite

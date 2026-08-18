@@ -10,8 +10,8 @@ export interface DemandPair {
   rate: number;
 }
 
-// Aggregate demand, never per-passenger agents (docs/rebuild-plan.md §4
-// hard rule 6): a node's queue is (destination, kind) -> amount waiting.
+// Aggregate demand, never per-passenger agents (docs/architecture/index.md
+// hard rule 4): a node's queue is (destination, kind) -> amount waiting.
 export type NodeQueueKey = string; // `${destinationNodeId}:${CargoKind}`
 export type NodeQueues = Map<string, Map<NodeQueueKey, number>>;
 
@@ -34,23 +34,23 @@ export interface Vehicle {
   capacity: number;
   cargo: LoadEntry[];
   // What this vehicle is built to carry -- a goods vehicle never loads
-  // passenger demand and vice versa (docs/rebuild-plan.md §5: paratransit
+  // passenger demand and vice versa (docs/principles.md §3: paratransit
   // is passengers-only because goods need capital an okada doesn't have,
   // generalized here to any vehicle).
   carries: "passengers" | "goods";
   // An okada occupying the same road space as a bus is plainly wrong
-  // (docs/rebuild-plan.md §5) -- this is how much of a segment's
+  // (docs/principles.md §3) -- this is how much of a segment's
   // congestion capacity one vehicle actually uses.
   congestionWeight: number;
   // Player vehicles run cyclic routes; paratransit is one-shot (docs/
-  // rebuild-plan.md §5) -- cyclic paratransit drains queues to a
+  // docs/principles.md §3) -- cyclic paratransit drains queues to a
   // comfortable equilibrium and removes the pressure to build. A
   // one-shot vehicle's path is not a closed loop; it's removed once it
   // reaches the end instead of wrapping back to the start.
   lifecycle: "cyclic" | "one-shot";
 }
 
-// Revenue accrues on unload, not on carriage (docs/rebuild-plan.md §5) --
+// Revenue accrues on unload, not on carriage (docs/principles.md §3) --
 // this is what a tick reports so the economy layer can turn it into
 // money without engine/simulation needing to know about fares itself.
 export interface DeliveryEvent {
@@ -72,8 +72,8 @@ export interface PickupEvent {
 }
 
 // Traffic is tracked per segment, not per corridor -- a segment is the
-// actual typed/levelled/maintained traversable unit (docs/rebuild-plan.md
-// §5), so it's what "which link is the bottleneck" needs to point at.
+// actual typed/levelled/maintained traversable unit (docs/principles.md
+// §3), so it's what "which link is the bottleneck" needs to point at.
 export interface SegmentTraffic {
   deliveredRecently: number;
   potentialRecently: number;
