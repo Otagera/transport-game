@@ -12,8 +12,12 @@ import { join, resolve } from "node:path";
 // error-prone step the studio exists to remove: an authored mod should be
 // loadable the moment it is exported.
 const MOD_ROOT = resolve(process.cwd(), "public", "mods");
+// The encoded JSON payload, not the mesh itself: base64 inflates by 4/3,
+// so this corresponds to MAX_MESH_BYTES (24 MB) in src/dev/encodeMesh.ts.
+// Keep the two in step.
 const MAX_BYTES = 32 * 1024 * 1024;
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const SAFE_MESH_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(glb|gltf)$/;
 
 export function studioModWriter() {
   return {
@@ -60,9 +64,29 @@ export function studioModWriter() {
               res.end("refused: path escapes public/mods");
               return;
             }
+            // A def whose `mesh` names a file the package does not contain
+            // is a dangling reference that only fails later, at load time,
+            // somewhere else. Refuse the whole write rather than produce a
+            // mod that looks fine on disk.
+            const hasMesh = Boolean(payload.meshBase64 && payload.meshName);
+            if (payload.vehicle?.mesh && !hasMesh) {
+              res.statusCode = 400;
+              res.end(`refused: vehicle.mesh names "${payload.vehicle.mesh}" but no mesh was uploaded`);
+              return;
+            }
+
             mkdirSync(dir, { recursive: true });
             writeFileSync(join(dir, "vehicle.json"), JSON.stringify(payload.vehicle, null, 2));
-            if (payload.meshBase64 && payload.meshName) {
+            if (hasMesh) {
+              // The mesh filename lands on disk, so it gets the same
+              // allowlist treatment the mod id does -- a name like
+              // "../../x.glb" must be a clear rejection, never a
+              // normalised path that writes outside the package.
+              if (!SAFE_MESH_NAME.test(payload.meshName)) {
+                res.statusCode = 400;
+                res.end("mesh filename must be a plain .glb/.gltf name");
+                return;
+              }
               writeFileSync(join(dir, payload.meshName), Buffer.from(payload.meshBase64, "base64"));
             }
 

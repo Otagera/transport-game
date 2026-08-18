@@ -6,7 +6,7 @@ conversation should read first to know where things stand, before diving into so
 `git log`. Pair with [architecture.md](architecture.md) for the stable "how it's shaped"
 reference.
 
-Current test count: **272 passing** across 42 files (`bun test`). All of typecheck /
+Current test count: **284 passing** across 43 files (`bun test`). All of typecheck /
 test / build / verify:bundle pass as of the last commit on this list.
 
 ## Module 0 — Foundation ✅

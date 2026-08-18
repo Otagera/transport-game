@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { Era, VehicleAnchors, VehicleDef } from "@content/schema";
 import { VehicleDefSchema } from "@content/schema";
+import { bytesToBase64, meshTooLargeMessage } from "./encodeMesh";
 import { button, downloadBlob, errorNote, note, row, sectionTitle, tabBody } from "./studioChrome";
 
 // Drag a .glb in, click the mesh to drop anchors, fill in the def, export
@@ -140,6 +141,11 @@ export function AssetStudio({ eras }: AssetStudioProps) {
     setLoadError(null);
     try {
       const buffer = await file.arrayBuffer();
+      const tooLarge = meshTooLargeMessage(buffer.byteLength);
+      if (tooLarge) {
+        setLoadError(tooLarge);
+        return;
+      }
       const gltf = await new GLTFLoader().parseAsync(buffer, "");
       for (const child of [...state.modelGroup.children]) state.modelGroup.remove(child);
       state.modelGroup.add(gltf.scene);
@@ -155,8 +161,15 @@ export function AssetStudio({ eras }: AssetStudioProps) {
       const center = box.getCenter(new THREE.Vector3()).multiplyScalar(scale);
       gltf.scene.position.set(-center.x, -box.min.y * scale, -center.z);
 
+      // Encoded BEFORE any state is set, so the two always move together.
+      // Setting the name first and letting the encode throw is what made
+      // the original failure so much worse than a crash: the panel said
+      // "Loaded <file>" while no bytes had been captured, and the mod
+      // package then wrote a vehicle.json whose `mesh` named a file that
+      // was never uploaded alongside it.
+      const encoded = bytesToBase64(new Uint8Array(buffer));
       setMeshName(file.name);
-      setMeshBase64(btoa(String.fromCharCode(...new Uint8Array(buffer))));
+      setMeshBase64(encoded);
       setAnchors(emptyAnchors());
     } catch (error) {
       setLoadError(String(error));
@@ -185,9 +198,14 @@ export function AssetStudio({ eras }: AssetStudioProps) {
     setAnchors((current) => ({ ...current, [activeKind]: [...current[activeKind], point] }));
   }
 
+  // `mesh` is claimed only when both the name and its bytes are held: a
+  // def naming a mesh the package does not contain is a dangling
+  // reference, and a silently broken mod is worse than an obviously
+  // meshless one.
+  const hasMesh = meshName !== null && meshBase64 !== null;
   const parsed = VehicleDefSchema.safeParse({
     ...draft,
-    ...(meshName ? { mesh: meshName } : {}),
+    ...(hasMesh ? { mesh: meshName } : {}),
     anchors,
   });
   const problems = parsed.success
@@ -201,7 +219,12 @@ export function AssetStudio({ eras }: AssetStudioProps) {
       const response = await fetch("/__studio/write-mod", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ modId, vehicle: parsed.data, meshName, meshBase64 }),
+        body: JSON.stringify({
+          modId,
+          vehicle: parsed.data,
+          meshName: hasMesh ? meshName : null,
+          meshBase64: hasMesh ? meshBase64 : null,
+        }),
       });
       const text = await response.text();
       if (!response.ok) throw new Error(text);
