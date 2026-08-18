@@ -43,10 +43,17 @@ export function tick(state: SimulationState, dt: number, economy?: EconomyState,
   // vehicles that have already moved earlier in the same pass.
   const segmentLoads = computeSegmentLoads(state.vehicles, state.routing);
 
+  // Paratransit is an independent informal economy, not the player's --
+  // its deliveries must never accrue to the player's funds. Gating on
+  // `lifecycle` here, not "does economy have an entry for this vehicle
+  // id" (registerPurchase is the only thing that would add one): the
+  // explicit lifecycle check keeps this correct even if that invariant
+  // ever slips, since paratransit vehicles are never meant to touch
+  // economy at all.
   let totalRevenueThisTick = 0;
   for (const vehicle of state.vehicles) {
     const deliveries = tickVehicle(vehicle, state.queues, state.routing, state.segmentTraffic, segmentLoads, dt);
-    if (economy && deliveries.length > 0) {
+    if (economy && vehicle.lifecycle !== "one-shot" && deliveries.length > 0) {
       totalRevenueThisTick += recordDeliveryRevenue(economy, vehicle.id, deliveries);
     }
   }

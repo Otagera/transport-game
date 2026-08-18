@@ -12,6 +12,14 @@ const VEHICLE_COLORS: Record<Vehicle["carries"], number> = {
   passengers: 0xff8844,
   goods: 0x8866ff,
 };
+// Paratransit reads as a distinct, informal presence -- not a smaller
+// version of a player vehicle (docs/rebuild-plan.md: "the player's
+// planned network competes with an emergent one").
+const PARATRANSIT_COLOR = 0xffd23f;
+
+function colorFor(vehicle: Vehicle): number {
+  return vehicle.lifecycle === "one-shot" ? PARATRANSIT_COLOR : VEHICLE_COLORS[vehicle.carries];
+}
 
 // A cheap moving marker per vehicle, interpolated along its current edge
 // by edgeProgress -- no heading/rotation (that's the kind of thing that
@@ -30,8 +38,9 @@ export function createVehicleFleetRenderer(): VehicleFleetHandle {
       seen.add(vehicle.id);
       let mesh = meshByVehicleId.get(vehicle.id);
       if (!mesh) {
-        const geometry = new THREE.SphereGeometry(0.22, 10, 8);
-        const material = new THREE.MeshStandardMaterial({ color: VEHICLE_COLORS[vehicle.carries] });
+        const radius = vehicle.lifecycle === "one-shot" ? 0.14 : 0.22;
+        const geometry = new THREE.SphereGeometry(radius, 10, 8);
+        const material = new THREE.MeshStandardMaterial({ color: colorFor(vehicle) });
         mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
         group.add(mesh);
@@ -39,7 +48,7 @@ export function createVehicleFleetRenderer(): VehicleFleetHandle {
       }
 
       const pathLength = vehicle.path.length;
-      if (pathLength < 2) continue;
+      if (pathLength < 2 || vehicle.pathIndex >= pathLength) continue;
       const fromIndex = (vehicle.pathIndex - 1 + pathLength) % pathLength;
       const fromNode = nodeById.get(vehicle.path[fromIndex]!);
       const toNode = nodeById.get(vehicle.path[vehicle.pathIndex]!);

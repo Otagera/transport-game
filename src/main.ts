@@ -3,6 +3,7 @@ import { loadContent } from "@content/loader";
 import { EraListSchema, VehicleDefListSchema } from "@content/schema";
 import { generateMap } from "@engine/map/generate";
 import { createSimulation, tick } from "@engine/simulation/simulate";
+import { createParatransitState } from "@engine/paratransit/types";
 import { createEconomyState } from "@engine/economy/state";
 import { computeBurnRate, computeRoutePnL } from "@engine/economy/report";
 import { createScene } from "@render/scene";
@@ -47,6 +48,7 @@ async function bootstrap(): Promise<void> {
 
   const simulation = createSimulation(map, []);
   const economy = createEconomyState(FARE_TABLE, STARTING_FUNDS);
+  const paratransit = createParatransitState();
 
   const fleetRenderer = createVehicleFleetRenderer();
   sceneHandle.scene.add(fleetRenderer.group);
@@ -83,7 +85,7 @@ async function bootstrap(): Promise<void> {
     const elapsed = (now - last) / 1000;
     last = now;
 
-    accumulator.advance(elapsed, (dt) => tick(simulation, dt, economy));
+    accumulator.advance(elapsed, (dt) => tick(simulation, dt, economy, paratransit));
 
     framesSinceSample += 1;
     timeSinceSample += elapsed;
@@ -102,6 +104,7 @@ async function bootstrap(): Promise<void> {
       incomePerDay: burnRate.incomePerDay,
       costPerDay: burnRate.costPerDay,
       netPerDay: burnRate.netPerDay,
+      paratransitCount: simulation.vehicles.filter((v) => v.lifecycle === "one-shot").length,
     });
     pnlPanel.render(pnlVisible, computeRoutePnL(economy));
 

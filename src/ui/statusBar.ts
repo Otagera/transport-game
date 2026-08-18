@@ -6,6 +6,7 @@ export interface StatusSnapshot {
   incomePerDay: number;
   costPerDay: number;
   netPerDay: number;
+  paratransitCount: number;
 }
 
 export interface StatusBar {
@@ -27,7 +28,8 @@ export function createStatusBar(el: HTMLElement): StatusBar {
         `tick ${snapshot.tick} · era: ${snapshot.era} · ${snapshot.fps} fps` +
         ` · funds: ${money(snapshot.funds)}${debtFlag}` +
         ` · ${money(snapshot.incomePerDay)}/day in · ${money(snapshot.costPerDay)}/day out` +
-        ` · net ${money(snapshot.netPerDay)}/day`;
+        ` · net ${money(snapshot.netPerDay)}/day` +
+        ` · ${snapshot.paratransitCount} informal`;
     },
   };
 }

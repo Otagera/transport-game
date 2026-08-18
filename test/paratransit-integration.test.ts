@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { generateMap } from "@engine/map/generate";
 import { createSimulation, tick } from "@engine/simulation/simulate";
 import { createParatransitState } from "@engine/paratransit/types";
+import { createEconomyState } from "@engine/economy/state";
 
 describe("paratransit integration", () => {
   test("leaving a map entirely unserved eventually fills it with one-shot informal traffic", () => {
@@ -28,6 +29,30 @@ describe("paratransit integration", () => {
         expect(vehicle.carries).toBe("passengers");
       }
     }
+  });
+
+  // Regression: caught live -- the tick() revenue loop originally credited
+  // *any* vehicle's deliveries to the player's economy, including
+  // paratransit's. Funds rose from ~1,000 to over 5,000 in 90 seconds
+  // with zero player vehicles ever purchased, purely from informal
+  // traffic nobody bought. Paratransit is an independent economy; it
+  // must never pay the player.
+  test("paratransit deliveries never accrue to the player's funds", () => {
+    const map = generateMap(11);
+    const state = createSimulation(map, []);
+    const paratransit = createParatransitState();
+    const economy = createEconomyState({ passengers: 5, produce: 3, supplies: 2 }, 1000);
+
+    for (let i = 0; i < 3600; i += 1) {
+      tick(state, 1 / 30, economy, paratransit);
+    }
+
+    // No player vehicle was ever purchased, so no operating cost should
+    // have accrued either -- funds should sit exactly at the starting
+    // amount despite (per the test above) paratransit having spawned,
+    // moved, and delivered repeatedly over the same window.
+    expect(economy.funds).toBe(1000);
+    expect(economy.ledger.size).toBe(0);
   });
 
   test("no demand-generating map produces no paratransit spawns", () => {
