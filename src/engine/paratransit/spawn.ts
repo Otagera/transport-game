@@ -12,8 +12,34 @@ export const PAIR_CAP = 2;
 // vehicles accumulate on one link and collapse throughput to ~10%.
 export const CORRIDOR_CAP = 6;
 export const SPAWN_COOLDOWN_SECONDS = 5;
-// A real operator does not join a jam that pays nothing.
+// A real operator does not join a jam that pays nothing. Now that ambient
+// private traffic is folded into segment loads, this also stops the
+// informal sector piling into a corridor that is already choked by cars.
 export const MIN_SPAWN_CONGESTION_FACTOR = 0.25;
+
+// Damping on the spawn threshold by how well the player already serves the
+// origin (docs/rebuild-plan.md §5: sustained state gates decisions).
+//
+// Without this, ambient traffic closes a vicious loop: private cars slow
+// the player's buses, slower buses clear queues more slowly, deeper queues
+// raise the unserved EMA, a higher EMA spawns more paratransit, and
+// paratransit adds *more* load to the same road. Every step is individually
+// correct, which is what makes it dangerous -- the queue depth the spawn
+// gate reads goes up whether service collapsed or whether the road merely
+// got slower, and it cannot tell those apart.
+//
+// The fix is to read the thing that CAN tell them apart: the rolling
+// player-served share of the origin's generated demand (engine/growth's
+// playerServiceEMA -- a ratio of independently smoothed rates, which is
+// what Module 9 established as the only trustworthy form of this number).
+// A well-served pair now needs a much deeper sustained queue before the
+// informal sector steps in.
+//
+// It damps rather than blocks, deliberately. Paratransit filling any gap
+// the player leaves is the hook (docs/rebuild-plan.md §1) -- a hard cutoff
+// at moderate service would turn the antagonist into a subsystem that
+// politely waits its turn.
+export const PLAYER_SERVICE_DAMPING = 3;
 
 export const PARATRANSIT_SPEED = 5;
 export const PARATRANSIT_CAPACITY = 1;
@@ -65,14 +91,22 @@ export function trySpawnParatransit(
   state: SimulationState,
   segmentLoads: Map<string, number>,
   paratransitPressure: number = 1,
+  // nodeId -> rolling player-served share of that node's generated demand.
+  // A plain map, not GrowthState: this module stays unaware of engine/
+  // growth's shape, exactly as it is unaware of engine/eras'.
+  playerServiceByNode?: ReadonlyMap<string, number>,
 ): Vehicle | null {
-  const effectiveThreshold = SPAWN_EMA_THRESHOLD / paratransitPressure;
+  const baseThreshold = SPAWN_EMA_THRESHOLD / paratransitPressure;
   for (const pair of state.demand) {
     if (pair.kind !== "passengers") continue;
 
     const key = pairKey(pair.from, pair.to);
     const ema = paratransit.pairUnservedEMA.get(key) ?? 0;
-    if (ema < effectiveThreshold) continue;
+    // Per-pair, not global: the informal sector answers a specific
+    // origin's unmet demand, so an origin the player serves well should
+    // resist spawning even while a neglected one across the map does not.
+    const playerService = Math.max(0, playerServiceByNode?.get(pair.from) ?? 0);
+    if (ema < baseThreshold * (1 + PLAYER_SERVICE_DAMPING * playerService)) continue;
 
     const lastSpawn = paratransit.pairLastSpawnSeconds.get(key) ?? -Infinity;
     if (paratransit.elapsedSeconds - lastSpawn < SPAWN_COOLDOWN_SECONDS) continue;

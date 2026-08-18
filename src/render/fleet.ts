@@ -1,7 +1,7 @@
 import type { Era, VehicleDef } from "../content/schema";
 import type { GeneratedMap } from "../engine/map/types";
 import type { SimulationState } from "../engine/simulation/types";
-import { buildRoutingContext } from "../engine/simulation/routing";
+import { rebuildFromMap } from "../engine/simulation/simulate";
 import { createVehicle } from "../engine/simulation/vehicle";
 import type { EconomyState } from "../engine/economy/types";
 import { canAfford, markVehicleObsolete, registerPurchase } from "../engine/economy/state";
@@ -79,14 +79,12 @@ export function createFleetController(
 
   function handleBuild(event: BuildEvent): void {
     pendingRoute = event.nodeIds;
-    simulation.routing = buildRoutingContext(event.map);
-    simulation.map = event.map;
+    rebuildFromMap(simulation, event.map);
     renderHint();
   }
 
   function handleMapChanged(map: GeneratedMap): void {
-    simulation.routing = buildRoutingContext(map);
-    simulation.map = map;
+    rebuildFromMap(simulation, map);
   }
 
   function buySelectedForPendingRoute(): void {

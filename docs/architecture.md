@@ -114,6 +114,19 @@ depending on how much real time elapsed. Inside that callback, in order:
 - **Congestion scales both speed and effective capacity.** Per-segment vehicle load is
   weighted by `congestionWeight` (an okada isn't a bus), floors at a minimum factor
   rather than approaching zero. See `simulation/congestion.ts`.
+- **Ambient private traffic is a load, not agents.** Prosperity (`engine/growth`'s `D`)
+  times the era's `ambientTraffic` factor becomes a per-segment ambient load — no car
+  entities exist anywhere in `engine/`, for the same reason passengers are queue amounts
+  (hard rule 4). Attenuates from each segment's **midpoint** distance to settled land, so
+  approaches choke while open country stays clear. **Rail is excluded from the geometry
+  outright**, which is what makes it the strategic answer rather than a cheaper tax.
+  `render/network.ts` draws instanced cars from the published ambient load; deleting that
+  renderer would change how the game looks and nothing about how it plays.
+- **One published load, many readers.** `SimulationState.segmentLoads` (total) and
+  `.ambientLoads` (the private-car share) are written once per tick and read by everything
+  else. Vehicle speed, the paratransit operator's "is this jam worth joining" check, and
+  the Corridor stress overlay all read the same number rather than recomputing it — a
+  recomputing overlay would have drawn an emptier road than the one slowing the buses.
 - **Revenue on unload, cost every tick unconditionally.** `economy/state.ts`:
   `recordDeliveryRevenue` fires on delivery; `applyOperatingCosts` fires every tick
   regardless of affordability (debt is allowed, no interest, no game over). Depreciated

@@ -1,4 +1,5 @@
 import type { GeneratedMap } from "../map/types";
+import type { AmbientGeometry } from "./congestion";
 
 export type CargoKind = "passengers" | "produce" | "supplies";
 
@@ -106,4 +107,20 @@ export interface SimulationState {
   vehicles: Vehicle[];
   segmentTraffic: Map<string, SegmentTraffic>;
   routing: RoutingContext;
+  // Derived from map topology alone, so it is rebuilt with `routing` on
+  // every map change rather than recomputed per tick -- nothing about it
+  // can move between builds. See simulate.ts's rebuildFromMap.
+  ambientGeometry: AmbientGeometry;
+  // Total road occupancy per segment as of the last tick: player vehicles,
+  // paratransit, and ambient private cars, already summed. Published here
+  // rather than left for each reader to recompute so the number that slows
+  // a bus down and the number the Corridor stress overlay draws are
+  // literally the same number.
+  segmentLoads: Map<string, number>;
+  // The private-car share of the above, published separately because the
+  // two answer different questions: `segmentLoads` is what slows a bus
+  // down, `ambientLoads` is what the renderer draws as cars. Deriving one
+  // from the other in render/ would mean player vehicles spawning phantom
+  // traffic that nobody is driving.
+  ambientLoads: Map<string, number>;
 }

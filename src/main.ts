@@ -349,10 +349,14 @@ async function bootstrap(): Promise<void> {
         routing: simulation.routing,
         growth,
         stranded,
+        segmentLoads: simulation.segmentLoads,
       },
       elapsed,
     );
 
+    // Ambient private traffic is a rendering of the engine's ambient load,
+    // never a source of it -- see engine/simulation/congestion.ts.
+    networkHandle.updateAmbientTraffic(simulation.ambientLoads, elapsed);
     cameraController.update(elapsed);
     fleetRenderer.update(simulation.vehicles, simulation.map);
     sceneHandle.render();

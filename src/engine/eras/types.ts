@@ -9,6 +9,13 @@ export interface EraModifiers {
   buildCost: number;
   decay: number;
   paratransitPressure: number;
+  // Private car ownership as ambient road friction, in the same
+  // congestion-weight units vehicles use, per unit of average endpoint
+  // demand multiplier (D). Not a vehicle count and not a percentage of
+  // anything -- it is "how much road space the private sector takes on a
+  // fully-grown approach", which is what makes prosperity legible as
+  // traffic. Rail is immune by construction (see simulation/congestion.ts).
+  ambientTraffic: number;
 }
 
 export interface EraDef {

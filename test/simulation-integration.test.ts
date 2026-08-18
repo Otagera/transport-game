@@ -38,6 +38,7 @@ describe("simulation integration", () => {
         buildCost: 1,
         decay: 1,
         paratransitPressure: 1,
+        ambientTraffic: 0,
       });
       tick(baseline, 1 / 30);
     }
@@ -64,6 +65,7 @@ describe("simulation integration", () => {
         buildCost: 1,
         decay: 50,
         paratransitPressure: 1,
+        ambientTraffic: 0,
       });
     }
 

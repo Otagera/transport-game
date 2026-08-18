@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { GeneratedMap } from "../engine/map/types";
 import { MIN_CONDITION } from "../engine/map/decay";
 import { stepCost } from "../engine/pathing/cost";
-import { computeSegmentLoads, congestionFactor } from "../engine/simulation/congestion";
+import { FREE_SLOT_WEIGHT, congestionFactor } from "../engine/simulation/congestion";
 import type { CargoKind, NodeQueues, RoutingContext, Vehicle } from "../engine/simulation/types";
 import type { GrowthState } from "../engine/growth/types";
 import type { OverlayId } from "../ui/overlays";
@@ -36,6 +36,8 @@ export interface OverlayContext {
   routing: RoutingContext;
   growth: GrowthState;
   stranded: ReadonlySet<string>;
+  /** The tick's own total road occupancy, ambient private cars included. */
+  segmentLoads: ReadonlyMap<string, number>;
 }
 
 export interface OverlayLayerHandle {
@@ -211,14 +213,25 @@ export function createOverlayLayer(): OverlayLayerHandle {
   }
 
   function renderStress(context: OverlayContext): void {
-    const loads = computeSegmentLoads(context.vehicles, context.routing);
+    // Read, never recomputed. The overlay used to call computeSegmentLoads
+    // itself, which was harmless while vehicles were the only thing on the
+    // road -- but ambient private traffic is added in simulate.ts, so a
+    // recomputing overlay would now draw a *different, emptier* road than
+    // the one actually slowing the player's buses down.
     forEachSegment(context.map, (segmentId, a, b) => {
-      const load = loads.get(segmentId) ?? 0;
+      const load = context.segmentLoads.get(segmentId) ?? 0;
       // congestionFactor is the same function the simulation moves
       // vehicles with -- the overlay must never compute its own idea of
       // stress, or the picture and the model drift apart.
       const factor = congestionFactor(load);
-      if (load <= 0) return;
+      // Only *stressed* links get a mark. The old guard was "any load at
+      // all", which was fine while vehicles were the only thing on the
+      // road -- but ambient private traffic puts a non-zero load on every
+      // road in every motorised era, so that guard would ribbon the entire
+      // network and "colouring every corridor destroys the signal"
+      // (docs/rebuild-plan.md §5). A free-flowing link is not an answer to
+      // "which link is the bottleneck?"
+      if (load <= FREE_SLOT_WEIGHT) return;
       addRibbon(a, b, healthColor(factor), 0.14 + (1 - factor) * 0.4, OVERLAY_Y);
     });
   }

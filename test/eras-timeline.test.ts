@@ -3,7 +3,7 @@ import { advanceEraTimeline, createEraTimeline, currentEra } from "@engine/eras/
 import type { EraDef } from "@engine/eras/types";
 
 function makeEras(): EraDef[] {
-  const modifiers = { demand: 1, fuel: 1, buildCost: 1, decay: 1, paratransitPressure: 1 };
+  const modifiers = { demand: 1, fuel: 1, buildCost: 1, decay: 1, paratransitPressure: 1, ambientTraffic: 0 };
   return [
     { id: "a", order: 0, durationSeconds: 10, modifiers, railAvailable: true },
     { id: "b", order: 1, durationSeconds: 10, modifiers, railAvailable: true },

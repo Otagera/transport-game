@@ -21,6 +21,12 @@ export const EraSchema = z.object({
     buildCost: z.number().positive(),
     decay: z.number().positive(),
     paratransitPressure: z.number().positive(),
+    // Required, not optional-with-a-default: an era that forgets to say
+    // how motorised it is would silently render as empty roads, and a
+    // missing mechanic that looks like a working one is the worst kind.
+    // nonnegative rather than positive -- zero private cars is a
+    // meaningful state for the earliest era, unlike a zero multiplier.
+    ambientTraffic: z.number().nonnegative(),
   }),
   // Rail goes dark through Informal and returns as standard gauge in
   // Modern (docs/rebuild-plan.md §5) -- historically exact, but a

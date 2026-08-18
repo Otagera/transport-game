@@ -42,6 +42,9 @@ function fixtureState(queuedAmount: number): SimulationState {
     queues,
     vehicles: [],
     segmentTraffic: new Map(),
+    ambientGeometry: [],
+    segmentLoads: new Map(),
+    ambientLoads: new Map(),
     routing,
   };
 }
@@ -181,5 +184,70 @@ describe("reapCompletedParatransit", () => {
     reapCompletedParatransit(paratransit, state);
 
     expect(state.vehicles).toContain(playerVehicle);
+  });
+});
+
+// The safeguard that keeps ambient private traffic from closing a vicious
+// loop: cars slow the player's buses, deeper queues raise the unserved
+// EMA, more paratransit spawns, and paratransit adds *more* load to the
+// same road. Queue depth alone cannot tell "service collapsed" apart from
+// "the road got slower" -- the player-served share can.
+describe("trySpawnParatransit player-service damping", () => {
+  function primed(): { paratransit: ReturnType<typeof createParatransitState>; state: SimulationState } {
+    const paratransit = createParatransitState();
+    const state = fixtureState(SPAWN_EMA_THRESHOLD * 3);
+    for (let i = 0; i < 900; i += 1) updateUnservedEMA(paratransit, state, 1 / 30);
+    return { paratransit, state };
+  }
+
+  test("an unserved origin still spawns -- paratransit fills any gap the player leaves", () => {
+    const { paratransit, state } = primed();
+    expect(trySpawnParatransit(paratransit, state, new Map(), 1, new Map([["a", 0]]))).not.toBeNull();
+  });
+
+  test("passing no service data at all behaves exactly as before the safeguard existed", () => {
+    const { paratransit, state } = primed();
+    expect(trySpawnParatransit(paratransit, state, new Map(), 1)).not.toBeNull();
+  });
+
+  test("a well-served origin resists spawning on the same queue depth", () => {
+    const { paratransit, state } = primed();
+    expect(trySpawnParatransit(paratransit, state, new Map(), 1, new Map([["a", 1]]))).toBeNull();
+  });
+
+  // It damps, it does not block. A hard cutoff at moderate service would
+  // turn the antagonist into a subsystem that politely waits its turn
+  // (docs/rebuild-plan.md §1, "The hook").
+  test("high enough sustained demand still breaks through good service", () => {
+    const paratransit = createParatransitState();
+    const state = fixtureState(SPAWN_EMA_THRESHOLD * 40);
+    for (let i = 0; i < 900; i += 1) updateUnservedEMA(paratransit, state, 1 / 30);
+    expect(trySpawnParatransit(paratransit, state, new Map(), 1, new Map([["a", 1]]))).not.toBeNull();
+  });
+
+  test("damping is read per origin, so serving one town does not shield a neglected one", () => {
+    const { paratransit, state } = primed();
+    // Service is recorded for a different node entirely.
+    expect(trySpawnParatransit(paratransit, state, new Map(), 1, new Map([["elsewhere", 1]]))).not.toBeNull();
+  });
+
+  // Era pressure divides the threshold, service damping multiplies it, and
+  // they compose. Informal-era pressure is strong enough to break through
+  // service that would have blocked a spawn in a calmer era -- which is
+  // the correct reading of "rail collapse, paratransit takeover", not a
+  // hole in the safeguard. The damping exists to stop a feedback loop,
+  // not to let a competent player switch the antagonist off.
+  test("era pressure composes with service damping and can overwhelm it", () => {
+    const calm = primed();
+    expect(trySpawnParatransit(calm.paratransit, calm.state, new Map(), 1, new Map([["a", 1]]))).toBeNull();
+
+    const informal = primed();
+    expect(trySpawnParatransit(informal.paratransit, informal.state, new Map(), 1.8, new Map([["a", 1]]))).not.toBeNull();
+  });
+
+  test("a jammed road blocks the spawn regardless of service -- ambient load counts as a jam", () => {
+    const { paratransit, state } = primed();
+    const jammed = new Map([["s-ab", 20]]);
+    expect(trySpawnParatransit(paratransit, state, jammed, 1, new Map([["a", 0]]))).toBeNull();
   });
 });

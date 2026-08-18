@@ -9,7 +9,7 @@ import { applyPromotion, demandMultiplierFor, updateGrowthState } from "../growt
 import type { GrowthState, NodeDemandSample, PromotionEvent } from "../growth/types";
 import { generateDemandPairs } from "./demand";
 import { buildRoutingContext } from "./routing";
-import { computeSegmentLoads } from "./congestion";
+import { addLoads, computeAmbientGeometry, computeAmbientLoads, computeSegmentLoads } from "./congestion";
 import { createVehicle, tickVehicle } from "./vehicle";
 import type { NodeQueues, PickupEvent, SimulationState } from "./types";
 
@@ -31,7 +31,29 @@ export function createSimulation(map: GeneratedMap, vehicleSpecs: VehicleSpec[] 
     createVehicle(spec.id, spec.waypoints, routing, spec.speed, spec.capacity, queues, spec.carries),
   );
 
-  return { map, demand, queues, vehicles, segmentTraffic: new Map(), routing };
+  return {
+    map,
+    demand,
+    queues,
+    vehicles,
+    segmentTraffic: new Map(),
+    routing,
+    ambientGeometry: computeAmbientGeometry(map.nodes, map.segments),
+    segmentLoads: new Map(),
+    ambientLoads: new Map(),
+  };
+}
+
+// Everything derived from map topology, rebuilt in one place. Callers used
+// to set `state.routing` and `state.map` by hand at two separate sites in
+// render/fleet.ts; adding a second derived cache to that pattern would
+// have meant two more places to forget. A stale proximity map is the
+// quiet kind of wrong -- ambient traffic would keep clustering around a
+// settlement that has since been pruned away from.
+export function rebuildFromMap(state: SimulationState, map: GeneratedMap): void {
+  state.map = map;
+  state.routing = buildRoutingContext(map);
+  state.ambientGeometry = computeAmbientGeometry(map.nodes, map.segments);
 }
 
 // `economy`, `paratransit`, and `growth` are optional and separate from
@@ -67,7 +89,18 @@ export function tick(
   // sees the same congestion snapshot this tick rather than reacting to
   // vehicles that have already moved earlier in the same pass. Segment
   // condition is read the same way, post-decay, for the same reason.
-  const segmentLoads = computeSegmentLoads(state.vehicles, state.routing);
+  // Ambient private traffic is folded in before anything reads a load, so
+  // vehicles, the paratransit operator and the stress overlay all see one
+  // road occupancy rather than three views of it.
+  const vehicleLoads = computeSegmentLoads(state.vehicles, state.routing);
+  const ambientLoads = computeAmbientLoads(
+    state.ambientGeometry,
+    demandMultipliers(growth),
+    eraModifiers?.ambientTraffic ?? 0,
+  );
+  const segmentLoads = addLoads(vehicleLoads, ambientLoads);
+  state.segmentLoads = segmentLoads;
+  state.ambientLoads = ambientLoads;
   const segmentConditions = new Map(state.map.segments.map((segment) => [segment.id, segment.condition]));
 
   // Paratransit is an independent informal economy, not the player's --
@@ -102,7 +135,13 @@ export function tick(
 
   if (paratransit) {
     updateUnservedEMA(paratransit, state, dt);
-    trySpawnParatransit(paratransit, state, segmentLoads, eraModifiers?.paratransitPressure ?? 1);
+    trySpawnParatransit(
+      paratransit,
+      state,
+      segmentLoads,
+      eraModifiers?.paratransitPressure ?? 1,
+      playerServiceByNode(growth),
+    );
     reapCompletedParatransit(paratransit, state);
   }
 
@@ -114,6 +153,23 @@ export function tick(
     applyPromotion(state.map, promotion);
   }
   return promotions;
+}
+
+// Plain nodeId -> number maps, never the GrowthState type itself: both
+// congestion and paratransit stay decoupled from engine/growth's shape,
+// the same way they take era multipliers as bare numbers.
+function demandMultipliers(growth?: GrowthState): ReadonlyMap<string, number> {
+  const multipliers = new Map<string, number>();
+  if (!growth) return multipliers;
+  for (const [nodeId, node] of growth) multipliers.set(nodeId, node.demandMultiplier);
+  return multipliers;
+}
+
+function playerServiceByNode(growth?: GrowthState): ReadonlyMap<string, number> {
+  const service = new Map<string, number>();
+  if (!growth) return service;
+  for (const [nodeId, node] of growth) service.set(nodeId, node.playerServiceEMA);
+  return service;
 }
 
 function buildGrowthSamples(generatedByNode: Map<string, number>, pickupEvents: PickupEvent[]): NodeDemandSample[] {

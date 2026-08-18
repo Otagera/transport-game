@@ -56,6 +56,9 @@ function fixture(options: { withVehicle?: boolean; funds?: number } = {}): Fixtu
     ]),
     vehicles: options.withVehicle === false ? [] : [fixtureVehicle()],
     segmentTraffic: new Map(),
+    ambientGeometry: [],
+    segmentLoads: new Map(),
+    ambientLoads: new Map(),
     routing: buildRoutingContext(map),
   };
   const economy = createEconomyState({ passengers: 5, produce: 3, supplies: 2 }, 1000);
