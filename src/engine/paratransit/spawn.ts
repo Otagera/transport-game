@@ -55,17 +55,24 @@ function segmentIdsAlongPath(path: string[], context: RoutingContext): string[] 
 // §6 Module 7). At most one spawn per call -- called once per tick, this
 // naturally rate-limits spawning even if several pairs cross threshold
 // in the same tick, rather than stampeding.
+// paratransitPressure divides the threshold, not multiplies caps: a
+// higher-pressure era (docs/rebuild-plan.md §6 Module 8, e.g. Informal)
+// makes the informal sector trigger sooner on the same unserved demand --
+// caps stay fixed, since they exist for perf/gameplay-pacing reasons
+// unrelated to era flavor.
 export function trySpawnParatransit(
   paratransit: ParatransitState,
   state: SimulationState,
   segmentLoads: Map<string, number>,
+  paratransitPressure: number = 1,
 ): Vehicle | null {
+  const effectiveThreshold = SPAWN_EMA_THRESHOLD / paratransitPressure;
   for (const pair of state.demand) {
     if (pair.kind !== "passengers") continue;
 
     const key = pairKey(pair.from, pair.to);
     const ema = paratransit.pairUnservedEMA.get(key) ?? 0;
-    if (ema < SPAWN_EMA_THRESHOLD) continue;
+    if (ema < effectiveThreshold) continue;
 
     const lastSpawn = paratransit.pairLastSpawnSeconds.get(key) ?? -Infinity;
     if (paratransit.elapsedSeconds - lastSpawn < SPAWN_COOLDOWN_SECONDS) continue;

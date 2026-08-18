@@ -34,6 +34,23 @@ describe("planCorridor", () => {
     expect(plan!.breakdown.nodes).toBe(2 * NODE_COST);
   });
 
+  test("buildCostMultiplier scales every breakdown field, keeping the receipt internally consistent", () => {
+    const terrain = makeTerrain(10, 10);
+    const waypoints: [number, number][] = [
+      [0, 0],
+      [9, 9],
+    ];
+    const base = planCorridor(terrain, waypoints.map(([x, y]) => ({ x, y })), "auto", new Set())!;
+    const scaled = planCorridor(terrain, waypoints.map(([x, y]) => ({ x, y })), "auto", new Set(), 1.3)!;
+
+    expect(scaled.breakdown.total).toBeCloseTo(base.breakdown.total * 1.3, 5);
+    expect(scaled.breakdown.nodes).toBeCloseTo(base.breakdown.nodes * 1.3, 5);
+    expect(scaled.breakdown.base + scaled.breakdown.gradient + scaled.breakdown.water + scaled.breakdown.density + scaled.breakdown.nodes).toBeCloseTo(
+      scaled.breakdown.total,
+      5,
+    );
+  });
+
   test("existing waypoints don't incur node cost", () => {
     const terrain = makeTerrain(10, 10);
     const plan = planCorridor(

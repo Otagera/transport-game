@@ -1,6 +1,7 @@
 import type { CargoKind, DeliveryEvent, LoadEntry, NodeQueues, RoutingContext, SegmentTraffic, Vehicle } from "./types";
 import { findPath } from "./routing";
 import { congestionFactor } from "./congestion";
+import { conditionSpeedFactor } from "../map/decay";
 
 function cargoAmount(cargo: LoadEntry[]): number {
   let total = 0;
@@ -187,6 +188,7 @@ export function tickVehicle(
   segmentTraffic: Map<string, SegmentTraffic>,
   segmentLoads: Map<string, number>,
   dt: number,
+  segmentConditions: Map<string, number> = new Map(),
 ): DeliveryEvent[] {
   const pathLength = vehicle.path.length;
   if (pathLength < 2 || hasCompletedTrip(vehicle)) {
@@ -203,7 +205,8 @@ export function tickVehicle(
     const edgeLength = nodeDistance(context, fromNode, toNode);
     const segmentId = findSegmentId(context, fromNode, toNode);
     const factor = segmentId ? congestionFactor(segmentLoads.get(segmentId) ?? 0) : 1;
-    const effectiveSpeed = vehicle.speed * factor;
+    const decayFactor = segmentId ? conditionSpeedFactor(segmentConditions.get(segmentId) ?? 1) : 1;
+    const effectiveSpeed = vehicle.speed * factor * decayFactor;
 
     const remainingDistanceOnEdge = (1 - vehicle.edgeProgress) * edgeLength;
     const distanceThisStep = effectiveSpeed * timeRemaining;

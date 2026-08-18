@@ -16,6 +16,7 @@ const SNAP_RADIUS = 1.2;
 export interface AuthoringController {
   dispose: () => void;
   getMap: () => GeneratedMap;
+  reconcileEraGating: () => void;
 }
 
 export interface BuildEvent {
@@ -29,6 +30,11 @@ export interface BuildEvent {
 // engine/ because it owns DOM events and raycasting -- the actual
 // pathing/build logic it calls into (planCorridor, commitCorridor) is
 // pure engine code.
+// getBuildCostMultiplier/getRailAvailable are live getters, not values
+// captured once (docs/rebuild-plan.md §6 Module 8): both change as the
+// era timeline advances on its own after this controller is built, and
+// every preview/build call must reflect whichever era is current right
+// now, not whichever was current when authoring started.
 export function createAuthoringController(
   sceneHandle: SceneHandle,
   groundMesh: THREE.Mesh,
@@ -37,6 +43,8 @@ export function createAuthoringController(
   costPanelEl: HTMLElement,
   onBuild?: (event: BuildEvent) => void,
   onMapChanged?: (map: GeneratedMap) => void,
+  getBuildCostMultiplier: () => number = () => 1,
+  getRailAvailable: () => boolean = () => true,
 ): AuthoringController {
   let map = initialMap;
   const history: GeneratedMap[] = [];
@@ -106,7 +114,7 @@ export function createAuthoringController(
       if (w.existingNodeId) existingIndices.add(i);
     });
 
-    const plan = planCorridor(map.terrain, previewPoints, mode, existingIndices);
+    const plan = planCorridor(map.terrain, previewPoints, mode, existingIndices, getBuildCostMultiplier());
     if (!plan) {
       ghostPreview.update(points, previewPoints, map.terrain.width, map.terrain.height, false);
       costPanel.render({
@@ -120,6 +128,7 @@ export function createAuthoringController(
       return;
     }
 
+    const railHint = getRailAvailable() ? "R road/rail" : "R road/rail (rail unavailable this era)";
     ghostPreview.update(points, plan.polyline, map.terrain.width, map.terrain.height, true);
     costPanel.render({
       visible: true,
@@ -127,7 +136,7 @@ export function createAuthoringController(
       infrastructureType,
       breakdown: plan.breakdown,
       valid: true,
-      hint: "Enter build · Esc cancel · Ctrl/Cmd+Z undo · 1/2/3 mode · R road/rail",
+      hint: `Enter build · Esc cancel · Ctrl/Cmd+Z undo · 1/2/3 mode · ${railHint}`,
     });
   }
 
@@ -165,7 +174,7 @@ export function createAuthoringController(
       if (w.existingNodeId) existingIndices.add(i);
     });
 
-    const plan = planCorridor(map.terrain, points, mode, existingIndices);
+    const plan = planCorridor(map.terrain, points, mode, existingIndices, getBuildCostMultiplier());
     if (!plan) return;
 
     history.push(cloneMap(map));
@@ -206,7 +215,22 @@ export function createAuthoringController(
       mode = "curve";
       refreshPreview(null);
     } else if (event.key.toLowerCase() === "r") {
+      // Rail goes dark through Informal (docs/rebuild-plan.md §5) --
+      // toggling *to* rail is blocked when the current era has no rail;
+      // toggling back to road always works, so a player never gets stuck.
+      if (infrastructureType === "road" && !getRailAvailable()) return;
       infrastructureType = infrastructureType === "road" ? "rail" : "road";
+      refreshPreview(null);
+    }
+  }
+
+  // A designed absence must be visible in advance, not ambush the player
+  // (docs/rebuild-plan.md §5) -- if rail becomes unavailable mid-draw
+  // (era transitions while the player is mid-authoring), fall back to
+  // road immediately rather than leaving an uncommittable rail preview.
+  function reconcileEraGating(): void {
+    if (infrastructureType === "rail" && !getRailAvailable()) {
+      infrastructureType = "road";
       refreshPreview(null);
     }
   }
@@ -224,5 +248,5 @@ export function createAuthoringController(
     window.removeEventListener("keydown", handleKeyDown);
   }
 
-  return { dispose, getMap: () => map };
+  return { dispose, getMap: () => map, reconcileEraGating };
 }

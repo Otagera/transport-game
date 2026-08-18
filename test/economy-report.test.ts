@@ -7,9 +7,9 @@ const fareTable = { passengers: 2, produce: 1, supplies: 1.5 };
 describe("computeRoutePnL", () => {
   test("sorts worst (most negative net) first", () => {
     const state = createEconomyState(fareTable, 0);
-    registerPurchase(state, "profitable", 0, 0);
-    registerPurchase(state, "bleeding", 0, 0);
-    registerPurchase(state, "breakeven", 0, 0);
+    registerPurchase(state, "profitable", 0, 0, "def-1");
+    registerPurchase(state, "bleeding", 0, 0, "def-1");
+    registerPurchase(state, "breakeven", 0, 0, "def-1");
 
     recordDeliveryRevenue(state, "profitable", [{ kind: "passengers", amount: 100 }]);
     state.ledger.get("profitable")!.cost = 50;

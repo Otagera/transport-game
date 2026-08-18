@@ -74,6 +74,18 @@ describe("trySpawnParatransit", () => {
     expect(state.vehicles.length).toBe(0);
   });
 
+  test("paratransitPressure divides the threshold, letting a higher-pressure era spawn sooner", () => {
+    const paratransit = createParatransitState();
+    const state = fixtureState(10);
+    // Below the base threshold, so a pressure of 1 (or omitted) refuses.
+    paratransit.pairUnservedEMA.set("a:b", SPAWN_EMA_THRESHOLD / 2);
+    expect(trySpawnParatransit(paratransit, state, new Map())).toBeNull();
+    expect(trySpawnParatransit(paratransit, state, new Map(), 1)).toBeNull();
+
+    // A pressure of 2 halves the effective threshold, which this EMA now clears.
+    expect(trySpawnParatransit(paratransit, state, new Map(), 2)).not.toBeNull();
+  });
+
   test("spawns a one-shot passengers-only vehicle once sustained demand crosses the threshold", () => {
     const paratransit = createParatransitState();
     const state = fixtureState(10);

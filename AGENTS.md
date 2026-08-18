@@ -7,6 +7,11 @@ remote — Module 0 (repo + remote from commit one) is the first priority for ex
 [docs/rebuild-plan.md](docs/rebuild-plan.md). Read §5 (Findings) before writing simulation, economy,
 pathing, or paratransit code — it's the part that cost the most to (re)learn.
 
+**Quick context for a new conversation:** [docs/architecture.md](docs/architecture.md) (module
+boundaries, file map, recurring patterns — the stable "how it's shaped" reference) and
+[docs/status.md](docs/status.md) (per-module build log — what's done, what's pending, key decisions
+and bugs caught along the way). Read status.md first to see where things stand.
+
 As modules get built, add their own docs under `docs/` rather than growing this file.
 
 ## Delegating to OpenCode

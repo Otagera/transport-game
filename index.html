@@ -42,6 +42,20 @@
         border-radius: 4px;
         pointer-events: none;
       }
+      #era-banner {
+        position: fixed;
+        left: 50%;
+        top: 24px;
+        transform: translateX(-50%);
+        font: bold 16px/1.4 monospace;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 8px 16px;
+        border-radius: 4px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
       #pnl-panel {
         position: fixed;
         left: 8px;
@@ -65,6 +79,7 @@
     <div id="cost-panel"></div>
     <div id="fleet-hint"></div>
     <div id="pnl-panel"></div>
+    <div id="era-banner"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

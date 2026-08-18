@@ -1,11 +1,14 @@
 import { Accumulator, SIM_DT } from "@engine/loop";
 import { loadContent } from "@content/loader";
 import { EraListSchema, VehicleDefListSchema } from "@content/schema";
+import type { Era } from "@content/schema";
 import { generateMap } from "@engine/map/generate";
 import { createSimulation, tick } from "@engine/simulation/simulate";
 import { createParatransitState } from "@engine/paratransit/types";
 import { createEconomyState } from "@engine/economy/state";
 import { computeBurnRate, computeRoutePnL } from "@engine/economy/report";
+import { advanceEraTimeline, createEraTimeline, currentEra, type EraTransition } from "@engine/eras/timeline";
+import type { EraDef } from "@engine/eras/types";
 import { createScene } from "@render/scene";
 import { createDefaultStyleSpec } from "@render/style";
 import { createNetworkGroup } from "@render/network";
@@ -14,10 +17,15 @@ import { createAuthoringController } from "@render/authoring";
 import { createFleetController } from "@render/fleet";
 import { createStatusBar } from "@ui/statusBar";
 import { createPnLPanel } from "@ui/pnlPanel";
+import { createEraBanner } from "@ui/eraBanner";
 
 const DEFAULT_MAP_SEED = 1;
 const STARTING_FUNDS = 1000;
 const FARE_TABLE = { passengers: 5, produce: 3, supplies: 2 };
+
+function toEraDef(era: Era): EraDef {
+  return { id: era.id, order: era.order, durationSeconds: era.durationSeconds, modifiers: era.modifiers, railAvailable: era.railAvailable };
+}
 
 async function bootstrap(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>("#scene");
@@ -25,7 +33,8 @@ async function bootstrap(): Promise<void> {
   const costPanelEl = document.querySelector<HTMLDivElement>("#cost-panel");
   const fleetHintEl = document.querySelector<HTMLDivElement>("#fleet-hint");
   const pnlPanelEl = document.querySelector<HTMLDivElement>("#pnl-panel");
-  if (!canvas || !statusEl || !costPanelEl || !fleetHintEl || !pnlPanelEl) {
+  const eraBannerEl = document.querySelector<HTMLDivElement>("#era-banner");
+  if (!canvas || !statusEl || !costPanelEl || !fleetHintEl || !pnlPanelEl || !eraBannerEl) {
     throw new Error("Missing a required element in index.html");
   }
 
@@ -33,7 +42,10 @@ async function bootstrap(): Promise<void> {
     loadContent(EraListSchema, "/content/eras.json"),
     loadContent(VehicleDefListSchema, "/content/vehicles.json"),
   ]);
-  const currentEraName = eras[0]?.name ?? "unknown";
+  const eraContentById = new Map(eras.map((era) => [era.id, era]));
+  const eraTimeline = createEraTimeline(eras.map(toEraDef));
+  const currentEraContent = (): Era => eraContentById.get(currentEra(eraTimeline).id)!;
+  const eraBanner = createEraBanner(eraBannerEl);
 
   const style = createDefaultStyleSpec();
   const sceneHandle = createScene(canvas, style);
@@ -53,9 +65,17 @@ async function bootstrap(): Promise<void> {
   const fleetRenderer = createVehicleFleetRenderer();
   sceneHandle.scene.add(fleetRenderer.group);
 
-  const fleetController = createFleetController(simulation, economy, vehicleCatalog, () => {}, fleetHintEl);
+  const fleetController = createFleetController(
+    simulation,
+    economy,
+    vehicleCatalog,
+    () => {},
+    fleetHintEl,
+    eras,
+    () => currentEra(eraTimeline).id,
+  );
 
-  createAuthoringController(
+  const authoringController = createAuthoringController(
     sceneHandle,
     groundMesh,
     map,
@@ -63,7 +83,27 @@ async function bootstrap(): Promise<void> {
     costPanelEl,
     (event) => fleetController.handleBuild(event),
     (changedMap) => fleetController.handleMapChanged(changedMap),
+    () => currentEraContent().modifiers.buildCost,
+    () => currentEraContent().railAvailable,
   );
+
+  // Cheap, high-leverage visual era identity (docs/rebuild-plan.md §5):
+  // background + fill light tint from the era's palette. Applied once at
+  // startup, then again on every transition.
+  function applyEraPalette(era: Era): void {
+    style.background.color = era.palette.primary;
+    style.lighting.fill.color = era.palette.secondary;
+    sceneHandle.applyStyle(style);
+  }
+  applyEraPalette(currentEraContent());
+
+  function handleEraTransition(transition: EraTransition): void {
+    const toContent = eraContentById.get(transition.to.id)!;
+    applyEraPalette(toContent);
+    fleetController.handleEraChanged();
+    authoringController.reconcileEraGating();
+    eraBanner.show(`Era: ${toContent.name}`);
+  }
 
   let pnlVisible = false;
   window.addEventListener("keydown", (event) => {
@@ -85,7 +125,11 @@ async function bootstrap(): Promise<void> {
     const elapsed = (now - last) / 1000;
     last = now;
 
-    accumulator.advance(elapsed, (dt) => tick(simulation, dt, economy, paratransit));
+    accumulator.advance(elapsed, (dt) => {
+      tick(simulation, dt, economy, paratransit, currentEra(eraTimeline).modifiers);
+      const transition = advanceEraTimeline(eraTimeline, dt);
+      if (transition) handleEraTransition(transition);
+    });
 
     framesSinceSample += 1;
     timeSinceSample += elapsed;
@@ -99,7 +143,7 @@ async function bootstrap(): Promise<void> {
     statusBar.render({
       tick: Math.round(economy.elapsedSeconds / SIM_DT),
       fps,
-      era: currentEraName,
+      era: currentEraContent().name,
       funds: economy.funds,
       incomePerDay: burnRate.incomePerDay,
       costPerDay: burnRate.costPerDay,

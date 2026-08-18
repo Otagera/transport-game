@@ -1,8 +1,10 @@
 import type { GeneratedMap } from "../map/types";
+import { decaySegments } from "../map/decay";
 import type { EconomyState } from "../economy/types";
 import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from "../economy/state";
 import type { ParatransitState } from "../paratransit/types";
 import { reapCompletedParatransit, trySpawnParatransit, updateUnservedEMA } from "../paratransit/spawn";
+import type { EraModifiers } from "../eras/types";
 import { generateDemandPairs } from "./demand";
 import { buildRoutingContext } from "./routing";
 import { computeSegmentLoads } from "./congestion";
@@ -34,14 +36,27 @@ export function createSimulation(map: GeneratedMap, vehicleSpecs: VehicleSpec[] 
 // SimulationState on purpose: engine/simulation stays about physical
 // movement, engine/economy about money, engine/paratransit about the
 // informal sector's own spawning -- this is the one place all three get
-// threaded together.
-export function tick(state: SimulationState, dt: number, economy?: EconomyState, paratransit?: ParatransitState): void {
-  growQueues(state, dt);
+// threaded together. `eraModifiers` is threaded the same way (docs/
+// rebuild-plan.md §6 Module 8): simulate.ts is the one integration point
+// that knows about eras at all -- economy/pathing/paratransit each take a
+// plain multiplier, never the EraModifiers type itself, so those
+// submodules stay decoupled from engine/eras.
+export function tick(
+  state: SimulationState,
+  dt: number,
+  economy?: EconomyState,
+  paratransit?: ParatransitState,
+  eraModifiers?: EraModifiers,
+): void {
+  growQueues(state, dt, eraModifiers?.demand ?? 1);
+  decaySegments(state.map, dt, eraModifiers?.decay ?? 1);
 
   // Computed once per tick, before any vehicle moves, so every vehicle
   // sees the same congestion snapshot this tick rather than reacting to
-  // vehicles that have already moved earlier in the same pass.
+  // vehicles that have already moved earlier in the same pass. Segment
+  // condition is read the same way, post-decay, for the same reason.
   const segmentLoads = computeSegmentLoads(state.vehicles, state.routing);
+  const segmentConditions = new Map(state.map.segments.map((segment) => [segment.id, segment.condition]));
 
   // Paratransit is an independent informal economy, not the player's --
   // its deliveries must never accrue to the player's funds. Gating on
@@ -52,30 +67,38 @@ export function tick(state: SimulationState, dt: number, economy?: EconomyState,
   // economy at all.
   let totalRevenueThisTick = 0;
   for (const vehicle of state.vehicles) {
-    const deliveries = tickVehicle(vehicle, state.queues, state.routing, state.segmentTraffic, segmentLoads, dt);
+    const deliveries = tickVehicle(
+      vehicle,
+      state.queues,
+      state.routing,
+      state.segmentTraffic,
+      segmentLoads,
+      dt,
+      segmentConditions,
+    );
     if (economy && vehicle.lifecycle !== "one-shot" && deliveries.length > 0) {
       totalRevenueThisTick += recordDeliveryRevenue(economy, vehicle.id, deliveries);
     }
   }
 
   if (economy) {
-    applyOperatingCosts(economy, dt);
+    applyOperatingCosts(economy, dt, eraModifiers?.fuel ?? 1);
     updateIncomeRateEMA(economy, totalRevenueThisTick, dt);
   }
 
   if (paratransit) {
     updateUnservedEMA(paratransit, state, dt);
-    trySpawnParatransit(paratransit, state, segmentLoads);
+    trySpawnParatransit(paratransit, state, segmentLoads, eraModifiers?.paratransitPressure ?? 1);
     reapCompletedParatransit(paratransit, state);
   }
 }
 
-function growQueues(state: SimulationState, dt: number): void {
+function growQueues(state: SimulationState, dt: number, demandMultiplier: number): void {
   for (const pair of state.demand) {
     const nodeQueue = state.queues.get(pair.from);
     if (!nodeQueue) continue;
     const key = `${pair.to}:${pair.kind}`;
     const current = nodeQueue.get(key) ?? 0;
-    nodeQueue.set(key, Math.min(QUEUE_CAP, current + pair.rate * dt));
+    nodeQueue.set(key, Math.min(QUEUE_CAP, current + pair.rate * demandMultiplier * dt));
   }
 }

@@ -3,6 +3,7 @@ import {
   applyOperatingCosts,
   canAfford,
   createEconomyState,
+  markVehicleObsolete,
   recordDeliveryRevenue,
   registerPurchase,
   sellVehicle,
@@ -23,19 +24,21 @@ describe("canAfford", () => {
 describe("registerPurchase", () => {
   test("deducts funds and creates ledger + economics entries", () => {
     const state = createEconomyState(fareTable, 500);
-    registerPurchase(state, "v1", 200, 4);
+    registerPurchase(state, "v1", 200, 4, "def-v1");
     expect(state.funds).toBe(300);
     expect(state.vehicleEconomics.get("v1")).toEqual({
       purchaseCost: 200,
       operatingCostPerSecond: 4,
       purchasedAtSeconds: 0,
+      defId: "def-v1",
+      obsoleteSinceSeconds: null,
     });
     expect(state.ledger.get("v1")).toEqual({ vehicleId: "v1", revenue: 0, cost: 0 });
   });
 
   test("purchasing is allowed to run funds negative -- spending gating is the caller's job", () => {
     const state = createEconomyState(fareTable, 50);
-    registerPurchase(state, "v1", 200, 4);
+    registerPurchase(state, "v1", 200, 4, "def-v1");
     expect(state.funds).toBe(-150);
   });
 });
@@ -43,7 +46,7 @@ describe("registerPurchase", () => {
 describe("applyOperatingCosts", () => {
   test("deducts unconditionally, even into debt, and accrues per-vehicle ledger cost", () => {
     const state = createEconomyState(fareTable, 10);
-    registerPurchase(state, "v1", 0, 4); // 4/sec operating cost, no purchase cost for this test
+    registerPurchase(state, "v1", 0, 4, "def-v1"); // 4/sec operating cost, no purchase cost for this test
     applyOperatingCosts(state, 5); // 5 seconds -> 20 cost
     expect(state.funds).toBe(-10);
     expect(state.ledger.get("v1")!.cost).toBe(20);
@@ -55,12 +58,59 @@ describe("applyOperatingCosts", () => {
     applyOperatingCosts(state, 5);
     expect(state.funds).toBe(10);
   });
+
+  test("era fuel multiplier scales the live cost, not the stored rate", () => {
+    // Module 8: a fuel-price era transition must bite every vehicle
+    // already on the road, so the multiplier is applied per tick here,
+    // not baked into operatingCostPerSecond at purchase time.
+    const state = createEconomyState(fareTable, 100000);
+    registerPurchase(state, "v1", 0, 4, "def-v1");
+    applyOperatingCosts(state, 5, 2); // 4/sec * 2x fuel * 5s = 40
+    expect(state.funds).toBe(100000 - 40);
+    expect(state.vehicleEconomics.get("v1")!.operatingCostPerSecond).toBe(4);
+  });
+
+  test("obsolete stock costs rising maintenance the longer it stays obsolete", () => {
+    const state = createEconomyState(fareTable, 1_000_000);
+    registerPurchase(state, "v1", 0, 10, "def-v1");
+    markVehicleObsolete(state, "v1");
+
+    applyOperatingCosts(state, 1); // right at the moment of obsolescence -> no ramp yet
+    const fundsAfterFirstSecond = state.funds;
+    applyOperatingCosts(state, 1); // one second further obsolete -> a strictly higher cost than the first
+    const costSecondSecond = fundsAfterFirstSecond - state.funds;
+
+    expect(costSecondSecond).toBeGreaterThan(10);
+  });
+
+  test("obsolescence maintenance caps rather than diverging to infinity", () => {
+    const state = createEconomyState(fareTable, 10_000_000);
+    registerPurchase(state, "v1", 0, 10, "def-v1");
+    markVehicleObsolete(state, "v1");
+    applyOperatingCosts(state, 1_000_000); // absurdly long stretch obsolete
+
+    // Capped at 3x operatingCostPerSecond -- 10 * 3 * dt for the final dt slice.
+    applyOperatingCosts(state, 1);
+    const funds1 = state.funds;
+    applyOperatingCosts(state, 1);
+    expect(funds1 - state.funds).toBeCloseTo(30, 5);
+  });
+
+  test("marking an already-obsolete vehicle obsolete again is a no-op", () => {
+    const state = createEconomyState(fareTable, 100000);
+    registerPurchase(state, "v1", 0, 10, "def-v1");
+    markVehicleObsolete(state, "v1");
+    const firstMark = state.vehicleEconomics.get("v1")!.obsoleteSinceSeconds;
+    state.elapsedSeconds = 500;
+    markVehicleObsolete(state, "v1");
+    expect(state.vehicleEconomics.get("v1")!.obsoleteSinceSeconds).toBe(firstMark);
+  });
 });
 
 describe("recordDeliveryRevenue", () => {
   test("adds revenue to funds and the vehicle's ledger entry", () => {
     const state = createEconomyState(fareTable, 0);
-    registerPurchase(state, "v1", 0, 0);
+    registerPurchase(state, "v1", 0, 0, "def-v1");
     const revenue = recordDeliveryRevenue(state, "v1", [{ kind: "passengers", amount: 10 }]);
     expect(revenue).toBe(20);
     expect(state.funds).toBe(20);
@@ -78,7 +128,7 @@ describe("recordDeliveryRevenue", () => {
 describe("sellVehicle", () => {
   test("resells at full price when sold immediately", () => {
     const state = createEconomyState(fareTable, 200);
-    registerPurchase(state, "v1", 200, 0);
+    registerPurchase(state, "v1", 200, 0, "def-v1");
     expect(state.funds).toBe(0);
     const resale = sellVehicle(state, "v1");
     expect(resale).toBeCloseTo(200, 5);
@@ -87,7 +137,7 @@ describe("sellVehicle", () => {
 
   test("depreciates with ownership time and removes tracking on sale", () => {
     const state = createEconomyState(fareTable, 0);
-    registerPurchase(state, "v1", 200, 0);
+    registerPurchase(state, "v1", 200, 0, "def-v1");
     state.elapsedSeconds = SECONDS_PER_GAME_DAY * 10; // 10 game-days owned
     const resale = sellVehicle(state, "v1");
     // 10 days * 5%/day = 50% depreciation -> 50% of 200 = 100
@@ -98,7 +148,7 @@ describe("sellVehicle", () => {
 
   test("never depreciates below the resale floor, however long it's owned", () => {
     const state = createEconomyState(fareTable, 0);
-    registerPurchase(state, "v1", 200, 0);
+    registerPurchase(state, "v1", 200, 0, "def-v1");
     state.elapsedSeconds = SECONDS_PER_GAME_DAY * 1000;
     const resale = sellVehicle(state, "v1");
     expect(resale).toBeCloseTo(200 * 0.15, 5);
@@ -116,7 +166,7 @@ describe("burn-rate EMA", () => {
   // convergence (1 - e^-3 ≈ 0.95) toward the sustained rate.
   test("costRateEMA converges toward the sustained cost rate over several ticks", () => {
     const state = createEconomyState(fareTable, 100000);
-    registerPurchase(state, "v1", 0, 10); // sustained $10/sec cost
+    registerPurchase(state, "v1", 0, 10, "def-v1"); // sustained $10/sec cost
     for (let i = 0; i < 900; i += 1) {
       applyOperatingCosts(state, 1 / 30);
     }

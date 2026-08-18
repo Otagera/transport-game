@@ -1,11 +1,17 @@
 import type { DeliveryEvent } from "../simulation/types";
 import { computeRevenue } from "./fares";
-import type { EconomyState, FareTable } from "./types";
+import type { EconomyState, FareTable, VehicleEconomics } from "./types";
 
 export const SECONDS_PER_GAME_DAY = 30;
 const MIN_RESALE_FRACTION = 0.15;
 const DEPRECIATION_PER_DAY = 0.05;
 const BURN_RATE_TIME_CONSTANT_SECONDS = 10;
+// Module 8, graceful obsolescence: maintenance ramps 2%/sec obsolete,
+// capped at 3x -- rising, so staying obsolete is a real cost, but capped
+// so it never becomes an unrecoverable death spiral for a single vehicle
+// (docs/rebuild-plan.md §5: no game over).
+const OBSOLESCENCE_RAMP_PER_SECOND = 0.02;
+const OBSOLESCENCE_MAX_MULTIPLIER = 3;
 
 export function createEconomyState(fareTable: FareTable, startingFunds: number): EconomyState {
   return {
@@ -33,14 +39,34 @@ export function registerPurchase(
   vehicleId: string,
   purchaseCost: number,
   operatingCostPerSecond: number,
+  defId: string,
 ): void {
   state.funds -= purchaseCost;
   state.vehicleEconomics.set(vehicleId, {
     purchaseCost,
     operatingCostPerSecond,
     purchasedAtSeconds: state.elapsedSeconds,
+    defId,
+    obsoleteSinceSeconds: null,
   });
   state.ledger.set(vehicleId, { vehicleId, revenue: 0, cost: 0 });
+}
+
+// Called once per obsoleted vehicle, from an era transition handler that
+// knows which defIds fell outside the new era's window -- economy/state.ts
+// itself stays content-unaware, same as elsewhere in engine/. A no-op if
+// already marked: an era timeline only moves forward, so a vehicle can't
+// un-obsolete and re-obsolete.
+export function markVehicleObsolete(state: EconomyState, vehicleId: string): void {
+  const econ = state.vehicleEconomics.get(vehicleId);
+  if (!econ || econ.obsoleteSinceSeconds !== null) return;
+  econ.obsoleteSinceSeconds = state.elapsedSeconds;
+}
+
+function obsolescenceMultiplier(econ: VehicleEconomics, elapsedSeconds: number): number {
+  if (econ.obsoleteSinceSeconds === null) return 1;
+  const secondsObsolete = elapsedSeconds - econ.obsoleteSinceSeconds;
+  return Math.min(OBSOLESCENCE_MAX_MULTIPLIER, 1 + OBSOLESCENCE_RAMP_PER_SECOND * secondsObsolete);
 }
 
 // Depreciated resale (docs/rebuild-plan.md §5): without this, a player in
@@ -67,15 +93,18 @@ function emaUpdate(previous: number, instantaneous: number, dt: number, tau: num
 }
 
 // Operating cost is per-tick and unconditional (docs/rebuild-plan.md §5)
-// -- it applies even if funds go negative doing so. Era fuel multipliers
-// are folded into operatingCostPerSecond at purchase/era-transition time
-// (Module 8), not computed here.
-export function applyOperatingCosts(state: EconomyState, dt: number): void {
+// -- it applies even if funds go negative doing so. The era fuel
+// multiplier is applied live here, not baked into operatingCostPerSecond
+// at purchase time (Module 8): a fuel-price era transition must bite
+// every vehicle already on the road, not just ones bought after the
+// transition -- "Informal-era fuel spike bites operationally" is a felt
+// event, not a catalog footnote.
+export function applyOperatingCosts(state: EconomyState, dt: number, fuelMultiplier: number = 1): void {
   state.elapsedSeconds += dt;
 
   let costThisTick = 0;
   for (const [vehicleId, econ] of state.vehicleEconomics) {
-    const cost = econ.operatingCostPerSecond * dt;
+    const cost = econ.operatingCostPerSecond * fuelMultiplier * obsolescenceMultiplier(econ, state.elapsedSeconds) * dt;
     costThisTick += cost;
     state.funds -= cost;
     const entry = state.ledger.get(vehicleId);

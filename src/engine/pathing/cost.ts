@@ -48,7 +48,10 @@ export interface CostBreakdown {
   total: number;
 }
 
-export function sumStepCosts(steps: StepCost[], newNodeCount: number): CostBreakdown {
+// buildCostMultiplier (docs/rebuild-plan.md §6 Module 8) scales every
+// field uniformly, not just `total` -- the breakdown must keep summing to
+// its own total, since the UI shows it as a receipt.
+export function sumStepCosts(steps: StepCost[], newNodeCount: number, buildCostMultiplier: number = 1): CostBreakdown {
   let base = 0;
   let gradient = 0;
   let water = 0;
@@ -60,5 +63,10 @@ export function sumStepCosts(steps: StepCost[], newNodeCount: number): CostBreak
     density += step.density;
   }
   const nodes = newNodeCount * NODE_COST;
-  return { base, gradient, water, density, nodes, total: base + gradient + water + density + nodes };
+  base *= buildCostMultiplier;
+  gradient *= buildCostMultiplier;
+  water *= buildCostMultiplier;
+  density *= buildCostMultiplier;
+  const scaledNodes = nodes * buildCostMultiplier;
+  return { base, gradient, water, density, nodes: scaledNodes, total: base + gradient + water + density + scaledNodes };
 }

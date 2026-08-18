@@ -46,4 +46,47 @@ describe("content schema", () => {
     const goodsVehicles = vehicles.filter((v) => v.carries === "goods");
     expect(goodsVehicles.map((v) => v.id)).toEqual(["lorry"]);
   });
+
+  test("every vehicle's eraIn and eraOut (when set) reference a real era id", () => {
+    const erasPath = join(import.meta.dir, "..", "public", "content", "eras.json");
+    const vehiclesPath = join(import.meta.dir, "..", "public", "content", "vehicles.json");
+    const eras = EraListSchema.parse(JSON.parse(readFileSync(erasPath, "utf8")));
+    const vehicles = VehicleDefListSchema.parse(JSON.parse(readFileSync(vehiclesPath, "utf8")));
+    const eraIds = new Set(eras.map((era) => era.id));
+
+    for (const vehicle of vehicles) {
+      expect(eraIds.has(vehicle.eraIn)).toBe(true);
+      if (vehicle.eraOut !== null) {
+        expect(eraIds.has(vehicle.eraOut)).toBe(true);
+      }
+    }
+  });
+
+  test("the catalog changes across every era transition, not just at the start", () => {
+    // Module 8 "done when": each era feels different to operate in --
+    // guard that against the catalog silently becoming static after the
+    // first couple of eras.
+    const erasPath = join(import.meta.dir, "..", "public", "content", "eras.json");
+    const vehiclesPath = join(import.meta.dir, "..", "public", "content", "vehicles.json");
+    const eras = EraListSchema.parse(JSON.parse(readFileSync(erasPath, "utf8")));
+    const vehicles = VehicleDefListSchema.parse(JSON.parse(readFileSync(vehiclesPath, "utf8")));
+    const orderOf = new Map(eras.map((era) => [era.id, era.order]));
+
+    function availableAt(order: number): Set<string> {
+      const ids = new Set<string>();
+      for (const vehicle of vehicles) {
+        const inOrder = orderOf.get(vehicle.eraIn)!;
+        const outOrder = vehicle.eraOut === null ? Infinity : orderOf.get(vehicle.eraOut)!;
+        if (inOrder <= order && order <= outOrder) ids.add(vehicle.id);
+      }
+      return ids;
+    }
+
+    for (let order = 1; order < eras.length; order += 1) {
+      const previous = availableAt(order - 1);
+      const current = availableAt(order);
+      const changed = previous.size !== current.size || [...previous].some((id) => !current.has(id));
+      expect(changed).toBe(true);
+    }
+  });
 });

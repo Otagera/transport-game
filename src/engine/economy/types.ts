@@ -9,6 +9,15 @@ export interface VehicleEconomics {
   purchaseCost: number;
   operatingCostPerSecond: number;
   purchasedAtSeconds: number;
+  // Module 8, graceful obsolescence (docs/rebuild-plan.md §5): a vehicle
+  // whose def falls outside the current era's eraIn/eraOut window keeps
+  // running -- it is never force-despawned -- but costs rising maintenance
+  // the longer it stays obsolete. `defId` is what a transition handler
+  // checks against the catalog; `obsoleteSinceSeconds` is null while the
+  // vehicle is still current, set once, and never cleared (an era timeline
+  // only advances forward, so a vehicle can't un-obsolete).
+  defId: string;
+  obsoleteSinceSeconds: number | null;
 }
 
 export interface RouteLedgerEntry {
