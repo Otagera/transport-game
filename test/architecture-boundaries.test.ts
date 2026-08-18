@@ -4,10 +4,16 @@ import { join } from "node:path";
 import ts from "typescript";
 
 // Hard rule (docs/rebuild-plan.md §4): engine/ imports nothing from
-// render/, content/, or three.js. Pure simulation.
+// render/, content/, ui/, dev/, or three.js. Pure simulation.
+//
+// ui/ and dev/ were added to the list in Module 11, which gave both of
+// them a lot more surface to be tempted by: ui/inspector.ts reads engine
+// state to build its panels and dev/ authors content the engine consumes,
+// so the pressure to close the loop the wrong way round is real now in a
+// way it wasn't when ui/ was four read-only text panels.
 const ENGINE_DIR = join(import.meta.dir, "..", "src", "engine");
-const FORBIDDEN_PREFIXES = ["three", "@render", "@content"];
-const FORBIDDEN_SUBSTRINGS = ["/render/", "/content/"];
+const FORBIDDEN_PREFIXES = ["three", "@render", "@content", "@ui", "@dev"];
+const FORBIDDEN_SUBSTRINGS = ["/render/", "/content/", "/ui/", "/dev/"];
 
 function collectTsFiles(dir: string): string[] {
   const files: string[] = [];
@@ -58,7 +64,7 @@ function isForbidden(specifier: string): boolean {
 }
 
 describe("engine/ import boundary", () => {
-  test("engine/ imports nothing from render/, content/, or three.js", () => {
+  test("engine/ imports nothing from render/, content/, ui/, dev/, or three.js", () => {
     const files = collectTsFiles(ENGINE_DIR);
     const violations: string[] = [];
 

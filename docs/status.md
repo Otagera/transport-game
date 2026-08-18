@@ -6,7 +6,7 @@ conversation should read first to know where things stand, before diving into so
 `git log`. Pair with [architecture.md](architecture.md) for the stable "how it's shaped"
 reference.
 
-Current test count: **161 passing** across 31 files (`bun test`). All of typecheck /
+Current test count: **231 passing** across 39 files (`bun test`). All of typecheck /
 test / build / verify:bundle pass as of the last commit on this list.
 
 ## Module 0 — Foundation ✅
@@ -218,7 +218,159 @@ economy, and paratransit all continued running correctly concurrently throughout
 console errors beyond the pre-existing harmless favicon 404.
 
 ## Module 10 — Save/load and scenarios (not started)
-Per `rebuild-plan.md`'s build order, comes next.
+Last module in `rebuild-plan.md`'s build order. Module 11 landed ahead of it and did
+**not** implement it: `ScenarioSchema` exists in `content/schema.ts` and the studio's
+Scenario Lab tab authors and validates one, but nothing *applies* a scenario yet — that
+needs the warm-forward pass and is still Module 10's job.
 
-## Module 10 — Save/load and scenarios (not started)
-Last module in the plan.
+## Module 11 — Dev studio + information architecture ✅
+Two halves of one problem — where a fact lives, and who is allowed to author it. Full
+design contract in [module-11-studio-and-ia.md](module-11-studio-and-ia.md).
+
+### The six homes (`src/ui/`)
+Every player-facing fact now belongs to exactly one home and does not also appear in
+another. The rules that make each one useful are the negative ones:
+
+- **Inspector** (`ui/inspector.ts`, new) — **empty when nothing is selected.** A
+  fallback summary would make it a second Strip, and then two homes disagree about the
+  same number. Covers vehicle / node / segment / corridor.
+- **Overlays** (`ui/overlays.ts` state+picker, `render/overlayLayer.ts` drawing, both
+  new) — exactly one active, `None` included.
+- **Lists** (`ui/pnlPanel.ts`) — worst-first as before, now **select-and-focus**: a row
+  click selects the vehicle and flies the camera. Ranking tells you which route bleeds;
+  it doesn't tell you where it is, and hunting for it is where the "under ten seconds"
+  actually went.
+- **Strip** (`ui/statusBar.ts`) — fps and tick moved behind a DEV-only `diagnostics`
+  field. A developer's number doesn't belong in the one home reserved for the player's.
+- **Moments** (`ui/eraBanner.ts`) — now carry an optional subject and are clickable. A
+  banner that says a village grew and then leaves you to find it is a dead end.
+- **Map** (`render/network.ts`) — see below.
+
+`ui/selection.ts` is the spine: a tiny store the Inspector, the list, the moments banner,
+the map picker and the camera all agree on. Re-selecting the same entity deliberately
+does not re-emit, or every click on an already-selected row would re-fly the camera and
+read as the map twitching.
+
+### The two visual channels finally used
+`network.ts` gained `updateSignals` — recolour in place, no geometry churn, safe per
+frame — mapping **hue to health and brightness to utilisation** from
+`computeBottleneckMetrics`, which had been sitting unused since Module 3 waiting for
+exactly this. Streets stay neutral where nothing runs (colouring every corridor makes the
+map a lattice and destroys the signal). Overlays never borrow those channels: the overlay
+layer is a separate additive group and the base network **dims to neutral** while one is
+up, so exactly one thing on screen speaks in colour at a time.
+`test/network-signal-color.test.ts` asserts hue is independent of utilisation and vice
+versa, so a later "make it pop" tweak can't quietly conflate them.
+
+### Inspector actions, and a deliberate rule exception
+Three actions, all of which **stay available at negative funds**:
+
+- *Sell vehicle* — depreciated resale. Paratransit is excluded: it is not the player's to
+  sell, it is the antagonist.
+- *Prune corridor* — `engine/map/prune.ts`, pure like `commitCorridor`, routed through a
+  new `authoringController.applyMapChange` so Ctrl/Cmd+Z undoes a prune exactly as it
+  undoes a build (two undo stacks would be a trap). Settlements and villages are never
+  removed — a place is not built infrastructure — and a junction survives if another
+  corridor still uses it. Blocked **only** by `engine/simulation/dependents.ts` finding
+  vehicles still routed over it, which it names so you can sell them first.
+- *Maintain segment* — `restoreSegmentCondition` restores first and returns the deficit
+  actually bought back; `maintenanceCost` prices exactly that. Maintenance pricing lives
+  in `pathing/cost.ts` because that module is the only place geometry may become
+  currency.
+
+Keeping all three usable in debt is a **deliberate, documented exception** to
+`economy/state.ts`'s "spending is blocked when it isn't affordable", which still governs
+purchases. The distinction that justifies it: buying a vehicle *adds* ongoing cost, these
+three *remove* it, and they are the only levers a player in debt has. §5 records three
+playthroughs ending in undiagnosable debt — disabling the way out isn't a rule worth
+being consistent about. Flagged here because it is the one place this module contradicts
+an earlier module's stated rule.
+
+### Build vs Inspect are explicit modes
+Tab toggles; the mode is always on screen. They compete for the click and most of the
+keyboard, and modifier-click conventions would have been worse than a visible mode.
+`authoring.ts` now stands down entirely in inspect mode rather than silently mutating a
+pending draw with `1`/`2`/`3`/`R`/Enter.
+
+Picking (`render/picking.ts`) is **grid-space arithmetic, not raycasting**: line
+primitives are near-impossible to hit with a ray (Module 5's bridge-deck bug lived at
+this exact boundary), and grid-space picking is unit-testable with no WebGL context.
+`render/vehicles.ts` shares `vehicleGridPosition` with it, so the marker you see and the
+thing you click cannot disagree.
+
+### The dev studio (`?studio=1`)
+Module 1's tuning panel became one tab of four: **Tuning · Profile Studio · Asset Modder
+· Scenario Lab**. `?tune=1` is kept as an alias rather than retired. Preact JSX is
+configured through Vite 8's **`oxc.jsx`** — Vite 8 replaced the esbuild transform with
+oxc, so the familiar `esbuild.jsx` key no longer exists.
+
+**Profile Studio** — an SVG cross-section canvas ruled at 1 m with the centre at (0,0),
+preset elements dragged by their vertex handles, and a live 3D sweep.
+`render/studioProfile.ts` derives the swept silhouette as the upper envelope walked
+left-to-right then the lower envelope back — a true polygon union is unnecessary because
+a cross-section is single-valued the way terrain is, so the envelope *is* the silhouette,
+exactly, for anything that can actually be built. Frames use **world up, not a Frenet
+normal**: a road banks with the terrain, not with its own plan curvature, and a Frenet
+frame rolls the section upside down through an inflection point. The preview sweeps along
+an S-curve with an elevated run, because a straight test piece hides both the failures
+that matter (fan-out at curvature, frame flip at the inflection).
+
+`MATERIAL_CHANNELS` lives **in the schema**, so "asphalt takes friction and decay, a curb
+takes structural integrity" is a validated fact — a curb claiming friction is a parse
+error, not a value that silently does nothing. The editor reads the same map and only
+offers channels the material actually carries.
+
+**Asset Modder** — drag a `.glb`/`.gltf` in, click the mesh to drop anchor gizmos (axles,
+boarding doors, cargo nodes, particle emitters), fill in the `VehicleDef`, write a mod
+package. Anchors are **placed by clicking, not typed**: a boarding door written as
+`[0.8, 0.4, -1.2]` is unverifiable until something stands in the wrong place at runtime.
+Imported models are normalised to a fixed framed size so anchors mean the same thing
+whether the source was authored in centimetres or metres.
+`scripts/studio-mod-writer.mjs` is a Vite plugin with `apply: "serve"` — not a
+runtime-gated path but one that **doesn't exist in a production build at all** — writing
+`vehicle.json` plus the mesh into `public/mods/<mod_id>/`, with a download fallback.
+
+**A real gap closed on the way through:** `congestionWeight` has been modelled in
+`simulation/congestion.ts` since Module 7, but *nothing ever supplied a value* —
+`render/fleet.ts` never passed one, so every player vehicle took `createVehicle`'s
+default of 1 and an okada weighed exactly as much as a BRT, which is the precise thing
+§5's "an okada occupying the same road space as a bus is plainly wrong" exists to
+prevent. The catalog now carries real weights (0.3 okada → 2.2 BRT), fleet.ts threads
+them, and a content test asserts weight rises with capacity so it can't silently flatten
+again.
+
+**Deliberate deviation from the brief:** `runsOn` was specified as `road | rail`. It is
+left as free text. The committed schema and the whole existing catalog use it as the
+propulsion/fuel channel (all `"petrol"`, with an electric Modern-era bus as its
+documented reason to exist); road vs. rail is a property of the *segment* a vehicle
+routes over, not of the def. Narrowing it would invalidate every existing vehicle and
+delete a field already load-bearing for a later era. The tab says so where it's edited.
+
+### Boundaries
+`test/architecture-boundaries.test.ts` now also forbids `engine/` importing `ui/` and
+`dev/`. Both gained a lot more surface in this module — `ui/inspector.ts` reads engine
+state to build its panels and `dev/` authors content the engine consumes — so the
+pressure to close the loop the wrong way round is real now in a way it wasn't when `ui/`
+was four read-only text panels. `verify-prod-bundle.mjs` carries a forbidden string per
+studio surface; adding a tab means adding a string, or the gate stops being an assertion.
+
+### Live verification (Playwright vs. local Chrome, three separate runs)
+- **Game:** status strip reads correctly, `O` cycles the seven overlays with each one's
+  question shown, Tab switches to INSPECT, a map click resolves to a real inherited
+  segment and the Inspector renders its stats plus a priced maintenance action (₦23 for a
+  24.4-cell segment at 73% condition). Inspector starts hidden, as it must.
+- **Profile Studio:** selecting the curb exposes 4 drag handles; dragging one updates the
+  derived bank-to-bank width live (7.22 m → 9.9 m); adding ballast offers exactly decay
+  and structural integrity and no friction; export round-trips a valid `Profile2DDef`
+  with a 12-point outline.
+- **Asset Modder:** a minimal hand-built glTF drops and frames; two clicks place two axle
+  anchors and one places a boarding door at real surface coordinates; "Write mod package"
+  lands a schema-valid `vehicle.json` plus the mesh in `public/mods/<id>/`.
+
+No console errors in any run beyond the pre-existing harmless favicon 404.
+
+**Not done, and deliberately so:** authored profiles are not yet *applied* to built
+corridors — `Profile2DDef` is authored, validated and swept in the studio, but
+`render/network.ts` still draws segments as lines and decks. Wiring a profile onto a real
+corridor (and its `decayRateMultiplier` into `decaySegments`) is the natural next step and
+was outside this module's brief.
