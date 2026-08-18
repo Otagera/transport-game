@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { buildRoutingContext } from "@engine/simulation/routing";
 import { createVehicle, tickVehicle } from "@engine/simulation/vehicle";
 import type { GeneratedMap } from "@engine/map/types";
-import type { NodeQueues, SegmentTraffic } from "@engine/simulation/types";
+import type { NodeQueues, PickupEvent, SegmentTraffic } from "@engine/simulation/types";
 
 function fixtureMap(): GeneratedMap {
   return {
@@ -94,5 +94,23 @@ describe("tickVehicle", () => {
     const queues: NodeQueues = new Map([["a", new Map()]]);
     const traffic: Map<string, SegmentTraffic> = new Map();
     expect(() => tickVehicle(vehicle, queues, context, traffic, new Map(), 1)).not.toThrow();
+  });
+
+  test("records a pickup event for demand loaded during a tick, not at vehicle creation", () => {
+    const context = buildRoutingContext(fixtureMap());
+    const vehicle = createVehicle("v1", ["a", "b"], context, 4, 10); // no queues -- no initial load
+    const queues: NodeQueues = new Map([
+      ["a", new Map([["b:passengers", 6]])],
+      ["b", new Map()],
+    ]);
+    const traffic: Map<string, SegmentTraffic> = new Map();
+    const pickupEvents: PickupEvent[] = [];
+
+    // dt=2s covers both edges (a->b, then b->a) at speed 4 over length-4
+    // edges -- a full cyclic lap, so the vehicle reloads at "a" mid-tick,
+    // not at creation.
+    tickVehicle(vehicle, queues, context, traffic, new Map(), 2, new Map(), pickupEvents);
+
+    expect(pickupEvents).toEqual([{ nodeId: "a", kind: "passengers", amount: 6, lifecycle: "cyclic" }]);
   });
 });

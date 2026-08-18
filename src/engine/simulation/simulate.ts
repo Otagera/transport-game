@@ -5,11 +5,13 @@ import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from 
 import type { ParatransitState } from "../paratransit/types";
 import { reapCompletedParatransit, trySpawnParatransit, updateUnservedEMA } from "../paratransit/spawn";
 import type { EraModifiers } from "../eras/types";
+import { applyPromotion, demandMultiplierFor, updateGrowthState } from "../growth/state";
+import type { GrowthState, NodeDemandSample, PromotionEvent } from "../growth/types";
 import { generateDemandPairs } from "./demand";
 import { buildRoutingContext } from "./routing";
 import { computeSegmentLoads } from "./congestion";
 import { createVehicle, tickVehicle } from "./vehicle";
-import type { NodeQueues, SimulationState } from "./types";
+import type { NodeQueues, PickupEvent, SimulationState } from "./types";
 
 const QUEUE_CAP = 50;
 
@@ -32,23 +34,28 @@ export function createSimulation(map: GeneratedMap, vehicleSpecs: VehicleSpec[] 
   return { map, demand, queues, vehicles, segmentTraffic: new Map(), routing };
 }
 
-// `economy` and `paratransit` are optional and separate from
+// `economy`, `paratransit`, and `growth` are optional and separate from
 // SimulationState on purpose: engine/simulation stays about physical
 // movement, engine/economy about money, engine/paratransit about the
-// informal sector's own spawning -- this is the one place all three get
-// threaded together. `eraModifiers` is threaded the same way (docs/
-// rebuild-plan.md §6 Module 8): simulate.ts is the one integration point
-// that knows about eras at all -- economy/pathing/paratransit each take a
-// plain multiplier, never the EraModifiers type itself, so those
-// submodules stay decoupled from engine/eras.
+// informal sector's own spawning, engine/growth about tier promotion --
+// this is the one place all four get threaded together. `eraModifiers` is
+// threaded the same way (docs/rebuild-plan.md §6 Module 8): simulate.ts
+// is the one integration point that knows about eras at all --
+// economy/pathing/paratransit/growth each take a plain multiplier, never
+// the EraModifiers type itself, so those submodules stay decoupled from
+// engine/eras. Returns any promotions this tick produced (docs/
+// rebuild-plan.md §6 Module 9) so a caller that owns rendering can react
+// (re-render the map, show a notification) without engine/simulation
+// needing to know either exists.
 export function tick(
   state: SimulationState,
   dt: number,
   economy?: EconomyState,
   paratransit?: ParatransitState,
   eraModifiers?: EraModifiers,
-): void {
-  growQueues(state, dt, eraModifiers?.demand ?? 1);
+  growth?: GrowthState,
+): PromotionEvent[] {
+  const generatedByNode = growQueues(state, dt, eraModifiers?.demand ?? 1, growth);
   decaySegments(state.map, dt, eraModifiers?.decay ?? 1);
 
   // Computed once per tick, before any vehicle moves, so every vehicle
@@ -66,6 +73,7 @@ export function tick(
   // ever slips, since paratransit vehicles are never meant to touch
   // economy at all.
   let totalRevenueThisTick = 0;
+  const pickupEvents: PickupEvent[] = [];
   for (const vehicle of state.vehicles) {
     const deliveries = tickVehicle(
       vehicle,
@@ -75,6 +83,7 @@ export function tick(
       segmentLoads,
       dt,
       segmentConditions,
+      pickupEvents,
     );
     if (economy && vehicle.lifecycle !== "one-shot" && deliveries.length > 0) {
       totalRevenueThisTick += recordDeliveryRevenue(economy, vehicle.id, deliveries);
@@ -91,14 +100,58 @@ export function tick(
     trySpawnParatransit(paratransit, state, segmentLoads, eraModifiers?.paratransitPressure ?? 1);
     reapCompletedParatransit(paratransit, state);
   }
+
+  if (!growth) return [];
+
+  const samples = buildGrowthSamples(generatedByNode, pickupEvents);
+  const promotions = updateGrowthState(growth, samples, dt);
+  for (const promotion of promotions) {
+    applyPromotion(state.map, promotion);
+  }
+  return promotions;
 }
 
-function growQueues(state: SimulationState, dt: number, demandMultiplier: number): void {
+function buildGrowthSamples(generatedByNode: Map<string, number>, pickupEvents: PickupEvent[]): NodeDemandSample[] {
+  const playerServed = new Map<string, number>();
+  const paratransitServed = new Map<string, number>();
+  for (const event of pickupEvents) {
+    const target = event.lifecycle === "one-shot" ? paratransitServed : playerServed;
+    target.set(event.nodeId, (target.get(event.nodeId) ?? 0) + event.amount);
+  }
+
+  const samples: NodeDemandSample[] = [];
+  for (const [nodeId, generated] of generatedByNode) {
+    samples.push({
+      nodeId,
+      generated,
+      playerServed: playerServed.get(nodeId) ?? 0,
+      paratransitServed: paratransitServed.get(nodeId) ?? 0,
+    });
+  }
+  return samples;
+}
+
+// Returns total demand generated per origin node this tick (all kinds
+// combined) -- growth's service ratio needs this as the denominator, and
+// computing it here (where the multiplier is already being applied) means
+// there's exactly one place growth's rate ever gets folded into a
+// generated amount, not two that could drift apart.
+function growQueues(
+  state: SimulationState,
+  dt: number,
+  demandMultiplier: number,
+  growth?: GrowthState,
+): Map<string, number> {
+  const generatedByNode = new Map<string, number>();
   for (const pair of state.demand) {
     const nodeQueue = state.queues.get(pair.from);
     if (!nodeQueue) continue;
+    const growthMultiplier = growth ? demandMultiplierFor(growth, pair.from) : 1;
     const key = `${pair.to}:${pair.kind}`;
     const current = nodeQueue.get(key) ?? 0;
-    nodeQueue.set(key, Math.min(QUEUE_CAP, current + pair.rate * demandMultiplier * dt));
+    const amount = pair.rate * demandMultiplier * growthMultiplier * dt;
+    nodeQueue.set(key, Math.min(QUEUE_CAP, current + amount));
+    generatedByNode.set(pair.from, (generatedByNode.get(pair.from) ?? 0) + amount);
   }
+  return generatedByNode;
 }

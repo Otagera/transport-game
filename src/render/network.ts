@@ -93,7 +93,11 @@ export function createNetworkGroup(map: GeneratedMap): NetworkHandle {
 
     for (const node of current.nodes) {
       const position = gridToWorld(node.x, node.y, width, height);
-      const radius = node.kind === "vertex" ? 0.12 : 0.25;
+      // A promoted village growing into a settlement (docs/rebuild-plan.md
+      // §6 Module 9) must be visible on the map without reading a number
+      // -- the color change alone is subtle, so settlement also renders
+      // larger than village.
+      const radius = node.kind === "vertex" ? 0.12 : node.kind === "settlement" ? 0.32 : 0.25;
       const geometry = new THREE.SphereGeometry(radius, 12, 8);
       const material = new THREE.MeshStandardMaterial({ color: NODE_COLORS[node.kind] });
       const mesh = new THREE.Mesh(geometry, material);

@@ -1,4 +1,4 @@
-import type { CargoKind, DeliveryEvent, LoadEntry, NodeQueues, RoutingContext, SegmentTraffic, Vehicle } from "./types";
+import type { CargoKind, DeliveryEvent, LoadEntry, NodeQueues, PickupEvent, RoutingContext, SegmentTraffic, Vehicle } from "./types";
 import { findPath } from "./routing";
 import { congestionFactor } from "./congestion";
 import { conditionSpeedFactor } from "../map/decay";
@@ -30,7 +30,11 @@ function isCompatibleCargo(carries: Vehicle["carries"], kind: CargoKind): boolea
 // Opportunistic loading, no manifests (docs/rebuild-plan.md §5): at each
 // node the vehicle loads queued demand whose destination lies ahead on its
 // remaining route -- not a full lookahead across the wrap-around.
-function loadAt(vehicle: Vehicle, nodeId: string, queues: NodeQueues): void {
+// pickupEvents is optional and only populated by tickVehicle's ongoing
+// loads (docs/rebuild-plan.md §6 Module 9) -- a vehicle's one-time initial
+// load at creation doesn't feed growth's service-ratio accounting, since
+// that's a bootstrap event, not sustained service.
+function loadAt(vehicle: Vehicle, nodeId: string, queues: NodeQueues, pickupEvents?: PickupEvent[]): void {
   const nodeQueue = queues.get(nodeId);
   if (!nodeQueue) {
     return;
@@ -53,6 +57,7 @@ function loadAt(vehicle: Vehicle, nodeId: string, queues: NodeQueues): void {
     vehicle.cargo.push({ from: nodeId, to: destination, kind, amount: take });
     nodeQueue.set(key, amount - take);
     free -= take;
+    pickupEvents?.push({ nodeId, kind, amount: take, lifecycle: vehicle.lifecycle });
   }
 }
 
@@ -189,6 +194,7 @@ export function tickVehicle(
   segmentLoads: Map<string, number>,
   dt: number,
   segmentConditions: Map<string, number> = new Map(),
+  pickupEvents: PickupEvent[] = [],
 ): DeliveryEvent[] {
   const pathLength = vehicle.path.length;
   if (pathLength < 2 || hasCompletedTrip(vehicle)) {
@@ -228,7 +234,7 @@ export function tickVehicle(
 
       const arrivedAtEnd = vehicle.lifecycle === "one-shot" && vehicle.pathIndex === pathLength - 1;
       if (!arrivedAtEnd) {
-        loadAt(vehicle, toNode, queues);
+        loadAt(vehicle, toNode, queues, pickupEvents);
       }
 
       if (segmentId) {

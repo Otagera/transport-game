@@ -6,7 +6,7 @@ conversation should read first to know where things stand, before diving into so
 `git log`. Pair with [architecture.md](architecture.md) for the stable "how it's shaped"
 reference.
 
-Current test count: **148 passing** across 30 files (`bun test`). All of typecheck /
+Current test count: **161 passing** across 31 files (`bun test`). All of typecheck /
 test / build / verify:bundle pass as of the last commit on this list.
 
 ## Module 0 — Foundation ✅
@@ -142,7 +142,82 @@ build-cost multiplier's receipt-consistency, rail gating's cost-panel hint, the
 obsolescence ramp/cap) are unit-tested but not separately live-verified beyond the
 wiring pattern already proven by the transition run.
 
-## Module 9 — Growth (not started)
+## Module 9 — Growth ✅
+`engine/growth/{types,state}.ts`: each village/settlement node gets a `NodeGrowthState`
+with a demand multiplier `D` (starts at 1) that grows via a logistic ODE
+(`dD/dt = growthRate * D * (1 - D/D_max)`), bounded by a per-tier `D_max`
+(`village: 2.5, settlement: 6`, independent constants, not derived from `D` itself).
+`D` feeds back into `simulate.ts`'s `growQueues` as a per-origin-node multiplier on
+`pair.rate` — "growth scales the rate, not the graph," demand pair topology never
+changes.
+
+**Service ratio, computed correctly on the second attempt.** `growthRate` is gated by a
+smoothstep on a rolling, paratransit-discounted service ratio S̄. The first
+implementation EMA'd the *per-tick clamped ratio* (`servedThisTick / generatedThisTick`,
+clamped to `[0,1]` before averaging) — this looked fine against synthetic
+100%-every-tick samples but **silently failed against real vehicle behavior**: a vehicle
+visiting a node every few seconds delivers service in a burst that dwarfs that single
+tick's tiny generated amount, so the clamp threw away nearly all of the burst's weight,
+converging S̄ to roughly `(1 tick serving) / (ticks per round trip)` — a live integration
+test with a real two-node map, a real route, and real vehicles caught this
+(`playerServiceEMA` stuck around 0.01–0.015, permanently below the 0.02 gate, no matter
+how well the route was actually served). Fixed by EMA-ing the **raw rates** (generated,
+player-served, paratransit-served — each `amount/dt`, smoothed independently) and taking
+the ratio of the smoothed rates afterward, never smoothing an already-computed ratio.
+Confirmed fixed both by the same live scenario and a synthetic regression test
+(`test/simulation-integration.test.ts`).
+
+**A second real bug, also caught by testing before it shipped:** the promotion
+threshold was originally `D_MAX.village * PROMOTION_THRESHOLD_FRACTION` = `2.5 * 0.3 =
+0.75` — below the starting multiplier of `1`, so *every* village promoted to settlement
+on its very first tick regardless of service. Fixed by measuring the threshold as a
+fraction of the *growable range above the starting multiplier*
+(`1 + 0.3 * (2.5 - 1) = 1.45`), which is safe by construction for any fraction `< 1`.
+
+**Necessary condition, not a weighted contributor:** `playerServiceEMA` (rolling,
+player-only) gates growth to exactly zero if it's ever at/below `PLAYER_SERVICE_EPSILON
+= 0.02`, independent of how high paratransit's discounted contribution pushes the
+combined S̄. Paratransit counts toward S̄ at `PARATRANSIT_SERVICE_DISCOUNT = 0.5`.
+
+**Promotion is a `NodeKind` change, nothing more elaborate:** `village` → `settlement` is
+already the top of the existing kind hierarchy, so `engine/growth/types.ts`'s
+`GrowableTier` just mirrors it — no new tier enum. `applyPromotion` mutates
+`GeneratedMap.nodes[i].kind` in place (same pattern as `decaySegments` mutating
+`Segment.condition`), which is what makes the promotion show up as a real map change for
+free once the caller re-renders from that same map.
+
+**Visible on the map without reading a number:** `render/network.ts` already recolors
+nodes by `kind` on every `update()` call; a promoted settlement additionally renders
+larger (`0.25 → 0.32` radius) as a second, unambiguous cue. `main.ts`'s
+`handlePromotions` re-runs `networkHandle.update(simulation.map)` and reuses the
+existing `ui/eraBanner.ts` component (already generic — "show a message for 4s," not
+era-specific) for a `"<nodeId> grew into a settlement!"` notification.
+
+**`tick()` signature change:** now takes an optional `growth?: GrowthState` and
+**returns `PromotionEvent[]`** (previously `void`) so a rendering-aware caller can react
+without `engine/simulation` needing to know rendering exists. `vehicle.ts`'s
+`tickVehicle` gained an optional `pickupEvents: PickupEvent[] = []` out-parameter
+(same default-empty-array pattern as Module 8's `segmentConditions`) so `loadAt` calls
+during ongoing ticks (not the one-time initial load at vehicle creation) report what was
+picked up, from where, and by which vehicle lifecycle — this is what growth's per-node
+samples are built from.
+
+**Live-verified** (Playwright vs. local Chrome, ~90s real-time run): a temporary debug
+hook (added, used, then fully removed before commit — same discipline as Module 8's
+palette check) built one real passenger route and one real goods route between an
+actual village and its nearest settlement on the live bootstrapped map, bought real
+vehicles for both, and sampled `growth` state every 15s. `demandMultiplier` climbed
+monotonically `1.00 → 1.02 → 1.07 → 1.20 → 1.30 → 1.37 → 1.41` over 90 seconds under
+partial-but-real service (`playerServiceEMA` fluctuating ~0.10–0.22, since the village
+still generates demand toward the 13 other inhabited nodes this pair of routes doesn't
+serve) — did not reach the promotion threshold in this run, which is expected on the
+full multi-node map without more routes; a dedicated two-node synthetic scenario (in
+`test/simulation-integration.test.ts`) confirms promotion itself fires correctly and
+`D` continues climbing past it toward the settlement's higher cap. Era transitions,
+economy, and paratransit all continued running correctly concurrently throughout. No
+console errors beyond the pre-existing harmless favicon 404.
+
+## Module 10 — Save/load and scenarios (not started)
 Per `rebuild-plan.md`'s build order, comes next.
 
 ## Module 10 — Save/load and scenarios (not started)

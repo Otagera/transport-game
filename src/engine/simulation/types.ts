@@ -57,6 +57,19 @@ export interface DeliveryEvent {
   amount: number;
 }
 
+// Module 9 (Growth): what engine/growth needs to compute a per-node
+// service ratio -- how much of a node's generated demand actually got
+// picked up, and by which kind of vehicle (player's cyclic fleet vs.
+// paratransit's one-shot fleet get weighted differently there). Lives
+// here, not in engine/growth, so engine/simulation stays the one module
+// that knows about vehicle movement -- growth only ever reads this.
+export interface PickupEvent {
+  nodeId: string;
+  kind: CargoKind;
+  amount: number;
+  lifecycle: Vehicle["lifecycle"];
+}
+
 // Traffic is tracked per segment, not per corridor -- a segment is the
 // actual typed/levelled/maintained traversable unit (docs/rebuild-plan.md
 // §5), so it's what "which link is the bottleneck" needs to point at.

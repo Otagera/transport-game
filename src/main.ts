@@ -9,6 +9,8 @@ import { createEconomyState } from "@engine/economy/state";
 import { computeBurnRate, computeRoutePnL } from "@engine/economy/report";
 import { advanceEraTimeline, createEraTimeline, currentEra, type EraTransition } from "@engine/eras/timeline";
 import type { EraDef } from "@engine/eras/types";
+import { createGrowthState } from "@engine/growth/state";
+import type { PromotionEvent } from "@engine/growth/types";
 import { createScene } from "@render/scene";
 import { createDefaultStyleSpec } from "@render/style";
 import { createNetworkGroup } from "@render/network";
@@ -61,6 +63,7 @@ async function bootstrap(): Promise<void> {
   const simulation = createSimulation(map, []);
   const economy = createEconomyState(FARE_TABLE, STARTING_FUNDS);
   const paratransit = createParatransitState();
+  const growth = createGrowthState(map);
 
   const fleetRenderer = createVehicleFleetRenderer();
   sceneHandle.scene.add(fleetRenderer.group);
@@ -105,6 +108,22 @@ async function bootstrap(): Promise<void> {
     eraBanner.show(`Era: ${toContent.name}`);
   }
 
+  // Growth must be visible on the map without reading a number (docs/
+  // rebuild-plan.md §5 Module 9): tick() already mutated the promoted
+  // node's kind in place on `simulation.map`, so re-running the network
+  // renderer from that same map is what turns it into a marker/color
+  // change -- no separate "apply promotion visually" step needed.
+  function handlePromotions(promotions: PromotionEvent[]): void {
+    networkHandle.update(simulation.map);
+    const [first] = promotions;
+    if (!first) return;
+    const message =
+      promotions.length === 1
+        ? `${first.nodeId} grew into a settlement!`
+        : `${promotions.length} villages grew into settlements!`;
+    eraBanner.show(message);
+  }
+
   let pnlVisible = false;
   window.addEventListener("keydown", (event) => {
     if (event.key.toLowerCase() === "p") {
@@ -126,7 +145,9 @@ async function bootstrap(): Promise<void> {
     last = now;
 
     accumulator.advance(elapsed, (dt) => {
-      tick(simulation, dt, economy, paratransit, currentEra(eraTimeline).modifiers);
+      const promotions = tick(simulation, dt, economy, paratransit, currentEra(eraTimeline).modifiers, growth);
+      if (promotions.length > 0) handlePromotions(promotions);
+
       const transition = advanceEraTimeline(eraTimeline, dt);
       if (transition) handleEraTransition(transition);
     });
