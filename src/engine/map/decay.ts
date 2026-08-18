@@ -20,3 +20,18 @@ export function decaySegments(map: GeneratedMap, dt: number, decayMultiplier: nu
 export function conditionSpeedFactor(condition: number): number {
   return MIN_CONDITION_SPEED_FACTOR + (1 - MIN_CONDITION_SPEED_FACTOR) * condition;
 }
+
+// The other half of decay: maintenance buys condition back. Returns the
+// deficit that was actually restored (0 if the segment is already at
+// full condition or doesn't exist), which is what the caller prices via
+// pathing/cost.ts's maintenanceCost -- never the other way round, since
+// pricing a repair that didn't happen is exactly the drift the cost rule
+// exists to prevent. Mutates in place, matching decaySegments.
+export function restoreSegmentCondition(map: GeneratedMap, segmentId: string): number {
+  const segment = map.segments.find((candidate) => candidate.id === segmentId);
+  if (!segment) return 0;
+  const deficit = 1 - segment.condition;
+  if (deficit <= 0) return 0;
+  segment.condition = 1;
+  return deficit;
+}

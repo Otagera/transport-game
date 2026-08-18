@@ -13,10 +13,22 @@ import type { SceneHandle } from "./scene";
 
 const SNAP_RADIUS = 1.2;
 
+export type InteractionMode = "build" | "inspect";
+
 export interface AuthoringController {
   dispose: () => void;
   getMap: () => GeneratedMap;
   reconcileEraGating: () => void;
+  /** Drops any in-progress draw and hides the cost panel. */
+  cancelDraw: () => void;
+  /**
+   * Swaps in a map changed by something other than authoring (a corridor
+   * prune from the Inspector), pushing the previous one onto the same
+   * snapshot history -- so Ctrl/Cmd+Z undoes a prune exactly as it undoes
+   * a build. Two separate undo stacks for "things that changed the map"
+   * would be a trap.
+   */
+  applyMapChange: (next: GeneratedMap) => void;
 }
 
 export interface BuildEvent {
@@ -45,6 +57,12 @@ export function createAuthoringController(
   onMapChanged?: (map: GeneratedMap) => void,
   getBuildCostMultiplier: () => number = () => 1,
   getRailAvailable: () => boolean = () => true,
+  // Build and inspect both want the click and most of the keyboard. Rather
+  // than inventing modifier-click conventions, the two are explicit modes
+  // and this controller simply stands down in "inspect" -- including its
+  // keyboard shortcuts, since `1`/`2`/`3`/`R`/Enter mean nothing while
+  // inspecting and would silently mutate the pending draw.
+  getInteractionMode: () => InteractionMode = () => "build",
 ): AuthoringController {
   let map = initialMap;
   const history: GeneratedMap[] = [];
@@ -141,10 +159,12 @@ export function createAuthoringController(
   }
 
   function handlePointerMove(event: PointerEvent): void {
+    if (getInteractionMode() !== "build") return;
     refreshPreview(pointerToGrid(event));
   }
 
   function handleClick(event: PointerEvent): void {
+    if (getInteractionMode() !== "build") return;
     const grid = pointerToGrid(event);
     if (!grid) return;
     // Wet waypoints must not create nodes (docs/rebuild-plan.md §5) -- no
@@ -198,6 +218,7 @@ export function createAuthoringController(
   }
 
   function handleKeyDown(event: KeyboardEvent): void {
+    if (getInteractionMode() !== "build") return;
     if (event.key === "Escape") {
       cancelDraw();
     } else if (event.key === "Enter") {
@@ -224,6 +245,15 @@ export function createAuthoringController(
     }
   }
 
+  function applyMapChange(next: GeneratedMap): void {
+    history.push(cloneMap(map));
+    map = next;
+    networkHandle.update(map);
+    onMapChanged?.(map);
+    waypoints.length = 0;
+    refreshPreview(null);
+  }
+
   // A designed absence must be visible in advance, not ambush the player
   // (docs/rebuild-plan.md §5) -- if rail becomes unavailable mid-draw
   // (era transitions while the player is mid-authoring), fall back to
@@ -248,5 +278,5 @@ export function createAuthoringController(
     window.removeEventListener("keydown", handleKeyDown);
   }
 
-  return { dispose, getMap: () => map, reconcileEraGating };
+  return { dispose, getMap: () => map, reconcileEraGating, cancelDraw, applyMapChange };
 }

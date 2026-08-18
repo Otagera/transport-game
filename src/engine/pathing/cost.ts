@@ -70,3 +70,19 @@ export function sumStepCosts(steps: StepCost[], newNodeCount: number, buildCostM
   const scaledNodes = nodes * buildCostMultiplier;
   return { base, gradient, water, density, nodes: scaledNodes, total: base + gradient + water + density + scaledNodes };
 }
+
+// Maintenance pricing lives here for the same reason build pricing does
+// (docs/rebuild-plan.md §5, architecture.md hard rule 3): this module is
+// the only place geometry is allowed to become currency. Restoring a
+// segment is priced off the same BASE_COST_PER_CELL its construction was,
+// scaled by how much condition is actually being bought back -- so a
+// nearly-new segment costs nearly nothing to maintain and a floored one
+// costs a real fraction of rebuilding it. Deliberately ignores gradient
+// and density: resurfacing an existing alignment doesn't re-pay for the
+// terrain it was already cut through.
+export const MAINTENANCE_FRACTION_OF_BUILD = 0.35;
+
+export function maintenanceCost(spanCells: number, conditionDeficit: number): number {
+  const deficit = Math.max(0, Math.min(1, conditionDeficit));
+  return BASE_COST_PER_CELL * spanCells * deficit * MAINTENANCE_FRACTION_OF_BUILD;
+}

@@ -3,42 +3,65 @@ import { loadContent } from "@content/loader";
 import { EraListSchema, VehicleDefListSchema } from "@content/schema";
 import type { Era } from "@content/schema";
 import { generateMap } from "@engine/map/generate";
+import { pruneCorridor } from "@engine/map/prune";
+import { restoreSegmentCondition } from "@engine/map/decay";
+import { maintenanceCost } from "@engine/pathing/cost";
 import { createSimulation, tick } from "@engine/simulation/simulate";
+import { computeStranded } from "@engine/simulation/reachability";
 import { createParatransitState } from "@engine/paratransit/types";
-import { createEconomyState } from "@engine/economy/state";
+import { createEconomyState, sellVehicle } from "@engine/economy/state";
 import { computeBurnRate, computeRoutePnL } from "@engine/economy/report";
 import { advanceEraTimeline, createEraTimeline, currentEra, type EraTransition } from "@engine/eras/timeline";
 import type { EraDef } from "@engine/eras/types";
 import { createGrowthState } from "@engine/growth/state";
 import type { PromotionEvent } from "@engine/growth/types";
 import { createScene } from "@render/scene";
+import { createCameraController } from "@render/camera";
 import { createDefaultStyleSpec } from "@render/style";
 import { createNetworkGroup } from "@render/network";
+import { createOverlayLayer } from "@render/overlayLayer";
 import { createVehicleFleetRenderer } from "@render/vehicles";
-import { createAuthoringController } from "@render/authoring";
+import { createAuthoringController, type InteractionMode } from "@render/authoring";
 import { createFleetController } from "@render/fleet";
+import { pickAt, selectionGridPosition } from "@render/picking";
+import { gridToWorld, worldToGrid } from "@render/gridCoords";
 import { createStatusBar } from "@ui/statusBar";
 import { createPnLPanel } from "@ui/pnlPanel";
 import { createEraBanner } from "@ui/eraBanner";
+import { createInspector } from "@ui/inspector";
+import { createOverlayController } from "@ui/overlays";
+import { createSelectionStore } from "@ui/selection";
+import * as THREE from "three";
 
 const DEFAULT_MAP_SEED = 1;
 const STARTING_FUNDS = 1000;
 const FARE_TABLE = { passengers: 5, produce: 3, supplies: 2 };
+// Reachability is an all-pairs A* sweep; it answers a question that
+// changes only when the graph does, so it is refreshed on a slow timer
+// rather than per frame.
+const STRANDED_REFRESH_SECONDS = 2;
 
 function toEraDef(era: Era): EraDef {
   return { id: era.id, order: era.order, durationSeconds: era.durationSeconds, modifiers: era.modifiers, railAvailable: era.railAvailable };
 }
 
+function requireElement(id: string): HTMLDivElement {
+  const el = document.querySelector<HTMLDivElement>(`#${id}`);
+  if (!el) throw new Error(`Missing #${id} in index.html`);
+  return el;
+}
+
 async function bootstrap(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>("#scene");
-  const statusEl = document.querySelector<HTMLDivElement>("#status");
-  const costPanelEl = document.querySelector<HTMLDivElement>("#cost-panel");
-  const fleetHintEl = document.querySelector<HTMLDivElement>("#fleet-hint");
-  const pnlPanelEl = document.querySelector<HTMLDivElement>("#pnl-panel");
-  const eraBannerEl = document.querySelector<HTMLDivElement>("#era-banner");
-  if (!canvas || !statusEl || !costPanelEl || !fleetHintEl || !pnlPanelEl || !eraBannerEl) {
-    throw new Error("Missing a required element in index.html");
-  }
+  if (!canvas) throw new Error("Missing #scene in index.html");
+  const statusEl = requireElement("status");
+  const costPanelEl = requireElement("cost-panel");
+  const fleetHintEl = requireElement("fleet-hint");
+  const pnlPanelEl = requireElement("pnl-panel");
+  const eraBannerEl = requireElement("era-banner");
+  const inspectorEl = requireElement("inspector");
+  const overlayPickerEl = requireElement("overlay-picker");
+  const modeHintEl = requireElement("mode-hint");
 
   const [eras, vehicleCatalog] = await Promise.all([
     loadContent(EraListSchema, "/content/eras.json"),
@@ -47,18 +70,19 @@ async function bootstrap(): Promise<void> {
   const eraContentById = new Map(eras.map((era) => [era.id, era]));
   const eraTimeline = createEraTimeline(eras.map(toEraDef));
   const currentEraContent = (): Era => eraContentById.get(currentEra(eraTimeline).id)!;
-  const eraBanner = createEraBanner(eraBannerEl);
 
   const style = createDefaultStyleSpec();
   const sceneHandle = createScene(canvas, style);
+  const cameraController = createCameraController(sceneHandle.camera, sceneHandle.controls);
   const accumulator = new Accumulator(SIM_DT);
   const statusBar = createStatusBar(statusEl);
-  const pnlPanel = createPnLPanel(pnlPanelEl);
 
   const map = generateMap(DEFAULT_MAP_SEED);
   const groundMesh = sceneHandle.setTerrain(map);
   const networkHandle = createNetworkGroup(map);
   sceneHandle.scene.add(networkHandle.group);
+  const overlayLayer = createOverlayLayer();
+  sceneHandle.scene.add(overlayLayer.group);
 
   const simulation = createSimulation(map, []);
   const economy = createEconomyState(FARE_TABLE, STARTING_FUNDS);
@@ -67,6 +91,12 @@ async function bootstrap(): Promise<void> {
 
   const fleetRenderer = createVehicleFleetRenderer();
   sceneHandle.scene.add(fleetRenderer.group);
+
+  // The one piece of state four homes have to agree on
+  // (docs/module-11-studio-and-ia.md §1).
+  const selection = createSelectionStore();
+  const eraBanner = createEraBanner(eraBannerEl, (subject) => selection.select(subject));
+  const pnlPanel = createPnLPanel(pnlPanelEl, (vehicleId) => selection.select({ kind: "vehicle", id: vehicleId }));
 
   const fleetController = createFleetController(
     simulation,
@@ -78,6 +108,12 @@ async function bootstrap(): Promise<void> {
     () => currentEra(eraTimeline).id,
   );
 
+  // Build and inspect compete for the click and most of the keyboard, so
+  // they are explicit modes rather than modifier conventions. Tab toggles;
+  // the mode is always on screen, since a mode you can't see is a mode
+  // that eats your input.
+  let interactionMode: InteractionMode = "build";
+
   const authoringController = createAuthoringController(
     sceneHandle,
     groundMesh,
@@ -88,7 +124,64 @@ async function bootstrap(): Promise<void> {
     (changedMap) => fleetController.handleMapChanged(changedMap),
     () => currentEraContent().modifiers.buildCost,
     () => currentEraContent().railAvailable,
+    () => interactionMode,
   );
+
+  let stranded: ReadonlySet<string> = new Set<string>();
+  let sinceStrandedRefresh = Infinity;
+
+  const inspector = createInspector(
+    inspectorEl,
+    selection,
+    {
+      simulation: () => simulation,
+      economy: () => economy,
+      growth: () => growth,
+      catalog: () => vehicleCatalog,
+      stranded: () => stranded,
+    },
+    {
+      sellVehicle(vehicleId: string): void {
+        const index = simulation.vehicles.findIndex((vehicle) => vehicle.id === vehicleId);
+        if (index === -1) return;
+        simulation.vehicles.splice(index, 1);
+        sellVehicle(economy, vehicleId);
+        selection.clear();
+      },
+      pruneCorridor(corridorId: string): void {
+        // Routed through the authoring controller rather than applied
+        // directly, so the prune lands on the same snapshot undo stack a
+        // build does.
+        authoringController.applyMapChange(pruneCorridor(authoringController.getMap(), corridorId));
+        selection.clear();
+      },
+      maintainSegment(segmentId: string): void {
+        const current = authoringController.getMap();
+        const segment = current.segments.find((candidate) => candidate.id === segmentId);
+        if (!segment) return;
+        const from = current.nodes.find((node) => node.id === segment.fromNodeId);
+        const to = current.nodes.find((node) => node.id === segment.toNodeId);
+        const span = from && to ? Math.hypot(from.x - to.x, from.y - to.y) : 0;
+        // Restore first, price the deficit that was actually bought back
+        // -- never price a repair that didn't happen.
+        const deficit = restoreSegmentCondition(current, segmentId);
+        economy.funds -= maintenanceCost(span, deficit);
+      },
+    },
+  );
+
+  const overlayController = createOverlayController(overlayPickerEl, (id) => overlayLayer.setOverlay(id));
+
+  // Select-and-focus: every route into the Inspector -- list row, moment,
+  // map click, inspector link -- flies the camera, so selection always
+  // means "and here it is."
+  selection.subscribe((next) => {
+    if (!next) return;
+    const grid = selectionGridPosition(next, authoringController.getMap(), simulation.vehicles);
+    if (!grid) return;
+    const { width, height } = authoringController.getMap().terrain;
+    cameraController.focusOn(gridToWorld(grid.x, grid.y, width, height));
+  });
 
   // Cheap, high-leverage visual era identity (docs/rebuild-plan.md §5):
   // background + fill light tint from the era's palette. Applied once at
@@ -109,10 +202,12 @@ async function bootstrap(): Promise<void> {
   }
 
   // Growth must be visible on the map without reading a number (docs/
-  // rebuild-plan.md §5 Module 9): tick() already mutated the promoted
+  // rebuild-plan.md §6 Module 9): tick() already mutated the promoted
   // node's kind in place on `simulation.map`, so re-running the network
   // renderer from that same map is what turns it into a marker/color
-  // change -- no separate "apply promotion visually" step needed.
+  // change -- no separate "apply promotion visually" step needed. The
+  // moment now carries the promoted node as its subject, so the
+  // notification is a route into the Inspector rather than a dead end.
   function handlePromotions(promotions: PromotionEvent[]): void {
     networkHandle.update(simulation.map);
     const [first] = promotions;
@@ -121,14 +216,52 @@ async function bootstrap(): Promise<void> {
       promotions.length === 1
         ? `${first.nodeId} grew into a settlement!`
         : `${promotions.length} villages grew into settlements!`;
-    eraBanner.show(message);
+    eraBanner.show(message, { kind: "node", id: first.nodeId });
   }
+
+  function setInteractionMode(next: InteractionMode): void {
+    if (next === interactionMode) return;
+    interactionMode = next;
+    if (next === "inspect") authoringController.cancelDraw();
+    renderModeHint();
+  }
+
+  function renderModeHint(): void {
+    modeHintEl.textContent =
+      interactionMode === "build"
+        ? "BUILD · Tab to inspect · O overlay"
+        : "INSPECT · click an entity · Tab to build · O overlay · Esc deselect";
+  }
+  renderModeHint();
 
   let pnlVisible = false;
   window.addEventListener("keydown", (event) => {
-    if (event.key.toLowerCase() === "p") {
+    const key = event.key.toLowerCase();
+    if (key === "p") {
       pnlVisible = !pnlVisible;
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      setInteractionMode(interactionMode === "build" ? "inspect" : "build");
+    } else if (key === "o") {
+      overlayController.cycle();
+    } else if (event.key === "Escape" && interactionMode === "inspect") {
+      selection.clear();
     }
+  });
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  canvas.addEventListener("click", (event) => {
+    if (interactionMode !== "inspect") return;
+    const rect = sceneHandle.renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, sceneHandle.camera);
+    const hits = raycaster.intersectObject(groundMesh, false);
+    if (hits.length === 0) return;
+    const currentMap = authoringController.getMap();
+    const grid = worldToGrid(hits[0]!.point.x, hits[0]!.point.z, currentMap.terrain.width, currentMap.terrain.height);
+    selection.select(pickAt(grid, currentMap, simulation.vehicles));
   });
 
   window.addEventListener("resize", sceneHandle.resize);
@@ -160,19 +293,46 @@ async function bootstrap(): Promise<void> {
       timeSinceSample = 0;
     }
 
+    sinceStrandedRefresh += elapsed;
+    if (sinceStrandedRefresh >= STRANDED_REFRESH_SECONDS) {
+      sinceStrandedRefresh = 0;
+      stranded = computeStranded(simulation.demand, simulation.routing);
+    }
+
     const burnRate = computeBurnRate(economy);
     statusBar.render({
-      tick: Math.round(economy.elapsedSeconds / SIM_DT),
-      fps,
       era: currentEraContent().name,
       funds: economy.funds,
       incomePerDay: burnRate.incomePerDay,
       costPerDay: burnRate.costPerDay,
       netPerDay: burnRate.netPerDay,
       paratransitCount: simulation.vehicles.filter((v) => v.lifecycle === "one-shot").length,
+      diagnostics: import.meta.env.DEV ? { tick: Math.round(economy.elapsedSeconds / SIM_DT), fps } : undefined,
     });
-    pnlPanel.render(pnlVisible, computeRoutePnL(economy));
 
+    const active = selection.get();
+    pnlPanel.render(pnlVisible, computeRoutePnL(economy), active?.kind === "vehicle" ? active.id : null);
+    inspector.render();
+
+    const overlayActive = overlayController.getActive() !== "none";
+    networkHandle.updateSignals({
+      segmentTraffic: simulation.segmentTraffic,
+      selection: active,
+      dimmed: overlayActive,
+    });
+    overlayLayer.update(
+      {
+        map: authoringController.getMap(),
+        vehicles: simulation.vehicles,
+        queues: simulation.queues,
+        routing: simulation.routing,
+        growth,
+        stranded,
+      },
+      elapsed,
+    );
+
+    cameraController.update(elapsed);
     fleetRenderer.update(simulation.vehicles, simulation.map);
     sceneHandle.render();
     requestAnimationFrame(frame);

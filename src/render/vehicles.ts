@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { Vehicle } from "../engine/simulation/types";
 import type { GeneratedMap } from "../engine/map/types";
 import { gridToWorld } from "./gridCoords";
+import { vehicleGridPosition } from "./picking";
 
 export interface VehicleFleetHandle {
   group: THREE.Group;
@@ -31,7 +32,6 @@ export function createVehicleFleetRenderer(): VehicleFleetHandle {
   const meshByVehicleId = new Map<string, THREE.Mesh>();
 
   function update(vehicles: Vehicle[], map: GeneratedMap): void {
-    const nodeById = new Map(map.nodes.map((node) => [node.id, node]));
     const seen = new Set<string>();
 
     for (const vehicle of vehicles) {
@@ -47,17 +47,12 @@ export function createVehicleFleetRenderer(): VehicleFleetHandle {
         meshByVehicleId.set(vehicle.id, mesh);
       }
 
-      const pathLength = vehicle.path.length;
-      if (pathLength < 2 || vehicle.pathIndex >= pathLength) continue;
-      const fromIndex = (vehicle.pathIndex - 1 + pathLength) % pathLength;
-      const fromNode = nodeById.get(vehicle.path[fromIndex]!);
-      const toNode = nodeById.get(vehicle.path[vehicle.pathIndex]!);
-      if (!fromNode || !toNode) continue;
-
-      const a = gridToWorld(fromNode.x, fromNode.y, map.terrain.width, map.terrain.height);
-      const b = gridToWorld(toNode.x, toNode.y, map.terrain.width, map.terrain.height);
-      const t = vehicle.edgeProgress;
-      mesh.position.set(a.x + (b.x - a.x) * t, 0.4, a.z + (b.z - a.z) * t);
+      // Position comes from the same function picking uses, so the
+      // marker you see and the thing you click can never disagree.
+      const grid = vehicleGridPosition(vehicle, map);
+      if (!grid) continue;
+      const world = gridToWorld(grid.x, grid.y, map.terrain.width, map.terrain.height);
+      mesh.position.set(world.x, 0.4, world.z);
     }
 
     for (const [id, mesh] of meshByVehicleId) {

@@ -1,10 +1,23 @@
 import * as THREE from "three";
 import type { GeneratedMap, NodeKind } from "../engine/map/types";
+import { computeBottleneckMetrics } from "../engine/simulation/bottleneck";
+import type { SegmentTraffic } from "../engine/simulation/types";
+import type { Selection } from "../ui/selection";
 import { gridToWorld } from "./gridCoords";
+
+export interface NetworkSignalInput {
+  segmentTraffic: Map<string, SegmentTraffic>;
+  selection: Selection | null;
+  /** True while an overlay owns the colour channels. */
+  dimmed: boolean;
+}
 
 export interface NetworkHandle {
   group: THREE.Group;
+  /** Rebuilds geometry. Call when the map itself changed. */
   update: (map: GeneratedMap) => void;
+  /** Recolours in place -- no geometry churn. Safe per frame. */
+  updateSignals: (input: NetworkSignalInput) => void;
 }
 
 const NODE_COLORS: Record<NodeKind, number> = {
@@ -13,6 +26,23 @@ const NODE_COLORS: Record<NodeKind, number> = {
   junction: 0xcccccc,
   vertex: 0x8899aa,
 };
+
+// Streets are neutral by default and take the health hue only where
+// service actually runs (docs/rebuild-plan.md §5): "colouring every
+// corridor green makes the whole map a lattice and destroys the signal."
+// So an unused segment is grey no matter how healthy it technically is --
+// health is a question you must act on, and there is nothing to act on
+// where nothing runs.
+const NEUTRAL_ROAD = 0xe8e8e8;
+const NEUTRAL_RAIL = 0x2b2b2b;
+const DIMMED_ROAD = 0x5a5a5a;
+const DIMMED_RAIL = 0x232323;
+const SELECTION_COLOR = 0xfff0a0;
+const UTILISATION_FLOOR = 0.02;
+// Brightness = utilisation, the second of the two channels. Floored well
+// above zero so a barely-used segment still reads as coloured rather than
+// black -- the channel encodes "how busy", not "does it exist".
+const MIN_BRIGHTNESS = 0.4;
 
 function disposeObject(object: THREE.Object3D): void {
   if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
@@ -54,14 +84,35 @@ export function createBridgeDeck(
   return mesh;
 }
 
+/**
+ * Hue = health, brightness = utilisation (docs/rebuild-plan.md §5). Two
+ * channels, two meanings, never conflated -- which is also why every other
+ * map-wide question lives in render/overlayLayer.ts's separate additive
+ * group instead of borrowing one of these.
+ */
+export function segmentSignalColor(health: number, utilisation: number): THREE.Color {
+  const clampedHealth = Math.max(0, Math.min(1, health));
+  const good = new THREE.Color(0x33cc55);
+  const mid = new THREE.Color(0xe0b040);
+  const bad = new THREE.Color(0xdd3322);
+  const hue =
+    clampedHealth > 0.5 ? mid.clone().lerp(good, (clampedHealth - 0.5) * 2) : bad.clone().lerp(mid, clampedHealth * 2);
+  const brightness = MIN_BRIGHTNESS + (1 - MIN_BRIGHTNESS) * Math.max(0, Math.min(1, utilisation));
+  return hue.multiplyScalar(brightness);
+}
+
 export function createNetworkGroup(map: GeneratedMap): NetworkHandle {
   const group = new THREE.Group();
+  const segmentMaterials = new Map<string, { material: THREE.Material & { color: THREE.Color }; isRail: boolean }>();
+  const nodeMaterials = new Map<string, { material: THREE.MeshStandardMaterial; kind: NodeKind }>();
 
   function clear(): void {
     for (const child of [...group.children]) {
       group.remove(child);
       disposeObject(child);
     }
+    segmentMaterials.clear();
+    nodeMaterials.clear();
   }
 
   function update(current: GeneratedMap): void {
@@ -76,10 +127,13 @@ export function createNetworkGroup(map: GeneratedMap): NetworkHandle {
       if (!from || !to) continue;
       const a = gridToWorld(from.x, from.y, width, height);
       const b = gridToWorld(to.x, to.y, width, height);
-      const color = segment.type === "rail" ? 0x2b2b2b : 0xe8e8e8;
+      const isRail = segment.type === "rail";
+      const color = isRail ? NEUTRAL_RAIL : NEUTRAL_ROAD;
 
       if (segment.level === "elevated") {
-        group.add(createBridgeDeck(a, b, color));
+        const deck = createBridgeDeck(a, b, color);
+        group.add(deck);
+        segmentMaterials.set(segment.id, { material: deck.material as THREE.MeshStandardMaterial, isRail });
         continue;
       }
 
@@ -87,8 +141,9 @@ export function createNetworkGroup(map: GeneratedMap): NetworkHandle {
         new THREE.Vector3(a.x, 0.15, a.z),
         new THREE.Vector3(b.x, 0.15, b.z),
       ]);
-      const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color }));
-      group.add(line);
+      const material = new THREE.LineBasicMaterial({ color });
+      group.add(new THREE.Line(geometry, material));
+      segmentMaterials.set(segment.id, { material, isRail });
     }
 
     for (const node of current.nodes) {
@@ -104,9 +159,35 @@ export function createNetworkGroup(map: GeneratedMap): NetworkHandle {
       mesh.position.set(position.x, 0.2, position.z);
       mesh.castShadow = true;
       group.add(mesh);
+      nodeMaterials.set(node.id, { material, kind: node.kind });
+    }
+  }
+
+  function updateSignals(input: NetworkSignalInput): void {
+    const selectedSegment = input.selection?.kind === "segment" ? input.selection.id : null;
+    const selectedNode = input.selection?.kind === "node" ? input.selection.id : null;
+
+    for (const [segmentId, entry] of segmentMaterials) {
+      if (segmentId === selectedSegment) {
+        entry.material.color.setHex(SELECTION_COLOR);
+        continue;
+      }
+      const traffic = input.segmentTraffic.get(segmentId);
+      const metrics = traffic ? computeBottleneckMetrics(traffic) : null;
+      if (input.dimmed || !metrics || metrics.utilisation <= UTILISATION_FLOOR) {
+        entry.material.color.setHex(
+          input.dimmed ? (entry.isRail ? DIMMED_RAIL : DIMMED_ROAD) : entry.isRail ? NEUTRAL_RAIL : NEUTRAL_ROAD,
+        );
+        continue;
+      }
+      entry.material.color.copy(segmentSignalColor(metrics.health, metrics.utilisation));
+    }
+
+    for (const [nodeId, entry] of nodeMaterials) {
+      entry.material.color.setHex(nodeId === selectedNode ? SELECTION_COLOR : NODE_COLORS[entry.kind]);
     }
   }
 
   update(map);
-  return { group, update };
+  return { group, update, updateSignals };
 }
