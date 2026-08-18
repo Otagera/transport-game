@@ -6,7 +6,7 @@ conversation should read first to know where things stand, before diving into so
 `git log`. Pair with [architecture.md](architecture.md) for the stable "how it's shaped"
 reference.
 
-Current test count: **318 passing** across 45 files (`bun test`). All of typecheck /
+Current test count: **328 passing** across 47 files (`bun test`). All of typecheck /
 test / build / verify:bundle pass as of the last commit on this list.
 
 ## Module 0 — Foundation ✅
@@ -217,14 +217,112 @@ full multi-node map without more routes; a dedicated two-node synthetic scenario
 economy, and paratransit all continued running correctly concurrently throughout. No
 console errors beyond the pre-existing harmless favicon 404.
 
-## Module 10 — Save/load and scenarios (not started, owned elsewhere)
-**Being worked by a different agent.** Do not start it here. See
-[handoff-module-10.md](handoff-module-10.md) for what Modules 11–12 changed that the
-save format and the warm-forward have to account for.
-Last module in `rebuild-plan.md`'s build order. Module 11 landed ahead of it and did
-**not** implement it: `ScenarioSchema` exists in `content/schema.ts` and the studio's
-Scenario Lab tab authors and validates one, but nothing *applies* a scenario yet — that
-needs the warm-forward pass and is still Module 10's job.
+## Module 10 — Save/load and scenarios ✅
+Last module in `rebuild-plan.md`'s build order. Built on top of Modules 11/11b/11c/12
+(merged first — see [handoff-module-10.md](handoff-module-10.md) for what they changed
+that a save format has to account for) rather than in parallel with them.
+
+**A save is state, not content.** `engine/save/types.ts`'s `SaveFile` is a hand-written
+type, not derived from `content/schema.ts`. The content schemas' `.default()` calls
+(`congestionWeight.default(1)`, `channels.default({})`) are correct for a hand-authored
+catalog, where an absent field means "assume the common case" — they are wrong for a
+save, where an absent field means "this save predates it" and must fail the version
+check, not silently backfill a plausible value. `restoreIntoState` rejects anything
+whose `version` doesn't match `SAVE_FORMAT_VERSION` exactly, with a clear error, and
+does not touch the target state on rejection.
+
+**Terrain is the only thing derivable from the seed.** `generateMap` is deterministic,
+so `SaveFile.map` stores `{ seed, nodes, corridors, segments }` and `restoreIntoState`
+regenerates the ~7k terrain floats via `generateTerrainField(createRng(seed), ...)`
+rather than serialising them. Everything else in `SavedMap` has drifted from what the
+seed alone would produce and has to be stored: promoted `node.kind`, decayed
+`segment.condition`, authored corridors/segments, and — the field that would corrupt a
+save silently, since a dropped one still renders fine — `segment.profileId`. A
+dedicated test (`test/save-snapshot.test.ts`) builds a segment with a profile set,
+round-trips it, and asserts the id survives.
+
+**`SimulationState`'s four derived fields are never serialised.** `demand` (pure
+function of `map.nodes`), `routing` and `ambientGeometry` (pure functions of
+`map.segments`/`map.nodes`, rebuilt together by Module 12's `rebuildFromMap`), and
+`segmentLoads`/`ambientLoads` (recomputed every tick) would just be a second source of
+truth for something the engine already recomputes — `restoreIntoState` calls
+`rebuildFromMap` and `generateDemandPairs` instead of storing any of them.
+
+**`applyScenario`/`warmForward` (`engine/save/scenario.ts`) take plain mirrored types,
+never `Scenario` or `VehicleDef` directly** — the same "content is data, engine stays
+content-unaware" pattern as `EraDef` (architecture.md hard rule 2). `main.ts` maps a
+loaded `Scenario`/`VehicleDef[]` into `ScenarioSpec`/`ScenarioVehicleSpec[]` before
+calling in. `applyScenario` sets funds and jumps the era timeline directly (not via
+`advanceEraTimeline`, which only ever moves forward), then places `seedFleet` vehicles
+round-robin over pairs of inhabited nodes on the map's already-connected inherited
+network — no corridor authoring needed (Module 2 guarantees full connectivity). Seed
+vehicles are registered as real purchases (funds deducted, ledger/vehicleEconomics
+entries created), not free stock: `startingFunds` and `seedFleet` are both scenario-
+author knobs shown side by side in the Scenario Lab, so the author reconciles them
+directly rather than the engine guessing at a "free starter fleet" exemption.
+
+**`warmForward` runs real ticks, not a clock skip**, so a warmed scenario produces an
+economy, a paratransit sector, and grown settlements that actually exist for the target
+era — reproducible from the same seed, since nothing in the tick path but paratransit's
+spawn-id derivation uses randomness, and that derives from `paratransit.elapsedSeconds`
+(deterministic). Its `growth`/`eraModifiersById`/`profileDecayById` parameters are
+**required**, unlike `tick()`'s optional ones — the fix for the exact bug
+docs/handoff-module-10.md warned about: `tick()`'s parameters are all optional so
+existing call sites keep compiling, but a warm-forward that omits `eraModifiers` gets no
+ambient traffic at all, omits `growth` and settlements never develop, omits
+`profileDecayById` and every segment decays at the base rate regardless of profile. A
+warm-forward missing any of them would warm the wrong world silently; making them
+required at `warmForward`'s own boundary turns that into a compile error instead.
+*Known limitation, not a blocker:* a warmed-forward vehicle's obsolescence isn't marked
+mid-warm (that logic lives in `render/fleet.ts`'s `markObsoleteStock`, which needs the
+content catalog `engine/` can't import) — `main.ts` calls
+`fleetController.handleEraChanged()` once after a scenario/save is applied, which
+catches it for the *final* era reached, just not for eras passed through en route.
+
+**Reload-based `load()`/`scenario()`, live `era()`/`funds()`/`warm()`.** Hot-swapping a
+running scene's map/terrain would need new `setMap`/`setGroundMesh` methods and risks
+stale closures in raycasting/network/authoring — instead, `load()`/`scenario()` stash a
+one-shot `BootOverride` into `sessionStorage` and call `location.reload()`;
+`bootstrap()` consumes it (DEV-only) and calls `restoreIntoState`/`applyScenario`
+**before** constructing `sceneHandle`/`networkHandle`/`authoringController`/
+`fleetController`, then reads `map` back off `simulation.map` (not the freshly generated
+one) so the scene is built from whatever topology actually won. `era()`/`warm()` operate
+live since neither changes map/terrain identity: `era()` sets `eraTimeline.currentIndex`
+directly (so, unlike live play, it can jump backward too) and synthesizes an
+`EraTransition` through the existing `handleEraTransition` reaction pipeline; `warm()`
+calls `warmForward` synchronously and then re-runs the same render refresh
+(`networkHandle.update`, `applyEraPalette`, `fleetController.handleEraChanged`) a live
+transition would trigger.
+
+**`window.dev` is a separate surface from `?studio=1`**, installed whenever the build is
+DEV regardless of that query param — `window.dev.{era,funds,warm,save,load,scenario}`.
+
+**A real bug caught by `verify:bundle`, not by inspection:** the first version of
+`window.dev`'s object literal was constructed unconditionally at the top of
+`bootstrap()`, with only `maybeMountDevTools`'s *installation* of it gated by
+`import.meta.env.DEV`. An object literal built at a function's top level is never dead
+code regardless of what its methods reference, so `createSnapshot`/`restoreIntoState`
+and the `"transport-game:boot-override"` storage-key string shipped into the production
+bundle anyway — caught immediately by `verify:bundle` failing on that exact string, not
+by review. Fixed by moving the whole `devApi` construction (and the `maybeMountDevTools`
+call) inside `if (import.meta.env.DEV) { ... }` at the top level of `bootstrap()`, where
+Rollup can actually prove it unreachable in a production build. `scripts/
+verify-prod-bundle.mjs` gained both that key string and the dev-console-ready log
+message as forbidden strings so a regression fails the same way again.
+
+**Live-verified** (Playwright vs. local Chrome, `?studio=1`): `window.dev.era("modern")`
+jumped the status bar to Modern instantly (including backward-capable jumps, unlike live
+play); `funds(123456)` updated the status bar directly; `warm(2)` ran without error;
+`save()` wrote a version-1 snapshot to `localStorage` (segments, funds, seed all
+present); `load()` triggered a reload and came back with the exact prior tick count,
+era, and funds — confirming real restoration, not a fresh boot; a save with its
+`version` field hand-corrupted to `999` was rejected with
+`"save format version 999 is not supported (this build reads version 1)."` and the game
+started a fresh map instead of mis-loading it; `scenario("modern-endgame")` reloaded,
+landed in the Modern era with funds net of its seeded BRT/lorry fleet, and showed real
+non-zero income/day and cost/day — confirming the 8-day warm-forward (7,200 ticks at
+`SIM_DT`) actually simulated real economic activity rather than skipping a clock
+forward.
 
 ## Module 11 — Dev studio + information architecture ✅
 Two halves of one problem — where a fact lives, and who is allowed to author it. Full

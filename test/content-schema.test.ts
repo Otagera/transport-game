@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { EraListSchema, VehicleDefListSchema } from "@content/schema";
+import { EraListSchema, ScenarioListSchema, VehicleDefListSchema } from "@content/schema";
 
 describe("content schema", () => {
   test("public/content/eras.json matches EraListSchema", () => {
@@ -104,5 +104,43 @@ describe("content schema", () => {
       expect(byCapacity[i]!.congestionWeight).toBeGreaterThanOrEqual(byCapacity[i - 1]!.congestionWeight);
     }
     expect(byCapacity.at(0)!.congestionWeight).toBeLessThan(byCapacity.at(-1)!.congestionWeight);
+  });
+
+  test("public/content/scenarios.json matches ScenarioListSchema", () => {
+    const path = join(import.meta.dir, "..", "public", "content", "scenarios.json");
+    const data = JSON.parse(readFileSync(path, "utf8"));
+    expect(() => ScenarioListSchema.parse(data)).not.toThrow();
+  });
+
+  test("every scenario's startingEraId references a real era id", () => {
+    const erasPath = join(import.meta.dir, "..", "public", "content", "eras.json");
+    const scenariosPath = join(import.meta.dir, "..", "public", "content", "scenarios.json");
+    const eras = EraListSchema.parse(JSON.parse(readFileSync(erasPath, "utf8")));
+    const scenarios = ScenarioListSchema.parse(JSON.parse(readFileSync(scenariosPath, "utf8")));
+    const eraIds = new Set(eras.map((era) => era.id));
+
+    for (const scenario of scenarios) {
+      expect(eraIds.has(scenario.startingEraId)).toBe(true);
+    }
+  });
+
+  test("every scenario's seedFleet entries reference a real vehicle def id", () => {
+    const vehiclesPath = join(import.meta.dir, "..", "public", "content", "vehicles.json");
+    const scenariosPath = join(import.meta.dir, "..", "public", "content", "scenarios.json");
+    const vehicles = VehicleDefListSchema.parse(JSON.parse(readFileSync(vehiclesPath, "utf8")));
+    const scenarios = ScenarioListSchema.parse(JSON.parse(readFileSync(scenariosPath, "utf8")));
+    const vehicleIds = new Set(vehicles.map((vehicle) => vehicle.id));
+
+    for (const scenario of scenarios) {
+      for (const entry of scenario.seedFleet) {
+        expect(vehicleIds.has(entry.defId)).toBe(true);
+      }
+    }
+  });
+
+  test("scenario ids are unique", () => {
+    const path = join(import.meta.dir, "..", "public", "content", "scenarios.json");
+    const scenarios = ScenarioListSchema.parse(JSON.parse(readFileSync(path, "utf8")));
+    expect(new Set(scenarios.map((s) => s.id)).size).toBe(scenarios.length);
   });
 });

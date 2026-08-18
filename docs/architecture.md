@@ -60,6 +60,8 @@ src/
     paratransit/  Informal-sector one-shot vehicle spawning
     simulation/   The tick loop: demand, vehicles, congestion, routing
     growth/       Logistic demand growth, service ratio, tier promotion
+    save/         Versioned snapshot (createSnapshot/restoreIntoState) and
+                  scenario application/warm-forward (applyScenario/warmForward)
   render/         three.js scene, camera transitions, authoring UI logic, entity
                   picking, overlay layer, profile extrusion, DOM event handling
   ui/             Plain-DOM panels, one per home: inspector, overlays, pnlPanel,

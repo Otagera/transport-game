@@ -21,6 +21,12 @@ const forbidden = [
   "crossSectionOutline",
   "PROFILE_PRESETS",
   "STYLE_FIELDS",
+  // Module 10: window.dev is a separate DEV-only surface from the studio
+  // (docs/handoff-module-10.md), gated the same way -- this string only
+  // ever appears inside that gate, so its presence in a prod bundle means
+  // the gate stopped being a real assertion.
+  "transport-game: dev console ready",
+  "transport-game:boot-override",
 ];
 
 const files = readdirSync(distAssets).filter((file) => file.endsWith(".js"));

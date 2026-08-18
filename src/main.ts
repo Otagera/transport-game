@@ -1,7 +1,7 @@
 import { Accumulator, SIM_DT } from "@engine/loop";
 import { loadContent } from "@content/loader";
-import { EraListSchema, Profile2DDefListSchema, VehicleDefListSchema } from "@content/schema";
-import type { Era, VehicleDef } from "@content/schema";
+import { EraListSchema, Profile2DDefListSchema, ScenarioListSchema, VehicleDefListSchema } from "@content/schema";
+import type { Era, Scenario, VehicleDef } from "@content/schema";
 import { generateMap } from "@engine/map/generate";
 import { pruneCorridor } from "@engine/map/prune";
 import { restoreSegmentCondition } from "@engine/map/decay";
@@ -12,9 +12,13 @@ import { createParatransitState } from "@engine/paratransit/types";
 import { createEconomyState, sellVehicle } from "@engine/economy/state";
 import { computeBurnRate, computeRoutePnL } from "@engine/economy/report";
 import { advanceEraTimeline, createEraTimeline, currentEra, type EraTransition } from "@engine/eras/timeline";
-import type { EraDef } from "@engine/eras/types";
+import type { EraDef, EraModifiers } from "@engine/eras/types";
 import { createGrowthState } from "@engine/growth/state";
 import type { PromotionEvent } from "@engine/growth/types";
+import { createSnapshot, restoreIntoState } from "@engine/save/snapshot";
+import type { SaveFile } from "@engine/save/types";
+import { applyScenario, warmForward } from "@engine/save/scenario";
+import type { ScenarioSpec, ScenarioVehicleSpec } from "@engine/save/scenario";
 import { createScene } from "@render/scene";
 import { createCameraController } from "@render/camera";
 import { createDefaultStyleSpec } from "@render/style";
@@ -50,8 +54,92 @@ const INHERITED_PROFILES = { road: "feeder-road", rail: "colonial-rail" } as con
 // rather than per frame.
 const STRANDED_REFRESH_SECONDS = 2;
 
+// Module 10 (save/load and scenarios). Both keys are only ever read or
+// written from DEV-gated code (see maybeMountDevTools/DevApi below), so
+// they -- and the save/scenario machinery they trigger -- tree-shake out
+// of the production bundle entirely rather than needing a runtime guard
+// around every call site.
+const SAVE_STORAGE_KEY = "transport-game:save";
+const BOOT_OVERRIDE_KEY = "transport-game:boot-override";
+
 function toEraDef(era: Era): EraDef {
   return { id: era.id, order: era.order, durationSeconds: era.durationSeconds, modifiers: era.modifiers, railAvailable: era.railAvailable };
+}
+
+function toScenarioSpec(scenario: Scenario): ScenarioSpec {
+  return {
+    startingEraId: scenario.startingEraId,
+    startingFunds: scenario.startingFunds,
+    warmForwardDays: scenario.warmForwardDays,
+    seedFleet: scenario.seedFleet.map((entry) => ({ defId: entry.defId, count: entry.count })),
+  };
+}
+
+function toScenarioVehicleCatalog(catalog: VehicleDef[]): ScenarioVehicleSpec[] {
+  return catalog.map((def) => ({
+    defId: def.id,
+    speed: def.speed,
+    capacity: def.capacity,
+    carries: def.carries,
+    purchaseCost: def.purchaseCost,
+    operatingCostPerSecond: def.operatingCostPerSecond,
+    congestionWeight: def.congestionWeight,
+  }));
+}
+
+// Reload-based rather than a hot-swap of the running scene's map/terrain:
+// avoids a new class of stale-closure bugs across raycasting/network/
+// authoring, at the cost of a page reload. A one-shot pointer in
+// sessionStorage (not localStorage -- it must not survive past the reload
+// it triggers) tells the next bootstrap() what to restore before any
+// scene/network/authoring controller gets constructed.
+type BootOverride = { kind: "load" } | { kind: "scenario"; scenarioId: string };
+
+function consumeBootOverride(): BootOverride | null {
+  const raw = sessionStorage.getItem(BOOT_OVERRIDE_KEY);
+  if (!raw) return null;
+  sessionStorage.removeItem(BOOT_OVERRIDE_KEY);
+  try {
+    return JSON.parse(raw) as BootOverride;
+  } catch {
+    return null;
+  }
+}
+
+interface BootPlan {
+  mapSeed: number;
+  pendingSave: SaveFile | null;
+  pendingScenario: Scenario | null;
+}
+
+function resolveBootPlan(scenarios: Scenario[]): BootPlan {
+  const fallback: BootPlan = { mapSeed: DEFAULT_MAP_SEED, pendingSave: null, pendingScenario: null };
+  if (!import.meta.env.DEV) return fallback;
+
+  const override = consumeBootOverride();
+  if (!override) return fallback;
+
+  if (override.kind === "load") {
+    const raw = localStorage.getItem(SAVE_STORAGE_KEY);
+    if (!raw) {
+      console.error("transport-game: no save found; starting a fresh map instead.");
+      return fallback;
+    }
+    try {
+      const save = JSON.parse(raw) as SaveFile;
+      return { mapSeed: save.map.seed, pendingSave: save, pendingScenario: null };
+    } catch {
+      console.error("transport-game: save data is corrupted; starting a fresh map instead.");
+      return fallback;
+    }
+  }
+
+  const scenario = scenarios.find((candidate) => candidate.id === override.scenarioId);
+  if (!scenario) {
+    console.error(`transport-game: unknown scenario "${override.scenarioId}"; starting a fresh map instead.`);
+    return fallback;
+  }
+  return { mapSeed: scenario.mapSeed, pendingSave: null, pendingScenario: scenario };
 }
 
 function requireElement(id: string): HTMLDivElement {
@@ -72,13 +160,15 @@ async function bootstrap(): Promise<void> {
   const overlayPickerEl = requireElement("overlay-picker");
   const modeHintEl = requireElement("mode-hint");
 
-  const [eras, vehicleCatalog, profiles] = await Promise.all([
+  const [eras, vehicleCatalog, profiles, scenarios] = await Promise.all([
     loadContent(EraListSchema, "/content/eras.json"),
     loadContent(VehicleDefListSchema, "/content/vehicles.json"),
     loadContent(Profile2DDefListSchema, "/content/profiles.json"),
+    loadContent(ScenarioListSchema, "/content/scenarios.json"),
   ]);
   const profileCatalog = createProfileCatalog(profiles, INHERITED_PROFILES);
   const eraContentById = new Map(eras.map((era) => [era.id, era]));
+  const eraModifiersById = new Map<string, EraModifiers>(eras.map((era) => [era.id, era.modifiers]));
   const eraTimeline = createEraTimeline(eras.map(toEraDef));
   const currentEraContent = (): Era => eraContentById.get(currentEra(eraTimeline).id)!;
 
@@ -88,17 +178,51 @@ async function bootstrap(): Promise<void> {
   const accumulator = new Accumulator(SIM_DT);
   const statusBar = createStatusBar(statusEl);
 
-  const map = generateMap(DEFAULT_MAP_SEED);
+  // Save/scenario restoration happens before any scene/network/authoring
+  // controller is built, and mutates simulation/economy/paratransit/growth/
+  // eraTimeline in place (docs/handoff-module-10.md): `map` below is read
+  // back off `simulation.map` afterward rather than the freshly generated
+  // one, so the scene is built from whatever topology actually won --
+  // restored corridors and promotions, an authored scenario's clean map,
+  // or, on the ordinary path, the map just generated.
+  const bootPlan = resolveBootPlan(scenarios);
+  const initialMap = generateMap(bootPlan.mapSeed);
+  const simulation = createSimulation(initialMap, []);
+  const economy = createEconomyState(FARE_TABLE, STARTING_FUNDS);
+  const paratransit = createParatransitState();
+  const growth = createGrowthState(initialMap);
+
+  if (bootPlan.pendingSave) {
+    const result = restoreIntoState(bootPlan.pendingSave, simulation, economy, paratransit, growth, eraTimeline);
+    if (!result.ok) console.error(`transport-game: ${result.error}`);
+  } else if (bootPlan.pendingScenario) {
+    applyScenario(
+      toScenarioSpec(bootPlan.pendingScenario),
+      simulation,
+      economy,
+      eraTimeline,
+      toScenarioVehicleCatalog(vehicleCatalog),
+    );
+    if (bootPlan.pendingScenario.warmForwardDays > 0) {
+      warmForward(
+        simulation,
+        economy,
+        paratransit,
+        growth,
+        eraTimeline,
+        bootPlan.pendingScenario.warmForwardDays,
+        eraModifiersById,
+        profileCatalog.decayMultipliers,
+      );
+    }
+  }
+
+  const map = simulation.map;
   const groundMesh = sceneHandle.setTerrain(map);
   const networkHandle = createNetworkGroup(map, profileCatalog);
   sceneHandle.scene.add(networkHandle.group);
   const overlayLayer = createOverlayLayer();
   sceneHandle.scene.add(overlayLayer.group);
-
-  const simulation = createSimulation(map, []);
-  const economy = createEconomyState(FARE_TABLE, STARTING_FUNDS);
-  const paratransit = createParatransitState();
-  const growth = createGrowthState(map);
 
   const fleetRenderer = createVehicleFleetRenderer();
   sceneHandle.scene.add(fleetRenderer.group);
@@ -205,6 +329,11 @@ async function bootstrap(): Promise<void> {
     sceneHandle.applyStyle(style);
   }
   applyEraPalette(currentEraContent());
+  // A restored save or a warmed-forward scenario can already own stock
+  // that's obsolete for the era it's starting in -- handleEraChanged marks
+  // that stock, same as it would after a live transition, rather than
+  // waiting for the next one to notice.
+  fleetController.handleEraChanged();
 
   function handleEraTransition(transition: EraTransition): void {
     const toContent = eraContentById.get(transition.to.id)!;
@@ -279,7 +408,68 @@ async function bootstrap(): Promise<void> {
 
   window.addEventListener("resize", sceneHandle.resize);
 
-  await maybeMountDevTools(canvas, style, sceneHandle, eras, vehicleCatalog);
+  // docs/rebuild-plan.md §6 Module 10: "window.dev console API for era,
+  // funds, warm, save, load." A separate surface from the ?studio=1 UI --
+  // installed whenever the build is DEV regardless of that query param, so
+  // it's reachable from the console alone. era/funds/warm act live, since
+  // neither changes map/terrain identity; save/load/scenario go through a
+  // reload (see BootOverride above).
+  //
+  // Built inside this `if` rather than unconditionally: an object literal
+  // constructed at the top level of bootstrap() is never dead code no
+  // matter what its methods reference, so the save/scenario machinery
+  // (and their storage-key strings) would ship in prod regardless of
+  // maybeMountDevTools' own DEV check. This is the branch that actually
+  // makes it tree-shake out -- verified by scripts/verify-prod-bundle.mjs.
+  if (import.meta.env.DEV) {
+    const devApi: DevApi = {
+      era(id: string): void {
+        const index = eraTimeline.eras.findIndex((candidate) => candidate.id === id);
+        if (index === -1) {
+          console.error(`transport-game: unknown era "${id}". Valid ids: ${eraTimeline.eras.map((e) => e.id).join(", ")}`);
+          return;
+        }
+        const from = currentEra(eraTimeline);
+        eraTimeline.currentIndex = index;
+        eraTimeline.elapsedInEraSeconds = 0;
+        const to = currentEra(eraTimeline);
+        if (from.id !== to.id) handleEraTransition({ from, to });
+      },
+      funds(amount: number): void {
+        economy.funds = amount;
+      },
+      warm(days: number): void {
+        warmForward(simulation, economy, paratransit, growth, eraTimeline, days, eraModifiersById, profileCatalog.decayMultipliers);
+        networkHandle.update(simulation.map);
+        applyEraPalette(currentEraContent());
+        fleetController.handleEraChanged();
+        eraBanner.show(`Warmed forward ${days} day${days === 1 ? "" : "s"}`);
+      },
+      save(): void {
+        const snapshot = createSnapshot(simulation, economy, paratransit, growth, eraTimeline);
+        localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(snapshot));
+        console.log("transport-game: saved.");
+      },
+      load(): void {
+        if (!localStorage.getItem(SAVE_STORAGE_KEY)) {
+          console.error("transport-game: no save found.");
+          return;
+        }
+        sessionStorage.setItem(BOOT_OVERRIDE_KEY, JSON.stringify({ kind: "load" } satisfies BootOverride));
+        location.reload();
+      },
+      scenario(id: string): void {
+        if (!scenarios.some((candidate) => candidate.id === id)) {
+          console.error(`transport-game: unknown scenario "${id}". Valid ids: ${scenarios.map((s) => s.id).join(", ")}`);
+          return;
+        }
+        sessionStorage.setItem(BOOT_OVERRIDE_KEY, JSON.stringify({ kind: "scenario", scenarioId: id } satisfies BootOverride));
+        location.reload();
+      },
+    };
+
+    await maybeMountDevTools(canvas, style, sceneHandle, eras, vehicleCatalog, devApi);
+  }
 
   let last = performance.now();
   let framesSinceSample = 0;
@@ -366,6 +556,19 @@ async function bootstrap(): Promise<void> {
   requestAnimationFrame(frame);
 }
 
+// Module 10's console API (docs/rebuild-plan.md §6): "you can reach any
+// era in seconds for tuning." Built in bootstrap(), where it can close
+// over live state, and installed here alongside the studio so both
+// DEV-only surfaces share one gate.
+interface DevApi {
+  era: (id: string) => void;
+  funds: (amount: number) => void;
+  warm: (days: number) => void;
+  save: () => void;
+  load: () => void;
+  scenario: (id: string) => void;
+}
+
 // Kept out of bootstrap() as its own function so the `import.meta.env.DEV`
 // guard is a single, easy-to-verify branch: in a production build this
 // evaluates to `false` at build time, and Rollup dead-code-eliminates the
@@ -376,10 +579,14 @@ async function maybeMountDevTools(
   sceneHandle: ReturnType<typeof createScene>,
   eras: Era[],
   catalog: VehicleDef[],
+  devApi: DevApi,
 ): Promise<void> {
   if (!import.meta.env.DEV) {
     return;
   }
+  (window as unknown as { dev: DevApi }).dev = devApi;
+  console.log("transport-game: dev console ready -- window.dev.{era,funds,warm,save,load,scenario}");
+
   // `?tune=1` is kept as an alias for `?studio=1` rather than retired:
   // Module 1's workflow (and the muscle memory around it) still opens the
   // same style controls, now as the studio's first tab.
