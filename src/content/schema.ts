@@ -78,3 +78,95 @@ export const ScenarioSchema = z.object({
 export type Scenario = z.infer<typeof ScenarioSchema>;
 
 export const ScenarioListSchema = z.array(ScenarioSchema);
+
+// Module 11: parametric road/rail cross-sections, authored in the dev
+// studio's Profile Studio tab and swept along a corridor's Catmull-Rom
+// centreline by render/studioProfile.ts.
+//
+// "Road and rail need a distinct visual channel -- width, surface
+// treatment, sleepers. Not hue or brightness, which are taken"
+// (docs/rebuild-plan.md §5). A profile IS that third channel, made
+// authorable: the difference between a road and a railway becomes a
+// difference in geometry rather than a difference in colour, which the
+// two-channel contract has no room left for.
+export const ProfileMaterialSchema = z.enum([
+  "asphalt",
+  "curb",
+  "gutter",
+  "ditch",
+  "barrier",
+  "ballast",
+  "sleeper",
+]);
+
+export type ProfileMaterial = z.infer<typeof ProfileMaterialSchema>;
+
+// Which physical channels a material is allowed to carry. Encoded here
+// rather than left as a convention, so "asphalt takes friction and decay,
+// a curb takes structural integrity" is a validated fact -- an element
+// claiming a channel its material has no meaning for is a parse error,
+// not a value that silently does nothing downstream.
+export const MATERIAL_CHANNELS: Record<ProfileMaterial, ReadonlyArray<"friction" | "decay" | "structuralIntegrity">> = {
+  asphalt: ["friction", "decay"],
+  curb: ["structuralIntegrity"],
+  gutter: ["structuralIntegrity"],
+  ditch: ["structuralIntegrity"],
+  barrier: ["structuralIntegrity"],
+  ballast: ["decay", "structuralIntegrity"],
+  sleeper: ["friction", "decay"],
+};
+
+export const Vec2Schema = z.object({ x: z.number(), y: z.number() });
+
+export const ProfileElementSchema = z
+  .object({
+    id: z.string(),
+    material: ProfileMaterialSchema,
+    // A closed polygon in cross-section space: x across the alignment,
+    // y up from the centreline's ground plane. Three points minimum --
+    // two would be a line, which sweeps to a surface with no thickness.
+    vertices: z.array(Vec2Schema).min(3),
+    channels: z
+      .object({
+        friction: z.number().positive().optional(),
+        decay: z.number().positive().optional(),
+        structuralIntegrity: z.number().positive().optional(),
+      })
+      .default({}),
+  })
+  .superRefine((element, ctx) => {
+    const allowed = MATERIAL_CHANNELS[element.material];
+    for (const channel of Object.keys(element.channels) as Array<keyof typeof element.channels>) {
+      if (!allowed.includes(channel)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["channels", channel],
+          message: `${element.material} carries no ${channel} channel (allowed: ${allowed.join(", ")})`,
+        });
+      }
+    }
+  });
+
+export type ProfileElement = z.infer<typeof ProfileElementSchema>;
+
+export const Profile2DDefSchema = z.object({
+  id: z.string(),
+  surfaceType: z.enum(["road", "rail"]),
+  /** Bank-to-bank width in metres, derived from the outline. */
+  width: z.number().positive(),
+  costPerMeter: z.number().nonnegative(),
+  /**
+   * Scales engine/map/decay.ts's base decay rate for segments built to
+   * this profile. A number, not a content type reaching into the engine --
+   * same pattern as the era modifiers (architecture.md, "content-aware
+   * code stays out of engine/").
+   */
+  decayRateMultiplier: z.number().positive(),
+  /** The swept silhouette: a closed polygon, outermost outline only. */
+  crossSectionVertices: z.array(Vec2Schema).min(3),
+  elements: z.array(ProfileElementSchema).min(1),
+});
+
+export type Profile2DDef = z.infer<typeof Profile2DDefSchema>;
+
+export const Profile2DDefListSchema = z.array(Profile2DDefSchema);

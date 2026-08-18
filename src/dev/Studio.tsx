@@ -2,6 +2,7 @@ import { render } from "preact";
 import { useState } from "preact/hooks";
 import type { Era, VehicleDef } from "@content/schema";
 import type { StyleSpec } from "@render/style";
+import { ProfileStudio } from "./ProfileStudio";
 import { ScenarioLab } from "./ScenarioLab";
 import { TuningTab } from "./TuningTab";
 import { drawer, tabBar, tabButton } from "./studioChrome";
@@ -11,7 +12,7 @@ import { drawer, tabBar, tabButton } from "./studioChrome";
 // before it counts as content -- the studio's job is to make authored
 // facts schema-correct by construction, so the failure mode of
 // hand-edited JSON (malformed, discovered at runtime) stops existing.
-export type StudioTabId = "tuning" | "scenario";
+export type StudioTabId = "tuning" | "profile" | "scenario";
 
 export interface StudioProps {
   style: StyleSpec;
@@ -22,6 +23,7 @@ export interface StudioProps {
 
 const TABS: Array<{ id: StudioTabId; label: string }> = [
   { id: "tuning", label: "Tuning" },
+  { id: "profile", label: "Profile Studio" },
   { id: "scenario", label: "Scenario Lab" },
 ];
 
@@ -45,6 +47,7 @@ export function Studio({ style, onStyleChange, eras, catalog }: StudioProps) {
       {active === "tuning" && (
         <TuningTab style={style} onChange={onStyleChange} onDirty={() => setRevision((n) => n + 1)} />
       )}
+      {active === "profile" && <ProfileStudio />}
       {active === "scenario" && <ScenarioLab eras={eras} catalog={catalog} />}
     </div>
   );

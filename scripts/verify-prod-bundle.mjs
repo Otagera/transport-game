@@ -14,6 +14,9 @@ const forbidden = [
   "installGreyscaleTest",
   "mountStudio",
   "Scenario Lab",
+  "Profile Studio",
+  "crossSectionOutline",
+  "PROFILE_PRESETS",
   "STYLE_FIELDS",
 ];
 
