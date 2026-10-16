@@ -85,6 +85,24 @@ browser: `bunx vite --port 5199`, open `/slice.html`.
 
 ## What's next
 
+**Lever audit, 2026-10-17** (`bun scripts/slice-lever-audit.ts`: each lever pulled in one of
+two identical deterministic worlds; the difference is its effect on every number the page
+shows). The user played to here and called it good; this is the start of making levers read:
+
+- The strip's net/day jitters ±₦135/day on its own; no lever moves it more than that, so
+  it can't show whether an action worked. Route rows settle in 1.5–2 days, lorries in ~5.
+- Shares (town rings, the strip bar) are the clean, fast signals: visible within a day.
+- Only buses and lorries pay (5–8 days). Pave pays in 80–175 days; fix never (−₦88/day net
+  on the trunk, informal gains more than you); both trains lose money at mid-game.
+- Selling a bus leaves no trace of its saving; pave and fix predict but never report back;
+  waiting dots don't respond to one route.
+- A roadside town splits a road, after which paving it by its end towns is refused
+  ("no road joins them directly").
+
+Plan: **track 1, legibility** (a steady net/day, a receipt a day after each action, pave and
+fix a whole road through roadside towns), then **track 2, economics** of the dead levers
+(fix, pave, then rail).
+
 **Played 2026-10-16 to day 14** (steps 2–4b together): *"felt stuck, didn't know how to get
 out of debt."* Fixed: the routes panel now names the way out when money runs low (which
 buses to sell, for how much, saving how much a day), and a full route asks for a bus
