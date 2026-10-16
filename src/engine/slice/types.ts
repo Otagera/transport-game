@@ -128,6 +128,16 @@ export interface SliceTuning {
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;
+  // Growth of the original towns (step 4, growth.ts).
+  /** A town can grow to this much above its starting size (0.5 = +50%). */
+  townGrowthCap: number;
+  /** Below this share of a town's trips carried by you, it doesn't grow. */
+  growthMinPlayerShare: number;
+  /** Service (yours + half the informal share) where growth starts, and where it's full. */
+  growthServiceFloor: number;
+  growthServiceFull: number;
+  /** How slowly a town's population follows the size its service supports. */
+  townGrowthTauSeconds: number;
   // Wear (step 4, wear.ts).
   /** Condition the inherited roads start at, 0.3..1 (map/decay.ts floors it at 0.3). */
   inheritedRoadCondition: number;
@@ -201,6 +211,8 @@ export interface SliceWorld {
   vehicleSegment: Map<string, string>;
   /** segmentId -> speed as a share of free flow this tick. What slows a bus is what the map draws. */
   segmentSpeed: Map<string, number>;
+  /** The original towns' starting sizes, thousands (growth.ts caps growth relative to these). */
+  basePopulation: Map<string, number>;
   /** Roads you maintain (wear.ts): repaired as they wear, billed as they go. */
   maintained: Set<string>;
   /** segmentId -> what maintaining it is costing, currency per second, rolling. */

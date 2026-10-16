@@ -27,6 +27,7 @@ import {
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { planRoad, segmentPolyline } from "@engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
+import { townGrowth } from "@engine/slice/growth";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
@@ -68,7 +69,8 @@ function resize(): void {
   canvas.style.width = `${window.innerWidth}px`;
   canvas.style.height = `${window.innerHeight}px`;
   const sidePanel = window.innerWidth > 900 ? 300 : 0;
-  view = fitView(world, window.innerWidth - sidePanel, window.innerHeight, 24, 64);
+  // Keep the map clear of the strip above and the key and toolbar below.
+  view = fitView(world, window.innerWidth - sidePanel, window.innerHeight, 24, 64, window.innerWidth > 1100 ? 96 : 56);
 }
 window.addEventListener("resize", resize);
 resize();
@@ -345,6 +347,23 @@ function reachNote(townId: string): string {
   return `<p class="callout">${stranded.length} of ${townName(townId)}'s trips have no road at all (dashed lines). The biggest is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
 }
 
+// Why a town is growing or not, in the terms that move it: your share, the
+// informal share at half, and the floor your share has to clear.
+function growthText(townId: string, name: string): string {
+  const growth = townGrowth(world, townId);
+  if (!growth) return "";
+  const town = world.towns.get(townId)!;
+  const k = (n: number) => `${Math.round(n)}k`;
+  const heading = growth.target > town.population * 1.02 ? `growing toward ${k(growth.target)}` : growth.target < town.population * 0.98 ? `shrinking toward ${k(growth.target)}` : `steady at ${k(town.population)}`;
+  const min = world.tuning.growthMinPlayerShare;
+  const why = isCutOff(world, townId)
+    ? "No road reaches it, so nothing can grow it."
+    : growth.playerShare < min
+    ? `It only grows once you carry at least ${pct(min)} of its trips (now ${pct(growth.playerShare)}); danfos alone keep it as it is.`
+    : `Service ${pct(growth.service)} (yours ${pct(growth.playerShare)}, plus informal at half). The better served, the bigger: up to ${k(growth.cap)}.`;
+  return `<p class="townshare"><b>${name} is ${heading}.</b> ${why}</p>`;
+}
+
 // Inside the town: informal's own ground, said as such so a permanent
 // informal share doesn't read as failure (principles.md §5). Kept out of
 // every share bar and all money.
@@ -379,6 +398,7 @@ function renderTown(townId: string): void {
     <h2>${town.name} <span class="muted">· ${Math.round(town.population)}k people${world.settlement.emergent.has(townId) ? " · grew on the road" : ""}</span></h2>
     <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">informal</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
     <p class="townshare">Of everyone leaving ${town.name} for another town: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
+    ${growthText(townId, town.name)}
     ${insideText(townId, town.name)}
     ${rows}`;
 }

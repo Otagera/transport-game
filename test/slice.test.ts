@@ -11,6 +11,7 @@ import { roadCapacity, speedFactor } from "@engine/slice/congestion";
 import { planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
 import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
+import { townGrowth } from "@engine/slice/growth";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -329,7 +330,8 @@ describe("slice: inserting a town into a vehicle's path", () => {
 
 describe("slice: transfers", () => {
   function network(): SliceWorld {
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    // Fixed towns: these pin how transfers work, not how growth moves demand.
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0 });
     for (let i = 0; i < 2; i += 1) addBus(w, "big", "mid");
     for (let i = 0; i < 2; i += 1) addBus(w, "mid", "far");
     return w;
@@ -749,6 +751,69 @@ describe("slice: wear (step 4)", () => {
     expect(paveCost(w, "big", "mid")).toBe(Math.round(segmentLength(w, trunk) * w.tuning.roadCostPerCell + repair));
     paveRoad(w, "big", "mid");
     expect(trunk.condition).toBe(1);
+  });
+});
+
+describe("slice: growth of the original towns (step 4)", () => {
+  // A faster drift than the game's (τ 60s, not 300s): these pin the rules, not the calibration.
+  const calm = { startingFunds: 1e6, maxEmergentTowns: 0, townGrowthTauSeconds: 60 };
+  const pop = (w: SliceWorld, id: string) => w.towns.get(id)!.population;
+
+  test("danfos alone never grow a town: your service is a necessary condition", () => {
+    const w = world(calm);
+    run(w, 300);
+    for (const id of ["big", "mid", "far", "cut"]) expect(pop(w, id)).toBeCloseTo(w.basePopulation.get(id)!, 5);
+    expect(townGrowth(w, "big")!.playerShare).toBe(0);
+  });
+
+  test("a town you serve well grows, slowly, toward a cap fixed by its starting size", () => {
+    const w = world(calm);
+    for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    run(w, 5);
+    const early = pop(w, "mid");
+    run(w, 400);
+    const g = townGrowth(w, "mid")!;
+    expect(g.playerShare).toBeGreaterThan(w.tuning.growthMinPlayerShare);
+    expect(pop(w, "mid")).toBeGreaterThan(w.basePopulation.get("mid")! * 1.05);
+    expect(pop(w, "mid")).toBeLessThanOrEqual(g.cap);
+    // Not a jump: a few seconds in, it had barely moved.
+    expect(early).toBeLessThan(w.basePopulation.get("mid")! * 1.02);
+  });
+
+  test("at the game's pace, a day of good service moves a town only a few percent", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    run(w, 30); // one game day
+    expect(pop(w, "mid")).toBeGreaterThan(w.basePopulation.get("mid")!);
+    expect(pop(w, "mid")).toBeLessThan(w.basePopulation.get("mid")! * 1.06);
+  });
+
+  test("a bigger town makes more trips", () => {
+    const w = world(calm);
+    const before = tripsFrom(w, "mid").reduce((sum, trip) => sum + trip.demand, 0);
+    for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    run(w, 400);
+    const after = tripsFrom(w, "mid").reduce((sum, trip) => sum + trip.demand, 0);
+    expect(after).toBeGreaterThan(before * 1.05);
+  });
+
+  test("take the service away and it shrinks back -- never below where it started", () => {
+    const w = world(calm);
+    for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    run(w, 400);
+    const grown = pop(w, "mid");
+    for (let i = 0; i < 4; i += 1) removeBus(w, w.routes[0]!.id);
+    run(w, 600);
+    expect(pop(w, "mid")).toBeLessThan(grown);
+    expect(pop(w, "mid")).toBeGreaterThanOrEqual(w.basePopulation.get("mid")! - 1e-9);
+  });
+
+  test("roadside towns grow from traffic, not from this", () => {
+    const w = world({ startingFunds: 1e6, foundTownFlow: 1, foundTownPlayerFlow: 0.3, minSecondsBetweenTowns: 0 });
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    run(w, 400);
+    const emergent = [...w.settlement.emergent][0]!;
+    expect(townGrowth(w, emergent)).toBeNull();
   });
 });
 

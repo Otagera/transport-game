@@ -197,6 +197,10 @@ for (const strategy of strategies) {
   console.log(
     `    busiest roads (riders/s, yours): ${flows.map(([id, f]) => `${id} ${f.toFixed(2)} (${(world.settlement.segmentPlayerFlowEMA.get(id) ?? 0).toFixed(2)})`).join(", ")}`,
   );
+  const grown = [...world.basePopulation]
+    .filter(([id, base]) => Math.abs(world.towns.get(id)!.population / base - 1) > 0.01)
+    .map(([id, base]) => `${world.towns.get(id)!.name} ${base}→${world.towns.get(id)!.population.toFixed(0)}k`);
+  console.log(`    original towns grown: ${grown.join(", ") || "none"}`);
   const emergent = [...world.settlement.emergent].map((id) => `${world.towns.get(id)!.name} ${world.towns.get(id)!.population.toFixed(1)}k`);
   if (townEvents.length > 0) console.log(`    towns: ${townEvents.join("; ")}  → now ${emergent.join(", ") || "none"}`);
   for (const route of routeSummaries(world)) {

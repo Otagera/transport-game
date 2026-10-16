@@ -234,6 +234,11 @@ no-cached-view discipline as §2).
 - **Road preview** — the ghost draws the planned road itself, bends and all, and its label
   says what the price is made of: "Road ₦581 (bridge 4 cells ₦315, bends round: 10% longer
   trip)" (principles §1: a quote must say why). It flips left rather than run under the panel.
+- **Growth** — a town's circle already scales with √population; a ▲ (green) or ▼ beside its
+  population says which way it's heading (target vs now, ±2%). The town panel says why:
+  heading, service (yours + informal at half), the cap — or that it needs 10% of its trips
+  from you, or that no road reaches it. `fitView` takes a bottom inset so the map clears the
+  key and toolbar (Ise's label sat under the key before).
 - **Wear** — a worn road draws cracks across it, closer together the worse it is; a
   maintained one a white dashed centre line instead. The Fix tool (`F`) hit-tests roads
   (`roadAt`, 10px), highlights the one under the cursor and labels it with its condition,

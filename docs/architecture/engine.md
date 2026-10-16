@@ -486,6 +486,14 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   repairing the base. `diagnoseRoute` adds `wornSpeed` (the worst stretch) and the `worn`
   verdict (< 85%, after `jammed`); `wornRoadsOn` names them with their upkeep. A split
   carries maintenance to both halves.
+- **Growth of the original towns** (step 4, `growth.ts`) — `townGrowth` reads the town's
+  share (`townShare`: trips leaving it), service = player + 0.5 × informal, and gives a target
+  `base × (1 + townGrowthCap × smoothstep((service − floor) / (full − floor)))`, zero growth
+  below `growthMinPlayerShare`; `base` is `world.basePopulation` (the def's sizes), so the
+  cap never chases the population. `growTowns` drifts each original town toward it every
+  tick (from `updateSettlements`, after the roadside towns' drift); demand follows at the
+  daily `refreshDemand`. Emergent towns are not in `basePopulation` and keep growing from
+  traffic.
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
 
 Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,

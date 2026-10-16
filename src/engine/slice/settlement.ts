@@ -3,6 +3,7 @@ import { rebuildFromMap } from "../simulation/simulate";
 import type { SliceTown, SliceWorld } from "./types";
 import { emptyOutcome, gravityDemand, pairKey } from "./world";
 import { parsePoolKey, parseQueueKey } from "./tick";
+import { growTowns } from "./growth";
 import { overWater, pointAlong, polylineLength, segmentLength, segmentPolyline, splitPolyline } from "./roads";
 
 // Towns that appear along busy roads, and -- rarely -- fade (step 3 of
@@ -86,6 +87,7 @@ export function updateSettlements(world: SliceWorld, dt: number): SliceEvent[] {
   // Populations drift every tick; founding and fading are checked once a
   // game day -- sustained state gates decisions (architecture hard rule 7).
   driftPopulations(world, dt);
+  growTowns(world, dt);
   if (settlement.elapsedSeconds < settlement.nextCheckAtSeconds) return [];
   settlement.nextCheckAtSeconds = settlement.elapsedSeconds + tuning.settlementCheckSeconds;
 

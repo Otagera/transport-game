@@ -107,6 +107,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     ruins: new Map(),
     pathCache: new Map(),
     roadPlans: new Map(),
+    basePopulation: new Map(def.towns.map((town) => [town.id, town.population])),
     maintained: new Set(),
     upkeepRateEMA: new Map(),
     bridgeCells: new Map(),

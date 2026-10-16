@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**395 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**401 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -33,7 +33,8 @@ step plan. Eras are paused. The slice is a second page beside the original game:
 | 2d | Inside towns: kekes' and okadas' own ground, shown as such; they feed your buses | Built, **not yet played** |
 | 3 | A place to build in: river, ridge, terrain-priced roads, bridges | Built, **not yet played** |
 | 4a | Decay: roads wear with use; the Fix tool keeps a road up for daily upkeep | Built, **not yet played** |
-| 4 | Depth, one at a time: growth, goods, rail (decay done as 4a) | — |
+| 4b | Growth of the original towns: served well, a town grows (to +50%) and makes more trips | Built, **not yet played** |
+| 4 | Depth, one at a time: goods, rail (decay 4a, growth 4b done) | — |
 
 Engine fixes found along the way, affecting the original game too: cyclic vehicles never
 loaded passengers whose destination lay behind the path's wrap-around, so every A↔B route
@@ -66,7 +67,7 @@ live-verified; each links to where its detail actually lives now.
 ## What's next
 
 **Play.** Everything since step 1e is built and unplayed: step 2 (congestion), 2b (running
-cost), 2c (paving), 2d (inside towns), step 3 (terrain) and 4a (decay). Questions to bring back:
+cost), 2c (paving), 2d (inside towns), step 3 (terrain), 4a (decay) and 4b (growth). Questions to bring back:
 
 - Does piling buses onto the trunk hurt, and does traffic read on the map?
 - Is money a constraint now (a bus costs ~₦105/day), or a grind?
@@ -75,6 +76,8 @@ cost), 2c (paving), 2d (inside towns), step 3 (terrain) and 4a (decay). Question
 - Do the river and the ridge make you think about where to build — and do bends read as a
   longer trip?
 - Is choosing which roads to maintain a decision, or does everything (or nothing) get kept?
+- Does a growing town (▲) read as a place developing, or as a treadmill of queues? Is money
+  loose again by day 40?
 
 Write down what was felt before changing anything (principles.md §6's playtest log). Open
 after that: a formal town-service tier (§5, "make it fixable") if play wants inside-town

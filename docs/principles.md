@@ -295,6 +295,11 @@ blow-by-blow; this section is the distilled rule.
   follows riders per second through it. Counting vehicles let empty buses inflate a town:
   measured, 12 buses on one route grew its town to the cap and made over-busing pay for
   itself, which deletes the fleet-size decision.
+- **Growth moves the fleet optimum, and loosens money** (slice, §6 step 4b). Serving a town
+  grows it, a bigger town makes more trips, and more buses then pay: measured at day 40, 4
+  buses on the trunk net +₦263/day with growth against +₦61 without, and a paved trunk
+  with 6 buses +₦522. Intended — a served place develops and needs more service — but it
+  undoes some of 2b's tightening by the mid-game. Watch it in play.
 - Growth **must be visible without reading a number**, or it reads as a treadmill —
   queues rising faster than you can add vehicles — rather than as a place developing.
 
@@ -573,6 +578,12 @@ Steps, each played before the next:
      the "worn" verdict ranks above full/poached/waiting, so under neglect nearly every
      route says "worn" — true (maintenance is the cheapest fix), but it can hide a bigger
      leak (the long Ilase–Ado route says "worn" with 50% giving up). Re-rank if play says so.
+   - **4b. Growth of the original towns** (built 2026-10-16, the user's next pick): a town
+     drifts (τ 10 days) toward its start × up to 1.5, on a smoothstep over service (your
+     share + half the informal share, 25%→75%), and only once you carry 10% of its trips;
+     it shrinks back if service falls, never below its start. ▲/▼ on the map, a sentence in
+     the town panel. See Findings, Growth. Watch: does a growing town read as a place
+     developing, or as a treadmill of queues? And is money loose again by day 40?
 
 Rules for working this way:
 

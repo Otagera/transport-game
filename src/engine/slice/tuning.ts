@@ -59,6 +59,17 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // bigger than the contest. A ~40k town is about as far as people walk to
   // the park: Ilase 75% of your riders arrive by keke/okada, Ise 27%.
   localTripsPerThousandPerDay: 10,
+  // Growth of the original towns (step 4, growth.ts). Probe, day 40: doing
+  // nothing grows nothing (danfos alone); 2 buses on the trunk grow Ilase
+  // 120->147k and Owode 45->53k; 4 buses 155k/61k; the hub grows Ise
+  // 15->19k too. tau = 10 game days: a day of good service moves a town a
+  // few percent. It moves the fleet optimum: 4 trunk buses net +263/day
+  // with growth against +61 without.
+  townGrowthCap: 0.5,
+  growthMinPlayerShare: 0.1,
+  growthServiceFloor: 0.25,
+  growthServiceFull: 0.75,
+  townGrowthTauSeconds: 300,
   // Wear (step 4, wear.ts). Tuned with the probe's wear strategies, a
   // 2+2-bus chain over 40 days (no wear at all: +305/day):
   //   - left alone, every busy dirt road reaches the floor (72% speed)

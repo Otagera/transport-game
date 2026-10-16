@@ -2,6 +2,7 @@ import type { InformalMode, SliceTown, SliceWorld } from "@engine/slice/types";
 import type { Vehicle } from "@engine/simulation/types";
 import { isCutOff, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
+import { townGrowth } from "@engine/slice/growth";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
@@ -16,6 +17,7 @@ export const COLORS = {
   hill: "#b5a27a",
   bridge: "#7d7466",
   crack: "#4a3b2a",
+  grow: "#2b8a3e",
   kept: "#fffdf8",
   groundEdge: "#d9ccae",
   dirtRoad: "#c4ab7c",
@@ -45,8 +47,8 @@ export interface View {
   offsetY: number;
 }
 
-export function fitView(world: SliceWorld, width: number, height: number, padding: number, topInset: number): View {
-  const usableH = height - topInset - padding * 2;
+export function fitView(world: SliceWorld, width: number, height: number, padding: number, topInset: number, bottomInset = 0): View {
+  const usableH = height - topInset - bottomInset - padding * 2;
   const usableW = width - padding * 2;
   const scale = Math.min(usableW / world.width, usableH / world.height);
   return {
@@ -554,7 +556,18 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
   ctx.fillText(town.name, p.x, p.y + ringR + 16);
   ctx.fillStyle = COLORS.labelMuted;
   ctx.font = "11px system-ui, sans-serif";
-  ctx.fillText(`${Math.round(town.population)}k`, p.x, p.y + ringR + 29);
+  // Growing or shrinking, at a glance (principles §3: growth must be
+  // visible without reading a number) -- the circle itself grows too.
+  const growth = townGrowth(world, town.id);
+  const trend = !growth ? "" : growth.target > town.population * 1.02 ? " ▲" : growth.target < town.population * 0.98 ? " ▼" : "";
+  ctx.fillText(`${Math.round(town.population)}k`, p.x - (trend ? 5 : 0), p.y + ringR + 29);
+  if (trend) {
+    const w = ctx.measureText(`${Math.round(town.population)}k`).width;
+    ctx.fillStyle = trend === " ▲" ? COLORS.grow : COLORS.ghostBad;
+    ctx.textAlign = "left";
+    ctx.fillText(trend.trim(), p.x - 5 + w / 2 + 3, p.y + ringR + 29);
+    ctx.textAlign = "center";
+  }
   if (isCutOff(world, town.id)) {
     ctx.fillStyle = COLORS.ghostBad;
     ctx.font = "600 11px system-ui, sans-serif";
