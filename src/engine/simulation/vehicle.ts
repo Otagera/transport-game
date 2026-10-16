@@ -27,20 +27,42 @@ function isCompatibleCargo(carries: Vehicle["carries"], kind: CargoKind): boolea
   return kind === "produce" || kind === "supplies";
 }
 
+// The nodes a vehicle standing at path[currentIndex] will still reach
+// before it next returns here. A cyclic route wraps: on an A<->B shuttle
+// (path [A, B]) standing at B, A is ahead. Reading only the tail of the
+// path array -- what this used to do -- meant every cyclic route ran its
+// return leg empty: the destinations behind the wrap point were never
+// "ahead", so reciprocal demand (docs/principles.md §3) was generated in
+// both directions but only ever served in one.
+function nodesAhead(vehicle: Vehicle, currentIndex: number): Set<string> {
+  const length = vehicle.path.length;
+  if (vehicle.lifecycle === "one-shot") return new Set(vehicle.path.slice(currentIndex + 1));
+  const ahead = new Set<string>();
+  for (let k = 1; k < length; k += 1) ahead.add(vehicle.path[(currentIndex + k) % length]!);
+  return ahead;
+}
+
 // Opportunistic loading, no manifests (docs/principles.md §3): at each
-// node the vehicle loads queued demand whose destination lies ahead on its
-// remaining route -- not a full lookahead across the wrap-around.
+// node the vehicle loads queued demand whose destination it will reach
+// before coming back round to this node (see nodesAhead).
 // pickupEvents is optional and only populated by tickVehicle's ongoing
 // loads (docs/architecture/engine.md §growth/) -- a vehicle's one-time initial
 // load at creation doesn't feed growth's service-ratio accounting, since
 // that's a bootstrap event, not sustained service.
-function loadAt(vehicle: Vehicle, nodeId: string, queues: NodeQueues, pickupEvents?: PickupEvent[]): void {
+function loadAt(
+  vehicle: Vehicle,
+  nodeId: string,
+  currentIndex: number,
+  queues: NodeQueues,
+  pickupEvents?: PickupEvent[],
+): void {
   const nodeQueue = queues.get(nodeId);
   if (!nodeQueue) {
     return;
   }
 
-  const ahead = new Set(vehicle.path.slice(vehicle.pathIndex));
+  const ahead = nodesAhead(vehicle, currentIndex);
+  ahead.delete(nodeId);
   let free = vehicle.capacity - cargoAmount(vehicle.cargo);
   if (free <= 0) {
     return;
@@ -135,7 +157,7 @@ export function createVehicle(
     lifecycle: "cyclic",
   };
   if (queues) {
-    loadAt(vehicle, path[0]!, queues);
+    loadAt(vehicle, path[0]!, 0, queues);
   }
   return vehicle;
 }
@@ -172,7 +194,7 @@ export function createOneShotVehicle(
     congestionWeight,
     lifecycle: "one-shot",
   };
-  loadAt(vehicle, fromNodeId, queues);
+  loadAt(vehicle, fromNodeId, 0, queues);
   return vehicle;
 }
 
@@ -234,7 +256,7 @@ export function tickVehicle(
 
       const arrivedAtEnd = vehicle.lifecycle === "one-shot" && vehicle.pathIndex === pathLength - 1;
       if (!arrivedAtEnd) {
-        loadAt(vehicle, toNode, queues, pickupEvents);
+        loadAt(vehicle, toNode, vehicle.pathIndex, queues, pickupEvents);
       }
 
       if (segmentId) {

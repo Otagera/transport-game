@@ -114,3 +114,21 @@ describe("tickVehicle", () => {
     expect(pickupEvents).toEqual([{ nodeId: "a", kind: "passengers", amount: 6, lifecycle: "cyclic" }]);
   });
 });
+
+describe("cyclic loading wraps around the route", () => {
+  // Regression: loadAt used to read only the tail of the path array, so on
+  // an a<->b shuttle the vehicle standing at b never saw a as "ahead" and
+  // ran every return leg empty.
+  test("a two-stop shuttle carries the return direction too", () => {
+    const context = buildRoutingContext(fixtureMap());
+    const queues: NodeQueues = new Map([
+      ["a", new Map([["b:passengers", 20]])],
+      ["b", new Map([["a:passengers", 20]])],
+    ]);
+    const vehicle = createVehicle("v1", ["a", "b"], context, 1, 10, queues);
+    const traffic = new Map<string, SegmentTraffic>();
+    for (let t = 0; t < 40; t += 0.1) tickVehicle(vehicle, queues, context, traffic, new Map(), 0.1);
+    expect(queues.get("a")!.get("b:passengers")).toBe(0);
+    expect(queues.get("b")!.get("a:passengers")).toBe(0);
+  });
+});
