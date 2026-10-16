@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, debtAdvice, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -814,6 +814,40 @@ describe("slice: growth of the original towns (step 4)", () => {
     run(w, 400);
     const emergent = [...w.settlement.emergent][0]!;
     expect(townGrowth(w, emergent)).toBeNull();
+  });
+});
+
+describe("slice: the way out of debt (playtest, day 14)", () => {
+  test("no advice while money isn't a worry", () => {
+    const w = world();
+    expect(debtAdvice(w)).toBeNull();
+  });
+
+  test("in debt, it names the losing routes, and selling them returns exactly what it quoted", () => {
+    const w = world({ maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    addBus(w, "mid", "far"); // thin: loses money
+    run(w, 300);
+    w.economy.funds = -400;
+    const advice = debtAdvice(w)!;
+    expect(advice.daysLeft).toBe(0);
+    expect(advice.sell.map((s) => s.routeId)).toEqual([w.routes.find((r) => r.a === "mid" || r.b === "far")!.id]);
+    const quote = advice.sell[0]!;
+    expect(quote.savesPerDay).toBeGreaterThan(0);
+    const before = w.economy.funds;
+    const refund = removeBus(w, quote.routeId);
+    expect(refund).toBeCloseTo(quote.refund, 6);
+    expect(w.economy.funds).toBeCloseTo(before + quote.refund, 6);
+  });
+
+  test("a full route on worn roads asks for a bus, not a repair", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 8 });
+    addBus(w, "big", "mid");
+    run(w, 1200);
+    const d = diagnoseRoute(w, w.routes[0]!.id)!;
+    expect(d.wornSpeed).toBeLessThan(0.85);
+    expect(d.loadFactor).toBeGreaterThanOrEqual(0.85);
+    expect(d.verdict).toBe("full");
   });
 });
 

@@ -72,14 +72,21 @@ function obsolescenceMultiplier(econ: VehicleEconomics, elapsedSeconds: number):
 // Depreciated resale (docs/principles.md §3): without this, a player in
 // debt liquidates the fleet and is instantly solvent. Floors at
 // MIN_RESALE_FRACTION rather than depreciating to zero.
-export function sellVehicle(state: EconomyState, vehicleId: string): number {
+// What selling a vehicle would return now -- the preview and the sale are
+// this one computation.
+export function resaleValue(state: EconomyState, vehicleId: string): number {
   const econ = state.vehicleEconomics.get(vehicleId);
   if (!econ) return 0;
-
   const secondsOwned = state.elapsedSeconds - econ.purchasedAtSeconds;
   const daysOwned = secondsOwned / SECONDS_PER_GAME_DAY;
   const fraction = Math.max(MIN_RESALE_FRACTION, 1 - DEPRECIATION_PER_DAY * daysOwned);
-  const resaleAmount = econ.purchaseCost * fraction;
+  return econ.purchaseCost * fraction;
+}
+
+export function sellVehicle(state: EconomyState, vehicleId: string): number {
+  const econ = state.vehicleEconomics.get(vehicleId);
+  if (!econ) return 0;
+  const resaleAmount = resaleValue(state, vehicleId);
 
   state.funds += resaleAmount;
   state.vehicleEconomics.delete(vehicleId);

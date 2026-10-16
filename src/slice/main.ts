@@ -8,6 +8,7 @@ import {
   checkPave,
   checkRoad,
   createSliceWorld,
+  debtAdvice,
   diagnoseRoute,
   directRoad,
   dirtRoadsOn,
@@ -469,7 +470,32 @@ function renderRoutes(): void {
         <div class="detail">${detail}</div>
       </div>`;
   });
-  routesEl.innerHTML = header + rows.join("");
+  routesEl.innerHTML = moneyNote() + header + rows.join("");
+}
+
+// The way out of debt, said outright (playtest, day 14: "felt stuck,
+// didn't know how to get out of debt"). Shown in debt, or with under a
+// week of money left.
+function moneyNote(): string {
+  const advice = debtAdvice(world);
+  if (!advice) return "";
+  const situation = advice.funds < 0
+    ? `<b>In debt (${naira(advice.funds)}).</b> Buying and repairs are blocked until funds are back above zero; running costs still bill${advice.netPerDay < 0 ? `, ${naira(-advice.netPerDay)}/day more than you earn` : ""}.`
+    : `<b>Money runs out in ~${Math.max(1, Math.round(advice.daysLeft))} days</b> at ${naira(advice.netPerDay)}/day.`;
+  const upkeep = [...world.upkeepRateEMA.entries()].filter(([id]) => world.maintained.has(id)).reduce((sum, [, rate]) => sum + rate, 0) * SECONDS_PER_GAME_DAY;
+  let exit: string;
+  if (advice.sell.length > 0) {
+    const list = advice.sell.map((s) => `${townName(s.a)} ↔ ${townName(s.b)} (${naira(-s.savesPerDay)}/day; sells for ${naira(s.refund)})`).join(", ");
+    const refund = advice.sell.reduce((sum, s) => sum + s.refund, 0);
+    const saves = advice.sell.reduce((sum, s) => sum + s.savesPerDay, 0);
+    const after = advice.funds + refund;
+    exit = `The way out: sell the buses on routes losing money on their own fares (<b>−</b> on each): ${list}. All of them: ${naira(refund)} now${after >= 0 && advice.funds < 0 ? " (out of debt)" : ""} and ${naira(saves)}/day better.`;
+  } else if (upkeep > 0) {
+    exit = `No route loses money on its own; road upkeep costs ${naira(upkeep)}/day. Stop maintaining the quietest roads (Fix tool, F).`;
+  } else {
+    exit = advice.netPerDay > 0 ? `You're earning ${naira(advice.netPerDay)}/day: the debt clears on its own in ~${Math.ceil(-advice.funds / advice.netPerDay)} days.` : "Every route pays its way; the loss is the network's start-up. Give it a few days.";
+  }
+  return `<p class="callout">${situation} ${exit}</p>`;
 }
 
 routesEl.addEventListener("click", (event) => {

@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**401 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**404 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -66,19 +66,26 @@ live-verified; each links to where its detail actually lives now.
 
 ## What's next
 
-**Play.** Everything since step 1e is built and unplayed: step 2 (congestion), 2b (running
-cost), 2c (paving), 2d (inside towns), step 3 (terrain), 4a (decay) and 4b (growth). Questions to bring back:
+**Played 2026-10-16 to day 14** (steps 2–4b together): *"felt stuck, didn't know how to get
+out of debt."* Fixed: the routes panel now names the way out when money runs low (which
+buses to sell, for how much, saving how much a day), and a full route asks for a bus
+before it mentions wear. Details in principles.md §6's playtest log.
 
+**Play again.** Questions to bring back:
+
+- When money ran low, did the panel's way out read, and did it get you out?
 - Does piling buses onto the trunk hurt, and does traffic read on the map?
 - Is money a constraint now (a bus costs ~₦105/day), or a grind?
 - Is paving found, and worth it where buses run full?
 - Does "Inside <town>" read as informal's ground, not a loss?
 - Do the river and the ridge make you think about where to build — and do bends read as a
-  longer trip?
+  longer trip? (Last time the Ikole bridge got a Kuto shuttle; a bus from Ilase through
+  Kuto earns far more, and nothing says so.)
 - Is choosing which roads to maintain a decision, or does everything (or nothing) get kept?
 - Does a growing town (▲) read as a place developing, or as a treadmill of queues? Is money
   loose again by day 40?
 
 Write down what was felt before changing anything (principles.md §6's playtest log). Open
-after that: a formal town-service tier (§5, "make it fixable") if play wants inside-town
-trips; "hold the line" road alignment once a straight line is priced as a line; then step 4.
+after that: pointing at through-routes; a formal town-service tier (§5, "make it fixable")
+if play wants inside-town trips; "hold the line" road alignment once a straight line is
+priced as a line; then goods or rail.

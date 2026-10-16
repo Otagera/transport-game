@@ -4,7 +4,8 @@ import { createSimulation, rebuildFromMap } from "../simulation/simulate";
 import { findPath } from "../simulation/routing";
 import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
-import { canAfford, createEconomyState, registerPurchase, sellVehicle } from "../economy/state";
+import { canAfford, createEconomyState, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
+import { computeBurnRate } from "../economy/report";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
@@ -316,6 +317,44 @@ export function removeBus(world: SliceWorld, routeId: string): number {
   return resale;
 }
 
+/**
+ * The way out of debt, or away from it (playtest 2026-10-16, day 14: "felt
+ * stuck, didn't know how to get out of debt"). Debt blocks spending but not
+ * billing (principles §3), so the only exit is to stop the bleeding: the
+ * routes losing money on their own book, what selling their buses returns
+ * now, and what it saves a day. Null when money isn't a worry -- in
+ * credit and either earning or with more than a week of runway.
+ */
+export interface DebtAdvice {
+  funds: number;
+  netPerDay: number;
+  /** Days until funds hit zero at this rate; 0 if already in debt, Infinity if earning. */
+  daysLeft: number;
+  /** Losing routes, worst first: selling all their buses returns `refund` and saves `savesPerDay`. */
+  sell: Array<{ routeId: string; a: string; b: string; buses: number; refund: number; savesPerDay: number }>;
+}
+
+const RUNWAY_WARNING_DAYS = 7;
+
+export function debtAdvice(world: SliceWorld): DebtAdvice | null {
+  const funds = world.economy.funds;
+  const { netPerDay } = computeBurnRate(world.economy);
+  const daysLeft = funds <= 0 ? 0 : netPerDay >= 0 ? Infinity : funds / -netPerDay;
+  if (funds >= 0 && daysLeft > RUNWAY_WARNING_DAYS) return null;
+  const sell = routeSummaries(world)
+    .filter((route) => route.netPerDay < 0)
+    .sort((p, q) => p.netPerDay - q.netPerDay)
+    .map((route) => ({
+      routeId: route.id,
+      a: route.a,
+      b: route.b,
+      buses: route.buses,
+      refund: world.routes.find((r) => r.id === route.id)!.vehicleIds.reduce((sum, id) => sum + resaleValue(world.economy, id), 0),
+      savesPerDay: -route.netPerDay,
+    }));
+  return { funds, netPerDay, daysLeft, sell };
+}
+
 export interface RouteSummary {
   id: string;
   a: string;
@@ -377,7 +416,10 @@ const FULL_LOAD = 0.85;
 const JAMMED_SPEED = 0.7;
 const POACHED_SHARE = 0.2;
 // Below this share of free speed from wear alone, the road is the story
-// (wear.ts). Ranked after jammed: traffic is the cause you can't repair.
+// (wear.ts). Ranked after jammed (traffic is the cause you can't repair)
+// and after full: buses leaving full is the leak that pays to fix first
+// -- ranked above it, "worn" hid the one move that would earn money
+// (playtest, day 14: a 100%-full route said only "worn").
 const WORN_SPEED = 0.85;
 const WAITING_SHARE = 0.3;
 // About how much of a route's riders one bus catches, measured: ~35% on
@@ -438,8 +480,8 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
     diagnosis.verdict = "overcapacity";
   }
   else if (route.speedEMA < JAMMED_SPEED) diagnosis.verdict = "jammed";
-  else if (diagnosis.wornSpeed < WORN_SPEED) diagnosis.verdict = "worn";
   else if (route.loadFactorEMA >= FULL_LOAD) diagnosis.verdict = "full";
+  else if (diagnosis.wornSpeed < WORN_SPEED) diagnosis.verdict = "worn";
   else if (diagnosis.poached >= POACHED_SHARE) diagnosis.verdict = "poached";
   else if (diagnosis.gaveUp + diagnosis.lost >= WAITING_SHARE) diagnosis.verdict = "waiting";
   return diagnosis;

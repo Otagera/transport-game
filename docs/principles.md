@@ -395,6 +395,10 @@ for if eras return; they are not live in the slice.*
   destination" — not "has no built edge". A road to nowhere doesn't un-strand a node.
 - **Per-route P&L with worst-first sorting** is what makes the economy diagnosable.
   Three playthroughs on the first attempt ended in undiagnosable debt without it.
+- **Debt needs its exit named** (slice playtest, day 14). "Spending blocked, billing
+  continues" is right, but a player in debt can't buy the bus that would earn, and reads
+  the situation as stuck. Say the way out — which buses to sell, for how much, saving how
+  much a day — the moment money becomes a worry, not after.
 - **A route's diagnosis must rank causes, and low load alone isn't overcapacity.** Measured:
   2 buses on the slice's best route run ~35% full yet beat 1 bus, because they still catch
   riders who'd otherwise be lost. "Too many buses" needs low load *and* most riders already
@@ -584,6 +588,22 @@ Steps, each played before the next:
      it shrinks back if service falls, never below its start. ▲/▼ on the map, a sentence in
      the town panel. See Findings, Growth. Watch: does a growing town read as a place
      developing, or as a treadmill of queues? And is money loose again by day 40?
+
+   **Played 2026-10-16 (to day 14), steps 2–4b at once:** *"felt stuck, didn't know how to
+   get out of debt."* The screenshot: −₦404, −₦40/day; four routes of one bus each — a
+   bridge to Ikole run as a Kuto–Ikole shuttle (thin, −₦74), Ado–Ogbe (thin, −₦73),
+   Owode–Ado (≈0), and Ilase–Owode, the only earner (+₦80), 100% full — which said only
+   "worn". Nothing maintained. Read as: debt blocks spending, so the one move that earns
+   (another bus on the full trunk) was out of reach, and nothing named the exit (sell the
+   thin buses). So:
+   - **The way out, said outright:** in debt, or under a week from it, the routes panel
+     opens with the losing routes, what selling their buses returns now and saves a day
+     (`debtAdvice`; the refund quote is `resaleValue`, the sale's own computation).
+   - **"full" now ranks above "worn":** a route that leaves riders behind asks for a bus
+     first; ranked the other way, "worn" hid the earning move.
+   Not changed, watch next time: the Ikole bridge got a Kuto shuttle, not the Ilase bus
+   through Kuto the probe found worth 4× — nothing points to the through-route; and
+   ▼ flickers on towns a little over their start as early shares settle.
 
 Rules for working this way:
 

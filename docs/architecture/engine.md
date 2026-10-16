@@ -484,7 +484,7 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   danfos alike — kept apart from `segmentSpeed`, which stays traffic only (the casing
   means traffic). `setMaintained` charges the catch-up repair at once. `paveCost` includes
   repairing the base. `diagnoseRoute` adds `wornSpeed` (the worst stretch) and the `worn`
-  verdict (< 85%, after `jammed`); `wornRoadsOn` names them with their upkeep. A split
+  verdict (< 85%, after `jammed` and `full` — a full route asks for a bus first); `wornRoadsOn` names them with their upkeep. A split
   carries maintenance to both halves.
 - **Growth of the original towns** (step 4, `growth.ts`) — `townGrowth` reads the town's
   share (`townShare`: trips leaving it), service = player + 0.5 × informal, and gives a target
@@ -494,6 +494,10 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   tick (from `updateSettlements`, after the roadside towns' drift); demand follows at the
   daily `refreshDemand`. Emergent towns are not in `basePopulation` and keep growing from
   traffic.
+- **`debtAdvice`** (`world.ts`) — null unless in debt or under `RUNWAY_WARNING_DAYS` (7) of
+  money left at the burn rate; otherwise the routes losing money on their own book, worst
+  first, with `economy/state.ts`'s `resaleValue` (the preview `sellVehicle` itself uses)
+  summed over their buses and their loss as the daily saving.
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
 
 Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,
