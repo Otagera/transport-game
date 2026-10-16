@@ -2,6 +2,7 @@ import { computeSegmentLoads } from "../simulation/congestion";
 import type { Segment } from "../map/types";
 import type { Vehicle } from "../simulation/types";
 import type { SliceWorld } from "./types";
+import { slowOrder } from "./wear";
 
 // Shared road (docs/principles.md §6, step 2). Your buses and the informal
 // sector slow each other down -- which closes the loop the hook depends on
@@ -90,6 +91,21 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
       if (vehicle.carries === "goods") heavy.set(segmentId, (heavy.get(segmentId) ?? 0) + vehicle.congestionWeight);
     }
   }
+  // Trains, on their own network: one entry per train onto a stretch of
+  // track, for track wear (wear.ts) -- never road flow.
+  const trainsEntering = new Map<string, number>();
+  for (const vehicle of simulation.vehicles) {
+    if (!world.railVehicles.has(vehicle.id)) continue;
+    const length = vehicle.path.length;
+    if (length < 2 || vehicle.pathIndex >= length) continue;
+    const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length]!;
+    const to = vehicle.path[vehicle.pathIndex]!;
+    const segmentId = world.railRouting.graph.get(from)?.find((candidate) => candidate.to === to)?.segmentId;
+    if (!segmentId) continue;
+    const leg = `${segmentId}#${vehicle.pathIndex}`;
+    nowOn.set(vehicle.id, leg);
+    if (world.vehicleSegment.get(vehicle.id) !== leg) trainsEntering.set(segmentId, (trainsEntering.get(segmentId) ?? 0) + 1);
+  }
   world.vehicleSegment = nowOn;
 
   const alpha = 1 - Math.exp(-dt / FLOW_TAU_SECONDS);
@@ -100,7 +116,10 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
   world.segmentSpeed = new Map();
   for (const segment of simulation.map.segments) {
     if (segment.type === "rail") {
-      world.segmentSpeed.set(segment.id, 1); // track has no traffic but its own trains
+      // Track has no traffic but its own trains; worn track runs under a slow order (wear.ts).
+      world.segmentSpeed.set(segment.id, slowOrder(world, segment));
+      const previousTrains = world.railFlowEMA.get(segment.id) ?? 0;
+      world.railFlowEMA.set(segment.id, previousTrains + ((trainsEntering.get(segment.id) ?? 0) / dt - previousTrains) * alpha);
       continue;
     }
     const previous = world.roadFlowEMA.get(segment.id) ?? 0;

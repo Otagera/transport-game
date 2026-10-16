@@ -14,6 +14,7 @@ import { computeBurnRate } from "@engine/economy/report";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
 import { addLorry, diagnoseLorryRoute, goodsFlows, removeLorry } from "@engine/slice/goods";
 import { addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
+import { slowOrder } from "@engine/slice/wear";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -1057,6 +1058,49 @@ describe("slice: rail (step 4d)", () => {
     expect(isCutOff(w, "cut")).toBe(false);
     expect(tripsFrom(w, "cut").find((t) => t.to === "mid")!.reachable).toBe(true);
     expect(roadPath(w, "mid", "cut")).toBeNull(); // still no road: no danfo gets there
+  });
+
+  test("track wears with the trains that run on it; disused track doesn't change", () => {
+    const w = createSliceWorld(
+      { ...MAP, rails: [{ a: "big", b: "far" }, { a: "mid", b: "cut" }] },
+      { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0 },
+    );
+    buildTrack(w, "big", "far");
+    for (let i = 0; i < 3; i += 1) addTrain(w, "big", "far");
+    const used = w.simulation.map.segments.find((s) => s.type === "rail" && s.fromNodeId === "big")!;
+    const disused = w.simulation.map.segments.find((s) => s.type === "rail" && s.fromNodeId === "mid")!;
+    const disusedBefore = disused.condition;
+    run(w, 300);
+    expect(used.condition).toBeLessThan(0.9);
+    expect(w.railFlowEMA.get(used.id)!).toBeGreaterThan(0);
+    expect(disused.condition).toBe(disusedBefore);
+  });
+
+  test("worn track runs under a slow order, and the train route says worn, not jammed", () => {
+    const w = railWorld();
+    buildTrack(w, "big", "far");
+    addTrain(w, "big", "far");
+    const track = w.simulation.map.segments.find((s) => s.type === "rail")!;
+    expect(slowOrder(w, track)).toBe(1);
+    track.condition = 0.4;
+    expect(slowOrder(w, track)).toBe(w.tuning.railSlowOrderSpeed);
+    run(w, 120);
+    const d = diagnoseRoute(w, w.routes.find((r) => r.id.startsWith("rail:"))!.id)!;
+    expect(d.verdict).not.toBe("jammed");
+    expect(d.wornSpeed).toBeLessThan(0.6);
+  });
+
+  test("maintained track is kept new for upkeep at a road's price per cell, not track's", () => {
+    const w = railWorld();
+    buildTrack(w, "big", "far");
+    const track = w.simulation.map.segments.find((s) => s.type === "rail")!;
+    expect(setMaintained(w, track.id, true).ok).toBe(true);
+    for (let i = 0; i < 3; i += 1) addTrain(w, "big", "far");
+    run(w, 300);
+    expect(track.condition).toBe(1);
+    // Same cells, same deficit: track costs what a road does to keep up.
+    const road = w.simulation.map.segments.find((s) => s.type === "road" && s.provenance === "inherited")!;
+    expect(repairCost(w, track, 0.5) / segmentLength(w, track)).toBeCloseTo(repairCost(w, road, 0.5) / segmentLength(w, road), 6);
   });
 
   test("selling a route's last train drops it, and the train leaves the rail set", () => {

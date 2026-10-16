@@ -26,7 +26,8 @@ import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, routeKey, type
 //     planned over the terrain like a road, ~3x the price, and minds
 //     gradients more -- the choice is restore the wrong line or build the
 //     right one.
-//   - Track doesn't wear in this first cut (wear.ts skips it).
+//   - Track wears with the trains that run over it, and the Fix tool keeps
+//     it up like a road (wear.ts); disused track doesn't change.
 
 export const TRAIN_DEF_ID = "slice-train";
 

@@ -225,7 +225,20 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
   for (const segment of world.simulation.map.segments) {
     const line = segmentPolyline(world.simulation.map, segment);
     if (segment.type === "rail") {
-      drawTrack(ctx, world, view, line, world.railOutOfService.has(segment.id));
+      const disused = world.railOutOfService.has(segment.id);
+      const kept = !disused && world.maintained.has(segment.id);
+      // Kept track sits on a clean pale bed under its sleepers (a centre
+      // line, as roads get, vanished inside the rail at normal zoom).
+      if (kept) {
+        ctx.strokeStyle = COLORS.kept;
+        ctx.lineWidth = 14;
+        ctx.lineCap = "butt";
+        strokeLine(ctx, view, line);
+        ctx.lineCap = "round";
+      }
+      drawTrack(ctx, world, view, line, disused);
+      // Worn track cracks like a road.
+      if (!disused && !kept && segment.condition < 0.85) drawCracks(ctx, view, line, segment.condition);
       continue;
     }
     // A bridge deck under the road where it crosses water.

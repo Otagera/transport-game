@@ -507,13 +507,22 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   vehicles in `world.railVehicles`; `routingFor(world, vehicle)` picks the network for
   `tickVehicle`, spacing (`edgeLengths`), `routeSegments`, `routeSpeed` and drawing.
   Congestion's `currentSegment`, segment loads and roadside-town flows skip trains; track
-  gets speed 1 and no wear; towns are founded beside roads only; `splitSegment` splices
+  gets no road traffic (its `segmentSpeed` is the slow order, below); towns are founded beside roads only; `splitSegment` splices
   road vehicles only. `planRail` is `roads.ts`'s `planAlignment` (the one planner, which
   `planRoad` now calls too) over a terrain with elevation × `railGradientMultiplier`, at
   `railCostPerCell`; `buildTrack` restores the derelict track joining two towns
   (`railRestoreCostPerCell` × length) or lays new. Route cost and the thin threshold are
   per vehicle kind (`vehicleCostPerDay`). `isCutOff` / `TripSummary.reachable` count working
   track. `throughRoute` extends bus routes along roads only, never trains.
+- **Track wear** (`wear.ts`, `congestion.ts`) — `updateRoadSpeeds` counts trains entering each
+  stretch of track (on `railRouting`) into `world.railFlowEMA`; `wearRate` for track is
+  `(weatherPerSecond + railWearPerTrain × trains/s) × bridge`, no dirt factor;
+  `updateRoadWear` skips only disused track. `slowOrder(world, segment)` is
+  `railSlowOrderSpeed` below `railSlowOrderBelow` condition (1 otherwise and for roads); it's
+  published as the track's `segmentSpeed`, so `tickVehicle` applies it with the condition
+  factor, and `wearSpeed(world, segment)` includes it. `repairCost` prices track at
+  `roadCostPerCell`, not `railCostPerCell`. `diagnoseRoute` never calls a train route
+  `jammed`; `wornRoadsOn` covers a train route's track.
 - **Goods** (step 4c, `goods.ts`) — `goodsFlows` derives one-way flows from the towns as they
   are: produce from each original town under `marketPopulation` to its nearest market
   (ties to the bigger), supplies from `world.port` (the map def's `port`) to every other town,

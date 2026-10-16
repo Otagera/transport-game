@@ -78,6 +78,14 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   trainSpeed: 8,
   trainPurchaseCost: 2000,
   trainOperatingCostPerSecond: 6,
+  // Track wear (wear.ts). Probe "track wear:", one train, 40 days: kept up,
+  // Ilase-Owode +265/day (upkeep 37) against +193 left alone; Ilase-Owode-
+  // Ado +365 (upkeep 67) against +263. Left alone, a busy line is at the
+  // floor in ~3 weeks, under a slow order. Without the slow order worn track
+  // barely touched a train (+4/day to keep it up): no decision.
+  railWearPerTrain: 0.003,
+  railSlowOrderBelow: 0.6,
+  railSlowOrderSpeed: 0.6,
   // Goods (step 4, goods.ts). Lorry from the original catalog
   // (public/content/vehicles.json): 30 t, slow, heavy. Fares tuned with the
   // probe's "goods:" strategies, one lorry, 20 days, whole-game net/day:

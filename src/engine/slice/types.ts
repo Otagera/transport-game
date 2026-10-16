@@ -144,6 +144,12 @@ export interface SliceTuning {
   trainSpeed: number;
   trainPurchaseCost: number;
   trainOperatingCostPerSecond: number;
+  /** Condition track loses per second per train entering it per second (wear.ts); weather as for roads. */
+  railWearPerTrain: number;
+  /** Below this condition, track is under a slow order... */
+  railSlowOrderBelow: number;
+  /** ...and trains on it run at this share of their speed. */
+  railSlowOrderSpeed: number;
   // Goods (step 4, goods.ts).
   /** Towns at least this big (thousands) are markets: produce goes to the nearest one. */
   marketPopulation: number;
@@ -256,6 +262,8 @@ export interface SliceWorld {
   railOutOfService: Set<string>;
   /** Vehicles that run on rail (trains): road systems skip them. */
   railVehicles: Set<string>;
+  /** segmentId -> rolling trains entering each stretch of track per second (wear.ts). */
+  railFlowEMA: Map<string, number>;
   /** Lorry routes (goods.ts) -- apart from `routes`, which every passenger system reads. */
   lorryRoutes: SliceRoute[];
   /** Goods waiting at each town's yard, and where each flow's goods ended up. */

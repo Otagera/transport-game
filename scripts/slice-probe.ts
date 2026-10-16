@@ -48,6 +48,14 @@ function rail(tracks: Array<[string, string]>, trains: Array<[string, string]>) 
   };
 }
 
+function keepTrack(world: SliceWorld) {
+  // New track needs no catch-up repair, but setMaintained refuses in debt: lend it the funds.
+  const funds = world.economy.funds;
+  world.economy.funds = 1e9;
+  for (const segment of world.simulation.map.segments) if (segment.type === "rail" && !world.railOutOfService.has(segment.id)) setMaintained(world, segment.id, true);
+  world.economy.funds = funds;
+}
+
 function lorries(a: string, b: string, n: number) {
   return (world: SliceWorld) => {
     for (let i = 0; i < n; i += 1) addLorry(world, a, b);
@@ -166,6 +174,17 @@ const allStrategies: Strategy[] = [
     name: "rail: track ilase-owode-ado + 1 train",
     setup: rail([["ilase", "owode"], ["owode", "ado"]], [["ilase", "ado"]]),
   },
+  // Track wear: the two lines that pay, left alone or kept up from the start.
+  { name: "track wear: ilase-owode, left alone", setup: rail([["ilase", "owode"]], [["ilase", "owode"]]) },
+  { name: "track wear: ilase-owode, maintained", setup: (w) => { rail([["ilase", "owode"]], [["ilase", "owode"]])(w); keepTrack(w); } },
+  { name: "track wear: ilase-owode-ado, left alone", setup: rail([["ilase", "owode"], ["owode", "ado"]], [["ilase", "ado"]]) },
+  {
+    name: "track wear: ilase-owode-ado, maintained",
+    setup: (w) => {
+      rail([["ilase", "owode"], ["owode", "ado"]], [["ilase", "ado"]])(w);
+      keepTrack(w);
+    },
+  },
   // Goods (step 4c): lorries where goods flow both ways against one-way
   // routes. Produce: Kuto/Ise -> Ilase, Ogbe -> Ado; supplies: Ilase -> all.
   { name: "goods: lorry ilase-kuto (both ways)", setup: lorries("ilase", "kuto", 1) },
@@ -258,9 +277,13 @@ for (const strategy of strategies) {
         `t/day out ${d.outbound.toFixed(0)} in ${d.inbound.toFixed(0)}  delivered ${pct(d.delivered)} spoiled ${pct(d.spoiled)} load ${pct(d.loadFactor)}`,
     );
   }
+  const track = world.simulation.map.segments
+    .filter((s) => s.type === "rail" && !world.railOutOfService.has(s.id))
+    .map((s) => `${s.id}${world.maintained.has(s.id) ? "*" : ""} ${pct(s.condition)} (${pct(wearSpeed(world, s))} speed, ${world.maintained.has(s.id) ? "upkeep" : "would cost"} ${upkeepPerDay(world, s).toFixed(0)}/day)`);
+  if (track.length > 0) console.log(`    track (* maintained): ${track.join(", ")}`);
   const roads = world.simulation.map.segments
     .filter((s) => (world.roadFlowEMA.get(s.id) ?? 0) > 0.2)
-    .map((s) => `${s.id}${world.maintained.has(s.id) ? "*" : ""} ${pct(s.condition)} (${pct(wearSpeed(s))} speed${world.maintained.has(s.id) ? `, upkeep ${upkeepPerDay(world, s).toFixed(0)}/day` : ""})`);
+    .map((s) => `${s.id}${world.maintained.has(s.id) ? "*" : ""} ${pct(s.condition)} (${pct(wearSpeed(world, s))} speed${world.maintained.has(s.id) ? `, upkeep ${upkeepPerDay(world, s).toFixed(0)}/day` : ""})`);
   console.log(`    roads (* maintained): ${roads.join(", ")}`);
   const busiest = [...world.roadFlowEMA].sort((a, b) => b[1] - a[1])[0];
   if (busiest) console.log(`    busiest road: ${busiest[0]} flow ${busiest[1].toFixed(2)}/s at ${pct(world.segmentSpeed.get(busiest[0]) ?? 1)} speed`);

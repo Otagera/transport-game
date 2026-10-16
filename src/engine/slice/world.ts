@@ -115,6 +115,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     railPlans: new Map(),
     railOutOfService: new Set(),
     railVehicles: new Set(),
+    railFlowEMA: new Map(),
     basePopulation: new Map(def.towns.map((town) => [town.id, town.population])),
     lorryRoutes: [],
     goods: createGoodsState(),
@@ -498,7 +499,7 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
     loadFactor: route.loadFactorEMA,
     speed: route.speedEMA,
     informalTraffic: informalTrafficShare(world, routeId),
-    wornSpeed: Math.min(1, ...[...routeSegments(world, routeId)].map((id) => wearSpeed(world.simulation.map.segments.find((s) => s.id === id)!))),
+    wornSpeed: Math.min(1, ...[...routeSegments(world, routeId)].map((id) => wearSpeed(world, world.simulation.map.segments.find((s) => s.id === id)!))),
     verdict: "healthy",
   };
 
@@ -506,7 +507,8 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
   else if (route.vehicleIds.length >= 2 && route.loadFactorEMA < OVERCAPACITY_LOAD && diagnosis.carried >= OVERCAPACITY_CARRIED) {
     diagnosis.verdict = "overcapacity";
   }
-  else if (route.speedEMA < JAMMED_SPEED) diagnosis.verdict = "jammed";
+  // Track has no traffic: a slow train is worn track under a slow order, not a jam.
+  else if (!isRailRoute(routeId) && route.speedEMA < JAMMED_SPEED) diagnosis.verdict = "jammed";
   else if (route.loadFactorEMA >= FULL_LOAD) diagnosis.verdict = "full";
   else if (diagnosis.wornSpeed < WORN_SPEED) diagnosis.verdict = "worn";
   else if (diagnosis.poached >= POACHED_SHARE) diagnosis.verdict = "poached";
@@ -536,11 +538,12 @@ function routeSegments(world: SliceWorld, routeId: string): Set<string> {
 export function wornRoadsOn(world: SliceWorld, routeId: string): Array<{ a: string; b: string; speed: number; upkeepPerDay: number; maintained: boolean }> {
   const ids = routeSegments(world, routeId);
   return world.simulation.map.segments
-    .filter((segment) => ids.has(segment.id) && segment.type === "road" && wearSpeed(segment) < 0.95)
+    // A bus route's roads, a train route's track (routeSegments is network-aware).
+    .filter((segment) => ids.has(segment.id) && !world.railOutOfService.has(segment.id) && wearSpeed(world, segment) < 0.95)
     .map((segment) => ({
       a: segment.fromNodeId,
       b: segment.toNodeId,
-      speed: wearSpeed(segment),
+      speed: wearSpeed(world, segment),
       upkeepPerDay: upkeepPerDay(world, segment),
       maintained: world.maintained.has(segment.id),
     }))

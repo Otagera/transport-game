@@ -145,6 +145,12 @@ blow-by-blow; this section is the distilled rule.
   lines that bypass the towns lose: the restored colonial line Ilase–Ipaja −₦125, new direct
   Ilase–Ado −₦10 (skips Owode). The brownfield line is cheap to restore and wrong — keep it
   that way. A train is fast or it's nothing: frequency is what one vehicle on a route lacks.
+- **Worn track needs a slow order to matter** (slice, track wear). At the wear factor every
+  vehicle gets (72% at the floor), a worn line cost a fast train ~₦37/day and keeping it up
+  was a wash. Railways restrict speed on bad track; with a slow order below 60% condition
+  (trains at 60% of that), keeping a busy line up is worth +₦72–102/day for ₦37–67 upkeep.
+  And price track *upkeep* like a road's per cell: building pays for formation and rails,
+  upkeep for ballast and sleepers — at building rates nobody would keep a line up.
 - **Two networks, one map** (slice). Track is a segment on the same map, but everything that
   drives routes on roads only and trains on track only; a train between two towns that also
   share a road must never be read as road traffic (it was, once: route diagnosis looked a
@@ -635,6 +641,11 @@ Steps, each played before the next:
      routes, so riders change bus ↔ train anywhere; no danfo or road traffic on the line;
      track doesn't wear yet. See Findings, Demand. Watch: restore the wrong line or build
      the right one — is that a choice you feel? Is rail a mid-game goal or out of reach?
+   - **Track wear** (built 2026-10-16): track wears with trains and weather (bridges 2×),
+     disused track doesn't; below 60% condition a slow order holds trains to 60% speed on
+     top of the usual wear. The Fix tool keeps track up like a road, at a road's upkeep
+     price per cell; kept track draws on a pale bed. A worn train route says "worn track",
+     never "jammed". See Findings, Demand.
 
    **Played 2026-10-16 (to day 14), steps 2–4b at once:** *"felt stuck, didn't know how to
    get out of debt."* The screenshot: −₦404, −₦40/day; four routes of one bus each — a

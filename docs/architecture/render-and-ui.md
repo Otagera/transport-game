@@ -242,7 +242,10 @@ no-cached-view discipline as §2).
   between") or new track (planned line, why it costs what it does); the Train tool (`T`)
   counts riders along the track path. Train rows read "by rail", "1 train", and their
   reasons are the bus reasons with the vehicle renamed (`forVehicle`). The toolbar (nine
-  tools) sits right of the key, left of the side panel; the key is 11px and four lines.
+  tools) sits right of the key, left of the side panel; the key is 11px and five lines.
+  Worn track cracks like a road; kept track draws on a pale bed under its sleepers (a centre
+  line vanished inside the rail at normal zoom). The Fix tool hovers and keeps track too
+  ("Track Ilase – Ipaja · … trains at N% speed"), never disused track.
 - **Lorries** — the Lorry tool (`L`) buys a lorry for a route like the Bus tool; its ghost
   says the goods along it each way ("25 t/day out, 50 back") and draws its road. Lorries
   draw longer than buses, brown, with a cab, filled by load; their routes as a brown dashed

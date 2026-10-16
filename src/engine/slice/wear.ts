@@ -39,15 +39,19 @@ export function bridgeCellsOn(world: SliceWorld, segment: Segment): number {
   return wet;
 }
 
-/** Condition lost per second on this road at its current traffic. */
+/** Condition lost per second on this road (or track) at its current traffic. */
 export function wearRate(world: SliceWorld, segment: Segment): number {
   const { tuning } = world;
+  const bridged = bridgeCellsOn(world, segment) > 0 ? tuning.bridgeWearMultiplier : 1;
+  if (segment.type === "rail") {
+    // Track: weather, plus every train that runs over it. No dirt to it.
+    return (tuning.weatherPerSecond + tuning.railWearPerTrain * (world.railFlowEMA.get(segment.id) ?? 0)) * bridged;
+  }
   // A lorry's road space wears `lorryWearMultiplier` times harder: count
   // its share of the flow that many times over.
   const flow = (world.roadFlowEMA.get(segment.id) ?? 0) + (tuning.lorryWearMultiplier - 1) * (world.heavyFlowEMA.get(segment.id) ?? 0);
   const surface = isDirt(segment) ? tuning.dirtWearMultiplier : 1;
-  const bridge = bridgeCellsOn(world, segment) > 0 ? tuning.bridgeWearMultiplier : 1;
-  return (tuning.weatherPerSecond + tuning.wearPerFlow * flow) * surface * bridge;
+  return (tuning.weatherPerSecond + tuning.wearPerFlow * flow) * surface * bridged;
 }
 
 /** What buying back `deficit` condition on a road costs, all of it. */
@@ -55,12 +59,30 @@ export function repairCost(world: SliceWorld, segment: Segment, deficit: number)
   const bridge = bridgeCellsOn(world, segment);
   const ground = Math.max(0, segmentLength(world, segment) - bridge);
   const units = maintenanceCost(ground, deficit) + maintenanceCost(bridge, deficit) * BRIDGE_REPAIR_MULTIPLIER;
+  // Track is repaired at a road's price per cell, not track's: building
+  // track pays for the formation and the rails, upkeep for ballast and
+  // sleepers. At track's price, keeping a line up cost 2-3x what it saved
+  // (probe: Ilase-Owode upkeep 112/day for ~60/day back), and nobody would.
   return units * (world.tuning.roadCostPerCell / BASE_COST_PER_CELL) * world.tuning.repairCostScale;
 }
 
-/** How fast a road's condition lets traffic go, 0..1 of free speed. */
-export function wearSpeed(segment: Segment): number {
-  return conditionSpeedFactor(segment.condition);
+/** How fast a road's (or track's) condition lets traffic go, 0..1 of free speed. */
+export function wearSpeed(world: SliceWorld, segment: Segment): number {
+  return conditionSpeedFactor(segment.condition) * slowOrder(world, segment);
+}
+
+/**
+ * Track below `railSlowOrderBelow` runs under a slow order: trains held to
+ * `railSlowOrderSpeed` of line speed, on top of the wear every vehicle
+ * feels. How railways actually degrade -- and without it worn track barely
+ * touched a fast train (probe: a line at the floor still made all but
+ * ~37/day of its fares), so keeping track up was never worth deciding.
+ * 1 for roads and sound track. congestion.ts publishes it as the track's
+ * speed, so it slows the train the map draws.
+ */
+export function slowOrder(world: SliceWorld, segment: Segment): number {
+  if (segment.type !== "rail" || segment.condition >= world.tuning.railSlowOrderBelow) return 1;
+  return world.tuning.railSlowOrderSpeed;
 }
 
 /**
@@ -72,7 +94,8 @@ export function updateRoadWear(world: SliceWorld, dt: number): number {
   let spent = 0;
   const alpha = 1 - Math.exp(-dt / UPKEEP_TAU_SECONDS);
   for (const segment of world.simulation.map.segments) {
-    if (segment.type === "rail") continue; // track doesn't wear in this first cut (rail.ts)
+    // Disused track stays as it is until restored: nothing runs on it.
+    if (world.railOutOfService.has(segment.id)) continue;
     const before = segment.condition;
     const worn = Math.max(MIN_CONDITION, before - wearRate(world, segment) * dt);
     let cost = 0;

@@ -113,7 +113,7 @@ function townAt(x: number, y: number): string | null {
 function roadAt(x: number, y: number): string | null {
   let best: { id: string; d: number } | null = null;
   for (const segment of world.simulation.map.segments) {
-    if (segment.type !== "road") continue; // track doesn't wear (rail.ts): nothing to keep up
+    if (world.railOutOfService.has(segment.id)) continue; // disused track: restore it first (K)
     const line = segmentPolyline(world.simulation.map, segment).map((p) => toScreen(view, p.x, p.y));
     for (let i = 1; i < line.length; i += 1) {
       const a = line[i - 1]!;
@@ -128,9 +128,14 @@ function roadAt(x: number, y: number): string | null {
   return best?.id ?? null;
 }
 
+/** "Track Ilase – Ipaja" opens a label; mid-sentence it's "track Ilase – Ipaja". */
+function midSentence(name: string): string {
+  return name.startsWith("Track ") ? `t${name.slice(1)}` : name;
+}
+
 function roadName(segmentId: string): string {
   const segment = world.simulation.map.segments.find((s) => s.id === segmentId)!;
-  return `${townName(segment.fromNodeId)} – ${townName(segment.toNodeId)}`;
+  return `${segment.type === "rail" ? "Track " : ""}${townName(segment.fromNodeId)} – ${townName(segment.toNodeId)}`;
 }
 
 function setTool(next: Tool): void {
@@ -169,8 +174,8 @@ canvas.addEventListener("click", (event) => {
     if (!result.ok) say(`Can't maintain: ${result.reason}`, true);
     else if (on) {
       const segment = world.simulation.map.segments.find((s) => s.id === road)!;
-      say(`Maintaining ${roadName(road)}: repaired for ${naira(result.charged)}, about ${naira(upkeepPerDay(world, segment))}/day to keep at this traffic`);
-    } else say(`Stopped maintaining ${roadName(road)}: it will wear again`);
+      say(`Maintaining ${midSentence(roadName(road))}: repaired for ${naira(result.charged)}, about ${naira(upkeepPerDay(world, segment))}/day to keep at this traffic`);
+    } else say(`Stopped maintaining ${midSentence(roadName(road))}: it will wear again`);
     renderPanel();
     return;
   }
@@ -245,7 +250,7 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
   const id = roadAt(mouse.x, mouse.y);
   if (!id) return null;
   const segment = world.simulation.map.segments.find((s) => s.id === id)!;
-  const state = `${pct(segment.condition)} condition, traffic at ${pct(wearSpeed(segment))} speed`;
+  const state = `${pct(segment.condition)} condition, ${segment.type === "rail" ? "trains" : "traffic"} at ${pct(wearSpeed(world, segment))} speed`;
   const upkeep = naira(upkeepPerDay(world, segment));
   const label = world.maintained.has(id)
     ? `${roadName(id)} · maintained, ${upkeep}/day · click to stop`
@@ -498,6 +503,11 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
       return `Jammed: traffic holds your buses to ${pct(d.speed)} of free speed, so each makes fewer trips a day. ${pct(d.informalTraffic)} of the traffic is informal; every rider you take back is one fewer okada. Too many buses of your own add to it too.${dirt.length > 0 ? ` It runs on dirt: paving ${dirt.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ")} (Road tool, click both towns) carries ${paveGain()}× the traffic.` : ""}`;
     case "worn": {
       const worn = wornRoadsOn(world, d.routeId).filter((r) => !r.maintained);
+      if (isRailRoute(d.routeId)) {
+        const stretches = worn.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ");
+        const upkeep = worn.reduce((sum, r) => sum + r.upkeepPerDay, 0);
+        return `Worn track holds your trains to ${pct(d.wornSpeed)} speed${stretches ? ` (${stretches})` : ""}. Maintain it (Fix tool, F) for about ${naira(upkeep)}/day at this traffic.`;
+      }
       const roads = worn.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ");
       const upkeep = worn.reduce((sum, r) => sum + r.upkeepPerDay, 0);
       return `Worn roads hold your buses to ${pct(d.wornSpeed)} speed${roads ? ` (${roads})` : ""}. Maintain them (Fix tool, F) for about ${naira(upkeep)}/day, or pave the dirt ones: paved roads wear a third as fast.`;
