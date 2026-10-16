@@ -77,6 +77,8 @@ export interface Ghost {
   label: string;
   /** The planned road, map cells -- drawn instead of a straight line when there is one. */
   line?: Point[];
+  /** Or the towns a bus would run through, drawn along their roads. */
+  path?: string[];
 }
 
 export interface DrawState {
@@ -386,10 +388,11 @@ function drawGhostLine(ctx: CanvasRenderingContext2D, world: SliceWorld, view: V
   ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 6]);
-  if (ghost.line) {
+  const line = ghost.line ?? (ghost.path ? ghost.path.slice(1).flatMap((to, i) => edgeLine(world, ghost.path![i]!, to)) : null);
+  if (line) {
     // The road you'd get, bends and all: where it goes round, it's longer.
     ctx.lineWidth = 3;
-    strokeLine(ctx, view, ghost.line);
+    strokeLine(ctx, view, line);
   } else {
     const from = world.towns.get(ghost.from)!;
     const a = toScreen(view, from.x, from.y);

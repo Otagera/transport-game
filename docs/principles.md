@@ -395,6 +395,13 @@ for if eras return; they are not live in the slice.*
   destination" — not "has no built edge". A road to nowhere doesn't un-strand a node.
 - **Per-route P&L with worst-first sorting** is what makes the economy diagnosable.
   Three playthroughs on the first attempt ended in undiagnosable debt without it.
+- **Show a route's reach along its whole path, and point thin shuttles onward** (slice
+  playtest, day 14). The bus preview counted only the two towns clicked, so a shuttle
+  looked as good as a through-route that carries every trip on the way. Suggesting the
+  extension needs two guards, both measured: one hop only, and at least as many trips per
+  cell — on reach alone the longest route always won (Kuto–Ikole "should" start at Ipaja,
+  five towns away); and 1.5× one bus's break-even — Owode–Ogbe via Ado reached 1.1× and
+  still lost ₦72/day, while Ilase–Ise → Owode–Ise via Ilase went from ₦0 to +₦63/day.
 - **Debt needs its exit named** (slice playtest, day 14). "Spending blocked, billing
   continues" is right, but a player in debt can't buy the bus that would earn, and reads
   the situation as stuck. Say the way out — which buses to sell, for how much, saving how
@@ -601,9 +608,12 @@ Steps, each played before the next:
      (`debtAdvice`; the refund quote is `resaleValue`, the sale's own computation).
    - **"full" now ranks above "worn":** a route that leaves riders behind asks for a bus
      first; ranked the other way, "worn" hid the earning move.
-   Not changed, watch next time: the Ikole bridge got a Kuto shuttle, not the Ilase bus
-   through Kuto the probe found worth 4× — nothing points to the through-route; and
-   ▼ flickers on towns a little over their start as early shares settle.
+   - **Through-routes, pointed at** (the user's follow-up): the Ikole bridge got a Kuto
+     shuttle, not the Ilase bus through Kuto the probe found worth ~4×. A thin route now
+     leads with "Run it through: a bus Ilase ↔ Ikole (via Kuto) reaches ₦456/day of trips,
+     against ₦76"; the debt note offers the same; the bus preview counts every trip along
+     its road and draws the road it would take. See Findings, Display.
+   Still to watch: ▼ flickers on towns a little over their start as early shares settle.
 
 Rules for working this way:
 

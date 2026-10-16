@@ -494,6 +494,11 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   tick (from `updateSettlements`, after the roadside towns' drift); demand follows at the
   daily `refreshDemand`. Emergent towns are not in `basePopulation` and keep growing from
   traffic.
+- **Through-routes** (`world.ts`) — `demandAlong(a, b)` is the demand of every trip with
+  both ends on the bus's road path. `throughRoute(route)` tries each road leaving either
+  end to a town not on the route (one hop), keeps extensions whose reach per path length is
+  no lower than the route's, and returns the best if its reach is ≥ 1.5× the route's and
+  ≥ 1.5× one bus's break-even at `ONE_BUS_REACH`.
 - **`debtAdvice`** (`world.ts`) — null unless in debt or under `RUNWAY_WARNING_DAYS` (7) of
   money left at the burn rate; otherwise the routes losing money on their own book, worst
   first, with `economy/state.ts`'s `resaleValue` (the preview `sellVehicle` itself uses)

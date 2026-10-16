@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, debtAdvice, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -848,6 +848,37 @@ describe("slice: the way out of debt (playtest, day 14)", () => {
     expect(d.wornSpeed).toBeLessThan(0.85);
     expect(d.loadFactor).toBeGreaterThanOrEqual(0.85);
     expect(d.verdict).toBe("full");
+  });
+});
+
+describe("slice: through-routes (playtest, day 14)", () => {
+  test("a bus's reach is every trip along its road, not just its two ends", () => {
+    const w = world();
+    const along = demandAlong(w, "big", "far");
+    expect(along).toBeCloseTo(pairDemand(w, "big", "mid") + pairDemand(w, "mid", "far") + pairDemand(w, "big", "far"));
+    expect(along).toBeGreaterThan(pairDemand(w, "big", "far"));
+  });
+
+  test("a thin shuttle is pointed at running on to the next town, and says why", () => {
+    const w = world({ startingFunds: 1e6 });
+    addBus(w, "mid", "far");
+    const through = throughRoute(w, w.routes[0]!.id)!;
+    expect(through).toMatchObject({ a: "big", b: "far", via: ["mid"] });
+    expect(through.reachPerDay).toBeGreaterThan(through.currentReachPerDay * 1.5);
+  });
+
+  test("a strong route isn't told to stretch: longer must also be denser", () => {
+    const w = world({ startingFunds: 1e6 });
+    addBus(w, "big", "mid");
+    expect(throughRoute(w, w.routes[0]!.id)).toBeNull();
+  });
+
+  test("a thin route with nowhere better to go is left as thin", () => {
+    const w = world({ startingFunds: 1e6 });
+    addBus(w, "mid", "far");
+    // Make every through-route too thin to pay: nothing to point at.
+    w.tuning = { ...w.tuning, busOperatingCostPerSecond: 1000 };
+    expect(throughRoute(w, w.routes[0]!.id)).toBeNull();
   });
 });
 

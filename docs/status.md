@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**404 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**408 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -79,13 +79,12 @@ before it mentions wear. Details in principles.md §6's playtest log.
 - Is paving found, and worth it where buses run full?
 - Does "Inside <town>" read as informal's ground, not a loss?
 - Do the river and the ridge make you think about where to build — and do bends read as a
-  longer trip? (Last time the Ikole bridge got a Kuto shuttle; a bus from Ilase through
-  Kuto earns far more, and nothing says so.)
+  longer trip? Does "Run it through" get the Ikole bridge used as an Ilase–Ikole route?
 - Is choosing which roads to maintain a decision, or does everything (or nothing) get kept?
 - Does a growing town (▲) read as a place developing, or as a treadmill of queues? Is money
   loose again by day 40?
 
 Write down what was felt before changing anything (principles.md §6's playtest log). Open
-after that: pointing at through-routes; a formal town-service tier (§5, "make it fixable")
+after that: a formal town-service tier (§5, "make it fixable")
 if play wants inside-town trips; "hold the line" road alignment once a straight line is
 priced as a line; then goods or rail.

@@ -9,6 +9,7 @@ import {
   checkRoad,
   createSliceWorld,
   debtAdvice,
+  demandAlong,
   diagnoseRoute,
   directRoad,
   dirtRoadsOn,
@@ -21,7 +22,9 @@ import {
   removeBus,
   paveCost,
   roadCost,
+  roadPath,
   routeSummaries,
+  throughRoute,
   townShare,
   tripsFrom,
 } from "@engine/slice/world";
@@ -267,7 +270,13 @@ function ghost(): Ghost | null {
   }
   const check = checkBus(world, selectedTown, to);
   const price = naira(world.tuning.busPurchaseCost);
-  return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Bus ${price} · ${riders}` : check.reason };
+  // Every trip along its road, not just the two towns clicked: a bus from
+  // Ilase to Ikole carries Ilase-Kuto and Kuto-Ikole riders too.
+  const along = `${Math.round(demandAlong(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want trips along it`;
+  // Drawn along the road it would take, not straight across: a bus to Ikole
+  // from Ilase goes through Kuto.
+  const path = check.ok ? roadPath(world, selectedTown, to)?.nodeIds : undefined;
+  return { from: selectedTown, to: end, ok: check.ok, path, label: check.ok ? `Bus ${price} · ${along}` : check.reason };
 }
 
 // --- DOM panels -------------------------------------------------------
@@ -408,11 +417,20 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 // One sentence: the biggest reason this route earns what it does, and the
 // lever that would change it. The engine picks the verdict; this says it.
+// A thin shuttle that would carry far more run on to the next town says
+// so first (playtest, day 14: the Ikole bridge got a Kuto shuttle).
+function throughText(routeId: string): string {
+  const through = throughRoute(world, routeId);
+  if (!through) return "";
+  const via = through.via.length > 0 ? ` (via ${through.via.map(townName).join(", ")})` : "";
+  return `<b>Run it through:</b> a bus ${townName(through.a)} ↔ ${townName(through.b)}${via} reaches ${naira(through.reachPerDay)}/day of trips, against ${naira(through.currentReachPerDay)} on this one. Sell this bus (−) and buy that one (Bus tool). `;
+}
+
 function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPerDay: number): string {
   const dirt = dirtRoadsOn(world, d.routeId);
   switch (d.verdict) {
     case "thin":
-      return `Thin: only ${Math.round(d.demand * SECONDS_PER_GAME_DAY)} riders/day want these trips. Carrying every one would earn ${naira(d.ceilingPerDay)}/day, but one bus catches only about half, not enough to cover its running cost (${naira(costPerDay / buses)}/day).`;
+      return `${throughText(d.routeId)}Thin: only ${Math.round(d.demand * SECONDS_PER_GAME_DAY)} riders/day want these trips. Carrying every one would earn ${naira(d.ceilingPerDay)}/day, but one bus catches only about half, not enough to cover its running cost (${naira(costPerDay / buses)}/day).`;
     case "overcapacity":
       return `Buses run ${pct(d.loadFactor)} full and already carry ${pct(d.carried)} of riders here: the last bus mostly carries empty seats. Selling one saves ${naira(costPerDay / buses)}/day.`;
     case "jammed":
@@ -485,7 +503,13 @@ function moneyNote(): string {
   const upkeep = [...world.upkeepRateEMA.entries()].filter(([id]) => world.maintained.has(id)).reduce((sum, [, rate]) => sum + rate, 0) * SECONDS_PER_GAME_DAY;
   let exit: string;
   if (advice.sell.length > 0) {
-    const list = advice.sell.map((s) => `${townName(s.a)} ↔ ${townName(s.b)} (${naira(-s.savesPerDay)}/day; sells for ${naira(s.refund)})`).join(", ");
+    const list = advice.sell
+      .map((s) => {
+        const through = throughRoute(world, s.routeId);
+        const rerun = through ? `, or run it through as ${townName(through.a)} ↔ ${townName(through.b)}` : "";
+        return `${townName(s.a)} ↔ ${townName(s.b)} (${naira(-s.savesPerDay)}/day; sells for ${naira(s.refund)}${rerun})`;
+      })
+      .join(", ");
     const refund = advice.sell.reduce((sum, s) => sum + s.refund, 0);
     const saves = advice.sell.reduce((sum, s) => sum + s.savesPerDay, 0);
     const after = advice.funds + refund;

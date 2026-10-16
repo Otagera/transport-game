@@ -234,6 +234,11 @@ no-cached-view discipline as §2).
 - **Road preview** — the ghost draws the planned road itself, bends and all, and its label
   says what the price is made of: "Road ₦581 (bridge 4 cells ₦315, bends round: 10% longer
   trip)" (principles §1: a quote must say why). It flips left rather than run under the panel.
+- **Through-routes** — a thin route's reason leads with `throughText` ("Run it through: a bus
+  Ilase ↔ Ikole (via Kuto) reaches ₦…/day of trips, against ₦… on this one"), and the money
+  note offers it beside selling. The bus ghost counts `demandAlong` ("N riders/day want
+  trips along it") and draws its road path (`Ghost.path`, via `edgeLine`), not a straight
+  line between the two towns.
 - **Money note** — in debt or under a week from it, the routes panel opens with a red
   callout (`moneyNote`): the situation (spending blocked, billing continues), then the exit —
   losing routes with their loss and resale, and the total refund and daily saving; or road

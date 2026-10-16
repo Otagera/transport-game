@@ -132,6 +132,19 @@ const allStrategies: Strategy[] = [
       w.economy.funds -= 2500;
     },
   },
+  // Through-routes (playtest day 14): each thin shuttle against the route
+  // world.ts throughRoute suggests instead, one bus each.
+  { name: "through: shuttle ado-ogbe", setup: buses("ado", "ogbe", 1) },
+  { name: "through: run on owode-ogbe (via ado)", setup: buses("owode", "ogbe", 1) },
+  { name: "through: shuttle ilase-ise", setup: buses("ilase", "ise", 1) },
+  { name: "through: run on owode-ise (via ilase)", setup: buses("owode", "ise", 1) },
+  {
+    name: "through: shuttle kuto-ikole (bridged)",
+    setup: (w) => {
+      buildRoad(w, "kuto", "ikole");
+      buses("kuto", "ikole", 1)(w);
+    },
+  },
   // Step 3: Ikole sits across the river. Bridge it from the west, or reach
   // it dry from Ado and let Ilase's riders go round.
   {

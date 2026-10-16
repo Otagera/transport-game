@@ -667,6 +667,82 @@ export function pairDemand(world: SliceWorld, a: string, b: string): number {
   return total;
 }
 
+/**
+ * Riders per second wanting trips a bus between `a` and `b` would carry
+ * without a change: every trip with both ends on its road path, both
+ * directions. What a route can reach on its own -- the honest number to
+ * show when buying a bus, since a bus from Ilase to Ikole also carries
+ * Ilase-Kuto and Kuto-Ikole riders, not only Ilase-Ikole ones.
+ */
+export function demandAlong(world: SliceWorld, a: string, b: string): number {
+  const path = roadPath(world, a, b);
+  if (!path) return 0;
+  const stops = new Set(path.nodeIds);
+  let total = 0;
+  for (const pair of world.simulation.demand) if (stops.has(pair.from) && stops.has(pair.to)) total += pair.rate;
+  return total;
+}
+
+export interface ThroughRoute {
+  /** The route's ends, extended past one of the current ones. */
+  a: string;
+  b: string;
+  /** Towns it passes through, in order, between a and b. */
+  via: string[];
+  /** Fares a day of every trip along it, against the current route's along its own path. */
+  reachPerDay: number;
+  currentReachPerDay: number;
+}
+
+// How much bigger an extension's reach must be before it's worth saying.
+const THROUGH_ROUTE_GAIN = 1.5;
+// And how far past one bus's break-even (at ONE_BUS_REACH) it must reach.
+// Measured over 20 days: Owode-Ogbe via Ado reached 1.1x break-even and
+// still lost 72/day (long, slow, one bus) -- not worth pointing at.
+// Kuto-Ikole -> Ilase-Ikole via Kuto (2.2x) and Ilase-Ise -> Owode-Ise via
+// Ilase (2.9x: 0/day -> +63) are.
+const THROUGH_ROUTE_PAY_MARGIN = 1.5;
+
+/**
+ * A thin shuttle can often be run through to the next town past one of its
+ * ends, and then carries every trip along the longer path (playtest, day
+ * 14: a bridge to Ikole got a Kuto-Ikole shuttle at -74/day; a bus from
+ * Ilase through Kuto reaches several times the trips). One hop only, and
+ * only if the longer path is at least as dense in trips per cell: measured
+ * on reach alone, the longest route always won (Kuto-Ikole "should" run
+ * from Ipaja through five towns), and one bus on it comes round too rarely
+ * to carry any of it. Returns the best extension if it's clearly more and
+ * could pay for a bus.
+ */
+export function throughRoute(world: SliceWorld, routeId: string): ThroughRoute | null {
+  const route = world.routes.find((candidate) => candidate.id === routeId);
+  if (!route) return null;
+  const perDay = (rate: number) => rate * world.tuning.fare * SECONDS_PER_GAME_DAY;
+  const lengthOf = (from: string, to: string) => roadPath(world, from, to)?.distance ?? Infinity;
+  const current = perDay(demandAlong(world, route.a, route.b));
+  const currentDensity = current / lengthOf(route.a, route.b);
+  const oneBus = world.tuning.busOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
+  let best: ThroughRoute | null = null;
+  for (const segment of world.simulation.map.segments) {
+    // A road leaving one end of the route, to a town not on it: past `a`
+    // it runs t, a, ..., b; past `b` it runs a, ..., b, t.
+    for (const [end, other] of [[route.a, route.b], [route.b, route.a]] as const) {
+      const t = segment.fromNodeId === end ? segment.toNodeId : segment.toNodeId === end ? segment.fromNodeId : null;
+      if (!t || t === other || !world.towns.has(t)) continue;
+      const [from, to] = end === route.a ? [t, route.b] : [route.a, t];
+      const path = roadPath(world, from, to);
+      if (!path || !path.nodeIds.includes(end)) continue;
+      const reach = perDay(demandAlong(world, from, to));
+      if (reach / path.distance < currentDensity) continue;
+      if (best && reach <= best.reachPerDay) continue;
+      best = { a: from, b: to, via: path.nodeIds.slice(1, -1), reachPerDay: reach, currentReachPerDay: current };
+    }
+  }
+  if (!best || best.reachPerDay < current * THROUGH_ROUTE_GAIN) return null;
+  if (best.reachPerDay * ONE_BUS_REACH < oneBus * THROUGH_ROUTE_PAY_MARGIN) return null;
+  return best;
+}
+
 export function waitingAt(world: SliceWorld, townId: string): number {
   let total = 0;
   for (const amount of world.simulation.queues.get(townId)?.values() ?? []) total += amount;
