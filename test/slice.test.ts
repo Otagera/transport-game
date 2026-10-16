@@ -12,7 +12,7 @@ import { planRoad, polylineLength, segmentLength, segmentPolyline } from "@engin
 import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
-import { addLorry, diagnoseLorryRoute, goodsFlows, removeLorry } from "@engine/slice/goods";
+import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, removeLorry } from "@engine/slice/goods";
 import { addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
 import { slowOrder } from "@engine/slice/wear";
 import type { Vehicle } from "@engine/simulation/types";
@@ -941,18 +941,61 @@ describe("slice: goods (step 4c)", () => {
     expect(d.delivered).toBeGreaterThan(0);
   });
 
-  test("a route with goods both ways isn't one-way; a supplies-only one is", () => {
+  test("a route with goods both ways isn't one-way; a produce-only one is", () => {
     const w = goodsWorld();
     addLorry(w, "big", "far"); // supplies out to Mid and Far, Far's produce back to Mid
-    addLorry(w, "big", "mid"); // supplies only
+    addLorry(w, "mid", "far"); // Far's produce only: the port's supplies don't start on it
     run(w, 120);
-    const both = diagnoseLorryRoute(w, w.lorryRoutes.find((r) => r.b === "far" || r.a === "far")!.id)!;
-    const oneWay = diagnoseLorryRoute(w, w.lorryRoutes.find((r) => (r.a === "big" && r.b === "mid") || (r.a === "mid" && r.b === "big"))!.id)!;
+    const both = diagnoseLorryRoute(w, w.lorryRoutes.find((r) => (r.a === "big" || r.b === "big") && (r.a === "far" || r.b === "far"))!.id)!;
+    const oneWay = diagnoseLorryRoute(w, w.lorryRoutes.find((r) => (r.a === "mid" || r.b === "mid") && (r.a === "far" || r.b === "far"))!.id)!;
     expect(both.outbound).toBeGreaterThan(0);
     expect(both.inbound).toBeGreaterThan(0);
     expect(both.verdict).not.toBe("one-way");
     expect(Math.min(oneWay.outbound, oneWay.inbound)).toBe(0);
     expect(["one-way", "thin"]).toContain(oneWay.verdict);
+  });
+
+  test("export: a market sends on to the port half the produce actually delivered to it -- and nothing before", () => {
+    const w = goodsWorld();
+    const exportFrom = (from: string) => goodsFlows(w).find((f) => f.from === from && f.to === "big" && f.kind === "produce");
+    expect(exportFrom("mid")).toBeUndefined(); // nothing delivered to Mid yet
+    addLorry(w, "mid", "far"); // brings Far's produce to Mid
+    run(w, 300);
+    const delivered = w.goods.outcomes.get("far:mid:produce")!.delivered;
+    expect(delivered).toBeGreaterThan(0);
+    expect(exportFrom("mid")!.rate).toBeCloseTo(delivered * w.tuning.exportShare, 9);
+    // The port itself doesn't export to itself.
+    expect(goodsFlows(w).some((f) => f.from === "big" && f.to === "big")).toBe(false);
+  });
+
+  test("a freight train carries goods on track only, and wears it harder than a passenger train", () => {
+    const w = createSliceWorld(
+      { ...MAP, port: "big", rails: [{ a: "big", b: "far" }] },
+      { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0 },
+    );
+    expect(addFreightTrain(w, "big", "far")).toEqual({ ok: false, reason: "no working track between them" });
+    buildTrack(w, "big", "far");
+    expect(addFreightTrain(w, "big", "far").ok).toBe(true);
+    const train = w.simulation.vehicles.find((v) => v.id.startsWith("freight-"))!;
+    expect(train.path).not.toContain("mid"); // the track, not the road
+    run(w, 300);
+    const route = w.lorryRoutes.find((r) => r.id.startsWith("freight:"))!;
+    expect(route.revenueRateEMA).toBeGreaterThan(0);
+    for (const flow of w.roadFlowEMA.values()) expect(flow).toBeLessThan(1); // danfos only, no freight on roads
+    // Same speed, same track: a freight train counts lorryWearMultiplier passenger trains toward wear.
+    const pair = (freight: boolean) => {
+      const x = createSliceWorld(
+        { ...MAP, port: "big", rails: [{ a: "big", b: "far" }] },
+        { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, freightSpeed: 8, trainSpeed: 8 },
+      );
+      buildTrack(x, "big", "far");
+      if (freight) addFreightTrain(x, "big", "far");
+      else addTrain(x, "big", "far");
+      run(x, 200);
+      return x.railFlowEMA.get(x.simulation.map.segments.find((seg) => seg.type === "rail")!.id)!;
+    };
+    // (Flow is a rolling average of discrete entries, so the exact ratio wobbles: assert clearly harder.)
+    expect(pair(true) / pair(false)).toBeGreaterThan(1.3);
   });
 
   test("lorries don't grow roadside towns: they carry tonnes, not people passing", () => {

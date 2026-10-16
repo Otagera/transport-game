@@ -523,6 +523,14 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   factor, and `wearSpeed(world, segment)` includes it. `repairCost` prices track at
   `roadCostPerCell`, not `railCostPerCell`. `diagnoseRoute` never calls a train route
   `jammed`; `wornRoadsOn` covers a train route's track.
+- **Export and freight trains** (`goods.ts`) — `goodsFlows` adds, per non-port market,
+  produce to the port at `exportShare` × the rolling produce *delivered* to that market
+  (`goods.outcomes`), so export starts at nothing and depends on feeders. Freight trains
+  are goods routes `freight:a~b` in `world.lorryRoutes` (`addFreightTrain`), their vehicles
+  in `world.railVehicles` (track routing, no road traffic); `goodsPath` / `goodsAlong(…,
+  onTrack)` / `diagnoseLorryRoute` use the track path for them, `goodsVehicleCostPerDay`
+  the freight running cost; `removeLorry` sells either. A freight train enters track
+  weighted `lorryWearMultiplier` for track wear.
 - **Goods** (step 4c, `goods.ts`) — `goodsFlows` derives one-way flows from the towns as they
   are: produce from each original town under `marketPopulation` to its nearest market
   (ties to the bigger), supplies from `world.port` (the map def's `port`) to every other town,

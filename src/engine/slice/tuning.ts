@@ -94,6 +94,18 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // -72; a second lorry on Ilase-Kuto takes the pair to +10. At 3/t no
   // lorry paid at all.
   marketPopulation: 40,
+  // Export and freight trains. Probe "freight:", 40 days, whole-game
+  // net/day: a freight train alone on Ilase-Owode-Ado track +160 (supplies
+  // only, 115 t/day out -- a lorry on that run loses 72: volume over distance
+  // is what rail is for); with two lorries feeding produce to Ado, Ado
+  // exports 23 t/day back and the train makes +230 (+217 all told); on the
+  // restored old line -115. Lorry routes are unchanged by export: no farm
+  // town's produce goes to Owode.
+  exportShare: 0.5,
+  freightCapacity: 150,
+  freightSpeed: 6,
+  freightPurchaseCost: 2500,
+  freightOperatingCostPerSecond: 6,
   producePerThousandPerDay: 2,
   suppliesPerThousandPerDay: 1,
   goodsSpoilSeconds: 60,

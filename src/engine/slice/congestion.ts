@@ -104,7 +104,9 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
     if (!segmentId) continue;
     const leg = `${segmentId}#${vehicle.pathIndex}`;
     nowOn.set(vehicle.id, leg);
-    if (world.vehicleSegment.get(vehicle.id) !== leg) trainsEntering.set(segmentId, (trainsEntering.get(segmentId) ?? 0) + 1);
+    // A freight train wears track as a lorry wears a road: harder.
+    const weight = vehicle.carries === "goods" ? tuning.lorryWearMultiplier : 1;
+    if (world.vehicleSegment.get(vehicle.id) !== leg) trainsEntering.set(segmentId, (trainsEntering.get(segmentId) ?? 0) + weight);
   }
   world.vehicleSegment = nowOn;
 

@@ -10,7 +10,7 @@ import { addBus, buildRoad, directRoad, paveRoad, paveCost, createSliceWorld, di
 import { sliceTick } from "../src/engine/slice/tick";
 import { planRoad } from "../src/engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "../src/engine/slice/wear";
-import { addLorry, diagnoseLorryRoute } from "../src/engine/slice/goods";
+import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, goodsVehicleCostPerDay } from "../src/engine/slice/goods";
 import { addTrain, buildTrack, trackCost } from "../src/engine/slice/rail";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
@@ -44,6 +44,33 @@ function rail(tracks: Array<[string, string]>, trains: Array<[string, string]>) 
     for (const [a, b] of trains) addTrain(world, a, b);
     spent += trains.length * world.tuning.trainPurchaseCost;
     console.log(`    (track and trains: ₦${spent.toFixed(0)})`);
+    world.economy.funds = funds - spent;
+  };
+}
+
+function freight(tracks: Array<[string, string]>, feeders: number) {
+  return (world: SliceWorld) => {
+    freightOn(tracks, ["ilase", "ado"])(world);
+    const funds = world.economy.funds;
+    world.economy.funds = 1e9;
+    if (feeders > 0) lorries("ado", "ogbe", 1)(world);
+    if (feeders > 1) lorries("ado", "ipaja", 1)(world);
+    world.economy.funds = funds - feeders * world.tuning.lorryPurchaseCost;
+  };
+}
+
+function freightOn(tracks: Array<[string, string]>, [a, b]: [string, string]) {
+  return (world: SliceWorld) => {
+    const funds = world.economy.funds;
+    world.economy.funds = 1e9;
+    let spent = 0;
+    for (const [x, y] of tracks) {
+      spent += trackCost(world, x, y);
+      buildTrack(world, x, y);
+    }
+    addFreightTrain(world, a, b);
+    spent += world.tuning.freightPurchaseCost;
+    console.log(`    (track and freight train: ₦${spent.toFixed(0)})`);
     world.economy.funds = funds - spent;
   };
 }
@@ -185,6 +212,13 @@ const allStrategies: Strategy[] = [
       keepTrack(w);
     },
   },
+  // Freight trains + export: a freight train on the trunk alone (no produce
+  // reaches Ado, so nothing to export), with lorries feeding Ado (export
+  // back to the port), and on the restored old line.
+  { name: "freight: ilase-owode-ado track + freight alone", setup: freight([["ilase", "owode"], ["owode", "ado"]], 0) },
+  { name: "freight: same + lorries feeding ado", setup: freight([["ilase", "owode"], ["owode", "ado"]], 2) },
+  { name: "freight: lorries feeding ado only (no train)", setup: (w) => { w.economy.funds += 1100; lorries("ado", "ogbe", 1)(w); lorries("ado", "ipaja", 1)(w); w.economy.funds -= 1100; } },
+  { name: "freight: restored ilase-ipaja + freight", setup: freightOn([["ilase", "ipaja"]], ["ilase", "ipaja"]) },
   // Goods (step 4c): lorries where goods flow both ways against one-way
   // routes. Produce: Kuto/Ise -> Ilase, Ogbe -> Ado; supplies: Ilase -> all.
   { name: "goods: lorry ilase-kuto (both ways)", setup: lorries("ilase", "kuto", 1) },
@@ -268,9 +302,15 @@ for (const strategy of strategies) {
       `share you ${pct(share.player)} danfo ${pct(share.informal)} home ${pct(share.lost)}  ` +
       `danfos ${String(danfos).padStart(3)}  waiting@ilase ${fmt(waitingAt(world, "ilase"))}  informal ₦ ${fmt(world.informal.earnings)}`,
   );
+  // Export proper: produce leaving a market for the port (a farm town whose
+  // nearest market is the port just sends produce there).
+  const exports = goodsFlows(world).filter(
+    (f) => f.to === world.port && f.kind === "produce" && world.towns.get(f.from)!.population >= world.tuning.marketPopulation,
+  );
+  if (exports.length > 0) console.log(`    export: ${exports.map((f) => `${f.from} ${(f.rate * SECONDS_PER_GAME_DAY).toFixed(0)} t/day`).join(", ")}`);
   for (const route of world.lorryRoutes) {
     const d = diagnoseLorryRoute(world, route.id)!;
-    const cost = route.vehicleIds.length * world.tuning.lorryOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
+    const cost = route.vehicleIds.length * goodsVehicleCostPerDay(world, route.id);
     const income = route.revenueRateEMA * SECONDS_PER_GAME_DAY;
     console.log(
       `    ${route.id.padEnd(20)} lorries ${route.vehicleIds.length}  in ${fmt(income)}  cost ${fmt(cost)}  net ${fmt(income - cost)}/day  → ${d.verdict.padEnd(9)} ` +

@@ -157,6 +157,14 @@ blow-by-blow; this section is the distilled rule.
   train's edge up on the road network and reported the road's wear and danfos). Every
   "all segments" loop has to ask which network it means — a bus "running on" to the next
   town found it over the railway.
+- **Freight needs a load back, and export is it** (slice, freight trains). Produce went only
+  to the nearest market, so every rail corridor carried goods one way. Export — a market
+  sends on to the port half the produce *delivered* to it — gives the trunk a return load,
+  and makes it depend on feeders: nothing reaches the port from Ado until lorries bring
+  produce to Ado. Measured, 40 days: a freight train alone on Ilase–Owode–Ado +₦160/day
+  (one-way, 115 t/day — a lorry on that run loses ₦72: volume over distance is rail's job);
+  with two feeder lorries, Ado exports 23 t/day and the train makes +₦230; on the restored
+  old line −₦115.
 - **Goods pay only where they go both ways** (slice, §6 step 4c). Produce to market, supplies
   from the port: a lorry running one flow comes back empty. Measured, one lorry, 20 days,
   ₦4/t: Ilase–Kuto (produce in, supplies out) +₦66/day, Ilase–Ise +₦26; supplies-only
@@ -646,6 +654,11 @@ Steps, each played before the next:
      top of the usual wear. The Fix tool keeps track up like a road, at a road's upkeep
      price per cell; kept track draws on a pale bed. A worn train route says "worn track",
      never "jammed". See Findings, Demand.
+   - **Goods trains + export** (built 2026-10-16; export was the user's call): markets
+     export half the produce delivered to them to the port; freight trains (Freight tool,
+     G: ₦2,500, ₦180/day, 150 t, speed 6) are goods routes on track, loaded like lorries,
+     wearing track like a lorry wears a road. See Findings, Demand. Watch: do you build
+     feeders to fill a freight train, or does it pay without them?
 
    **Played 2026-10-16 (to day 14), steps 2–4b at once:** *"felt stuck, didn't know how to
    get out of debt."* The screenshot: −₦404, −₦40/day; four routes of one bus each — a

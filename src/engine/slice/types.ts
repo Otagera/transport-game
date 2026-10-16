@@ -153,6 +153,13 @@ export interface SliceTuning {
   // Goods (step 4, goods.ts).
   /** Towns at least this big (thousands) are markets: produce goes to the nearest one. */
   marketPopulation: number;
+  /** Share of the produce delivered to a market that it sends on to the port as export. */
+  exportShare: number;
+  /** Freight trains (goods.ts): goods on track. */
+  freightCapacity: number;
+  freightSpeed: number;
+  freightPurchaseCost: number;
+  freightOperatingCostPerSecond: number;
   /** Tonnes of produce a farm town sends a day, per thousand people. */
   producePerThousandPerDay: number;
   /** Tonnes of supplies the port sends a town a day, per thousand people there. */

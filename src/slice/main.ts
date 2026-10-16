@@ -33,6 +33,7 @@ import { planRoad, segmentPolyline } from "@engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
 import { addTrain, buildTrack, checkTrack, checkTrain, isRailRoute, planRail, railPath, restoreCost, trackAction } from "@engine/slice/rail";
+import { addFreightTrain, checkFreight, isFreightRoute } from "@engine/slice/goods";
 import { addLorry, checkLorry, diagnoseLorryRoute, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
@@ -47,10 +48,11 @@ import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View 
 //   L  lorry tool -- click a town, then another: buy a lorry running goods between them.
 //   K  track tool -- click a town, then another: restore the old line there, or lay new track.
 //   T  train tool -- click a town, then another joined by track: buy a train between them.
+//   G  freight tool -- click a town, then another joined by track: buy a freight train between them.
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "lorry" | "track" | "train" | "fix";
+type Tool = "road" | "bus" | "lorry" | "track" | "train" | "freight" | "fix";
 
 const world = createSliceWorld(SLICE_MAP);
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
@@ -82,6 +84,11 @@ function resize(): void {
   view = fitView(world, window.innerWidth - sidePanel, window.innerHeight, 24, 64, window.innerWidth > 1100 ? 96 : 56);
 }
 window.addEventListener("resize", resize);
+
+// The key opens only when there's room beside the toolbar (ten tools); on a
+// narrower window it starts closed, one click away, instead of covering the map.
+const key = document.querySelector<HTMLDetailsElement>("#key");
+if (key) key.open = window.innerWidth >= 1560;
 resize();
 
 let toastTimer = 0;
@@ -205,6 +212,10 @@ canvas.addEventListener("click", (event) => {
     const result = buildTrack(world, from, town);
     if (result.ok) say(restoring ? `Restored the old line ${townName(from)} – ${townName(town)} for ${naira(cost)}: trains can run on it` : `Laid track ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't lay track: ${result.reason}`, true);
+  } else if (tool === "freight") {
+    const result = addFreightTrain(world, from, town);
+    if (result.ok) say(`Freight train added: ${townName(from)} ↔ ${townName(town)}`);
+    else say(`Can't add freight train: ${result.reason}`, true);
   } else if (tool === "train") {
     const result = addTrain(world, from, town);
     if (result.ok) say(`Train added: ${townName(from)} ↔ ${townName(town)}`);
@@ -231,6 +242,7 @@ window.addEventListener("keydown", (event) => {
   else if (event.key === "l" || event.key === "L") setTool("lorry");
   else if (event.key === "k" || event.key === "K") setTool("track");
   else if (event.key === "t" || event.key === "T") setTool("train");
+  else if (event.key === "g" || event.key === "G") setTool("freight");
   else if (event.key === "Escape") selectedTown = null;
   else if (event.key === " ") {
     paused = !paused;
@@ -314,6 +326,13 @@ function ghost(): Ghost | null {
     const label = `Train ${naira(world.tuning.trainPurchaseCost)} · ${along}`;
     return { from: selectedTown, to: end, ok: check.ok, path: check.ok ? path : undefined, rail: true, label: check.ok ? label : check.reason };
   }
+  if (tool === "freight") {
+    const check = checkFreight(world, selectedTown, to);
+    const goods = goodsAlong(world, selectedTown, to, true);
+    const label = `Freight train ${naira(world.tuning.freightPurchaseCost)} · goods along the track: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back`;
+    const path = check.ok ? railPath(world, selectedTown, to)?.nodeIds : undefined;
+    return { from: selectedTown, to: end, ok: check.ok, path, rail: true, label: check.ok ? label : check.reason };
+  }
   if (tool === "lorry") {
     const check = checkLorry(world, selectedTown, to);
     // Both ways, because that's the decision: a lorry runs full only where goods go each way.
@@ -347,6 +366,7 @@ function renderToolbar(): void {
     button("Bus", "B", tool === "bus", () => setTool("bus")),
     button("Train", "T", tool === "train", () => setTool("train")),
     button("Lorry", "L", tool === "lorry", () => setTool("lorry")),
+    button("Freight", "G", tool === "freight", () => setTool("freight")),
     button("Road", "R", tool === "road", () => setTool("road")),
     button("Track", "K", tool === "track", () => setTool("track")),
     button("Fix", "F", tool === "fix", () => setTool("fix")),
@@ -575,21 +595,27 @@ function lorryRows(afterBuses: boolean): string {
           <i style="width:${pct(d.delivered)};background:var(--goods)"></i>
           <i style="width:${pct(d.spoiled)};background:var(--home)"></i>
         </div>
-        <div class="why why-${d.verdict === "healthy" ? "healthy" : d.verdict === "full" ? "full" : "thin"}">${lorryReason(d, s.costPerDay / s.lorries)}</div>
-        <small>goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full</small>`
+        <div class="why why-${d.verdict === "healthy" ? "healthy" : d.verdict === "full" ? "full" : "thin"}">${forGoodsVehicle(lorryReason(d, s.costPerDay / s.lorries), s.id)}</div>
+        <small>${forGoodsVehicle(`goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full`, s.id)}</small>`
       : "";
     return `
       <div class="route">
         <span class="swatch" style="background:var(--goods)"></span>
-        <div class="name">${townName(s.a)} ↔ ${townName(s.b)}<small>${s.lorries} lorr${s.lorries === 1 ? "y" : "ies"} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
+        <div class="name">${townName(s.a)} ↔ ${townName(s.b)}${isFreightRoute(s.id) ? ' <span class="muted">by rail</span>' : ""}<small>${s.lorries} ${isFreightRoute(s.id) ? `freight train${s.lorries === 1 ? "" : "s"}` : `lorr${s.lorries === 1 ? "y" : "ies"}`} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
         <span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${naira(s.netPerDay)}</span>
         <button data-add="${s.id}" title="Add a lorry">+</button>
         <button data-remove="${s.id}" title="Sell a lorry">−</button>
         <div class="detail">${detail}</div>
       </div>`;
   });
-  const port = world.port ? `, supplies from ${townName(world.port)}` : "";
-  return `<h2${afterBuses ? ' class="section"' : ""}>Your lorries</h2><p class="hint">Goods go one way each: produce to market${port}. Bar: delivered · spoiled.</p>${rows.join("")}`;
+  const port = world.port ? `, supplies from ${townName(world.port)}, export to it` : "";
+  return `<h2${afterBuses ? ' class="section"' : ""}>Your goods</h2><p class="hint">Goods go one way each: produce to market${port}. Bar: delivered · spoiled.</p>${rows.join("")}`;
+}
+
+// A freight route's reasons are a lorry route's with the vehicle renamed.
+function forGoodsVehicle(text: string, routeId: string): string {
+  if (!isFreightRoute(routeId)) return text;
+  return text.replace(/\bLorries\b/g, "Freight trains").replace(/\blorries\b/g, "freight trains").replace(/\blorry's\b/g, "freight train's").replace(/\blorry\b/g, "freight train");
 }
 
 function lorryReason(d: LorryDiagnosis, onePerDay: number): string {
@@ -661,8 +687,9 @@ routesEl.addEventListener("click", (event) => {
   if (addId && isLorryRoute(addId)) {
     const route = world.lorryRoutes.find((candidate) => candidate.id === addId);
     if (!route) return;
-    const result = addLorry(world, route.a, route.b);
-    if (!result.ok) say(`Can't add lorry: ${result.reason}`, true);
+    const freight = isFreightRoute(addId);
+    const result = freight ? addFreightTrain(world, route.a, route.b) : addLorry(world, route.a, route.b);
+    if (!result.ok) say(`Can't add ${freight ? "freight train" : "lorry"}: ${result.reason}`, true);
   } else if (addId && isRailRoute(addId)) {
     const route = world.routes.find((candidate) => candidate.id === addId);
     if (!route) return;
@@ -675,7 +702,7 @@ routesEl.addEventListener("click", (event) => {
     if (!result.ok) say(`Can't add bus: ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {
     const refund = removeLorry(world, removeId);
-    if (refund > 0) say(`Sold a lorry for ${naira(refund)}`);
+    if (refund > 0) say(`Sold a ${isFreightRoute(removeId) ? "freight train" : "lorry"} for ${naira(refund)}`);
   } else if (removeId) {
     const refund = removeBus(world, removeId);
     if (refund > 0) say(`Sold a ${isRailRoute(removeId) ? "train" : "bus"} for ${naira(refund)}`);

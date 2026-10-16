@@ -81,9 +81,11 @@
         opacity: 0; transition: opacity 0.4s; pointer-events: none; max-width: calc(100% - 32px);
       }
       #toast[data-bad="true"] { background: var(--bad); }
-      #key { position: fixed; left: 16px; bottom: 16px; max-width: calc(100% - 316px - 690px); box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 11px; color: var(--muted); }
+      #key { position: fixed; left: 16px; bottom: 16px; max-width: 470px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 11px; color: var(--muted); }
       #key b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
-      @media (max-width: 1250px) { #key { display: none; } }
+      #key summary { cursor: pointer; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+      #key:not([open]) { padding: 6px 12px; }
+      @media (max-width: 1100px) { #key { display: none; } }
       @media (max-width: 900px) { #toolbar { right: 16px; } }
       @media (max-width: 900px) { #routes { display: none; } .stat:last-child { display: none; } }
     </style>
@@ -92,7 +94,7 @@
     <canvas id="map"></canvas>
     <div id="strip"></div>
     <div id="routes"></div>
-    <div id="key">
+    <details id="key" open><summary>Key</summary>
       <b style="background:var(--player)"></b>you
       <b style="background:var(--danfo)"></b>informal
       <b style="background:var(--home)"></b>stayed home
@@ -101,7 +103,7 @@
       Road: dashed = dirt · cracks = worn · centre line = kept · red = traffic<br />
       Track: sleepers · faded = disused (K restores) · pale bed = kept (F)<br />
       Double ring = interchange. Hover a town: where its people want to go.
-    </div>
+    </details>
     <div id="toolbar"></div>
     <div id="toast"></div>
     <script type="module" src="/src/slice/main.ts"></script>

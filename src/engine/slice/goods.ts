@@ -4,6 +4,7 @@ import { canAfford, registerPurchase, resaleValue, sellVehicle } from "../econom
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { SliceRoute, SliceWorld } from "./types";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, routeKey, type ActionResult } from "./world";
+import { railPath } from "./rail";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -22,6 +23,7 @@ import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, rout
 // space for congestion, and heavier wear (wear.ts) -- and the money.
 
 export const LORRY_DEF_ID = "slice-lorry";
+export const FREIGHT_DEF_ID = "slice-freight";
 
 export type GoodsKind = Extract<CargoKind, "produce" | "supplies">;
 
@@ -85,6 +87,19 @@ export function goodsFlows(world: SliceWorld): GoodsFlow[] {
   }
   const port = world.port ? world.towns.get(world.port) : undefined;
   if (port) {
+    // Export: each market sends on to the port a share of the produce
+    // actually delivered to it -- what reaches Ado can leave Ado, nothing
+    // else. Still one-way (never mirrored); it's what gives the trunk a
+    // load back to the port, and what the colonial line was built for.
+    const intoMarket = new Map<string, number>();
+    for (const flow of flows) {
+      const delivered = world.goods.outcomes.get(flowKey(flow))?.delivered ?? 0;
+      intoMarket.set(flow.to, (intoMarket.get(flow.to) ?? 0) + delivered);
+    }
+    for (const [market, delivered] of intoMarket) {
+      if (market === port.id || delivered <= 0) continue;
+      flows.push({ from: market, to: port.id, kind: "produce", rate: delivered * tuning.exportShare });
+    }
     for (const town of towns) {
       if (town.id === port.id) continue;
       flows.push({ from: port.id, to: town.id, kind: "supplies", rate: perSecond(tuning.suppliesPerThousandPerDay, town.population) });
@@ -163,8 +178,24 @@ function lorryRouteId(a: string, b: string): string {
   return `lorry:${routeKey(a, b)}`;
 }
 
+/** Goods routes: lorries (`lorry:`) on roads, freight trains (`freight:`) on track -- both in `world.lorryRoutes`. */
 export function isLorryRoute(routeId: string): boolean {
-  return routeId.startsWith("lorry:");
+  return routeId.startsWith("lorry:") || routeId.startsWith("freight:");
+}
+
+export function isFreightRoute(routeId: string): boolean {
+  return routeId.startsWith("freight:");
+}
+
+/** The stops a goods route runs through: by road for lorries, by track for freight trains. */
+function goodsPath(world: SliceWorld, a: string, b: string, onTrack: boolean) {
+  return onTrack ? railPath(world, a, b) : roadPath(world, a, b);
+}
+
+/** Running cost a day of one vehicle on a goods route. */
+export function goodsVehicleCostPerDay(world: SliceWorld, routeId: string): number {
+  const perSecond = isFreightRoute(routeId) ? world.tuning.freightOperatingCostPerSecond : world.tuning.lorryOperatingCostPerSecond;
+  return perSecond * SECONDS_PER_GAME_DAY;
 }
 
 export function findLorryRoute(world: SliceWorld, a: string, b: string): SliceRoute | undefined {
@@ -200,12 +231,44 @@ export function addLorry(world: SliceWorld, a: string, b: string): ActionResult 
   return { ok: true };
 }
 
-/** Sells the route's most recently bought lorry, at depreciated value; what it carried is lost. */
+export function checkFreight(world: SliceWorld, a: string, b: string): ActionResult {
+  if (a === b) return { ok: false, reason: "pick two different towns" };
+  if (!railPath(world, a, b)) return { ok: false, reason: "no working track between them" };
+  if (!canAfford(world.economy, world.tuning.freightPurchaseCost)) return { ok: false, reason: "can't afford a freight train" };
+  return { ok: true };
+}
+
+/** A freight train: a goods route on track, loaded like a lorry, routed like a train (rail.ts). */
+export function addFreightTrain(world: SliceWorld, a: string, b: string): ActionResult {
+  const check = checkFreight(world, a, b);
+  if (!check.ok) return check;
+  const routeId = `freight:${routeKey(a, b)}`;
+  let route = world.lorryRoutes.find((candidate) => candidate.id === routeId);
+  if (!route) {
+    route = { id: routeId, a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
+    world.lorryRoutes.push(route);
+  }
+  const { tuning } = world;
+  const id = `freight-${world.nextId++}`;
+  const vehicle = createVehicle(id, [route.a, route.b], world.railRouting, tuning.freightSpeed, tuning.freightCapacity, undefined, "goods", 0);
+  world.railVehicles.add(id);
+  const others = route.vehicleIds
+    .map((otherId) => world.simulation.vehicles.find((candidate) => candidate.id === otherId))
+    .filter((candidate): candidate is Vehicle => candidate !== undefined);
+  placeAtCycleFraction(world, vehicle, largestGapMidpoint(others.map((other) => cycleFraction(world, other))));
+  world.simulation.vehicles.push(vehicle);
+  registerPurchase(world.economy, id, tuning.freightPurchaseCost, tuning.freightOperatingCostPerSecond, FREIGHT_DEF_ID);
+  route.vehicleIds.push(id);
+  return { ok: true };
+}
+
+/** Sells the route's most recently bought lorry (or freight train), at depreciated value; what it carried is lost. */
 export function removeLorry(world: SliceWorld, routeId: string): number {
   const route = world.lorryRoutes.find((candidate) => candidate.id === routeId);
   const id = route?.vehicleIds.pop();
   if (!route || !id) return 0;
   world.simulation.vehicles = world.simulation.vehicles.filter((vehicle) => vehicle.id !== id);
+  world.railVehicles.delete(id);
   const resale = sellVehicle(world.economy, id);
   if (route.vehicleIds.length === 0) world.lorryRoutes = world.lorryRoutes.filter((candidate) => candidate !== route);
   return resale;
@@ -226,7 +289,7 @@ export function lorrySummaries(world: SliceWorld): LorrySummary[] {
   return world.lorryRoutes
     .map((route) => {
       const incomePerDay = route.revenueRateEMA * SECONDS_PER_GAME_DAY;
-      const costPerDay = route.vehicleIds.length * world.tuning.lorryOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
+      const costPerDay = route.vehicleIds.length * goodsVehicleCostPerDay(world, route.id);
       return { id: route.id, a: route.a, b: route.b, lorries: route.vehicleIds.length, incomePerDay, costPerDay, netPerDay: incomePerDay - costPerDay };
     })
     .sort((p, q) => p.netPerDay - q.netPerDay);
@@ -240,8 +303,8 @@ export function lorryResale(world: SliceWorld, routeId: string): number {
 // --- What a lorry route carries --------------------------------------------
 
 /** Tonnes a day of goods wanting to go each way along the road from a to b: what a lorry there could carry. */
-export function goodsAlong(world: SliceWorld, a: string, b: string): { outbound: number; inbound: number } {
-  const path = roadPath(world, a, b);
+export function goodsAlong(world: SliceWorld, a: string, b: string, onTrack = false): { outbound: number; inbound: number } {
+  const path = goodsPath(world, a, b, onTrack);
   if (!path) return { outbound: 0, inbound: 0 };
   const order = new Map(path.nodeIds.map((id, i) => [id, i]));
   let outbound = 0;
@@ -276,7 +339,7 @@ const SPOILING_SHARE = 0.3;
 
 export function diagnoseLorryRoute(world: SliceWorld, routeId: string): LorryDiagnosis | null {
   const route = world.lorryRoutes.find((candidate) => candidate.id === routeId);
-  const path = route && roadPath(world, route.a, route.b);
+  const path = route && goodsPath(world, route.a, route.b, isFreightRoute(route.id));
   if (!route || !path) return null;
   const order = new Map(path.nodeIds.map((id, i) => [id, i]));
   let outbound = 0;
@@ -306,7 +369,7 @@ export function diagnoseLorryRoute(world: SliceWorld, routeId: string): LorryDia
   };
   const { tuning } = world;
   const fare = Math.min(tuning.produceFare, tuning.suppliesFare);
-  const oneLorryPerDay = tuning.lorryOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
+  const oneLorryPerDay = goodsVehicleCostPerDay(world, routeId);
   const weaker = Math.min(diagnosis.outbound, diagnosis.inbound);
   const stronger = Math.max(diagnosis.outbound, diagnosis.inbound);
   if ((diagnosis.outbound + diagnosis.inbound) * fare < oneLorryPerDay) diagnosis.verdict = "thin";

@@ -358,7 +358,7 @@ function drawRouteLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: 
     if (!vehicle) continue;
     const half = halfPath(vehicle.path, route.a, route.b);
     const line: Point[] = [];
-    for (let i = 1; i < half.length; i += 1) line.push(...edgeLine(world, half[i - 1]!, half[i]!));
+    for (let i = 1; i < half.length; i += 1) line.push(...edgeLine(world, half[i - 1]!, half[i]!, routingFor(world, vehicle)));
     ctx.strokeStyle = COLORS.goods;
     ctx.lineWidth = 3;
     ctx.setLineDash([8, 5]);
@@ -525,6 +525,19 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     ctx.rotate(pose.angle);
     if (vehicle.lifecycle === "one-shot") {
       drawInformal(ctx, world.informal.active.get(vehicle.id)?.mode ?? "danfo");
+    } else if (world.railVehicles.has(vehicle.id) && vehicle.carries === "goods") {
+      // A freight train: dark engine, then brown wagons filled by load.
+      const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
+      ctx.fillStyle = COLORS.rail;
+      ctx.fillRect(12, -5, 8, 10);
+      for (let i = 0; i < 3; i += 1) {
+        const x = -22 + i * 11;
+        ctx.strokeStyle = COLORS.goods;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, -4, 10, 8);
+        ctx.fillStyle = COLORS.goods;
+        ctx.fillRect(x, -4, 10 * Math.max(0, Math.min(1, load * 3 - i)), 8);
+      }
     } else if (world.railVehicles.has(vehicle.id)) {
       // A train: long, dark, its route's colour along the side, filled by load.
       const color = routeColor(routeIndex.get(vehicle.id) ?? 0);

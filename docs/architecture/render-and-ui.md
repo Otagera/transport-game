@@ -246,6 +246,11 @@ no-cached-view discipline as §2).
   Worn track cracks like a road; kept track draws on a pale bed under its sleepers (a centre
   line vanished inside the rail at normal zoom). The Fix tool hovers and keeps track too
   ("Track Ilase – Ipaja · … trains at N% speed"), never disused track.
+- **Freight trains** — the Freight tool (`G`) previews the goods along the *track* each way and
+  draws the track path; freight trains draw as a dark engine and three brown wagons filling
+  by load; their rows sit with the lorries under "Your goods", "by rail", reasons renamed
+  (`forGoodsVehicle`). With ten tools the key is a `<details>` panel, open when the window is
+  ≥ 1560px wide, else a "Key" button.
 - **Lorries** — the Lorry tool (`L`) buys a lorry for a route like the Bus tool; its ghost
   says the goods along it each way ("25 t/day out, 50 back") and draws its road. Lorries
   draw longer than buses, brown, with a cab, filled by load; their routes as a brown dashed
