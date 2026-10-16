@@ -51,6 +51,15 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // visibly fills the gaps, and step 2 revisits it.
   informalRoadSpace: 12,
   startingFunds: 2500,
+  // Inside towns (docs/principles.md §5, answered "acknowledge it"): short
+  // trips and the last mile, which kekes and okadas carry and nothing you
+  // run reaches. Display only -- no money, no share. 10 per thousand puts
+  // every town's inside trips at 2-3x everything it sends to other towns
+  // (Ilase: ~1,200/day against ~375), so informal's own ground reads as
+  // bigger than the contest. A ~40k town is about as far as people walk to
+  // the park: Ilase 75% of your riders arrive by keke/okada, Ise 27%.
+  localTripsPerThousandPerDay: 10,
+  walkableTownPopulation: 40,
   outcomeTauSeconds: 30,
   // Shared road (congestion.ts). Capacity is road space entering per
   // second. With no service the busiest dirt road carries ~0.5-0.8/s

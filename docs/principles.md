@@ -193,6 +193,15 @@ blow-by-blow; this section is the distilled rule.
   not join a jam that pays nothing.
 - **Per-vehicle congestion weight.** An okada occupying the same road space as a bus is
   plainly wrong and inflates the congestion effect.
+- **Inside towns, informal is acknowledged, not contested** (slice, §5 answered). Short
+  trips and the last mile are kekes' and okadas' for good: the slice shows each town's
+  inside trips (10 per thousand people a day, 2–3× what it sends to other towns) and how
+  many of your riders reach the park by keke or okada (a share growing with town size), and
+  keeps both out of every share and all money. A permanent informal share must not read
+  as failure, so every headline says "between towns". There the relationship is feeder,
+  not competitor. It's display only, against "a parameter enters only when it creates a
+  decision" — taken on purpose, for truth; the formal tier that would make it a decision
+  waits on play.
 - Paratransit is **passengers-only**. Informal freight needs capital an okada does not.
   The asymmetry is deliberate and historically true.
 - Paratransit **counts toward service at a discount** (~0.5) for growth purposes:
@@ -441,8 +450,9 @@ for if eras return; they are not live in the slice.*
 - ~~What does a warm-forwarded Modern-era game feel like?~~ Answered by a headless probe
   (2026-10-16): nothing to decide — queues pinned at cap, growth over in ~2 days, costs
   negligible. That answer is what started §6.
-- **Can paratransit be replaced everywhere, or only on the trunk roads?** *(Raised
-  2026-10-16, for later.)* On major roads, formal service can plausibly displace danfos.
+- ~~**Can paratransit be replaced everywhere, or only on the trunk roads?**~~ *(Raised
+  2026-10-16; answered "acknowledge it" the same day — see §6 step 2d and Findings,
+  Paratransit. "Make it fixable" stays open, for if play makes you want those trips.)* On major roads, formal service can plausibly displace danfos.
   That's what a BRT corridor does. Inside towns, on the short local trips and the last mile,
   it probably can't. Kekes and okadas persist there because nothing formal reaches that
   finely. Two ways to answer it:
@@ -519,6 +529,10 @@ Steps, each played before the next:
      joins paves it, at the price of building it (₦382 for the trunk), so it carries 1.7×
      the traffic. It pays only where riders are left behind (see Findings, Congestion):
      a bus first, paving later. A jammed route on dirt now names the roads to pave.
+   - **2d. Inside towns** (answering §5, "acknowledge it"): each town panel says how many
+     short trips its kekes and okadas carry (~1,200/day in Ilase) and how many of your riders
+     they bring to your buses; none of it counts against you. Headlines now say "between
+     towns". Watch next playtest: does it read as informal's ground, or as a loss after all?
 3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`
    and `engine/pathing`. The map stops being a diagram.
 4. **Depth, one at a time** — decay, goods, rail, growth of the original towns — each played

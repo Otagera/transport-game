@@ -498,6 +498,37 @@ export function townShare(world: SliceWorld, townId: string): ShareSummary {
   return toShare(townOutcomes(world, townId));
 }
 
+/**
+ * Travel inside a town (docs/principles.md §5): the short trips and the
+ * last mile that kekes and okadas carry and nothing you run reaches. It's
+ * informal's for good, so it's kept out of every share and all money -- a
+ * permanent informal share must not read as failure. Inside a town the
+ * relationship flips from competitor to feeder: most of your riders in a
+ * big town reach the bus park, and leave it, by keke or okada.
+ */
+export interface LocalTravel {
+  /** Inside-town trips per day, all informal. */
+  tripsPerDay: number;
+  /** Share of your riders here who ride a keke or okada to or from the park, 0..1. */
+  firstMileShare: number;
+  /** Your riders boarding or getting off here per day who came or left that way. */
+  feederPerDay: number;
+}
+
+export function localTravel(world: SliceWorld, townId: string): LocalTravel {
+  const town = world.towns.get(townId);
+  if (!town) return { tripsPerDay: 0, firstMileShare: 0, feederPerDay: 0 };
+  const firstMileShare = town.population / (town.population + world.tuning.walkableTownPopulation);
+  // Your riders starting or ending a trip here (outcomes are per trip, so a
+  // rider changing buses here isn't counted -- they never leave the park).
+  const yours = sumOutcomes(world, (from, to) => from === townId || to === townId).player;
+  return {
+    tripsPerDay: town.population * world.tuning.localTripsPerThousandPerDay,
+    firstMileShare,
+    feederPerDay: yours * firstMileShare * SECONDS_PER_GAME_DAY,
+  };
+}
+
 export interface TripSummary {
   /** The other town. */
   to: string;

@@ -210,6 +210,10 @@ no-cached-view discipline as §2).
   focused end, then yellow, then grey — labelled riders/day. The side panel swaps to that
   town's trip list with the same bars. One home at a time: the panel shows the focused
   town *or* your routes, never both.
+- **Inside towns** — the town panel's dashed, neutral "Inside <town>" block (`insideText`):
+  its short trips, all keke and okada, "not counted against you", and how many of your riders
+  they carry to and from your buses. Neutral, not the red callout: it isn't a problem to fix.
+  The strip's share bar and the town's share line say "between towns".
 - **Cut-off towns** — a trip with no road between its towns draws dashed (`TripSummary.reachable`);
   a town no road reaches (`isCutOff`) is labelled "no road" on the map, and its panel opens
   with a sentence naming the biggest trip as the road to build.

@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, paveRoad, checkPave, dirtRoadsOn } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, paveRoad, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
+import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/slice/settlement";
 import { routesOnTrip, tripPlans } from "@engine/slice/transfers";
 import { roadCapacity, speedFactor } from "@engine/slice/congestion";
@@ -518,6 +519,37 @@ describe("slice: paving a dirt road", () => {
     const halves = w.simulation.map.segments.filter((s) => s.fromNodeId === town || s.toNodeId === town);
     expect(halves.length).toBe(2);
     for (const half of halves) expect(half.provenance).toBe("built");
+  });
+});
+
+describe("slice: inside towns", () => {
+  test("every town has inside trips, more of them than it sends to every other town", () => {
+    const w = world();
+    for (const id of ["big", "mid", "far", "cut"]) {
+      const between = tripsFrom(w, id).reduce((sum, trip) => sum + trip.demand, 0) * SECONDS_PER_GAME_DAY;
+      expect(localTravel(w, id).tripsPerDay).toBeGreaterThan(between);
+    }
+  });
+
+  test("in a bigger town, more of your riders reach the bus by keke or okada", () => {
+    const w = world();
+    expect(localTravel(w, "big").firstMileShare).toBeGreaterThan(localTravel(w, "far").firstMileShare);
+  });
+
+  test("they feed your buses once you run some, and never touch your share or your money", () => {
+    const quiet = world({ maxEmergentTowns: 0 });
+    run(quiet, 300);
+    expect(localTravel(quiet, "big").feederPerDay).toBe(0);
+    const served = world({ maxEmergentTowns: 0 });
+    addBus(served, "big", "mid");
+    run(served, 300);
+    expect(localTravel(served, "big").feederPerDay).toBeGreaterThan(0);
+    // Inside trips are display only: changing their size changes nothing else.
+    const bigger = world({ maxEmergentTowns: 0, localTripsPerThousandPerDay: 1000, walkableTownPopulation: 1 });
+    addBus(bigger, "big", "mid");
+    run(bigger, 300);
+    expect(networkShare(bigger)).toEqual(networkShare(served));
+    expect(bigger.economy.funds).toBe(served.economy.funds);
   });
 });
 

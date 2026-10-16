@@ -444,6 +444,11 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   the slice, so `splitSegment`'s copy leaves both halves of a paved road paved and the map
   draws it like a built road. `dirtRoadsOn(route)` lists a route's dirt roads for the
   jammed reason.
+- **Inside towns** (`localTravel` in `world.ts`) — display only: a town's inside trips
+  (`population × localTripsPerThousandPerDay`), the share of your riders who reach the park
+  by keke or okada (`pop / (pop + walkableTownPopulation)`), and that share of your riders
+  starting or ending trips there (`pairOutcomes`, so riders changing buses aren't counted).
+  Nothing in the tick reads it; it touches no share and no money (a test pins that).
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
 
 Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,

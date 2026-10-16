@@ -109,6 +109,10 @@ export interface SliceTuning {
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;
+  /** Inside-town trips per thousand people per day -- informal's own ground (world.ts localTravel). */
+  localTripsPerThousandPerDay: number;
+  /** Town size (thousands) at which half your riders reach the bus by keke or okada. */
+  walkableTownPopulation: number;
   /** Danfos and buses slow each other down on shared road (step 2, congestion.ts). */
   congestion: boolean;
   /** Road space a bus takes, in danfo-equivalents. */

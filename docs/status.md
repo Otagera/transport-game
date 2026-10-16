@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**377 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**380 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -30,6 +30,7 @@ step plan. Eras are paused. The slice is a second page beside the original game:
 | 2 | Shared road: flow-based congestion; traffic drawn on roads | Built, **not yet played** |
 | 2b | Running cost that bites: thin routes lose, trunk peaks at 2 buses | Built, **not yet played** |
 | 2c | Pave a dirt road: Road tool on two joined towns; 1.7× the traffic | Built, **not yet played** |
+| 2d | Inside towns: kekes' and okadas' own ground, shown as such; they feed your buses | Built, **not yet played** |
 | 3 | A place to build in: terrain, pathing, bridges | — |
 | 4 | Depth, one at a time: growth, decay, goods, rail | — |
 
@@ -63,11 +64,13 @@ live-verified; each links to where its detail actually lives now.
 
 ## What's next
 
-Play step 2 (with 2b, 2c): does piling onto a trunk now hurt, does traffic read on the map,
-is money now a constraint rather than a grind, and does paving get found and feel worth it? A bus now costs ~₦105/day to run
+Play step 2 (with 2b–2d): does piling onto a trunk now hurt, does traffic read on the map,
+is money now a constraint rather than a grind, does paving get found and feel worth it, and
+does the "Inside <town>" block read as informal's ground rather than a loss? A bus now costs ~₦105/day to run
 (was ~₦48), so a thin route run alone loses money and says "thin" (principles.md §6).
 Paving (Road tool on two towns a dirt road joins) buys speed, but only pays where buses
-run full. Known open item: paratransit inside towns (principles.md §5).
+run full. Paratransit inside towns is answered "acknowledge it" (principles.md §5): display
+only, out of every share; a formal town-service tier waits on whether play wants it.
 Cut-off towns now say "no road" outright (dashed wish-lines, a map label, a sentence in
 the town panel), after a playtester read them as "nowhere to go" (day 17). Step 1's question is in principles.md §6. Whatever the answer, write down what was
 felt before changing anything — then step 2, or back to step 1's model if the loop didn't

@@ -12,6 +12,7 @@ import {
   directRoad,
   dirtRoadsOn,
   isCutOff,
+  localTravel,
   networkShare,
   pairDemand,
   paveRoad,
@@ -230,7 +231,7 @@ function renderStrip(): void {
     <div class="stat"><span class="k">Funds</span><span class="v ${world.economy.funds < 0 ? "bad" : ""}">${naira(world.economy.funds)}</span></div>
     <div class="stat"><span class="k">Net / day</span><span class="v ${burn.netPerDay < 0 ? "bad" : "good"}">${naira(burn.netPerDay)}</span></div>
     <div class="stat share">
-      <span class="k">Where passengers went</span>
+      <span class="k">Trips between towns: who carried them</span>
       <div class="bar">
         <i style="width:${pct(share.player)};background:var(--player)"></i>
         <i style="width:${pct(share.informal)};background:var(--danfo)"></i>
@@ -270,6 +271,18 @@ function reachNote(townId: string): string {
   return `<p class="callout">${stranded.length} of ${townName(townId)}'s trips have no road at all (dashed lines). The biggest is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
 }
 
+// Inside the town: informal's own ground, said as such so a permanent
+// informal share doesn't read as failure (principles.md §5). Kept out of
+// every share bar and all money.
+function insideText(townId: string, name: string): string {
+  const local = localTravel(world, townId);
+  const feeder = Math.round(local.feederPerDay);
+  const reach = feeder > 0
+    ? `They also carry ~${feeder} of your riders a day to and from your buses (${pct(local.firstMileShare)} of them here).`
+    : `Once you run buses here, about ${pct(local.firstMileShare)} of your riders will reach them by keke or okada.`;
+  return `<p class="inside"><b>Inside ${name}:</b> ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day, all by keke and okada. Nothing you run reaches that finely, and it isn't counted against you. ${reach}</p>`;
+}
+
 function renderTown(townId: string): void {
   const town = world.towns.get(townId)!;
   const share = townShare(world, townId);
@@ -291,7 +304,8 @@ function renderTown(townId: string): void {
     ${reachNote(townId)}
     <h2>${town.name} <span class="muted">· ${Math.round(town.population)}k people${world.settlement.emergent.has(townId) ? " · grew on the road" : ""}</span></h2>
     <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">informal</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
-    <p class="townshare">Of everyone leaving ${town.name}: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
+    <p class="townshare">Of everyone leaving ${town.name} for another town: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
+    ${insideText(townId, town.name)}
     ${rows}`;
 }
 
