@@ -43,6 +43,8 @@
       #routes h2 { margin: 0; font-size: 14px; }
       #routes .hint, #routes .empty { margin: 2px 0 8px; color: var(--muted); font-size: 12px; }
       #routes .muted { color: var(--muted); font-weight: 400; }
+      #routes .callout { margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; background: #fff0f0; color: var(--bad); font-size: 12px; line-height: 1.4; }
+      #routes .callout kbd { font: 11px ui-monospace, monospace; }
       #routes .townshare { margin: 0 0 6px; font-size: 12px; }
       .trip { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; }
       .trip .name { font-weight: 600; }
@@ -91,7 +93,7 @@
       Ring: where a town's people went. Dots: waiting now.<br />
       Double outline: riders change buses here.<br />
       Orange/red under a road: traffic is slowing it.<br />
-      Hover a town: where its people want to go.
+      Hover a town: where its people want to go (dashed: no road).
     </div>
     <div id="toolbar"></div>
     <div id="toast"></div>

@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**370 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**372 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -63,8 +63,8 @@ live-verified; each links to where its detail actually lives now.
 
 Play step 2: does piling onto a trunk now hurt, and does traffic read on the map? Known
 open items: money is still loose for a well-spread network (an economy lever, not a traffic
-one); cut-off towns should say "no road" outright (dashed wish-lines, a map label, a
-sentence in the town panel — playtest confusion, day 17); paving a dirt road could become
-its own decision now that dirt roads carry less. Step 1's question is in principles.md §6. Whatever the answer, write down what was
+one); paving a dirt road could become its own decision now that dirt roads carry less.
+Cut-off towns now say "no road" outright (dashed wish-lines, a map label, a sentence in
+the town panel), after a playtester read them as "nowhere to go" (day 17). Step 1's question is in principles.md §6. Whatever the answer, write down what was
 felt before changing anything — then step 2, or back to step 1's model if the loop didn't
 hold.

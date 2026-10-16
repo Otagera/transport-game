@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -451,5 +451,24 @@ describe("slice: shared road", () => {
     for (let i = 0; i < 16; i += 1) addBus(w, "big", "mid");
     run(w, 200);
     for (const speed of w.segmentSpeed.values()) expect(speed).toBe(1);
+  });
+});
+
+describe("slice: cut-off towns", () => {
+  test("a town no road reaches is cut off, and every trip to it is unreachable", () => {
+    const w = world();
+    expect(isCutOff(w, "cut")).toBe(true);
+    expect(isCutOff(w, "big")).toBe(false);
+    expect(tripsFrom(w, "cut").every((trip) => !trip.reachable)).toBe(true);
+    const fromBig = new Map(tripsFrom(w, "big").map((trip) => [trip.to, trip.reachable]));
+    expect(fromBig.get("mid")).toBe(true);
+    expect(fromBig.get("cut")).toBe(false);
+  });
+
+  test("building a road ends it", () => {
+    const w = world();
+    buildRoad(w, "mid", "cut");
+    expect(isCutOff(w, "cut")).toBe(false);
+    expect(tripsFrom(w, "cut").every((trip) => trip.reachable)).toBe(true);
   });
 });

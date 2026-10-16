@@ -210,6 +210,9 @@ no-cached-view discipline as §2).
   focused end, then yellow, then grey — labelled riders/day. The side panel swaps to that
   town's trip list with the same bars. One home at a time: the panel shows the focused
   town *or* your routes, never both.
+- **Cut-off towns** — a trip with no road between its towns draws dashed (`TripSummary.reachable`);
+  a town no road reaches (`isCutOff`) is labelled "no road" on the map, and its panel opens
+  with a sentence naming the biggest trip as the road to build.
 - **Route rows** show income/cost/net, a stacked bar of where the route's riders went
   (you / poached / gave up → danfo / stayed home), and `diagnoseRoute`'s verdict as one
   sentence with the lever that would change it. Build previews carry the trip's

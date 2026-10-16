@@ -8,6 +8,7 @@ import {
   checkRoad,
   createSliceWorld,
   diagnoseRoute,
+  isCutOff,
   networkShare,
   pairDemand,
   removeBus,
@@ -234,6 +235,21 @@ function changingText(townId: string): string {
   return perDay > 0 ? ` <b>${perDay} riders/day change buses here.</b>` : "";
 }
 
+// Says outright when a town's trips have no road -- the wish-lines alone
+// were read as "nowhere to go" (playtest, day 17).
+function reachNote(townId: string): string {
+  const trips = tripsFrom(world, townId);
+  const stranded = trips.filter((trip) => !trip.reachable);
+  if (stranded.length === 0) return "";
+  const perDay = (n: number) => Math.round(n * SECONDS_PER_GAME_DAY);
+  const biggest = stranded[0]!;
+  if (isCutOff(world, townId)) {
+    const total = perDay(stranded.reduce((sum, trip) => sum + trip.demand, 0));
+    return `<p class="callout">No road reaches ${townName(townId)}. Its people want to make ${total} trips a day and every one stays home. Build a road (<kbd>R</kbd>): the biggest trip is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
+  }
+  return `<p class="callout">${stranded.length} of ${townName(townId)}'s trips have no road at all (dashed lines). The biggest is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
+}
+
 function renderTown(townId: string): void {
   const town = world.towns.get(townId)!;
   const share = townShare(world, townId);
@@ -252,6 +268,7 @@ function renderTown(townId: string): void {
     })
     .join("");
   routesEl.innerHTML = `
+    ${reachNote(townId)}
     <h2>${town.name} <span class="muted">· ${Math.round(town.population)}k people${world.settlement.emergent.has(townId) ? " · grew on the road" : ""}</span></h2>
     <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">informal</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
     <p class="townshare">Of everyone leaving ${town.name}: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>

@@ -1,6 +1,6 @@
 import type { InformalMode, SliceTown, SliceWorld } from "@engine/slice/types";
 import type { Vehicle } from "@engine/simulation/types";
-import { townShare, tripsFrom, waitingAt } from "@engine/slice/world";
+import { isCutOff, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
@@ -198,6 +198,9 @@ function drawDesireLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view:
     let t0 = 0;
     ctx.globalAlpha = 0.72;
     ctx.lineWidth = width;
+    // No road joins them: dashed, so it reads as "no way there", not as a
+    // connection.
+    ctx.setLineDash(trip.reachable ? [] : [Math.max(6, width), Math.max(5, width * 0.8)]);
     for (const [fraction, color] of parts) {
       if (fraction <= 0) continue;
       const t1 = t0 + fraction;
@@ -208,6 +211,7 @@ function drawDesireLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view:
       ctx.stroke();
       t0 = t1;
     }
+    ctx.setLineDash([]);
     ctx.globalAlpha = 1;
     const perDay = Math.round(trip.demand * SECONDS_PER_GAME_DAY);
     const mid = { x: a.x + (b.x - a.x) * 0.62, y: a.y + (b.y - a.y) * 0.62 };
@@ -401,6 +405,11 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
   ctx.fillStyle = COLORS.labelMuted;
   ctx.font = "11px system-ui, sans-serif";
   ctx.fillText(`${Math.round(town.population)}k`, p.x, p.y + ringR + 29);
+  if (isCutOff(world, town.id)) {
+    ctx.fillStyle = COLORS.ghostBad;
+    ctx.font = "600 11px system-ui, sans-serif";
+    ctx.fillText("no road", p.x, p.y + ringR + 42);
+  }
   ctx.textAlign = "left";
 }
 

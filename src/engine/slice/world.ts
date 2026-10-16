@@ -462,6 +462,8 @@ export interface TripSummary {
   /** Passengers per second wanting this trip, both directions combined. */
   demand: number;
   share: ShareSummary;
+  /** Whether any road joins the two towns -- if not, nobody can take this trip. */
+  reachable: boolean;
 }
 
 /**
@@ -480,8 +482,21 @@ export function tripsFrom(world: SliceWorld, townId: string): TripSummary[] {
       to,
       demand,
       share: toShare(sumOutcomes(world, (a, b) => (a === townId && b === to) || (a === to && b === townId))),
+      reachable: roadPath(world, townId, to) !== null,
     }))
     .sort((x, y) => y.demand - x.demand);
+}
+
+/**
+ * A town no road reaches: every trip its people want stays home. Said
+ * outright, because a playtester read a cut-off town's all-grey wish-lines
+ * as "nowhere to go" rather than "no way to get there" (day 17).
+ */
+export function isCutOff(world: SliceWorld, townId: string): boolean {
+  for (const other of world.towns.keys()) {
+    if (other !== townId && roadPath(world, townId, other) !== null) return false;
+  }
+  return true;
 }
 
 /** Passengers per second wanting to travel between a and b, both directions. */
