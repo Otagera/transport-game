@@ -99,6 +99,14 @@ shows). The user played to here and called it good; this is the start of making 
 - A roadside town splits a road, after which paving it by its end towns is refused
   ("no road joins them directly").
 
+**Track 1 built (not yet played):** the strip and route rows read an exact rolling
+one-day ledger ("Net, last day"); every action gets a **receipt** two game days later —
+the world copied just before the action and run without it, so the difference is the
+action's own (money/day, payback, share and town rings it moved), listed under Results in
+the routes panel; and paving and fixing work on a whole road through roadside towns. First
+receipts in the browser say buses are marginal early (+₦10–20/day on ₦500 at day 3–4) —
+an input to track 2.
+
 Plan: **track 1, legibility** (a steady net/day, a receipt a day after each action, pave and
 fix a whole road through roadside towns), then **track 2, economics** of the dead levers
 (fix, pave, then rail).

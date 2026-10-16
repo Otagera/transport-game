@@ -1,5 +1,5 @@
 import { Accumulator, SIM_DT } from "@engine/loop";
-import { computeBurnRate } from "@engine/economy/report";
+import { lastDay } from "@engine/slice/ledger";
 import { sliceTick } from "@engine/slice/tick";
 import {
   addBus,
@@ -11,7 +11,10 @@ import {
   debtAdvice,
   demandAlong,
   diagnoseRoute,
-  directRoad,
+  chainOf,
+  findRoute,
+  roadChain,
+  routeKey,
   dirtRoadsOn,
   wornRoadsOn,
   isCutOff,
@@ -30,10 +33,12 @@ import {
 } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { planRoad, segmentPolyline, type Alignment, type RoadPlan } from "@engine/slice/roads";
-import { setMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
+import { setRoadMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
+import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/slice/receipts";
+import type { SliceWorld } from "@engine/slice/types";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
-import { addTrain, buildTrack, checkTrack, checkTrain, isRailRoute, planRail, railPath, restoreCost, trackAction } from "@engine/slice/rail";
-import { addFreightTrain, checkFreight, isFreightRoute } from "@engine/slice/goods";
+import { addTrain, buildTrack, checkTrack, checkTrain, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction } from "@engine/slice/rail";
+import { addFreightTrain, checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
 import { addLorry, checkLorry, diagnoseLorryRoute, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
@@ -109,6 +114,29 @@ if (key) {
 }
 resize();
 
+// Every action goes through the receipt book: it happens now, and two days
+// later a receipt says exactly what it did (receipts.ts).
+const book = createReceiptBook();
+
+/** Does an action and starts measuring it. The result is the real world's. */
+function act<T extends { ok: boolean }>(spec: ReceiptSpec, run: (w: SliceWorld) => T): T {
+  let result: T | undefined;
+  perform(world, book, (w) => {
+    const r = run(w);
+    if (w === world) result = r;
+    return r.ok;
+  }, spec);
+  return result!;
+}
+
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+const pair = (a: string, b: string) => `${townName(a)} ↔ ${townName(b)}`;
+
+/** "a 3rd bus on Ilase ↔ Owode", or "a new bus route Ilase ↔ Owode". */
+function addLabel(vehicle: string, count: number, a: string, b: string): string {
+  return count <= 1 ? `a new ${vehicle} route ${pair(a, b)}` : `a ${ordinal(count)} ${vehicle} on ${pair(a, b)}`;
+}
+
 let toastTimer = 0;
 function say(message: string, bad = false, seconds = 2.6): void {
   toast.textContent = message;
@@ -158,9 +186,18 @@ function midSentence(name: string): string {
   return name.startsWith("Track ") ? `t${name.slice(1)}` : name;
 }
 
+// A road is named by its end towns even where roadside towns have split it
+// into pieces: the player thinks of "the Owode-Ado road" (lever audit).
 function roadName(segmentId: string): string {
   const segment = world.simulation.map.segments.find((s) => s.id === segmentId)!;
-  return `${segment.type === "rail" ? "Track " : ""}${townName(segment.fromNodeId)} – ${townName(segment.toNodeId)}`;
+  const whole = segment.type === "road" ? chainOf(world, segmentId) : null;
+  const [a, b] = whole ? [whole.a, whole.b] : [segment.fromNodeId, segment.toNodeId];
+  return `${segment.type === "rail" ? "Track " : ""}${townName(a)} – ${townName(b)}`;
+}
+
+/** Every piece of the road a segment belongs to (just itself for track). */
+function roadPieces(segmentId: string) {
+  return chainOf(world, segmentId)?.pieces ?? world.simulation.map.segments.filter((s) => s.id === segmentId);
 }
 
 function setTool(next: Tool): void {
@@ -195,12 +232,16 @@ canvas.addEventListener("click", (event) => {
     const road = roadAt(event.clientX, event.clientY);
     if (!road) return;
     const on = !world.maintained.has(road);
-    const result = setMaintained(world, road, on);
+    const name = midSentence(roadName(road));
+    const pieces = roadPieces(road);
+    const ends = chainOf(world, road);
+    const towns = ends ? [ends.a, ends.b] : [pieces[0]!.fromNodeId, pieces[0]!.toNodeId];
+    const result = act({ label: on ? `maintaining ${name}` : `letting ${name} wear`, towns }, (w) => setRoadMaintained(w, road, on));
     if (!result.ok) say(`Can't maintain: ${result.reason}`, true);
     else if (on) {
-      const segment = world.simulation.map.segments.find((s) => s.id === road)!;
-      say(`Maintaining ${midSentence(roadName(road))}: repaired for ${naira(result.charged)}, about ${naira(upkeepPerDay(world, segment))}/day to keep at this traffic`);
-    } else say(`Stopped maintaining ${midSentence(roadName(road))}: it will wear again`);
+      const upkeep = pieces.reduce((sum, piece) => sum + upkeepPerDay(world, piece), 0);
+      say(`Maintaining ${name}: repaired for ${naira(result.charged)}, about ${naira(upkeep)}/day to keep at this traffic. Result in two days.`);
+    } else say(`Stopped maintaining ${name}: it will wear again`);
     renderPanel();
     return;
   }
@@ -214,37 +255,44 @@ canvas.addEventListener("click", (event) => {
     return;
   }
   const from = selectedTown;
-  if (tool === "road" && directRoad(world, from, town)) {
+  const towns = [from, town];
+  const later = " Result in two days.";
+  if (tool === "road" && roadChain(world, from, town)) {
     const cost = paveCost(world, from, town);
-    const result = paveRoad(world, from, town);
-    if (result.ok) say(`Paved ${townName(from)} – ${townName(town)} for ${naira(cost)}: it now carries ${paveGain()}× the traffic`);
+    const result = act({ label: `paving ${townName(from)} – ${townName(town)}`, towns }, (w) => paveRoad(w, from, town));
+    if (result.ok) say(`Paved ${townName(from)} – ${townName(town)} for ${naira(cost)}: it now carries ${paveGain()}× the traffic.${later}`);
     else say(`Can't pave: ${result.reason}`, true);
   } else if (tool === "road") {
     const cost = roadCost(world, from, town, alignment);
-    const result = buildRoad(world, from, town, alignment);
-    if (result.ok) say(`Built road ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
+    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, (w) => buildRoad(w, from, town, alignment));
+    if (result.ok) say(`Built road ${townName(from)} – ${townName(town)} for ${naira(cost)}.${later}`);
     else say(`Can't build: ${result.reason}`, true);
   } else if (tool === "track") {
     const restoring = trackAction(world, from, town) === "restore";
     const cost = restoring ? restoreCost(world, from, town) : (planRail(world, from, town, alignment)?.cost ?? 0);
-    const result = buildTrack(world, from, town, alignment);
+    const label = restoring ? `restoring the old line ${townName(from)} – ${townName(town)}` : `track ${townName(from)} – ${townName(town)}`;
+    const result = act({ label, towns }, (w) => buildTrack(w, from, town, alignment));
     if (result.ok) say(restoring ? `Restored the old line ${townName(from)} – ${townName(town)} for ${naira(cost)}: trains can run on it` : `Laid track ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't lay track: ${result.reason}`, true);
   } else if (tool === "freight") {
-    const result = addFreightTrain(world, from, town);
-    if (result.ok) say(`Freight train added: ${townName(from)} ↔ ${townName(town)}`);
+    const count = (world.lorryRoutes.find((r) => r.id === freightRouteId(from, town))?.vehicleIds.length ?? 0) + 1;
+    const result = act({ label: addLabel("freight train", count, from, town), towns, routeId: freightRouteId(from, town) }, (w) => addFreightTrain(w, from, town));
+    if (result.ok) say(`Freight train added: ${pair(from, town)}.${later}`);
     else say(`Can't add freight train (${naira(world.tuning.freightPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "train") {
-    const result = addTrain(world, from, town);
-    if (result.ok) say(`Train added: ${townName(from)} ↔ ${townName(town)}`);
+    const count = (world.routes.find((r) => r.id === railRouteId(from, town))?.vehicleIds.length ?? 0) + 1;
+    const result = act({ label: addLabel("train", count, from, town), towns, routeId: railRouteId(from, town) }, (w) => addTrain(w, from, town));
+    if (result.ok) say(`Train added: ${pair(from, town)}.${later}`);
     else say(`Can't add train (${naira(world.tuning.trainPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "lorry") {
-    const result = addLorry(world, from, town);
-    if (result.ok) say(`Lorry added: ${townName(from)} ↔ ${townName(town)}`);
+    const route = findLorryRoute(world, from, town);
+    const result = act({ label: addLabel("lorry", (route?.vehicleIds.length ?? 0) + 1, from, town), towns, routeId: route?.id ?? lorryRouteId(from, town) }, (w) => addLorry(w, from, town));
+    if (result.ok) say(`Lorry added: ${pair(from, town)}.${later}`);
     else say(`Can't add lorry (${naira(world.tuning.lorryPurchaseCost)}): ${result.reason}`, true);
   } else {
-    const result = addBus(world, from, town);
-    if (result.ok) say(`Bus added: ${townName(from)} ↔ ${townName(town)}`);
+    const count = (findRoute(world, from, town)?.vehicleIds.length ?? 0) + 1;
+    const result = act({ label: addLabel("bus", count, from, town), towns, routeId: routeKey(from, town) }, (w) => addBus(w, from, town));
+    if (result.ok) say(`Bus added: ${pair(from, town)}.${later}`);
     else say(`Can't add bus (${naira(world.tuning.busPurchaseCost)}): ${result.reason}`, true);
   }
   // Shift keeps the first town selected: fanning roads or routes out of
@@ -283,9 +331,11 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
   if (tool !== "fix" || !mouse) return null;
   const id = roadAt(mouse.x, mouse.y);
   if (!id) return null;
-  const segment = world.simulation.map.segments.find((s) => s.id === id)!;
-  const state = `${pct(segment.condition)} condition, ${segment.type === "rail" ? "trains" : "traffic"} at ${pct(wearSpeed(world, segment))} speed`;
-  const upkeep = naira(upkeepPerDay(world, segment));
+  // The whole road, through any roadside towns: its worst piece, its total upkeep.
+  const pieces = roadPieces(id);
+  const worst = pieces.reduce((low, piece) => (piece.condition < low.condition ? piece : low), pieces[0]!);
+  const state = `${pct(worst.condition)} condition${pieces.length > 1 ? " at worst" : ""}, ${worst.type === "rail" ? "trains" : "traffic"} at ${pct(wearSpeed(world, worst))} speed`;
+  const upkeep = naira(pieces.reduce((sum, piece) => sum + upkeepPerDay(world, piece), 0));
   const label = world.maintained.has(id)
     ? `${roadName(id)} · maintained, ${upkeep}/day · click to stop`
     : `${roadName(id)} · ${state} · maintain for ~${upkeep}/day`;
@@ -329,7 +379,7 @@ function ghost(): Ghost | null {
   if (!to) return { from: selectedTown, to: end, ok: true, label: "" };
   // The trip's demand rides along on every preview: what you'd be building for.
   const riders = `${Math.round(pairDemand(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want this trip`;
-  if (tool === "road" && directRoad(world, selectedTown, to)) {
+  if (tool === "road" && roadChain(world, selectedTown, to)) {
     const check = checkPave(world, selectedTown, to);
     const cost = naira(paveCost(world, selectedTown, to));
     return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Pave ${cost} · carries ${paveGain()}× the traffic` : `${cost} · ${check.reason}` };
@@ -468,13 +518,13 @@ function renderToolbar(): void {
 }
 
 function renderStrip(): void {
-  const burn = computeBurnRate(world.economy);
+  const burn = { netPerDay: lastDay(world.ledger).net };
   const share = networkShare(world);
   const day = Math.floor(world.economy.elapsedSeconds / 30) + 1;
   strip.innerHTML = `
     <div class="stat"><span class="k">Day</span><span class="v">${day}</span></div>
     <div class="stat"><span class="k">Funds</span><span class="v ${world.economy.funds < 0 ? "bad" : ""}">${naira(world.economy.funds)}</span></div>
-    <div class="stat"><span class="k">Net / day</span><span class="v ${burn.netPerDay < 0 ? "bad" : "good"}">${naira(burn.netPerDay)}</span></div>
+    <div class="stat"><span class="k" title="Fares minus running costs over the last game day">Net, last day</span><span class="v ${burn.netPerDay < 0 ? "bad" : "good"}">${naira(burn.netPerDay)}</span></div>
     <div class="stat share">
       <span class="k">Trips between towns: who carried them</span>
       <div class="bar">
@@ -634,7 +684,7 @@ function renderRoutes(): void {
   const summaries = routeSummaries(world);
   const header = `<h2>Your routes</h2><p class="hint">Worst first. Net is fares minus running cost. Bar: who carried this route's riders.</p>`;
   if (summaries.length === 0 && world.lorryRoutes.length === 0) {
-    routesEl.innerHTML = `${header}<p class="empty">No buses yet. Hover a town to see where its people want to go. Then pick the <b>Bus</b> tool, click a town, then another town joined to it by road.</p>`;
+    routesEl.innerHTML = `${resultsHtml()}${header}<p class="empty">No buses yet. Hover a town to see where its people want to go. Then pick the <b>Bus</b> tool, click a town, then another town joined to it by road.</p>`;
     return;
   }
   const rows = summaries.map((s) => {
@@ -661,7 +711,52 @@ function renderRoutes(): void {
         <div class="detail">${detail}</div>
       </div>`;
   });
-  routesEl.innerHTML = moneyNote() + (rows.length > 0 ? header + rows.join("") : "") + lorryRows(rows.length > 0);
+  routesEl.innerHTML = moneyNote() + resultsHtml() + (rows.length > 0 ? header + rows.join("") : "") + lorryRows(rows.length > 0);
+}
+
+// --- Results: what each action did --------------------------------------
+
+const pp = (n: number) => `${n >= 0 ? "+" : "−"}${Math.abs(Math.round(n))}pp`;
+const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** One receipt as a sentence: money first, then who it moved. */
+function receiptLine(r: Receipt): string {
+  const sale = r.capital < 0;
+  const level = Math.abs(r.moneyPerDay) < 5;
+  const money = level
+    ? "about level on money"
+    : r.moneyPerDay > 0
+    ? sale ? `saves you ${naira(r.moneyPerDay)}/day` : `earns you ${naira(r.moneyPerDay)}/day more`
+    : sale ? `costs you ${naira(-r.moneyPerDay)}/day in lost fares` : `costs you ${naira(-r.moneyPerDay)}/day`;
+  const capital = r.capital > 0
+    ? r.paybackDays !== null ? `, paying back its ${naira(r.capital)} in ~${Math.ceil(r.paybackDays)} days` : `; its ${naira(r.capital)} isn't paid back at this rate`
+    : sale ? ` (you got ${naira(-r.capital)} for it)` : "";
+  const moved: string[] = [];
+  if (Math.abs(r.you) >= 0.5) moved.push(`your share of all trips ${pp(r.you)}`);
+  for (const t of r.towns) {
+    const bits: string[] = [];
+    if (Math.abs(t.you) >= 1) bits.push(`you ${pp(t.you)}`);
+    if (Math.abs(t.informal) >= 1) bits.push(`informal ${pp(t.informal)}`);
+    if (Math.abs(t.home) >= 1) bits.push(`stayed home ${pp(t.home)}`);
+    if (bits.length > 0) moved.push(`${townName(t.townId)}: ${bits.join(", ")}`);
+  }
+  const early = r.measuredDays < 0.95 ? " (measured early: you acted again before it settled)" : "";
+  return `${capitalise(r.spec.label)} ${money}${capital}.${moved.length > 0 ? ` ${capitalise(moved.join("; "))}.` : ""}${early}`;
+}
+
+// What's being measured, and the latest receipts -- compared against the
+// same world without the action, so the number is the action's own.
+function resultsHtml(): string {
+  if (book.pending.length === 0 && book.done.length === 0) return "";
+  const dayOf = (seconds: number) => Math.floor(seconds / SECONDS_PER_GAME_DAY) + 1;
+  const pending = book.pending
+    .map((p) => `<li class="pending">Measuring ${p.spec.label}: result on day ${dayOf(p.startedAt + RECEIPT_SECONDS)}</li>`)
+    .join("");
+  const done = book.done
+    .slice(0, 3)
+    .map((r) => `<li class="${r.moneyPerDay < -5 ? "bad" : "good"}"><small>Day ${r.day}</small> ${receiptLine(r)}</li>`)
+    .join("");
+  return `<h2>Results</h2><p class="hint">Each action against the same world without it: the difference is its own.</p><ul class="results">${pending}${done}</ul>`;
 }
 
 // Lorries, after the buses: what goods go each way along the route, and
@@ -766,29 +861,37 @@ routesEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
   const addId = target.dataset.add;
   const removeId = target.dataset.remove;
+  const later = " Result in two days.";
+  const sell = (routeId: string, vehicle: string, remove: (w: SliceWorld) => number) => {
+    const route = [...world.routes, ...world.lorryRoutes].find((candidate) => candidate.id === routeId);
+    if (!route) return;
+    const result = act({ label: `selling a ${vehicle} on ${pair(route.a, route.b)}`, towns: [route.a, route.b], routeId }, (w) => {
+      const refund = remove(w);
+      return { ok: refund > 0, refund };
+    });
+    if (result.ok) say(`Sold a ${vehicle} for ${naira(result.refund)}.${later}`);
+  };
   if (addId && isLorryRoute(addId)) {
     const route = world.lorryRoutes.find((candidate) => candidate.id === addId);
     if (!route) return;
     const freight = isFreightRoute(addId);
-    const result = freight ? addFreightTrain(world, route.a, route.b) : addLorry(world, route.a, route.b);
+    const vehicle = freight ? "freight train" : "lorry";
+    const spec = { label: addLabel(vehicle, route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
+    const result = act(spec, (w) => (freight ? addFreightTrain(w, route.a, route.b) : addLorry(w, route.a, route.b)));
     const price = freight ? world.tuning.freightPurchaseCost : world.tuning.lorryPurchaseCost;
-    if (!result.ok) say(`Can't add ${freight ? "freight train" : "lorry"} (${naira(price)}): ${result.reason}`, true);
-  } else if (addId && isRailRoute(addId)) {
-    const route = world.routes.find((candidate) => candidate.id === addId);
-    if (!route) return;
-    const result = addTrain(world, route.a, route.b);
-    if (!result.ok) say(`Can't add train (${naira(world.tuning.trainPurchaseCost)}): ${result.reason}`, true);
+    if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (addId) {
     const route = world.routes.find((candidate) => candidate.id === addId);
     if (!route) return;
-    const result = addBus(world, route.a, route.b);
-    if (!result.ok) say(`Can't add bus (${naira(world.tuning.busPurchaseCost)}): ${result.reason}`, true);
+    const train = isRailRoute(addId);
+    const spec = { label: addLabel(train ? "train" : "bus", route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
+    const result = act(spec, (w) => (train ? addTrain(w, route.a, route.b) : addBus(w, route.a, route.b)));
+    const price = train ? world.tuning.trainPurchaseCost : world.tuning.busPurchaseCost;
+    if (!result.ok) say(`Can't add ${train ? "train" : "bus"} (${naira(price)}): ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {
-    const refund = removeLorry(world, removeId);
-    if (refund > 0) say(`Sold a ${isFreightRoute(removeId) ? "freight train" : "lorry"} for ${naira(refund)}`);
+    sell(removeId, isFreightRoute(removeId) ? "freight train" : "lorry", (w) => removeLorry(w, removeId));
   } else if (removeId) {
-    const refund = removeBus(world, removeId);
-    if (refund > 0) say(`Sold a ${isRailRoute(removeId) ? "train" : "bus"} for ${naira(refund)}`);
+    sell(removeId, isRailRoute(removeId) ? "train" : "bus", (w) => removeBus(w, removeId));
   }
   renderRoutes();
 });
@@ -808,6 +911,7 @@ function frame(now: number): void {
     for (let i = 0; i < speed; i += 1) {
       accumulator.advance(elapsed, (dt) => {
         for (const event of sliceTick(world, dt)) announce(event);
+        for (const receipt of tickReceipts(world, book, dt)) say(receiptLine(receipt), receipt.moneyPerDay < -5, 8);
       });
     }
   }

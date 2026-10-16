@@ -559,3 +559,22 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
 
 Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,
 town founding/abandonment rules, and `insertIntoPath`'s position-preserving split.
+
+### Ledger, receipts, road chains (legibility, track 1)
+
+- **`ledger.ts`** — an exact rolling one-day total of running income and cost, overall and
+  per route, in one-second slots. Running cost is whatever left the funds in a tick that
+  fares didn't bring in, so purchases and sales (outside the tick) never count. Read by the
+  strip, `routeSummaries`, `lorrySummaries` and `debtAdvice`. A route younger than a day is
+  scaled up from its own age (`openedAtSeconds`); a re-opened route id forgets its old fares.
+- **`receipts.ts`** — `perform(world, book, act, spec)` copies the world with
+  `structuredClone` just before the action, applies the action to the real world (and
+  replays it into every copy still measuring, so each stays "reality minus one action"),
+  then `tickReceipts` steps each copy in lockstep. After one settling day it notes the funds
+  gap; after the second it reports that day's change in the gap (running money only — the
+  capital cancels), payback, and share/ring differences. At most four measured at once; a
+  fifth finishes the oldest early. A refused action leaves no receipt.
+- **Road chains** (`world.ts`) — `roadChain(a, b)` and `chainOf(segmentId)` treat a road
+  split by roadside towns as one road, continuing through any emergent town or ruin on
+  exactly two roads. Paving, the "already connected" check, and `setRoadMaintained`
+  (wear.ts, whole road at once, track per piece) all use them.

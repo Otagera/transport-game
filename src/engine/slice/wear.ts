@@ -2,6 +2,7 @@ import type { Segment } from "../map/types";
 import { MIN_CONDITION, conditionSpeedFactor } from "../map/decay";
 import { BASE_COST_PER_CELL, BRIDGE_PREMIUM_PER_CELL, maintenanceCost } from "../pathing/cost";
 import { canAfford } from "../economy/state";
+import { chainOf } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { SliceWorld } from "./types";
 import { isDirt } from "./congestion";
@@ -139,6 +140,30 @@ export function setMaintained(world: SliceWorld, segmentId: string, on: boolean)
   segment.condition = 1;
   world.maintained.add(segmentId);
   return { ok: true, charged: catchUp };
+}
+
+/**
+ * Maintains (or stops maintaining) the whole road a piece belongs to --
+ * through any roadside towns that have split it -- as one decision. Track
+ * is kept per piece. The catch-up repair for all of it is charged at once,
+ * and refused as one if you can't afford it.
+ */
+export function setRoadMaintained(world: SliceWorld, segmentId: string, on: boolean): MaintainResult & { pieces: number } {
+  const pieces = chainOf(world, segmentId)?.pieces.map((piece) => piece.id) ?? [segmentId];
+  if (on) {
+    const catchUp = pieces.reduce((sum, id) => {
+      const segment = world.simulation.map.segments.find((candidate) => candidate.id === id);
+      return sum + (segment && !world.maintained.has(id) ? repairCost(world, segment, 1 - segment.condition) : 0);
+    }, 0);
+    if (!canAfford(world.economy, catchUp)) return { ok: false, reason: "can't afford the repair", pieces: pieces.length };
+  }
+  let charged = 0;
+  for (const id of pieces) {
+    if (on && world.maintained.has(id)) continue;
+    const result = setMaintained(world, id, on);
+    if (result.ok) charged += result.charged;
+  }
+  return { ok: true, charged, pieces: pieces.length };
 }
 
 /** Each road's condition, keyed by segment, for tickVehicle's speed. */

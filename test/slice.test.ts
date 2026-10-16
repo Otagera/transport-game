@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
+import { lastDay, routeIncomeLastDay } from "@engine/slice/ledger";
+import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/slice/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/slice/settlement";
+import { setRoadMaintained } from "@engine/slice/wear";
 import { routesOnTrip, tripPlans } from "@engine/slice/transfers";
 import { roadCapacity, speedFactor } from "@engine/slice/congestion";
 import { planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
@@ -491,8 +494,8 @@ describe("slice: paving a dirt road", () => {
   test("it refuses what isn't a dirt road between neighbours, and refusals cost nothing", () => {
     const w = world();
     const before = w.economy.funds;
-    expect(checkPave(w, "big", "far")).toEqual({ ok: false, reason: "no road joins them directly" });
-    expect(paveRoad(w, "mid", "cut")).toEqual({ ok: false, reason: "no road joins them directly" });
+    expect(checkPave(w, "big", "far")).toEqual({ ok: false, reason: "no road joins them" });
+    expect(paveRoad(w, "mid", "cut")).toEqual({ ok: false, reason: "no road joins them" });
     expect(w.economy.funds).toBe(before);
     paveRoad(w, "big", "mid");
     const after = w.economy.funds;
@@ -980,7 +983,7 @@ describe("slice: goods (step 4c)", () => {
     addLorry(w, "big", "far");
     const before = w.economy.funds;
     run(w, 300);
-    expect(w.lorryRoutes[0]!.revenueRateEMA).toBeGreaterThan(0);
+    expect(routeIncomeLastDay(w.ledger, w.lorryRoutes[0]!.id, Infinity)).toBeGreaterThan(0);
     expect(w.economy.funds).toBeGreaterThan(before - 300 * w.tuning.lorryOperatingCostPerSecond);
     const d = diagnoseLorryRoute(w, w.lorryRoutes[0]!.id)!;
     expect(d.delivered).toBeGreaterThan(0);
@@ -1025,7 +1028,7 @@ describe("slice: goods (step 4c)", () => {
     expect(train.path).not.toContain("mid"); // the track, not the road
     run(w, 300);
     const route = w.lorryRoutes.find((r) => r.id.startsWith("freight:"))!;
-    expect(route.revenueRateEMA).toBeGreaterThan(0);
+    expect(routeIncomeLastDay(w.ledger, route.id, Infinity)).toBeGreaterThan(0);
     for (const flow of w.roadFlowEMA.values()) expect(flow).toBeLessThan(1); // danfos only, no freight on roads
     // Same speed, same track: a freight train counts lorryWearMultiplier passenger trains toward wear.
     const pair = (freight: boolean) => {
@@ -1126,7 +1129,7 @@ describe("slice: rail (step 4d)", () => {
     addBus(w, "far", "mid"); // Big -> Mid can go by train to Far, then bus back... or the road
     run(w, 300);
     const train = w.routes.find((r) => r.id.startsWith("rail:"))!;
-    expect(train.revenueRateEMA).toBeGreaterThan(0);
+    expect(routeIncomeLastDay(w.ledger, train.id, Infinity)).toBeGreaterThan(0);
     expect(diagnoseRoute(w, train.id)!.informalTraffic).toBe(0);
   });
 
@@ -1218,5 +1221,180 @@ describe("slice: cut-off towns", () => {
     buildRoad(w, "mid", "cut");
     expect(isCutOff(w, "cut")).toBe(false);
     expect(tripsFrom(w, "cut").every((trip) => trip.reachable)).toBe(true);
+  });
+});
+
+describe("slice: money over the last day (ledger)", () => {
+  test("net, last day matches what the funds actually did over that day", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    for (let i = 0; i < 2; i += 1) addBus(w, "big", "mid");
+    run(w, 60);
+    const start = w.economy.funds;
+    run(w, 30);
+    // The ledger's day and the test's day differ by under a second, so they
+    // can disagree by at most a busload of fares landing in the gap.
+    const busload = w.tuning.busCapacity * w.tuning.fare;
+    expect(Math.abs(lastDay(w.ledger).net - (w.economy.funds - start))).toBeLessThan(busload);
+  });
+
+  test("it holds steadier than the old third-of-a-day average", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    for (let i = 0; i < 2; i += 1) addBus(w, "big", "mid");
+    run(w, 90);
+    const ledger: number[] = [];
+    const ema: number[] = [];
+    for (let t = 0; t < 60; t += 1) {
+      run(w, 1);
+      ledger.push(lastDay(w.ledger).net);
+      ema.push((w.economy.incomeRateEMA - w.economy.costRateEMA) * 30);
+    }
+    const spread = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
+    expect(spread(ledger)).toBeLessThan(spread(ema) * 0.75);
+  });
+
+  test("a new route reads at its real rate from the start, not ramping from zero", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    run(w, 90);
+    addBus(w, "mid", "far");
+    run(w, 20); // its first unload: a bus placed mid-route starts empty
+    const early = routeSummaries(w).find((r) => r.id.includes("far"))!.incomePerDay;
+    run(w, 60);
+    const settled = routeSummaries(w).find((r) => r.id.includes("far"))!.incomePerDay;
+    expect(early).toBeGreaterThan(settled * 0.4);
+    expect(early).toBeLessThan(settled * 2.5);
+  });
+});
+
+describe("slice: receipts (a day after each action, exactly what it did)", () => {
+  function runWithReceipts(w: SliceWorld, book: ReturnType<typeof createReceiptBook>, seconds: number): Receipt[] {
+    const out: Receipt[] = [];
+    for (let t = 0; t < seconds; t += SIM_DT) {
+      sliceTick(w, SIM_DT);
+      out.push(...tickReceipts(w, book, SIM_DT));
+    }
+    return out;
+  }
+  /** Ticks until the next receipt finishes; returns it and how many ticks it took. */
+  function untilReceipt(w: SliceWorld, book: ReturnType<typeof createReceiptBook>): { receipt: Receipt; ticks: number } {
+    for (let ticks = 1; ; ticks += 1) {
+      sliceTick(w, SIM_DT);
+      const [receipt] = tickReceipts(w, book, SIM_DT);
+      if (receipt) return { receipt, ticks };
+    }
+  }
+
+  test("a receipt equals the difference between the world with and without the action", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    run(w, 90);
+    const without = structuredClone(w);
+    const withBus = structuredClone(w);
+    addBus(withBus, "big", "mid");
+    const book = createReceiptBook();
+    perform(w, book, (x) => addBus(x, "big", "mid").ok, { label: "2nd bus", towns: ["big", "mid"], routeId: w.routes[0]!.id });
+    const { receipt, ticks } = untilReceipt(w, book);
+    expect(receipt.capital).toBe(w.tuning.busPurchaseCost);
+    // The same measurement done by hand: the second day's change in the gap.
+    const settleTicks = Math.round(SETTLE_SECONDS / SIM_DT);
+    for (let i = 0; i < settleTicks; i += 1) {
+      sliceTick(without, SIM_DT);
+      sliceTick(withBus, SIM_DT);
+    }
+    const gap1 = withBus.economy.funds - without.economy.funds;
+    for (let i = settleTicks; i < ticks; i += 1) {
+      sliceTick(without, SIM_DT);
+      sliceTick(withBus, SIM_DT);
+    }
+    const gap2 = withBus.economy.funds - without.economy.funds;
+    expect(receipt.moneyPerDay).toBeCloseTo((gap2 - gap1) / receipt.measuredDays, 0);
+    expect(receipt.you).toBeGreaterThan(0);
+  });
+
+  test("a refused action leaves no receipt and costs nothing", () => {
+    const w = world();
+    const book = createReceiptBook();
+    const before = w.economy.funds;
+    expect(perform(w, book, (x) => addBus(x, "big", "cut").ok, { label: "bus to nowhere", towns: [] })).toBe(false);
+    expect(book.pending).toHaveLength(0);
+    expect(w.economy.funds).toBe(before);
+  });
+
+  test("a later action isn't credited to an earlier one: it's replayed into the earlier copy", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    run(w, 60);
+    const book = createReceiptBook();
+    perform(w, book, (x) => addBus(x, "big", "mid").ok, { label: "first", towns: ["big"] });
+    run(w, 1);
+    perform(w, book, (x) => addBus(x, "mid", "far").ok, { label: "second", towns: ["far"] });
+    // The first copy now has the second route too: it differs from reality only by the first bus.
+    expect(book.pending[0]!.shadow.routes.some((r) => r.id.includes("far"))).toBe(true);
+    expect(book.pending[0]!.shadow.routes.some((r) => r.id.includes("big"))).toBe(false);
+  });
+
+  test("selling a bus reports its capital as money coming in, and what it saved or lost", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    addBus(w, "big", "mid");
+    run(w, 120);
+    const book = createReceiptBook();
+    const routeId = w.routes[0]!.id;
+    perform(w, book, (x) => removeBus(x, routeId) > 0, { label: "sold a bus", towns: ["big"] });
+    const [receipt] = runWithReceipts(w, book, RECEIPT_SECONDS + 1);
+    expect(receipt!.capital).toBeLessThan(0);
+    expect(receipt!.paybackDays).toBeNull();
+    expect(receipt!.you).toBeLessThanOrEqual(0);
+  });
+
+  test("never more than four measured at once: a fifth finishes the oldest early", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    const book = createReceiptBook();
+    for (let i = 0; i < 5; i += 1) {
+      perform(w, book, (x) => addBus(x, "big", "mid").ok, { label: `bus ${i}`, towns: [] });
+      run(w, 1);
+    }
+    expect(book.pending).toHaveLength(4);
+    expect(book.done).toHaveLength(1);
+    expect(book.done[0]!.measuredDays).toBeLessThan(1);
+  });
+});
+
+describe("slice: a road split by roadside towns is still one road", () => {
+  function splitRoad(): SliceWorld {
+    const w = world({ startingFunds: 1e6, foundTownFlow: 1, foundTownPlayerFlow: 0.3, minSecondsBetweenTowns: 0, maxEmergentTowns: 1 });
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    run(w, 400);
+    expect(w.settlement.emergent.size).toBe(1);
+    return w;
+  }
+
+  test("the chain runs from end town to end town through the roadside town", () => {
+    const w = splitRoad();
+    const chain = roadChain(w, "big", "mid")!;
+    expect(chain).toHaveLength(2);
+    const whole = chainOf(w, chain[1]!.id)!;
+    expect(new Set([whole.a, whole.b])).toEqual(new Set(["big", "mid"]));
+    expect(whole.pieces.map((p) => p.id)).toEqual(chain.map((p) => p.id));
+  });
+
+  test("paving it by its end towns paves every piece", () => {
+    const w = splitRoad();
+    expect(paveRoad(w, "big", "mid").ok).toBe(true);
+    for (const piece of roadChain(w, "big", "mid")!) expect(piece.provenance).toBe("built");
+  });
+
+  test("you can't build a second road alongside it", () => {
+    const w = splitRoad();
+    expect(checkRoad(w, "big", "mid")).toEqual({ ok: false, reason: "already connected directly" });
+  });
+
+  test("fixing one piece maintains the whole road", () => {
+    const w = splitRoad();
+    const chain = roadChain(w, "big", "mid")!;
+    const result = setRoadMaintained(w, chain[0]!.id, true);
+    expect(result.ok).toBe(true);
+    for (const piece of chain) expect(w.maintained.has(piece.id)).toBe(true);
+    setRoadMaintained(w, chain[1]!.id, false);
+    for (const piece of chain) expect(w.maintained.has(piece.id)).toBe(false);
   });
 });

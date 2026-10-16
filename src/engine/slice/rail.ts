@@ -1,3 +1,4 @@
+import { forgetRoute } from "./ledger";
 import type { TerrainField } from "../map/types";
 import type { PathResult, RoutingContext, Vehicle } from "../simulation/types";
 import { buildRoutingContext, findPath } from "../simulation/routing";
@@ -144,7 +145,7 @@ export function buildTrack(world: SliceWorld, a: string, b: string, alignment: A
 
 // --- Trains -----------------------------------------------------------------
 
-function railRouteId(a: string, b: string): string {
+export function railRouteId(a: string, b: string): string {
   return `rail:${routeKey(a, b)}`;
 }
 
@@ -161,8 +162,9 @@ export function addTrain(world: SliceWorld, a: string, b: string): ActionResult 
   const id = railRouteId(a, b);
   let route = world.routes.find((candidate) => candidate.id === id);
   if (!route) {
-    route = { id, a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
+    route = { id, a, b, vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
     world.routes.push(route);
+    forgetRoute(world.ledger, route.id);
     world.plans = null; // a new route changes how riders cross the network
   }
   const { tuning } = world;

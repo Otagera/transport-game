@@ -461,6 +461,14 @@ for if eras return; they are not live in the slice.*
   the whole fleet's cost called an over-bused strong route thin. And "pay for one bus" is
   what one bus can *catch* (about half its trips, measured), not the whole ceiling: once
   running cost bit, the ceiling test called a losing thin route "waiting" — add buses.
+- **No network-wide number can show one action.** The slice's daily earnings genuinely vary
+  ±₦75 day to day; a good bus adds ~₦90. Smoothing the total helps (a rolling one-day
+  ledger halved the jitter) but can't fix it, and before/after comparisons drown in the
+  same noise. What works is a counterfactual: copy the world just before the action, run
+  the copy without it, report the difference — exact, because the sim is deterministic,
+  and cheap (~1% extra per action being measured). Report after the action has *settled*:
+  a new bus starts empty mid-route, and its first day read as a loss when it settled at a
+  profit. (Lever audit + receipts, 2026-10-17.)
 - **Burn rate in the status strip** — income, cost, net per day. Balance without rate is
   unreadable.
 

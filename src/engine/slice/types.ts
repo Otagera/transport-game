@@ -1,6 +1,7 @@
 import type { PathResult, RoutingContext, SimulationState } from "../simulation/types";
 import type { EconomyState } from "../economy/types";
 import type { SettlementState } from "./settlement";
+import type { DayLedger } from "./ledger";
 import type { TripPlans } from "./transfers";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
@@ -62,8 +63,8 @@ export interface SliceRoute {
   a: string;
   b: string;
   vehicleIds: string[];
-  /** Rolling fare income for this route, currency per second. */
-  revenueRateEMA: number;
+  /** When it opened (economy seconds): a route younger than a day reads its fares by its own age. */
+  openedAtSeconds: number;
   /** Rolling riders boarding this route's buses, per second. */
   boardingRateEMA: number;
   /** Rolling mean of how full this route's buses are, 0..1. */
@@ -239,6 +240,8 @@ export interface SliceTuning {
 }
 
 export interface SliceWorld {
+  /** Money over the last game day: what the strip and route rows read (ledger.ts). */
+  ledger: DayLedger;
   width: number;
   height: number;
   towns: Map<string, SliceTown>;

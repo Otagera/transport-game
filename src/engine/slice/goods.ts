@@ -1,3 +1,4 @@
+import { forgetRoute, routeIncomeLastDay } from "./ledger";
 import type { CargoKind, DeliveryEvent, Vehicle } from "../simulation/types";
 import { createVehicle, freeSeats, nodesAhead, type Loader } from "../simulation/vehicle";
 import { canAfford, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
@@ -174,8 +175,12 @@ export function updateGoodsOutcomes(world: SliceWorld, delivered: Map<string, nu
 
 // --- Lorry routes -----------------------------------------------------------
 
-function lorryRouteId(a: string, b: string): string {
+export function lorryRouteId(a: string, b: string): string {
   return `lorry:${routeKey(a, b)}`;
+}
+
+export function freightRouteId(a: string, b: string): string {
+  return `freight:${routeKey(a, b)}`;
 }
 
 /** Goods routes: lorries (`lorry:`) on roads, freight trains (`freight:`) on track -- both in `world.lorryRoutes`. */
@@ -214,8 +219,9 @@ export function addLorry(world: SliceWorld, a: string, b: string): ActionResult 
   if (!check.ok) return check;
   let route = findLorryRoute(world, a, b);
   if (!route) {
-    route = { id: lorryRouteId(a, b), a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
+    route = { id: lorryRouteId(a, b), a, b, vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
     world.lorryRoutes.push(route);
+    forgetRoute(world.ledger, route.id);
   }
   const { tuning } = world;
   const id = `lorry-${world.nextId++}`;
@@ -242,11 +248,12 @@ export function checkFreight(world: SliceWorld, a: string, b: string): ActionRes
 export function addFreightTrain(world: SliceWorld, a: string, b: string): ActionResult {
   const check = checkFreight(world, a, b);
   if (!check.ok) return check;
-  const routeId = `freight:${routeKey(a, b)}`;
+  const routeId = freightRouteId(a, b);
   let route = world.lorryRoutes.find((candidate) => candidate.id === routeId);
   if (!route) {
-    route = { id: routeId, a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
+    route = { id: routeId, a, b, vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
     world.lorryRoutes.push(route);
+    forgetRoute(world.ledger, route.id);
   }
   const { tuning } = world;
   const id = `freight-${world.nextId++}`;
@@ -288,7 +295,7 @@ export interface LorrySummary {
 export function lorrySummaries(world: SliceWorld): LorrySummary[] {
   return world.lorryRoutes
     .map((route) => {
-      const incomePerDay = route.revenueRateEMA * SECONDS_PER_GAME_DAY;
+      const incomePerDay = routeIncomeLastDay(world.ledger, route.id, world.economy.elapsedSeconds - route.openedAtSeconds);
       const costPerDay = route.vehicleIds.length * goodsVehicleCostPerDay(world, route.id);
       return { id: route.id, a: route.a, b: route.b, lorries: route.vehicleIds.length, incomePerDay, costPerDay, netPerDay: incomePerDay - costPerDay };
     })

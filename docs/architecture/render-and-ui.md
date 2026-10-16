@@ -300,3 +300,13 @@ no-cached-view discipline as §2).
   instead of "earning well". Speed: Space pauses, 1/2/3 give 1×/2×/4×.
 - **`map.ts`** — the hand-made map as a TS constant, not yet content JSON (it moves to
   `public/content/` once the loop survives a playtest).
+
+### Results and naming (legibility, track 1)
+
+- Every action in the page goes through `act()` → `receipts.perform`, with a label the
+  player would use ("a 3rd bus on Ilase ↔ Owode", "paving Owode – Ado"). The routes panel
+  opens with **Results**: what's being measured and the day its result is due, then the
+  latest three receipts as one sentence each (money first, then who it moved), green or red.
+  A finished receipt also shows as an 8-second toast.
+- Roads are named by their end towns even when roadside towns have split them; the Fix
+  tool's hover shows the whole road's worst piece and total upkeep.

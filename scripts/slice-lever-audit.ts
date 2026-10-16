@@ -38,6 +38,7 @@ import { addLorry, lorrySummaries } from "../src/engine/slice/goods";
 import { addTrain, buildTrack } from "../src/engine/slice/rail";
 import { addFreightTrain } from "../src/engine/slice/goods";
 import { computeBurnRate } from "../src/engine/economy/report";
+import { lastDay } from "../src/engine/slice/ledger";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
@@ -183,7 +184,8 @@ const levers: Lever[] = [
 ];
 
 const always: Watch[] = [
-  money("strip net/day", (w) => computeBurnRate(w.economy).netPerDay),
+  money("strip net, last day", (w) => lastDay(w.ledger).net),
+  money("(old) net/day average", (w) => computeBurnRate(w.economy).netPerDay),
   share("strip: you", (w) => networkShare(w).player),
   share("strip: informal", (w) => networkShare(w).informal),
 ];

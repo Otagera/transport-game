@@ -4,6 +4,7 @@ import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from 
 import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types";
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
+import { recordMoney } from "./ledger";
 import { tripPlans } from "./transfers";
 import { updateRoadSpeeds } from "./congestion";
 import { segmentConditions, updateRoadWear } from "./wear";
@@ -71,6 +72,7 @@ export function parsePoolKey(key: string): { at: string; origin: string; destina
 // on your buses, taken by a danfo, or stayed home.
 export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   const { simulation, tuning, informal, economy } = world;
+  const fundsAtStart = economy.funds;
   const arrived = new Map<string, number>();
   const poached = new Map<string, number>();
   const gaveUp = new Map<string, number>();
@@ -204,9 +206,12 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // repaired as they go, and that upkeep is a running cost like a bus's.
   const upkeep = updateRoadWear(world, dt);
 
-  // Money.
+  // Money. Running cost is whatever left the funds this tick that fares
+  // didn't bring in -- buses, lorries, trains and road upkeep alike --
+  // so the ledger never has to know every way money is spent.
   applyOperatingCosts(economy, dt, 1, upkeep);
   updateIncomeRateEMA(economy, revenueThisTick, dt);
+  recordMoney(world.ledger, revenueThisTick, revenueThisTick - (economy.funds - fundsAtStart), routeRevenue, dt);
 
   // Rolling rates, each updated exactly once per tick (architecture hard
   // rule 7).
@@ -218,7 +223,6 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   for (const route of world.routes) updateRouteRates(route, alpha);
   for (const route of world.lorryRoutes) updateRouteRates(route, lorryAlpha);
   function updateRouteRates(route: SliceRoute, alpha: number): void {
-    route.revenueRateEMA += ((routeRevenue.get(route.id) ?? 0) / dt - route.revenueRateEMA) * alpha;
     route.boardingRateEMA += ((boardings.get(route.id) ?? 0) / dt - route.boardingRateEMA) * alpha;
     route.loadFactorEMA += (routeLoadFactor(world, route.vehicleIds) - route.loadFactorEMA) * alpha;
     route.speedEMA += (routeSpeed(world, route.vehicleIds) - route.speedEMA) * alpha;

@@ -5,7 +5,7 @@ import { findPath } from "../simulation/routing";
 import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
 import { canAfford, createEconomyState, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
-import { computeBurnRate } from "../economy/report";
+import { createDayLedger, forgetRoute, lastDay, routeIncomeLastDay } from "./ledger";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
@@ -103,6 +103,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     settlement: createSettlementState(),
     plans: null,
     transferRateEMA: new Map(),
+    ledger: createDayLedger(),
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),
@@ -171,10 +172,13 @@ export function roadCost(world: SliceWorld, a: string, b: string, alignment: Ali
 // base. Without that, paving a worn dirt road (new surface and all) cost
 // less than repairing it, and repair was never the choice (step 4).
 export function paveCost(world: SliceWorld, a: string, b: string): number {
-  const road = directRoad(world, a, b);
-  if (!road) return Infinity;
-  const surface = segmentLength(world, road) * world.tuning.roadCostPerCell;
-  return Math.round(surface + repairCost(world, road, 1 - road.condition));
+  const chain = roadChain(world, a, b);
+  if (!chain) return Infinity;
+  let cost = 0;
+  for (const road of chain.filter(isDirt)) {
+    cost += segmentLength(world, road) * world.tuning.roadCostPerCell + repairCost(world, road, 1 - road.condition);
+  }
+  return Math.round(cost);
 }
 
 /** The one road segment joining two neighbouring towns, if there is one. */
@@ -184,10 +188,65 @@ export function directRoad(world: SliceWorld, a: string, b: string): Segment | u
   );
 }
 
+function roadsAt(world: SliceWorld, nodeId: string): Segment[] {
+  return world.simulation.map.segments.filter((s) => s.type === "road" && (s.fromNodeId === nodeId || s.toNodeId === nodeId));
+}
+
+function otherEnd(segment: Segment, nodeId: string): string {
+  return segment.fromNodeId === nodeId ? segment.toNodeId : segment.fromNodeId;
+}
+
+/** A roadside town (or its ruin) that a road only passes through: on exactly two roads. */
+function isPassThrough(world: SliceWorld, nodeId: string): boolean {
+  return (world.settlement.emergent.has(nodeId) || world.ruins.has(nodeId)) && roadsAt(world, nodeId).length === 2;
+}
+
+/**
+ * The road joining a and b, as the player thinks of it: one segment, or
+ * several where roadside towns have grown on it and split it. The lever
+ * audit found that once Mile 10 split the Owode-Ado road, paving "Owode to
+ * Ado" was refused -- "no road joins them directly" -- and nothing said
+ * you now had to pave each piece.
+ */
+export function roadChain(world: SliceWorld, a: string, b: string): Segment[] | null {
+  for (const first of roadsAt(world, a)) {
+    const chain = [first];
+    let at = otherEnd(first, a);
+    while (at !== b && isPassThrough(world, at)) {
+      const next = roadsAt(world, at).find((s) => s !== chain[chain.length - 1])!;
+      chain.push(next);
+      at = otherEnd(next, at);
+    }
+    if (at === b) return chain;
+  }
+  return null;
+}
+
+/** The whole road a piece belongs to, extended both ways through roadside towns, with its end towns. */
+export function chainOf(world: SliceWorld, segmentId: string): { a: string; b: string; pieces: Segment[] } | null {
+  const piece = world.simulation.map.segments.find((s) => s.id === segmentId);
+  if (!piece || piece.type !== "road") return null;
+  const walk = (from: Segment, towards: string): { end: string; pieces: Segment[] } => {
+    const pieces: Segment[] = [];
+    let at = towards;
+    let last = from;
+    while (isPassThrough(world, at)) {
+      const next = roadsAt(world, at).find((s) => s !== last)!;
+      pieces.push(next);
+      at = otherEnd(next, at);
+      last = next;
+    }
+    return { end: at, pieces };
+  };
+  const back = walk(piece, piece.fromNodeId);
+  const forward = walk(piece, piece.toNodeId);
+  return { a: back.end, b: forward.end, pieces: [...back.pieces.reverse(), piece, ...forward.pieces] };
+}
+
 export function checkPave(world: SliceWorld, a: string, b: string): ActionResult {
-  const road = directRoad(world, a, b);
-  if (!road) return { ok: false, reason: "no road joins them directly" };
-  if (!isDirt(road)) return { ok: false, reason: "already paved" };
+  const chain = roadChain(world, a, b);
+  if (!chain) return { ok: false, reason: "no road joins them" };
+  if (!chain.some(isDirt)) return { ok: false, reason: "already paved" };
   if (!canAfford(world.economy, paveCost(world, a, b))) return { ok: false, reason: "can't afford it" };
   return { ok: true };
 }
@@ -196,16 +255,17 @@ export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult 
   const check = checkPave(world, a, b);
   if (!check.ok) return check;
   world.economy.funds -= paveCost(world, a, b);
-  const road = directRoad(world, a, b)!;
-  road.provenance = "built";
-  // A new surface: paving renews the road as well as widening what it carries.
-  road.condition = 1;
+  for (const road of roadChain(world, a, b)!.filter(isDirt)) {
+    road.provenance = "built";
+    // A new surface: paving renews the road as well as widening what it carries.
+    road.condition = 1;
+  }
   return { ok: true };
 }
 
 export function checkRoad(world: SliceWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
-  if (directRoad(world, a, b)) return { ok: false, reason: "already connected directly" };
+  if (roadChain(world, a, b)) return { ok: false, reason: "already connected directly" };
   if (!planRoad(world, a, b, alignment)) return { ok: false, reason: "the water is too wide to bridge here" };
   if (!canAfford(world.economy, roadCost(world, a, b, alignment))) return { ok: false, reason: "can't afford it" };
   return { ok: true };
@@ -242,8 +302,9 @@ export function addBus(world: SliceWorld, a: string, b: string): ActionResult {
 
   let route = findRoute(world, a, b);
   if (!route) {
-    route = { id: routeKey(a, b), a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
+    route = { id: routeKey(a, b), a, b, vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
     world.routes.push(route);
+    forgetRoute(world.ledger, route.id);
     world.plans = null; // a new route changes how riders cross the network
   }
   const { tuning } = world;
@@ -360,7 +421,7 @@ const RUNWAY_WARNING_DAYS = 7;
 
 export function debtAdvice(world: SliceWorld): DebtAdvice | null {
   const funds = world.economy.funds;
-  const { netPerDay } = computeBurnRate(world.economy);
+  const netPerDay = lastDay(world.ledger).net;
   const daysLeft = funds <= 0 ? 0 : netPerDay >= 0 ? Infinity : funds / -netPerDay;
   if (funds >= 0 && daysLeft > RUNWAY_WARNING_DAYS) return null;
   const buses = routeSummaries(world).map((route) => ({
@@ -398,7 +459,7 @@ export interface RouteSummary {
 export function routeSummaries(world: SliceWorld): RouteSummary[] {
   return world.routes
     .map((route) => {
-      const incomePerDay = route.revenueRateEMA * SECONDS_PER_GAME_DAY;
+      const incomePerDay = routeIncomeLastDay(world.ledger, route.id, world.economy.elapsedSeconds - route.openedAtSeconds);
       const costPerDay = route.vehicleIds.length * vehicleCostPerDay(world, route.id, SECONDS_PER_GAME_DAY);
       return { id: route.id, a: route.a, b: route.b, buses: route.vehicleIds.length, incomePerDay, costPerDay, netPerDay: incomePerDay - costPerDay };
     })
