@@ -57,6 +57,26 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   return { base, cap, target: base + (cap - base) * developed, service, playerShare: share.player };
 }
 
+// How far a town's target must be from its size, as a share of its
+// *starting* size, before it reads as growing or shrinking. At 2% of its
+// current size, a town drifting 1-3k back to its start flashed a down arrow
+// while shares settled (playtest, day 14: Owode, and Ilase/Kuto/Ikole a
+// little over their start) -- noise read as a loss.
+const TREND_SHARE_OF_BASE = 0.05;
+
+export type GrowthTrend = "growing" | "shrinking" | "steady";
+
+/** Which way a town is heading, for the map's arrow and the panel's sentence -- one rule for both. */
+export function growthTrend(world: SliceWorld, townId: string): GrowthTrend {
+  const growth = townGrowth(world, townId);
+  const town = world.towns.get(townId);
+  if (!growth || !town) return "steady";
+  const gap = growth.target - town.population;
+  if (gap > growth.base * TREND_SHARE_OF_BASE) return "growing";
+  if (-gap > growth.base * TREND_SHARE_OF_BASE) return "shrinking";
+  return "steady";
+}
+
 /** Drifts every original town toward the size its service supports. Demand follows once a day (settlement.ts). */
 export function growTowns(world: SliceWorld, dt: number): void {
   const alpha = 1 - Math.exp(-dt / world.tuning.townGrowthTauSeconds);

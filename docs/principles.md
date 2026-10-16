@@ -613,7 +613,10 @@ Steps, each played before the next:
      leads with "Run it through: a bus Ilase ↔ Ikole (via Kuto) reaches ₦456/day of trips,
      against ₦76"; the debt note offers the same; the bus preview counts every trip along
      its road and draws the road it would take. See Findings, Display.
-   Still to watch: ▼ flickers on towns a little over their start as early shares settle.
+   - **No ▼ for noise:** a town reads as growing or shrinking only when its target is more
+     than 5% of its *starting* size away (was 2% of its current size), so a town a
+     thousand or two over its start, settling back, reads as steady (`growthTrend`, one
+     rule for the map's arrow and the panel's sentence).
 
 Rules for working this way:
 

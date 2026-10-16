@@ -11,7 +11,7 @@ import { roadCapacity, speedFactor } from "@engine/slice/congestion";
 import { planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
 import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
-import { townGrowth } from "@engine/slice/growth";
+import { growthTrend, townGrowth } from "@engine/slice/growth";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -806,6 +806,23 @@ describe("slice: growth of the original towns (step 4)", () => {
     run(w, 600);
     expect(pop(w, "mid")).toBeLessThan(grown);
     expect(pop(w, "mid")).toBeGreaterThanOrEqual(w.basePopulation.get("mid")! - 1e-9);
+  });
+
+  test("a town a little over its start, settling back, reads as steady -- not shrinking", () => {
+    const w = world(calm); // no service: every target is the town's start
+    w.towns.get("big")!.population = w.basePopulation.get("big")! * 1.03;
+    expect(growthTrend(w, "big")).toBe("steady");
+    // Well over it, losing the growth it had: that is shrinking.
+    w.towns.get("big")!.population = w.basePopulation.get("big")! * 1.2;
+    expect(growthTrend(w, "big")).toBe("shrinking");
+  });
+
+  test("a town your service is growing reads as growing", () => {
+    const w = world(calm);
+    for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    run(w, 60);
+    expect(townGrowth(w, "mid")!.target).toBeGreaterThan(w.basePopulation.get("mid")! * 1.1);
+    expect(growthTrend(w, "mid")).toBe("growing");
   });
 
   test("roadside towns grow from traffic, not from this", () => {

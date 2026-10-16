@@ -31,7 +31,7 @@ import {
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { planRoad, segmentPolyline } from "@engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
-import { townGrowth } from "@engine/slice/growth";
+import { growthTrend, townGrowth } from "@engine/slice/growth";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
@@ -364,7 +364,8 @@ function growthText(townId: string, name: string): string {
   if (!growth) return "";
   const town = world.towns.get(townId)!;
   const k = (n: number) => `${Math.round(n)}k`;
-  const heading = growth.target > town.population * 1.02 ? `growing toward ${k(growth.target)}` : growth.target < town.population * 0.98 ? `shrinking toward ${k(growth.target)}` : `steady at ${k(town.population)}`;
+  const trend = growthTrend(world, townId);
+  const heading = trend === "growing" ? `growing toward ${k(growth.target)}` : trend === "shrinking" ? `shrinking toward ${k(growth.target)}` : `steady at ${k(town.population)}`;
   const min = world.tuning.growthMinPlayerShare;
   const why = isCutOff(world, townId)
     ? "No road reaches it, so nothing can grow it."

@@ -244,7 +244,8 @@ no-cached-view discipline as §2).
   losing routes with their loss and resale, and the total refund and daily saving; or road
   upkeep to drop; or, if every route pays, how long the debt takes to clear.
 - **Growth** — a town's circle already scales with √population; a ▲ (green) or ▼ beside its
-  population says which way it's heading (target vs now, ±2%). The town panel says why:
+  population says which way it's heading (`growthTrend`: target more than 5% of the town's
+  *starting* size away; the panel's "growing/shrinking/steady" uses the same rule). The town panel says why:
   heading, service (yours + informal at half), the cap — or that it needs 10% of its trips
   from you, or that no road reaches it. `fitView` takes a bottom inset so the map clears the
   key and toolbar (Ise's label sat under the key before).

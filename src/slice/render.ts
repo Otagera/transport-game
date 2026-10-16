@@ -2,7 +2,7 @@ import type { InformalMode, SliceTown, SliceWorld } from "@engine/slice/types";
 import type { Vehicle } from "@engine/simulation/types";
 import { isCutOff, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
-import { townGrowth } from "@engine/slice/growth";
+import { growthTrend } from "@engine/slice/growth";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
@@ -561,8 +561,8 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
   ctx.font = "11px system-ui, sans-serif";
   // Growing or shrinking, at a glance (principles §3: growth must be
   // visible without reading a number) -- the circle itself grows too.
-  const growth = townGrowth(world, town.id);
-  const trend = !growth ? "" : growth.target > town.population * 1.02 ? " ▲" : growth.target < town.population * 0.98 ? " ▼" : "";
+  const heading = growthTrend(world, town.id);
+  const trend = heading === "growing" ? " ▲" : heading === "shrinking" ? " ▼" : "";
   ctx.fillText(`${Math.round(town.population)}k`, p.x - (trend ? 5 : 0), p.y + ringR + 29);
   if (trend) {
     const w = ctx.measureText(`${Math.round(town.population)}k`).width;
