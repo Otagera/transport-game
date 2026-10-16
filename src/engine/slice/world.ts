@@ -10,6 +10,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
 import { createSettlementState } from "./settlement";
+import { createGoodsState, lorryResale, lorrySummaries } from "./goods";
 import { routesOnTrip } from "./transfers";
 import { isDirt } from "./congestion";
 import { buildSliceTerrain } from "./terrain";
@@ -94,7 +95,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     towns: new Map(def.towns.map((town) => [town.id, { ...town }])),
     tuning,
     simulation,
-    economy: createEconomyState({ passengers: tuning.fare, produce: 0, supplies: 0 }, tuning.startingFunds),
+    economy: createEconomyState({ passengers: tuning.fare, produce: tuning.produceFare, supplies: tuning.suppliesFare }, tuning.startingFunds),
     routes: [],
     informal: { pool: new Map(), smallPool: new Map(), active: new Map(), segmentSpace: new Map(), earnings: 0 },
     pairOutcomes: new Map(),
@@ -109,6 +110,10 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     pathCache: new Map(),
     roadPlans: new Map(),
     basePopulation: new Map(def.towns.map((town) => [town.id, town.population])),
+    lorryRoutes: [],
+    goods: createGoodsState(),
+    port: def.port,
+    heavyFlowEMA: new Map(),
     maintained: new Set(),
     upkeepRateEMA: new Map(),
     bridgeCells: new Map(),
@@ -200,7 +205,7 @@ export function buildRoad(world: SliceWorld, a: string, b: string): ActionResult
   return { ok: true };
 }
 
-function routeKey(a: string, b: string): string {
+export function routeKey(a: string, b: string): string {
   return a < b ? `${a}~${b}` : `${b}~${a}`;
 }
 
@@ -273,7 +278,7 @@ export function cycleFraction(world: SliceWorld, vehicle: Vehicle): number {
   return distance / total;
 }
 
-function placeAtCycleFraction(world: SliceWorld, vehicle: Vehicle, fraction: number): void {
+export function placeAtCycleFraction(world: SliceWorld, vehicle: Vehicle, fraction: number): void {
   const lengths = edgeLengths(world, vehicle);
   const total = lengths.reduce((sum, length) => sum + length, 0);
   let remaining = fraction * total;
@@ -331,7 +336,7 @@ export interface DebtAdvice {
   /** Days until funds hit zero at this rate; 0 if already in debt, Infinity if earning. */
   daysLeft: number;
   /** Losing routes, worst first: selling all their buses returns `refund` and saves `savesPerDay`. */
-  sell: Array<{ routeId: string; a: string; b: string; buses: number; refund: number; savesPerDay: number }>;
+  sell: Array<{ routeId: string; a: string; b: string; vehicles: number; refund: number; savesPerDay: number }>;
 }
 
 const RUNWAY_WARNING_DAYS = 7;
@@ -341,17 +346,23 @@ export function debtAdvice(world: SliceWorld): DebtAdvice | null {
   const { netPerDay } = computeBurnRate(world.economy);
   const daysLeft = funds <= 0 ? 0 : netPerDay >= 0 ? Infinity : funds / -netPerDay;
   if (funds >= 0 && daysLeft > RUNWAY_WARNING_DAYS) return null;
-  const sell = routeSummaries(world)
-    .filter((route) => route.netPerDay < 0)
-    .sort((p, q) => p.netPerDay - q.netPerDay)
-    .map((route) => ({
-      routeId: route.id,
-      a: route.a,
-      b: route.b,
-      buses: route.buses,
-      refund: world.routes.find((r) => r.id === route.id)!.vehicleIds.reduce((sum, id) => sum + resaleValue(world.economy, id), 0),
-      savesPerDay: -route.netPerDay,
-    }));
+  const buses = routeSummaries(world).map((route) => ({
+    routeId: route.id,
+    a: route.a,
+    b: route.b,
+    vehicles: route.buses,
+    refund: world.routes.find((r) => r.id === route.id)!.vehicleIds.reduce((sum, id) => sum + resaleValue(world.economy, id), 0),
+    savesPerDay: -route.netPerDay,
+  }));
+  const lorries = lorrySummaries(world).map((route) => ({
+    routeId: route.id,
+    a: route.a,
+    b: route.b,
+    vehicles: route.lorries,
+    refund: lorryResale(world, route.id),
+    savesPerDay: -route.netPerDay,
+  }));
+  const sell = [...buses, ...lorries].filter((route) => route.savesPerDay > 0).sort((p, q) => q.savesPerDay - p.savesPerDay);
   return { funds, netPerDay, daysLeft, sell };
 }
 

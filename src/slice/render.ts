@@ -18,6 +18,7 @@ export const COLORS = {
   bridge: "#7d7466",
   crack: "#4a3b2a",
   grow: "#2b8a3e",
+  goods: "#8a5a2b",
   kept: "#fffdf8",
   groundEdge: "#d9ccae",
   dirtRoad: "#c4ab7c",
@@ -298,6 +299,21 @@ const SLOW_ROAD_SPEED = 0.9;
 // Each route is drawn as a coloured line over the roads it runs on, offset
 // a little per route so two routes sharing a road both stay visible.
 function drawRouteLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
+  // Lorry routes: brown, dashed, beside the buses' lines.
+  for (const route of world.lorryRoutes) {
+    const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
+    if (!vehicle) continue;
+    const half = halfPath(vehicle.path, route.a, route.b);
+    const line: Point[] = [];
+    for (let i = 1; i < half.length; i += 1) line.push(...edgeLine(world, half[i - 1]!, half[i]!));
+    ctx.strokeStyle = COLORS.goods;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 5]);
+    ctx.globalAlpha = 0.85;
+    strokeLine(ctx, view, line, 5);
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
   world.routes.forEach((route, index) => {
     const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
     if (!vehicle) return;
@@ -454,6 +470,19 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     ctx.rotate(pose.angle);
     if (vehicle.lifecycle === "one-shot") {
       drawInformal(ctx, world.informal.active.get(vehicle.id)?.mode ?? "danfo");
+    } else if (vehicle.carries === "goods") {
+      // A lorry: longer than a bus, brown, filled from the back by its load.
+      const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
+      ctx.fillStyle = "#fffdf8";
+      ctx.strokeStyle = COLORS.goods;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-13, -5, 26, 10, 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = COLORS.goods;
+      ctx.fillRect(-12, -4, 24 * Math.min(1, load), 8);
+      ctx.fillRect(9, -5, 4, 10); // cab
     } else {
       const color = routeColor(routeIndex.get(vehicle.id) ?? 0);
       const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;

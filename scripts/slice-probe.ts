@@ -10,6 +10,7 @@ import { addBus, buildRoad, directRoad, paveRoad, paveCost, createSliceWorld, di
 import { sliceTick } from "../src/engine/slice/tick";
 import { planRoad } from "../src/engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "../src/engine/slice/wear";
+import { addLorry, diagnoseLorryRoute } from "../src/engine/slice/goods";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
@@ -27,6 +28,12 @@ interface Strategy {
 function buses(a: string, b: string, n: number) {
   return (world: SliceWorld) => {
     for (let i = 0; i < n; i += 1) addBus(world, a, b);
+  };
+}
+
+function lorries(a: string, b: string, n: number) {
+  return (world: SliceWorld) => {
+    for (let i = 0; i < n; i += 1) addLorry(world, a, b);
   };
 }
 
@@ -132,6 +139,21 @@ const allStrategies: Strategy[] = [
       w.economy.funds -= 2500;
     },
   },
+  // Goods (step 4c): lorries where goods flow both ways against one-way
+  // routes. Produce: Kuto/Ise -> Ilase, Ogbe -> Ado; supplies: Ilase -> all.
+  { name: "goods: lorry ilase-kuto (both ways)", setup: lorries("ilase", "kuto", 1) },
+  { name: "goods: 2 lorries ilase-kuto", setup: (w) => { w.economy.funds += 1000; lorries("ilase", "kuto", 2)(w); w.economy.funds -= 1000; } },
+  { name: "goods: lorry ilase-ise (both ways)", setup: lorries("ilase", "ise", 1) },
+  { name: "goods: lorry ado-ogbe (produce only)", setup: lorries("ado", "ogbe", 1) },
+  { name: "goods: lorry ilase-owode (supplies only)", setup: lorries("ilase", "owode", 1) },
+  { name: "goods: lorry ilase-ado (supplies, long)", setup: lorries("ilase", "ado", 1) },
+  {
+    name: "goods: 2 buses ilase-owode + lorry ilase-kuto",
+    setup: (w) => {
+      buses("ilase", "owode", 2)(w);
+      lorries("ilase", "kuto", 1)(w);
+    },
+  },
   // Through-routes (playtest day 14): each thin shuttle against the route
   // world.ts throughRoute suggests instead, one bus each.
   { name: "through: shuttle ado-ogbe", setup: buses("ado", "ogbe", 1) },
@@ -200,6 +222,15 @@ for (const strategy of strategies) {
       `share you ${pct(share.player)} danfo ${pct(share.informal)} home ${pct(share.lost)}  ` +
       `danfos ${String(danfos).padStart(3)}  waiting@ilase ${fmt(waitingAt(world, "ilase"))}  informal ₦ ${fmt(world.informal.earnings)}`,
   );
+  for (const route of world.lorryRoutes) {
+    const d = diagnoseLorryRoute(world, route.id)!;
+    const cost = route.vehicleIds.length * world.tuning.lorryOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
+    const income = route.revenueRateEMA * SECONDS_PER_GAME_DAY;
+    console.log(
+      `    ${route.id.padEnd(20)} lorries ${route.vehicleIds.length}  in ${fmt(income)}  cost ${fmt(cost)}  net ${fmt(income - cost)}/day  → ${d.verdict.padEnd(9)} ` +
+        `t/day out ${d.outbound.toFixed(0)} in ${d.inbound.toFixed(0)}  delivered ${pct(d.delivered)} spoiled ${pct(d.spoiled)} load ${pct(d.loadFactor)}`,
+    );
+  }
   const roads = world.simulation.map.segments
     .filter((s) => (world.roadFlowEMA.get(s.id) ?? 0) > 0.2)
     .map((s) => `${s.id}${world.maintained.has(s.id) ? "*" : ""} ${pct(s.condition)} (${pct(wearSpeed(s))} speed${world.maintained.has(s.id) ? `, upkeep ${upkeepPerDay(world, s).toFixed(0)}/day` : ""})`);

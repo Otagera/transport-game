@@ -75,8 +75,10 @@ export function updateSettlements(world: SliceWorld, dt: number): SliceEvent[] {
   settlement.elapsedSeconds += dt;
 
   const alpha = 1 - Math.exp(-dt / tuning.flowTauSeconds);
-  const flow = instantaneousFlow(world, () => true);
-  const playerFlow = instantaneousFlow(world, (vehicle) => vehicle.lifecycle === "cyclic");
+  // People passing, not tonnes: lorries don't grow roadside towns (yet --
+  // goods are kept off growth for now, principles §6 step 4c).
+  const flow = instantaneousFlow(world, (vehicle) => vehicle.carries === "passengers");
+  const playerFlow = instantaneousFlow(world, (vehicle) => vehicle.lifecycle === "cyclic" && vehicle.carries === "passengers");
   for (const segment of world.simulation.map.segments) {
     const previous = settlement.segmentFlowEMA.get(segment.id) ?? 0;
     settlement.segmentFlowEMA.set(segment.id, previous + ((flow.get(segment.id) ?? 0) - previous) * alpha);
@@ -240,7 +242,7 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
   informal.segmentSpace.set(first.id, space);
   informal.segmentSpace.set(second.id, space);
   informal.segmentSpace.delete(segmentId);
-  for (const flows of [settlement.segmentFlowEMA, settlement.segmentPlayerFlowEMA, world.roadFlowEMA]) {
+  for (const flows of [settlement.segmentFlowEMA, settlement.segmentPlayerFlowEMA, world.roadFlowEMA, world.heavyFlowEMA]) {
     const flow = flows.get(segmentId) ?? 0;
     flows.set(first.id, flow);
     flows.set(second.id, flow);

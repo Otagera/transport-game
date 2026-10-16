@@ -76,6 +76,7 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
   // ways, and keyed by segment it never "entered" again -- its traffic was
   // invisible until something split the road.
   const entering = new Map<string, number>();
+  const heavy = new Map<string, number>();
   const nowOn = new Map<string, string>();
   for (const vehicle of simulation.vehicles) {
     const segmentId = currentSegment(world, vehicle);
@@ -84,6 +85,8 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
     nowOn.set(vehicle.id, leg);
     if (world.vehicleSegment.get(vehicle.id) !== leg) {
       entering.set(segmentId, (entering.get(segmentId) ?? 0) + vehicle.congestionWeight);
+      // Lorries counted apart too: they wear a road harder (wear.ts).
+      if (vehicle.carries === "goods") heavy.set(segmentId, (heavy.get(segmentId) ?? 0) + vehicle.congestionWeight);
     }
   }
   world.vehicleSegment = nowOn;
@@ -95,6 +98,8 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
     const previous = world.roadFlowEMA.get(segment.id) ?? 0;
     const flow = previous + ((entering.get(segment.id) ?? 0) / dt - previous) * alpha;
     world.roadFlowEMA.set(segment.id, flow);
+    const previousHeavy = world.heavyFlowEMA.get(segment.id) ?? 0;
+    world.heavyFlowEMA.set(segment.id, previousHeavy + ((heavy.get(segment.id) ?? 0) / dt - previousHeavy) * alpha);
     world.segmentSpeed.set(segment.id, tuning.congestion ? speedFactor(flow, roadCapacity(world, segment.id), tuning.minSpeedFactor) : 1);
   }
 }

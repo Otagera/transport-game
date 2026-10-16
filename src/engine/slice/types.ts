@@ -3,6 +3,7 @@ import type { EconomyState } from "../economy/types";
 import type { SettlementState } from "./settlement";
 import type { TripPlans } from "./transfers";
 import type { RoadPlan } from "./roads";
+import type { GoodsState } from "./goods";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
 // towns, straight roads, one bus type, passengers who give up, and the
@@ -49,6 +50,8 @@ export interface SliceMapDef {
   roads: SliceRoadDef[];
   /** Step 3: authored terrain. Absent means flat dry land. */
   terrain?: { rivers?: SliceRiverDef[]; hills?: SliceHillDef[] };
+  /** Step 4: the port city, where supplies come from (goods.ts). Absent means no supplies. */
+  port?: string;
 }
 
 /** A player route: an A<->B shuttle, running however many buses. */
@@ -128,6 +131,26 @@ export interface SliceTuning {
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;
+  // Goods (step 4, goods.ts).
+  /** Towns at least this big (thousands) are markets: produce goes to the nearest one. */
+  marketPopulation: number;
+  /** Tonnes of produce a farm town sends a day, per thousand people. */
+  producePerThousandPerDay: number;
+  /** Tonnes of supplies the port sends a town a day, per thousand people there. */
+  suppliesPerThousandPerDay: number;
+  /** Mean seconds goods wait at a yard before spoiling. */
+  goodsSpoilSeconds: number;
+  /** Freight fares, per tonne delivered. */
+  produceFare: number;
+  suppliesFare: number;
+  lorryCapacity: number;
+  lorrySpeed: number;
+  lorryPurchaseCost: number;
+  lorryOperatingCostPerSecond: number;
+  /** Road space a lorry takes, in danfo-equivalents. */
+  lorryRoadSpace: number;
+  /** A lorry's road space wears a road this many times what the same road space of anything else does. */
+  lorryWearMultiplier: number;
   // Growth of the original towns (step 4, growth.ts).
   /** A town can grow to this much above its starting size (0.5 = +50%). */
   townGrowthCap: number;
@@ -211,6 +234,14 @@ export interface SliceWorld {
   vehicleSegment: Map<string, string>;
   /** segmentId -> speed as a share of free flow this tick. What slows a bus is what the map draws. */
   segmentSpeed: Map<string, number>;
+  /** Lorry routes (goods.ts) -- apart from `routes`, which every passenger system reads. */
+  lorryRoutes: SliceRoute[];
+  /** Goods waiting at each town's yard, and where each flow's goods ended up. */
+  goods: GoodsState;
+  /** Where supplies come from (the map def's port). */
+  port: string | undefined;
+  /** segmentId -> rolling road space entering per second from lorries alone (heavier wear). */
+  heavyFlowEMA: Map<string, number>;
   /** The original towns' starting sizes, thousands (growth.ts caps growth relative to these). */
   basePopulation: Map<string, number>;
   /** Roads you maintain (wear.ts): repaired as they wear, billed as they go. */

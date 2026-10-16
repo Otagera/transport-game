@@ -234,6 +234,12 @@ no-cached-view discipline as §2).
 - **Road preview** — the ghost draws the planned road itself, bends and all, and its label
   says what the price is made of: "Road ₦581 (bridge 4 cells ₦315, bends round: 10% longer
   trip)" (principles §1: a quote must say why). It flips left rather than run under the panel.
+- **Lorries** — the Lorry tool (`L`) buys a lorry for a route like the Bus tool; its ghost
+  says the goods along it each way ("25 t/day out, 50 back") and draws its road. Lorries
+  draw longer than buses, brown, with a cab, filled by load; their routes as a brown dashed
+  line. The routes panel lists them after the buses ("Your lorries"), each with a
+  delivered/spoiled bar, a one-line reason, and tonnes each way; the town panel adds what
+  goods leave and arrive and how much is delivered.
 - **Through-routes** — a thin route's reason leads with `throughText` ("Run it through: a bus
   Ilase ↔ Ikole (via Kuto) reaches ₦…/day of trips, against ₦… on this one"), and the money
   note offers it beside selling. The bus ghost counts `demandAlong` ("N riders/day want

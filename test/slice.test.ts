@@ -12,6 +12,7 @@ import { planRoad, polylineLength, segmentLength, segmentPolyline } from "@engin
 import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
+import { addLorry, diagnoseLorryRoute, goodsFlows, removeLorry } from "@engine/slice/goods";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -896,6 +897,88 @@ describe("slice: through-routes (playtest, day 14)", () => {
     // Make every through-route too thin to pay: nothing to point at.
     w.tuning = { ...w.tuning, busOperatingCostPerSecond: 1000 };
     expect(throughRoute(w, w.routes[0]!.id)).toBeNull();
+  });
+});
+
+describe("slice: goods (step 4c)", () => {
+  // MAP with Big as the port. Markets: Big and Mid (>= 40k). Far's produce goes to Mid, its nearest.
+  const goodsWorld = (overrides: Partial<SliceTuning> = {}) =>
+    createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, ...overrides });
+
+  test("goods are one-way: produce from farm towns to their nearest market, supplies from the port", () => {
+    const w = goodsWorld();
+    const flows = goodsFlows(w);
+    const produce = flows.filter((f) => f.kind === "produce");
+    expect(produce.map((f) => `${f.from}>${f.to}`).sort()).toEqual(["cut>mid", "far>mid"]);
+    expect(flows.filter((f) => f.kind === "supplies").map((f) => f.to).sort()).toEqual(["cut", "far", "mid"]);
+    // Never mirrored: no produce comes back from market.
+    expect(flows.some((f) => f.kind === "produce" && f.from === "mid")).toBe(false);
+  });
+
+  test("goods nobody carries wait a while and spoil -- and never touch the passenger share", () => {
+    const w = goodsWorld();
+    const plain = goodsWorld({ producePerThousandPerDay: 0, suppliesPerThousandPerDay: 0 });
+    run(w, 300);
+    run(plain, 300);
+    const yard = w.goods.yards.get("far")!;
+    expect([...yard.values()].reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+    const outcome = [...w.goods.outcomes.values()][0]!;
+    expect(outcome.delivered).toBe(0);
+    expect(outcome.spoiled).toBeGreaterThan(0);
+    expect(networkShare(w)).toEqual(networkShare(plain));
+  });
+
+  test("a lorry delivers goods ahead of it and earns freight fares", () => {
+    const w = goodsWorld();
+    addLorry(w, "big", "far");
+    const before = w.economy.funds;
+    run(w, 300);
+    expect(w.lorryRoutes[0]!.revenueRateEMA).toBeGreaterThan(0);
+    expect(w.economy.funds).toBeGreaterThan(before - 300 * w.tuning.lorryOperatingCostPerSecond);
+    const d = diagnoseLorryRoute(w, w.lorryRoutes[0]!.id)!;
+    expect(d.delivered).toBeGreaterThan(0);
+  });
+
+  test("a route with goods both ways isn't one-way; a supplies-only one is", () => {
+    const w = goodsWorld();
+    addLorry(w, "big", "far"); // supplies out to Mid and Far, Far's produce back to Mid
+    addLorry(w, "big", "mid"); // supplies only
+    run(w, 120);
+    const both = diagnoseLorryRoute(w, w.lorryRoutes.find((r) => r.b === "far" || r.a === "far")!.id)!;
+    const oneWay = diagnoseLorryRoute(w, w.lorryRoutes.find((r) => (r.a === "big" && r.b === "mid") || (r.a === "mid" && r.b === "big"))!.id)!;
+    expect(both.outbound).toBeGreaterThan(0);
+    expect(both.inbound).toBeGreaterThan(0);
+    expect(both.verdict).not.toBe("one-way");
+    expect(Math.min(oneWay.outbound, oneWay.inbound)).toBe(0);
+    expect(["one-way", "thin"]).toContain(oneWay.verdict);
+  });
+
+  test("lorries don't grow roadside towns: they carry tonnes, not people passing", () => {
+    const w = goodsWorld();
+    for (let i = 0; i < 4; i += 1) addLorry(w, "big", "far");
+    run(w, 300);
+    for (const flow of w.settlement.segmentPlayerFlowEMA.values()) expect(flow).toBe(0);
+  });
+
+  test("a lorry's road space wears a road harder than anyone else's", () => {
+    const w = goodsWorld();
+    const road = w.simulation.map.segments[0]!;
+    w.roadFlowEMA.set(road.id, 1);
+    w.heavyFlowEMA.set(road.id, 0);
+    const light = wearRate(w, road);
+    w.heavyFlowEMA.set(road.id, 1); // the same road space, all of it lorries
+    expect(wearRate(w, road)).toBeGreaterThan(light * 1.3);
+  });
+
+  test("a losing lorry route is in the debt advice, and selling it returns what was quoted", () => {
+    const w = goodsWorld({ produceFare: 0, suppliesFare: 0 }); // nothing it carries pays: it loses
+    addLorry(w, "big", "mid");
+    run(w, 200);
+    w.economy.funds = -100;
+    const quote = debtAdvice(w)!.sell.find((s) => s.routeId === w.lorryRoutes[0]!.id)!;
+    expect(quote.savesPerDay).toBeCloseTo(w.tuning.lorryOperatingCostPerSecond * 30);
+    expect(removeLorry(w, quote.routeId)).toBeCloseTo(quote.refund, 6);
+    expect(w.lorryRoutes).toHaveLength(0);
   });
 });
 

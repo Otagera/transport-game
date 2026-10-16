@@ -30,6 +30,8 @@ export const SLICE_MAP: SliceMapDef = {
     { a: "ilase", b: "kuto" },
     { a: "ado", b: "ogbe" },
   ],
+  // Step 4, goods: Ilase is the port -- supplies leave from here.
+  port: "ilase",
   // Step 3: a river and a ridge, placed so a road is a decision.
   //   - The river splits the west (Ilase, Owode, Kuto, Ise, Ilaro) from the
   //     east (Ado, Ipaja, Ikole, Ogbe). Only the old Owode-Ado road crosses

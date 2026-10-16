@@ -59,6 +59,27 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // bigger than the contest. A ~40k town is about as far as people walk to
   // the park: Ilase 75% of your riders arrive by keke/okada, Ise 27%.
   localTripsPerThousandPerDay: 10,
+  // Goods (step 4, goods.ts). Lorry from the original catalog
+  // (public/content/vehicles.json): 30 t, slow, heavy. Fares tuned with the
+  // probe's "goods:" strategies, one lorry, 20 days, whole-game net/day:
+  // both ways pays -- Ilase-Kuto +66, Ilase-Ise +26; one-way doesn't --
+  // Ilase-Owode (supplies) +5, Ado-Ogbe (produce) -49, Ilase-Ado (long)
+  // -72; a second lorry on Ilase-Kuto takes the pair to +10. At 3/t no
+  // lorry paid at all.
+  marketPopulation: 40,
+  producePerThousandPerDay: 2,
+  suppliesPerThousandPerDay: 1,
+  goodsSpoilSeconds: 60,
+  produceFare: 4,
+  suppliesFare: 4,
+  lorryCapacity: 30,
+  lorrySpeed: 2.5,
+  lorryPurchaseCost: 550,
+  lorryOperatingCostPerSecond: 4,
+  lorryRoadSpace: 1.5,
+  // 1.5 road space x 1.6 = 2.4 against a bus's 1.2: a lorry wears a road
+  // about twice what a bus does.
+  lorryWearMultiplier: 1.6,
   // Growth of the original towns (step 4, growth.ts). Probe, day 40: doing
   // nothing grows nothing (danfos alone); 2 buses on the trunk grow Ilase
   // 120->147k and Owode 45->53k; 4 buses 155k/61k; the hub grows Ise

@@ -1,12 +1,13 @@
 import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
 import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from "../economy/state";
-import type { InformalMode, SliceTuning, SliceWorld } from "./types";
+import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types";
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { tripPlans } from "./transfers";
 import { updateRoadSpeeds } from "./congestion";
 import { segmentConditions, updateRoadWear } from "./wear";
+import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
 
 // How much longer people wait at a motor park for a danfo to fill than
 // they wait for your bus before giving up.
@@ -96,8 +97,11 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // 3. Movement. Road speeds are computed once, before anything moves, so
   // every vehicle sees the same road this tick (congestion.ts).
   updateRoadSpeeds(world, dt);
+  // Goods arrive at their yards, and some of what's waiting spoils (goods.ts).
+  produceAndSpoil(world, dt);
   const routeOf = new Map<string, string>();
-  for (const route of world.routes) for (const id of route.vehicleIds) routeOf.set(id, route.id);
+  for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
+  const goodsDelivered = new Map<string, number>();
   const boardings = new Map<string, number>();
   const routeRevenue = new Map<string, number>();
   const plans = tripPlans(world);
@@ -121,6 +125,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       bump(boardings, routeId, take);
     }
   };
+
+  // A lorry loads goods bound anywhere ahead on its route (goods.ts).
+  const lorryLoader = goodsLoader(world, boardings, routeOf);
 
   // A danfo passing through takes anyone going its way -- your riders
   // included. That is the competition, not a leak.
@@ -156,7 +163,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       dt,
       conditions,
       undefined,
-      isDanfo ? danfoLoader : busLoader,
+      vehicle.carries === "goods" ? lorryLoader : isDanfo ? danfoLoader : busLoader,
       world.segmentSpeed,
     );
     if (deliveries.length === 0) continue;
@@ -165,10 +172,15 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       for (const delivery of deliveries) informal.earnings += delivery.amount * tuning.fare;
       continue;
     }
-    // Each leg pays a fare, on getting off (revenue on unload).
+    // Each leg pays a fare, on getting off (revenue on unload) -- per
+    // rider, or per tonne for a lorry.
     const revenue = recordDeliveryRevenue(economy, vehicle.id, deliveries);
     revenueThisTick += revenue;
     bump(routeRevenue, routeOf.get(vehicle.id) ?? "", revenue);
+    if (vehicle.carries === "goods") {
+      recordGoodsDelivered(deliveries, goodsDelivered);
+      continue;
+    }
     for (const { entry, amount } of deliveries) {
       if (!entry) continue;
       const trip = entry.trip ?? { origin: entry.from, destination: entry.to };
@@ -180,6 +192,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       }
     }
   }
+
+  updateGoodsOutcomes(world, goodsDelivered, dt);
 
   // 4. The informal sector: danfos, then kekes and okadas.
   dispatchInformal(world, dt, lost, gaveUp);
@@ -196,7 +210,13 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // Rolling rates, each updated exactly once per tick (architecture hard
   // rule 7).
   const alpha = emaAlpha(dt, tuning.outcomeTauSeconds);
-  for (const route of world.routes) {
+  // A lorry delivers in 30-tonne lumps a dozen seconds apart: its route's
+  // rates roll over four times as long, or its net swung by more than it
+  // earned (probe: +15/day shown against +66/day made).
+  const lorryAlpha = emaAlpha(dt, tuning.outcomeTauSeconds * 4);
+  for (const route of world.routes) updateRouteRates(route, alpha);
+  for (const route of world.lorryRoutes) updateRouteRates(route, lorryAlpha);
+  function updateRouteRates(route: SliceRoute, alpha: number): void {
     route.revenueRateEMA += ((routeRevenue.get(route.id) ?? 0) / dt - route.revenueRateEMA) * alpha;
     route.boardingRateEMA += ((boardings.get(route.id) ?? 0) / dt - route.boardingRateEMA) * alpha;
     route.loadFactorEMA += (routeLoadFactor(world, route.vehicleIds) - route.loadFactorEMA) * alpha;

@@ -42,7 +42,9 @@ export function bridgeCellsOn(world: SliceWorld, segment: Segment): number {
 /** Condition lost per second on this road at its current traffic. */
 export function wearRate(world: SliceWorld, segment: Segment): number {
   const { tuning } = world;
-  const flow = world.roadFlowEMA.get(segment.id) ?? 0;
+  // A lorry's road space wears `lorryWearMultiplier` times harder: count
+  // its share of the flow that many times over.
+  const flow = (world.roadFlowEMA.get(segment.id) ?? 0) + (tuning.lorryWearMultiplier - 1) * (world.heavyFlowEMA.get(segment.id) ?? 0);
   const surface = isDirt(segment) ? tuning.dirtWearMultiplier : 1;
   const bridge = bridgeCellsOn(world, segment) > 0 ? tuning.bridgeWearMultiplier : 1;
   return (tuning.weatherPerSecond + tuning.wearPerFlow * flow) * surface * bridge;

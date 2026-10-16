@@ -32,6 +32,7 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { planRoad, segmentPolyline } from "@engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
+import { addLorry, checkLorry, diagnoseLorryRoute, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
@@ -42,10 +43,11 @@ import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View 
 //   R  road tool -- click a town, then another: build a straight road, or
 //      pave the dirt road already joining them.
 //   B  bus tool  -- click a town, then another: buy a bus running between them.
+//   L  lorry tool -- click a town, then another: buy a lorry running goods between them.
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "fix";
+type Tool = "road" | "bus" | "lorry" | "fix";
 
 const world = createSliceWorld(SLICE_MAP);
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
@@ -188,6 +190,10 @@ canvas.addEventListener("click", (event) => {
     const result = buildRoad(world, from, town);
     if (result.ok) say(`Built road ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't build: ${result.reason}`, true);
+  } else if (tool === "lorry") {
+    const result = addLorry(world, from, town);
+    if (result.ok) say(`Lorry added: ${townName(from)} ↔ ${townName(town)}`);
+    else say(`Can't add lorry: ${result.reason}`, true);
   } else {
     const result = addBus(world, from, town);
     if (result.ok) say(`Bus added: ${townName(from)} ↔ ${townName(town)}`);
@@ -203,6 +209,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "r" || event.key === "R") setTool("road");
   else if (event.key === "b" || event.key === "B") setTool("bus");
   else if (event.key === "f" || event.key === "F") setTool("fix");
+  else if (event.key === "l" || event.key === "L") setTool("lorry");
   else if (event.key === "Escape") selectedTown = null;
   else if (event.key === " ") {
     paused = !paused;
@@ -268,6 +275,14 @@ function ghost(): Ghost | null {
     const label = `Road ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)} · ${riders}`;
     return { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
   }
+  if (tool === "lorry") {
+    const check = checkLorry(world, selectedTown, to);
+    // Both ways, because that's the decision: a lorry runs full only where goods go each way.
+    const goods = goodsAlong(world, selectedTown, to);
+    const label = `Lorry ${naira(world.tuning.lorryPurchaseCost)} · goods along it: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back`;
+    const path = check.ok ? roadPath(world, selectedTown, to)?.nodeIds : undefined;
+    return { from: selectedTown, to: end, ok: check.ok, path, label: check.ok ? label : check.reason };
+  }
   const check = checkBus(world, selectedTown, to);
   const price = naira(world.tuning.busPurchaseCost);
   // Every trip along its road, not just the two towns clicked: a bus from
@@ -291,6 +306,7 @@ function renderToolbar(): void {
   };
   toolbar.replaceChildren(
     button("Bus", "B", tool === "bus", () => setTool("bus")),
+    button("Lorry", "L", tool === "lorry", () => setTool("lorry")),
     button("Road", "R", tool === "road", () => setTool("road")),
     button("Fix", "F", tool === "fix", () => setTool("fix")),
     Object.assign(document.createElement("span"), { className: "sep" }),
@@ -410,6 +426,7 @@ function renderTown(townId: string): void {
     <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">informal</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
     <p class="townshare">Of everyone leaving ${town.name} for another town: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
     ${growthText(townId, town.name)}
+    ${goodsText(townId)}
     ${insideText(townId, town.name)}
     ${rows}`;
 }
@@ -461,7 +478,7 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
 function renderRoutes(): void {
   const summaries = routeSummaries(world);
   const header = `<h2>Your routes</h2><p class="hint">Worst first. Net is fares minus running cost. Bar: who carried this route's riders.</p>`;
-  if (summaries.length === 0) {
+  if (summaries.length === 0 && world.lorryRoutes.length === 0) {
     routesEl.innerHTML = `${header}<p class="empty">No buses yet. Hover a town to see where its people want to go. Then pick the <b>Bus</b> tool, click a town, then another town joined to it by road.</p>`;
     return;
   }
@@ -489,7 +506,68 @@ function renderRoutes(): void {
         <div class="detail">${detail}</div>
       </div>`;
   });
-  routesEl.innerHTML = moneyNote() + header + rows.join("");
+  routesEl.innerHTML = moneyNote() + (rows.length > 0 ? header + rows.join("") : "") + lorryRows(rows.length > 0);
+}
+
+// Lorries, after the buses: what goods go each way along the route, and
+// the one reason it earns what it does (goods.ts diagnoseLorryRoute).
+function lorryRows(afterBuses: boolean): string {
+  const summaries = lorrySummaries(world);
+  if (summaries.length === 0) return "";
+  const rows = summaries.map((s) => {
+    const d = diagnoseLorryRoute(world, s.id);
+    const detail = d
+      ? `
+        <div class="bar" title="goods along it: delivered / spoiled">
+          <i style="width:${pct(d.delivered)};background:var(--goods)"></i>
+          <i style="width:${pct(d.spoiled)};background:var(--home)"></i>
+        </div>
+        <div class="why why-${d.verdict === "healthy" ? "healthy" : d.verdict === "full" ? "full" : "thin"}">${lorryReason(d, s.costPerDay / s.lorries)}</div>
+        <small>goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full</small>`
+      : "";
+    return `
+      <div class="route">
+        <span class="swatch" style="background:var(--goods)"></span>
+        <div class="name">${townName(s.a)} ↔ ${townName(s.b)}<small>${s.lorries} lorr${s.lorries === 1 ? "y" : "ies"} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
+        <span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${naira(s.netPerDay)}</span>
+        <button data-add="${s.id}" title="Add a lorry">+</button>
+        <button data-remove="${s.id}" title="Sell a lorry">−</button>
+        <div class="detail">${detail}</div>
+      </div>`;
+  });
+  const port = world.port ? `, supplies from ${townName(world.port)}` : "";
+  return `<h2${afterBuses ? ' class="section"' : ""}>Your lorries</h2><p class="hint">Goods go one way each: produce to market${port}. Bar: delivered · spoiled.</p>${rows.join("")}`;
+}
+
+function lorryReason(d: LorryDiagnosis, onePerDay: number): string {
+  switch (d.verdict) {
+    case "thin":
+      return `Thin: only ${Math.round(d.outbound + d.inbound)} t/day of goods go along it, not enough to pay one lorry's running cost (${naira(onePerDay)}/day).`;
+    case "one-way":
+      return `One-way: ${Math.round(Math.max(d.outbound, d.inbound))} t/day go one way and ${Math.round(Math.min(d.outbound, d.inbound))} the other, so lorries come back near empty. A route with goods both ways (produce in, supplies out) runs full both legs.`;
+    case "full":
+      return `Lorries leave full and ${pct(d.spoiled)} of the goods along it spoil waiting. Another lorry would carry them, if they pay its ${naira(onePerDay)}/day.`;
+    case "spoiling":
+      return `${pct(d.spoiled)} of the goods along it spoil before a lorry comes. Another lorry would catch more, if they pay its ${naira(onePerDay)}/day.`;
+    case "healthy":
+      return `Goods go both ways along it: you deliver ${pct(d.delivered)} of them.`;
+  }
+}
+
+// What goods leave and reach a town, and how much of each you deliver.
+function goodsText(townId: string): string {
+  const goods = townGoods(world, townId);
+  if (goods.length === 0) return "";
+  const out = goods.filter((g) => g.outgoing);
+  const inbound = goods.filter((g) => !g.outgoing);
+  const parts: string[] = [];
+  for (const g of out) parts.push(`${Math.round(g.perDay)} t/day of ${g.kind} to ${townName(g.other)} (${pct(g.delivered)} delivered)`);
+  const into = inbound.reduce((sum, g) => sum + g.perDay, 0);
+  if (into > 0) {
+    const delivered = inbound.reduce((sum, g) => sum + g.perDay * g.delivered, 0) / into;
+    parts.push(`${Math.round(into)} t/day of goods coming in (${pct(delivered)} delivered)`);
+  }
+  return `<p class="townshare"><b>Goods:</b> ${parts.slice(0, 3).join("; ")}. Nobody else carries freight: what lorries don't take, spoils.</p>`;
 }
 
 // The way out of debt, said outright (playtest, day 14: "felt stuck,
@@ -514,7 +592,7 @@ function moneyNote(): string {
     const refund = advice.sell.reduce((sum, s) => sum + s.refund, 0);
     const saves = advice.sell.reduce((sum, s) => sum + s.savesPerDay, 0);
     const after = advice.funds + refund;
-    exit = `The way out: sell the buses on routes losing money on their own fares (<b>−</b> on each): ${list}. All of them: ${naira(refund)} now${after >= 0 && advice.funds < 0 ? " (out of debt)" : ""} and ${naira(saves)}/day better.`;
+    exit = `The way out: sell the buses and lorries on routes losing money on their own fares (<b>−</b> on each): ${list}. All of them: ${naira(refund)} now${after >= 0 && advice.funds < 0 ? " (out of debt)" : ""} and ${naira(saves)}/day better.`;
   } else if (upkeep > 0) {
     exit = `No route loses money on its own; road upkeep costs ${naira(upkeep)}/day. Stop maintaining the quietest roads (Fix tool, F).`;
   } else {
@@ -527,11 +605,19 @@ routesEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
   const addId = target.dataset.add;
   const removeId = target.dataset.remove;
-  if (addId) {
+  if (addId && isLorryRoute(addId)) {
+    const route = world.lorryRoutes.find((candidate) => candidate.id === addId);
+    if (!route) return;
+    const result = addLorry(world, route.a, route.b);
+    if (!result.ok) say(`Can't add lorry: ${result.reason}`, true);
+  } else if (addId) {
     const route = world.routes.find((candidate) => candidate.id === addId);
     if (!route) return;
     const result = addBus(world, route.a, route.b);
     if (!result.ok) say(`Can't add bus: ${result.reason}`, true);
+  } else if (removeId && isLorryRoute(removeId)) {
+    const refund = removeLorry(world, removeId);
+    if (refund > 0) say(`Sold a lorry for ${naira(refund)}`);
   } else if (removeId) {
     const refund = removeBus(world, removeId);
     if (refund > 0) say(`Sold a bus for ${naira(refund)}`);

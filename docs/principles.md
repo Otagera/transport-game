@@ -139,6 +139,14 @@ blow-by-blow; this section is the distilled rule.
   Produce does not come back from market; supplies and imports go the other way.
   Mirroring goods flows is untrue and pointless.
 - Demand pairs are static topology; growth scales the *rate*, not the graph.
+- **Goods pay only where they go both ways** (slice, §6 step 4c). Produce to market, supplies
+  from the port: a lorry running one flow comes back empty. Measured, one lorry, 20 days,
+  ₦4/t: Ilase–Kuto (produce in, supplies out) +₦66/day, Ilase–Ise +₦26; supplies-only
+  Ilase–Owode +₦5, produce-only Ado–Ogbe −₦49, long one-way Ilase–Ado −₦72. At ₦3/t no lorry
+  paid at all. That gap *is* the decision — keep it when retuning.
+- **Roll lumpy earnings over longer.** A lorry delivers 30 t at a time, a dozen seconds
+  apart; on the 30 s rate a buses route uses, a route making +₦66/day showed +₦15. Lorry
+  routes roll over 4× as long.
 
 ### Vehicles and carriage
 
@@ -595,6 +603,14 @@ Steps, each played before the next:
      it shrinks back if service falls, never below its start. ▲/▼ on the map, a sentence in
      the town panel. See Findings, Growth. Watch: does a growing town read as a place
      developing, or as a treadmill of queues? And is money loose again by day 40?
+   - **4c. Goods** (built 2026-10-16, the user's pick: produce + supplies, freight fares only,
+     no growth link yet): farm towns (< 40k) send produce to the nearest market; Ilase, the
+     port, sends supplies to every town. Goods wait at the yard and spoil; nobody else
+     carries freight. Lorry tool (L): 30 t, ₦550, ₦120/day, 1.5 road space, wears a road ~2× a
+     bus. Lorry routes are their own list (`world.lorryRoutes`) so no passenger system sees
+     them; roadside towns count people, not tonnes. See Findings, Demand. Watch: is "which
+     routes carry goods both ways" a decision you make, and do lorries crowd the buses'
+     roads?
 
    **Played 2026-10-16 (to day 14), steps 2–4b at once:** *"felt stuck, didn't know how to
    get out of debt."* The screenshot: −₦404, −₦40/day; four routes of one bus each — a

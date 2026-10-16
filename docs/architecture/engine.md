@@ -499,6 +499,22 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   end to a town not on the route (one hop), keeps extensions whose reach per path length is
   no lower than the route's, and returns the best if its reach is ≥ 1.5× the route's and
   ≥ 1.5× one bus's break-even at `ONE_BUS_REACH`.
+- **Goods** (step 4c, `goods.ts`) — `goodsFlows` derives one-way flows from the towns as they
+  are: produce from each original town under `marketPopulation` to its nearest market
+  (ties to the bigger), supplies from `world.port` (the map def's `port`) to every other town,
+  rates per thousand people a day. `produceAndSpoil` (each tick, before movement) adds them
+  to each town's yard (`world.goods.yards`, `to|kind` → tonnes) and spoils
+  `1 − e^(−dt/goodsSpoilSeconds)` of what waits. Lorry routes are `world.lorryRoutes`,
+  ids `lorry:a~b` (`addLorry` / `removeLorry` / `lorrySummaries`), never in `world.routes`, so
+  transfers, diagnosis, through-routes and growth stay passenger-only. In the tick a
+  `carries: "goods"` vehicle uses `goodsLoader` (goods for any stop ahead, no transfers);
+  deliveries pay `produceFare`/`suppliesFare` through the economy's fare table and roll
+  into `goods.outcomes` (delivered vs spoiled per flow). Lorry routes' rates roll over 4×
+  `outcomeTauSeconds`. `updateRoadSpeeds` also keeps `heavyFlowEMA` (lorry road space alone);
+  `wearRate` counts it `lorryWearMultiplier` times. Settlement flows count
+  `carries: "passengers"` vehicles only. `diagnoseLorryRoute`: tonnes/day each way along the
+  path, delivered/spoiled shares, verdict thin → full → one-way (weaker way < 30% of the
+  stronger) → spoiling → healthy. `debtAdvice` includes losing lorry routes.
 - **`debtAdvice`** (`world.ts`) — null unless in debt or under `RUNWAY_WARNING_DAYS` (7) of
   money left at the burn rate; otherwise the routes losing money on their own book, worst
   first, with `economy/state.ts`'s `resaleValue` (the preview `sellVehicle` itself uses)
