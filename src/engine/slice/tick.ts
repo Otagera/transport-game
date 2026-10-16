@@ -2,7 +2,7 @@ import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { computeSegmentLoads } from "../simulation/congestion";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
 import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from "../economy/state";
-import type { SliceWorld } from "./types";
+import type { InformalMode, SliceTuning, SliceWorld } from "./types";
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { tripPlans } from "./transfers";
@@ -59,8 +59,9 @@ export function parsePoolKey(key: string): { at: string; origin: string; destina
 //      destination waits there for the next bus. A danfo passing through
 //      picks up anyone whose destination is ahead of it.
 //   4. People who gave up gather at a motor park. A full danfo's worth
-//      leaves if a road exists and the caps allow; with no road, they stay
-//      home.
+//      leaves if a road exists and there's road space; people who won't
+//      wait for one to fill take a keke or an okada; with no road, they stay
+//      home (dispatchInformal).
 //   5. Towns grow along busy roads, and rarely fade (settlement.ts).
 //
 // Every rider is counted exactly once, when their trip resolves: arrived
@@ -156,7 +157,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     );
     if (deliveries.length === 0) continue;
     if (isDanfo) {
-      // Danfo fares are the informal sector's, never the player's.
+      // Informal fares are the informal sector's, never the player's.
       for (const delivery of deliveries) informal.earnings += delivery.amount * tuning.fare;
       continue;
     }
@@ -176,9 +177,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     }
   }
 
-  // 4. Danfos.
-  dispatchDanfos(world, dt, lost, gaveUp);
-  reapDanfos(world);
+  // 4. The informal sector: danfos, then kekes and okadas.
+  dispatchInformal(world, dt, lost, gaveUp);
+  reapInformal(world);
 
   // Money.
   applyOperatingCosts(economy, dt);
@@ -224,21 +225,23 @@ interface PooledRider {
   path: PathResult;
 }
 
-// Danfos run corridors, not pairs. Riders who gave up are grouped by where
-// they are and the first town they'd pass through; within a group, a danfo
-// heads for the destination whose path collects the most waiting riders,
-// and takes everyone whose stop is on the way. Dispatching per (origin,
-// destination) pair instead -- the first version -- split demand so thin
-// that most danfos never filled: measured, uncapping every danfo limit
-// barely moved the stayed-home share, while one-seat danfos cut it from
-// 53% to 33%.
-function dispatchDanfos(world: SliceWorld, dt: number, lost: Map<string, number>, gaveUp: Map<string, number>): void {
-  const { simulation, tuning, informal } = world;
-  const cap = tuning.danfoCapacity;
-  const drift = emaAlpha(dt, tuning.patienceSeconds * PARK_PATIENCE_MULTIPLIER);
-  const groups = new Map<string, { at: string; riders: PooledRider[] }>();
+type Group = { at: string; riders: PooledRider[] };
 
-  for (const [key, pooled] of informal.pool) {
+/**
+ * Sorts one motor-park pool into groups by where riders are and the first
+ * town they'd pass through. Riders with no road go home at once; the rest
+ * lose `drift` of themselves per tick to `onDrift` -- people who won't wait
+ * any longer.
+ */
+function groupPool(
+  world: SliceWorld,
+  pool: Map<string, number>,
+  drift: number,
+  lost: Map<string, number>,
+  onDrift: (key: string, trip: string, amount: number) => void,
+): Group[] {
+  const groups = new Map<string, Group>();
+  for (const [key, pooled] of pool) {
     if (pooled <= 0) continue;
     const { at, origin, destination } = parsePoolKey(key);
     const trip = pairKey(origin, destination);
@@ -247,16 +250,13 @@ function dispatchDanfos(world: SliceWorld, dt: number, lost: Map<string, number>
     // No road: nobody can take them. They stay home.
     if (!path || path.nodeIds.length < 2) {
       bump(lost, trip, pooled);
-      informal.pool.set(key, 0);
+      pool.set(key, 0);
       continue;
     }
 
-    // People waiting at the park for a danfo to fill drift home too, more
-    // slowly than they gave up on you. This is also what bounds the pool
-    // when every danfo on a run is already out.
     const drifting = pooled * drift;
-    informal.pool.set(key, pooled - drifting);
-    bump(lost, trip, drifting);
+    pool.set(key, pooled - drifting);
+    onDrift(key, trip, drifting);
 
     const groupKey = `${at}>${path.nodeIds[1]}`;
     let group = groups.get(groupKey);
@@ -266,50 +266,124 @@ function dispatchDanfos(world: SliceWorld, dt: number, lost: Map<string, number>
     }
     group.riders.push({ key, origin, destination, path });
   }
+  return [...groups.values()];
+}
 
-  for (const { at, riders } of groups.values()) {
-    let best: PooledRider | null = null;
-    let bestAboard: PooledRider[] = [];
-    let bestLoad = 0;
-    for (const candidate of riders) {
-      const stops = new Set(candidate.path.nodeIds);
-      const aboard = riders.filter((rider) => stops.has(rider.destination));
-      const load = aboard.reduce((sum, rider) => sum + (informal.pool.get(rider.key) ?? 0), 0);
-      if (load > bestLoad) {
-        best = candidate;
-        bestAboard = aboard;
-        bestLoad = load;
-      }
-    }
-    if (!best || bestLoad < cap) continue;
-    if (best.path.segmentIds.some((id) => (informal.segmentCounts.get(id) ?? 0) >= tuning.danfoCorridorCap)) continue;
+/** The destination in a group whose path collects the most waiting riders, and who'd be aboard. */
+function bestRun(group: Group, pool: Map<string, number>): { run: PooledRider; aboard: PooledRider[]; load: number } | null {
+  let best: { run: PooledRider; aboard: PooledRider[]; load: number } | null = null;
+  for (const candidate of group.riders) {
+    const stops = new Set(candidate.path.nodeIds);
+    const aboard = group.riders.filter((rider) => stops.has(rider.destination));
+    const load = aboard.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0), 0);
+    if (!best || load > best.load) best = { run: candidate, aboard, load };
+  }
+  return best;
+}
 
-    const id = `danfo-${world.nextId++}`;
-    // An empty queue map: a danfo leaves with the people who gave up on
-    // you, it doesn't also sweep the queue that's still waiting for you.
-    const danfo = createOneShotVehicle(id, at, best.destination, simulation.routing, tuning.danfoSpeed, cap, 1, new Map());
-    if (!danfo) continue;
+/**
+ * Sends one informal vehicle of `mode` on `run`, taking `seats` riders
+ * proportionally from everyone `aboard` -- if the road has space for it.
+ * Road space is a budget in danfo-equivalents (each mode's congestion
+ * weight), so a corridor holds a dozen danfos or forty okadas.
+ */
+function sendInformal(
+  world: SliceWorld,
+  mode: InformalMode,
+  group: Group,
+  run: PooledRider,
+  aboard: PooledRider[],
+  load: number,
+  pool: Map<string, number>,
+  gaveUp: Map<string, number>,
+): boolean {
+  const { simulation, tuning, informal } = world;
+  const spec = informalSpec(tuning, mode);
+  const space = run.path.segmentIds.map((id) => informal.segmentSpace.get(id) ?? 0);
+  if (space.some((used) => used + spec.weight > tuning.informalRoadSpace)) return false;
 
-    const share = cap / bestLoad;
-    danfo.cargo = bestAboard.map((rider) => {
-      const pooled = informal.pool.get(rider.key) ?? 0;
-      informal.pool.set(rider.key, pooled * (1 - share));
-      bump(gaveUp, pairKey(rider.origin, rider.destination), pooled * share);
-      return { from: at, to: rider.destination, kind: "passengers" as const, amount: pooled * share, trip: { origin: rider.origin, destination: rider.destination } };
-    });
-    simulation.vehicles.push(danfo);
-    informal.active.set(id, { segmentIds: best.path.segmentIds });
-    for (const segmentId of best.path.segmentIds) bump(informal.segmentCounts, segmentId, 1);
+  const id = `${mode}-${world.nextId++}`;
+  // An empty queue map: it leaves with the people who gave up on you, it
+  // doesn't also sweep the queue that's still waiting for you.
+  const vehicle = createOneShotVehicle(id, group.at, run.destination, simulation.routing, spec.speed, spec.capacity, spec.weight, new Map());
+  if (!vehicle) return false;
+
+  const share = Math.min(1, spec.capacity / load);
+  vehicle.cargo = aboard.map((rider) => {
+    const pooled = pool.get(rider.key) ?? 0;
+    pool.set(rider.key, pooled * (1 - share));
+    bump(gaveUp, pairKey(rider.origin, rider.destination), pooled * share);
+    return { from: group.at, to: rider.destination, kind: "passengers" as const, amount: pooled * share, trip: { origin: rider.origin, destination: rider.destination } };
+  });
+  simulation.vehicles.push(vehicle);
+  informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode });
+  for (const segmentId of run.path.segmentIds) bump(informal.segmentSpace, segmentId, spec.weight);
+  return true;
+}
+
+export function informalSpec(tuning: SliceTuning, mode: InformalMode): { capacity: number; speed: number; weight: number } {
+  switch (mode) {
+    case "danfo":
+      return { capacity: tuning.danfoCapacity, speed: tuning.danfoSpeed, weight: tuning.danfoRoadSpace };
+    case "keke":
+      return { capacity: tuning.kekeCapacity, speed: tuning.kekeSpeed, weight: tuning.kekeRoadSpace };
+    case "okada":
+      return { capacity: tuning.okadaCapacity, speed: tuning.okadaSpeed, weight: tuning.okadaRoadSpace };
   }
 }
 
-function reapDanfos(world: SliceWorld): void {
+// The informal sector, in two stages at each motor park:
+//
+// 1. Danfos. People who gave up on your bus wait for a danfo -- cheapest
+//    per seat. Danfos run corridors, not pairs: a danfo heads where most
+//    waiting riders are going and takes everyone whose stop is on the way.
+//    (Dispatching per (origin, destination) pair split demand so thin that
+//    most danfos never filled: measured, uncapping every limit barely moved
+//    the stayed-home share, while one-seat danfos cut it from 53% to 33%.)
+// 2. Kekes and okadas. People who won't wait any longer for a danfo to fill
+//    take a keke (when three are going the same way) or an okada. This is
+//    what keeps a thin gap informal instead of empty: a dense road network
+//    splits leftover riders across so many directions that no danfo ever
+//    fills, and before small vehicles existed those riders simply went
+//    home -- measured on a 34-bus network, 38% stayed home and danfos fell
+//    to 3% (playtest, day 91).
+//
+// Only people with no road, or who out-wait even the okadas (the road is
+// out of space), stay home.
+function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, number>, gaveUp: Map<string, number>): void {
+  const { tuning, informal } = world;
+  const drift = emaAlpha(dt, tuning.patienceSeconds * PARK_PATIENCE_MULTIPLIER);
+
+  const danfoGroups = groupPool(world, informal.pool, drift, lost, (key, _trip, amount) => bump(informal.smallPool, key, amount));
+  for (const group of danfoGroups) {
+    const best = bestRun(group, informal.pool);
+    if (best && best.load >= tuning.danfoCapacity) sendInformal(world, "danfo", group, best.run, best.aboard, best.load, informal.pool, gaveUp);
+  }
+
+  const smallGroups = groupPool(world, informal.smallPool, drift, lost, (_key, trip, amount) => bump(lost, trip, amount));
+  for (const group of smallGroups) {
+    const best = bestRun(group, informal.smallPool);
+    if (!best) continue;
+    if (best.load >= tuning.kekeCapacity) {
+      if (sendInformal(world, "keke", group, best.run, best.aboard, best.load, informal.smallPool, gaveUp)) continue;
+    }
+    // An okada takes one rider, from whoever has waited in the biggest crowd.
+    const single = group.riders.reduce<PooledRider | null>(
+      (top, rider) => ((informal.smallPool.get(rider.key) ?? 0) > (top ? informal.smallPool.get(top.key) ?? 0 : 0) ? rider : top),
+      null,
+    );
+    const waiting = single ? informal.smallPool.get(single.key) ?? 0 : 0;
+    if (single && waiting >= tuning.okadaCapacity) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp);
+  }
+}
+
+function reapInformal(world: SliceWorld): void {
   const { simulation, informal } = world;
   simulation.vehicles = simulation.vehicles.filter((vehicle: Vehicle) => {
     if (!hasCompletedTrip(vehicle)) return true;
     const info = informal.active.get(vehicle.id);
     if (info) {
-      for (const segmentId of info.segmentIds) bump(informal.segmentCounts, segmentId, -1);
+      for (const segmentId of info.segmentIds) bump(informal.segmentSpace, segmentId, -info.weight);
       informal.active.delete(vehicle.id);
     }
     return false;

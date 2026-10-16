@@ -1,11 +1,12 @@
-import type { SliceTown, SliceWorld } from "@engine/slice/types";
+import type { InformalMode, SliceTown, SliceWorld } from "@engine/slice/types";
 import type { Vehicle } from "@engine/simulation/types";
 import { townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
-// where they ended up, which roads you run buses on, and the danfos.
+// where they ended up, which roads you run buses on, and the informal
+// sector (danfos, kekes, okadas).
 
 export const COLORS = {
   ground: "#efe7d4",
@@ -19,6 +20,7 @@ export const COLORS = {
   player: "#2f6fdb",
   danfo: "#f2c200",
   danfoStripe: "#1d1b18",
+  keke: "#2b8a3e",
   home: "#a59d90",
   waiting: "#2b2925",
   selection: "#d9480f",
@@ -152,7 +154,7 @@ function drawRouteLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: 
 
 // Desire lines: straight from the focused town to every town its people
 // want to reach, thickness = how many want that trip, and the line itself a
-// stacked bar of who carries them -- blue from your end, then danfo, then
+// stacked bar of who carries them -- blue from your end, then informal, then
 // stayed home. A thick yellow or grey line is a route waiting to be built
 // (docs/principles.md §3: show relationships, not just state).
 function drawDesireLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, focus: string): void {
@@ -272,15 +274,7 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     ctx.translate(pose.x, pose.y);
     ctx.rotate(pose.angle);
     if (vehicle.lifecycle === "one-shot") {
-      ctx.fillStyle = COLORS.danfo;
-      ctx.strokeStyle = COLORS.danfoStripe;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.roundRect(-6, -3.5, 12, 7, 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = COLORS.danfoStripe;
-      ctx.fillRect(-6, -0.6, 12, 1.2);
+      drawInformal(ctx, world.informal.active.get(vehicle.id)?.mode ?? "danfo");
     } else {
       const color = routeColor(routeIndex.get(vehicle.id) ?? 0);
       const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
@@ -299,8 +293,39 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
   }
 }
 
+// The informal sector, at a glance: a danfo is a yellow minibus with a black
+// stripe, a keke a small yellow tricycle with a green band, an okada a dark
+// dot. Sizes follow road space, so a swarm of okadas reads as many small
+// things, not as many danfos.
+function drawInformal(ctx: CanvasRenderingContext2D, mode: InformalMode): void {
+  ctx.strokeStyle = COLORS.danfoStripe;
+  ctx.lineWidth = 1.2;
+  if (mode === "danfo") {
+    ctx.fillStyle = COLORS.danfo;
+    ctx.beginPath();
+    ctx.roundRect(-6, -3.5, 12, 7, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = COLORS.danfoStripe;
+    ctx.fillRect(-6, -0.6, 12, 1.2);
+  } else if (mode === "keke") {
+    ctx.fillStyle = COLORS.danfo;
+    ctx.beginPath();
+    ctx.roundRect(-3.5, -3, 7, 6, 2.5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = COLORS.keke;
+    ctx.fillRect(-3.5, -1, 7, 2);
+  } else {
+    ctx.fillStyle = COLORS.danfoStripe;
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 // Each town shows two things at a glance. The ring: where its passengers
-// ended up (yours / danfo / stayed home). The dots: who is waiting right
+// ended up (yours / informal / stayed home). The dots: who is waiting right
 // now, one dot per few people.
 function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, town: SliceTown, state: DrawState): void {
   const p = toScreen(view, town.x, town.y);

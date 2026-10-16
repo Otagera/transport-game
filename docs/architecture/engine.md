@@ -373,14 +373,21 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   interchange rate. Each leg pays a fare on getting off. Danfos' `Loader` takes anyone whose
   final destination is ahead. The plan is cached on `world.plans`, nulled whenever a route
   is created or removed, a town is founded (paths change) or abandoned.
-- **Danfo dispatch** groups pooled riders by origin and first hop, picks the destination
-  whose path collects the most of them, and sends one danfo (capacity 14) if that's a full
-  load and no segment on the path is at `danfoCorridorCap`. Riders are taken
-  proportionally from every pool on the way. With no road, pooled riders stay home at once;
-  otherwise they drift home at `patience × 3`. A danfo is created with an *empty* queue map
-  so it leaves with the people who gave up, not the queue still waiting for you — but
-  `tickVehicle` still loads one-shot vehicles at intermediate stops, so a danfo passing
-  through takes your waiting passengers. That is deliberate and counts as danfo share.
+- **The informal sector** (`dispatchInformal`) — two motor-park pools with the same keys.
+  Stage 1, `pool`: people who gave up on your bus wait for a danfo. Riders are grouped by
+  where they are and their first hop; a danfo (14 seats) goes toward the destination whose
+  path collects the most of them and takes everyone whose stop is on the way, if that's a
+  full load. Riders who won't wait any longer drift (τ = patience × 3) into stage 2,
+  `smallPool`: a keke (3 seats) goes when 3 share a run, otherwise an okada takes one rider.
+  Stage-2 riders who out-wait even that go home. With no road, pooled riders go home at
+  once. Every informal vehicle is created with an *empty* queue map — it leaves with the
+  people who gave up, not the queue still waiting for you — but its `Loader` picks up
+  anyone at a stop it passes whose final destination is ahead, which counts as `poached`.
+  **Road space** caps the sector per segment in danfo-equivalents
+  (`informalRoadSpace`, each mode's congestion weight: danfo 1, keke 0.5, okada 0.3);
+  `informal.active` records each vehicle's mode, weight and segments so reaping frees the
+  space. Capacities, speeds and weights come from the original catalog
+  (`public/content/vehicles.json`).
 - **Outcomes** — kept per (origin, destination) pair in `world.pairOutcomes`, as EMA rates
   (τ = one game day) of four disjoint buckets, each counted once, *when the trip
   resolves*: `player` (arrived at their destination on your buses, however many changes),

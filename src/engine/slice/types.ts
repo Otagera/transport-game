@@ -66,12 +66,17 @@ export interface OutcomeRates {
   lost: number;
 }
 
+export type InformalMode = "danfo" | "keke" | "okada";
+
 export interface InformalState {
-  /** pairKey -> passengers who gave up and are gathering for a danfo. */
+  /** Pool key (at>origin>destination) -> people who gave up on you, waiting for a danfo to fill. */
   pool: Map<string, number>;
-  /** danfo vehicleId -> the segments it occupies, for the corridor cap. */
-  active: Map<string, { segmentIds: string[] }>;
-  segmentCounts: Map<string, number>;
+  /** Same keys -- people who won't wait any longer for a danfo, looking for a keke or okada. */
+  smallPool: Map<string, number>;
+  /** Informal vehicleId -> what it is and the road space it occupies. */
+  active: Map<string, { segmentIds: string[]; weight: number; mode: InformalMode }>;
+  /** segmentId -> informal road space in use, in danfo-equivalents. */
+  segmentSpace: Map<string, number>;
   /** Fares the informal sector has collected -- money you didn't make. */
   earnings: number;
 }
@@ -89,7 +94,16 @@ export interface SliceTuning {
   busOperatingCostPerSecond: number;
   danfoCapacity: number;
   danfoSpeed: number;
-  danfoCorridorCap: number;
+  kekeCapacity: number;
+  kekeSpeed: number;
+  okadaCapacity: number;
+  okadaSpeed: number;
+  /** Road space each informal mode takes, in danfo-equivalents (its congestion weight). */
+  danfoRoadSpace: number;
+  kekeRoadSpace: number;
+  okadaRoadSpace: number;
+  /** Informal road space per segment, in danfo-equivalents (principles §3: cap per corridor). */
+  informalRoadSpace: number;
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;

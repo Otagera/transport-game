@@ -197,8 +197,10 @@ no-cached-view discipline as §2).
   grey = built), one coloured line per route (offset per route so shared roads show both),
   the ghost line, vehicles, towns, and the ghost's price label last so nothing draws
   through it. Vehicles keep right of the road centre so opposite directions don't overlap.
-  A bus is outlined in its route colour and filled from the back by how full it is; a
-  danfo is yellow with a black stripe.
+  A bus is outlined in its route colour and filled from the back by how full it is. The
+  informal sector reads by size: a danfo is a yellow minibus with a black stripe, a keke a
+  small yellow tricycle with a green band, an okada a dark dot. The page calls their shared
+  share "informal".
 - **Each town carries the loop's two facts.** The ring: where its passengers went, as
   shares of rolling rates — blue yours, yellow danfo, grey stayed home. The dots: people
   waiting now, one per four. Both are always on; there is no overlay to switch.

@@ -221,15 +221,15 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
 
   for (const vehicle of simulation.vehicles) insertIntoPath(vehicle, a, b, town.id);
 
-  // Danfos already on the road now occupy both halves.
+  // Informal vehicles already on the road now occupy both halves.
   for (const info of informal.active.values()) {
     if (!info.segmentIds.includes(segmentId)) continue;
     info.segmentIds = info.segmentIds.flatMap((id) => (id === segmentId ? [first.id, second.id] : [id]));
-    const count = informal.segmentCounts.get(segmentId) ?? 0;
-    informal.segmentCounts.set(first.id, count);
-    informal.segmentCounts.set(second.id, count);
   }
-  informal.segmentCounts.delete(segmentId);
+  const space = informal.segmentSpace.get(segmentId) ?? 0;
+  informal.segmentSpace.set(first.id, space);
+  informal.segmentSpace.set(second.id, space);
+  informal.segmentSpace.delete(segmentId);
   for (const flows of [settlement.segmentFlowEMA, settlement.segmentPlayerFlowEMA]) {
     const flow = flows.get(segmentId) ?? 0;
     flows.set(first.id, flow);
@@ -315,9 +315,11 @@ function abandonTown(world: SliceWorld, townId: string): SliceEvent {
       if (destination === townId || origin === townId) queue.delete(key);
     }
   }
-  for (const key of [...informal.pool.keys()]) {
-    const { at, origin, destination } = parsePoolKey(key);
-    if (at === townId || origin === townId || destination === townId) informal.pool.delete(key);
+  for (const pool of [informal.pool, informal.smallPool]) {
+    for (const key of [...pool.keys()]) {
+      const { at, origin, destination } = parsePoolKey(key);
+      if (at === townId || origin === townId || destination === townId) pool.delete(key);
+    }
   }
   world.plans = null;
   for (const key of [...world.pairOutcomes.keys()]) {

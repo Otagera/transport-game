@@ -90,7 +90,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     simulation,
     economy: createEconomyState({ passengers: tuning.fare, produce: 0, supplies: 0 }, tuning.startingFunds),
     routes: [],
-    informal: { pool: new Map(), active: new Map(), segmentCounts: new Map(), earnings: 0 },
+    informal: { pool: new Map(), smallPool: new Map(), active: new Map(), segmentSpace: new Map(), earnings: 0 },
     pairOutcomes: new Map(),
     settlement: createSettlementState(),
     plans: null,

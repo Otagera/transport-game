@@ -179,6 +179,13 @@ blow-by-blow; this section is the distilled rule.
   stayed-home share, while one-seat danfos cut it from 53% to 33%. Group riders by origin and
   first hop; send the danfo where most of them are going; everyone whose stop is on the way
   boards.
+- **The informal sector scales its vehicle to the gap.** Danfos first (cheapest per seat);
+  people who won't wait for one to fill take a keke or an okada. Without the small modes, a
+  dense player network split leftover riders across so many directions that no danfo ever
+  filled, and they went home: measured on a 34-bus slice network, danfos fell to 3% and 38%
+  stayed home — the antagonist beaten by a modelling gap, not by the player. With kekes and
+  okadas the same network leaves informal at 23% and stayed-home at 17% (mostly the one
+  town no road reaches). "Stayed home" should mean *no road*, not *no danfo filled*.
 - **Cap per corridor, not only per demand pair.** Many pairs route over one corridor;
   without a corridor-level cap, 20+ informal vehicles accumulate on one link and
   collapse throughput to ~10%.
@@ -465,6 +472,14 @@ Steps, each played before the next:
    - **1d. Transfers** — riders plan the fewest-buses trip across your routes and change
      at interchanges; each leg pays a fare. Watch next playtest: whether money now
      loosens too far once a network exists.
+
+   Played again (to day 91): transfers worked — 58% share, +₦313/day — but danfos fell to
+   2% and 40% stayed home. The antagonist was beaten by a modelling gap (see Findings,
+   Paratransit), and money stopped being a constraint (₦19k). So:
+   - **1e. Kekes and okadas** — people who won't wait for a danfo to fill take a smaller
+     vehicle; road space is a budget in danfo-equivalents. Money is now looser still
+     (a 4-bus chain nets ~₦590/day by day 40): step 2's congestion is where density
+     should start costing.
 2. **Shared road** — danfos and buses congest each other (`tuning.congestion`), closing
    "weak service invites the interference that weakens it further." Revisit the corridor cap.
 3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`

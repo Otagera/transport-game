@@ -24,12 +24,22 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   busSpeed: 3,
   busPurchaseCost: 500,
   busOperatingCostPerSecond: 1.6,
+  // Informal modes, from the original game's catalog (public/content/
+  // vehicles.json): capacity, speed, and congestion weight as road space.
   danfoCapacity: 14,
   danfoSpeed: 3.5,
-  // Cap per corridor (docs/principles.md §3). That finding was about
-  // congestion collapse; with congestion off in step 1 the cap is set
-  // loose enough that danfos visibly fill the gaps, and step 2 revisits it.
-  danfoCorridorCap: 12,
+  kekeCapacity: 3,
+  kekeSpeed: 4.5,
+  okadaCapacity: 1,
+  okadaSpeed: 6,
+  danfoRoadSpace: 1,
+  kekeRoadSpace: 0.5,
+  okadaRoadSpace: 0.3,
+  // Cap per corridor (docs/principles.md §3), as road space: a dozen danfos
+  // or forty okadas. That finding was about congestion collapse; with
+  // congestion off the cap is loose enough that the informal sector
+  // visibly fills the gaps, and step 2 revisits it.
+  informalRoadSpace: 12,
   startingFunds: 2500,
   outcomeTauSeconds: 30,
   congestion: false,

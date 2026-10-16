@@ -156,7 +156,7 @@ describe("slice: roads", () => {
 
 describe("slice: where people want to go", () => {
   test("each trip's share says who carries it", () => {
-    const w = world({ startingFunds: 1e6 });
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
     for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
     run(w, 300);
     const trips = new Map(tripsFrom(w, "big").map((trip) => [trip.to, trip]));
@@ -165,7 +165,7 @@ describe("slice: where people want to go", () => {
     expect(trips.size).toBe(3);
     // Served by your buses.
     expect(trips.get("mid")!.share.player).toBeGreaterThan(0.3);
-    // Reachable by road but not on your route: danfos.
+    // Reachable by road but not on your route: the informal sector.
     expect(trips.get("far")!.share.player).toBe(0);
     expect(trips.get("far")!.share.informal).toBeGreaterThan(0);
     // No road: everyone stays home.
@@ -371,3 +371,30 @@ describe("slice: transfers", () => {
 function pairDemandOn(w: SliceWorld, towns: string[]): number {
   return w.simulation.demand.filter((pair) => towns.includes(pair.from) && towns.includes(pair.to)).reduce((sum, pair) => sum + pair.rate, 0);
 }
+
+describe("slice: kekes and okadas", () => {
+  test("riders who won't wait for a danfo to fill take kekes and okadas instead of going home", () => {
+    const w = world({ maxEmergentTowns: 0 });
+    run(w, 300);
+    const modes = new Set([...w.informal.active.values()].map((info) => info.mode));
+    expect(modes.has("okada") || modes.has("keke")).toBe(true);
+    // Every connected trip is mostly informal, not stayed-home.
+    const far = tripsFrom(w, "big").find((trip) => trip.to === "far")!;
+    expect(far.share.informal).toBeGreaterThan(far.share.lost);
+  });
+
+  test("road space caps the informal sector in danfo-equivalents", () => {
+    const w = world({ maxEmergentTowns: 0, informalRoadSpace: 1 });
+    for (let t = 0; t < 120; t += SIM_DT) {
+      sliceTick(w, SIM_DT);
+      for (const used of w.informal.segmentSpace.values()) expect(used).toBeLessThanOrEqual(1 + 1e-9);
+    }
+  });
+
+  test("with no road, nobody takes them -- not even an okada", () => {
+    const w = world({ maxEmergentTowns: 0 });
+    run(w, 200);
+    expect(townOutcomes(w, "cut").lost).toBeGreaterThan(0);
+    expect(townOutcomes(w, "cut").gaveUp).toBe(0);
+  });
+});

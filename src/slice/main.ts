@@ -215,9 +215,9 @@ function renderStrip(): void {
         <i style="width:${pct(share.informal)};background:var(--danfo)"></i>
         <i style="width:${pct(share.lost)};background:var(--home)"></i>
       </div>
-      <span class="legend"><b style="color:var(--player)">You ${pct(share.player)}</b> · <b class="danfo-text">Danfo ${pct(share.informal)}</b> · <b style="color:var(--home-text)">Stayed home ${pct(share.lost)}</b></span>
+      <span class="legend"><b style="color:var(--player)">You ${pct(share.player)}</b> · <b class="danfo-text">Informal ${pct(share.informal)}</b> · <b style="color:var(--home-text)">Stayed home ${pct(share.lost)}</b></span>
     </div>
-    <div class="stat"><span class="k">Danfos earned</span><span class="v">${naira(world.informal.earnings)}</span></div>
+    <div class="stat"><span class="k">Informal sector earned</span><span class="v">${naira(world.informal.earnings)}</span></div>
   `;
 }
 
@@ -253,8 +253,8 @@ function renderTown(townId: string): void {
     .join("");
   routesEl.innerHTML = `
     <h2>${town.name} <span class="muted">· ${Math.round(town.population)}k people${world.settlement.emergent.has(townId) ? " · grew on the road" : ""}</span></h2>
-    <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">danfo</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
-    <p class="townshare">Of everyone leaving ${town.name}: you ${pct(share.player)}, danfo ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
+    <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">informal</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
+    <p class="townshare">Of everyone leaving ${town.name}: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
     ${rows}`;
 }
 
@@ -271,7 +271,7 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number): strin
     case "full":
       return `Buses leave ${pct(d.loadFactor)} full: more riders than seats. Another bus would carry the ones left behind.`;
     case "poached":
-      return `Danfos passing through take ${pct(d.poached)} of this route's riders before your bus arrives. A more frequent service leaves less for them, if the extra fares cover another bus.`;
+      return `Danfos, kekes and okadas passing through take ${pct(d.poached)} of this route's riders before your bus arrives. A more frequent service leaves less for them, if the extra fares cover another bus.`;
     case "waiting":
       return `${pct(d.gaveUp + d.lost)} give up waiting before your bus comes. Another bus would catch more of them, if their fares cover its cost.`;
     case "healthy":
@@ -291,7 +291,7 @@ function renderRoutes(): void {
     const d = diagnoseRoute(world, s.id);
     const detail = d
       ? `
-        <div class="bar" title="you / danfo took them from your stop / gave up, then danfo / stayed home">
+        <div class="bar" title="you / informal took them from your stop / gave up, then informal / stayed home">
           <i style="width:${pct(d.carried)};background:var(--player)"></i>
           <i style="width:${pct(d.poached)};background:var(--danfo)"></i>
           <i style="width:${pct(d.gaveUp)};background:var(--danfo-light)"></i>
@@ -361,5 +361,5 @@ function frame(now: number): void {
 renderToolbar();
 renderStrip();
 renderPanel();
-say("Danfos are already carrying your passengers. Click a town, then another, to run a bus.");
+say("Danfos, kekes and okadas are already carrying your passengers. Click a town, then another, to run a bus.");
 requestAnimationFrame(frame);
