@@ -82,15 +82,31 @@ function resize(): void {
   canvas.style.width = `${window.innerWidth}px`;
   canvas.style.height = `${window.innerHeight}px`;
   const sidePanel = window.innerWidth > 900 ? 300 : 0;
-  // Keep the map clear of the strip above and the key and toolbar below.
-  view = fitView(world, window.innerWidth - sidePanel, window.innerHeight, 24, 64, window.innerWidth > 1100 ? 96 : 56);
+  // Keep the map clear of the strip above and of whatever sits below it --
+  // the toolbar, and the key when it's open -- measured, not guessed: a
+  // fixed inset left the open key over the map's corner (playtest).
+  // (getClientRects, not offsetParent: both are position: fixed, whose offsetParent is always null.)
+  const below = (el: HTMLElement | null) => (el && el.getClientRects().length > 0 ? window.innerHeight - el.getBoundingClientRect().top : 0);
+  // On a window too narrow for the open key beside the toolbar, the key sits above it.
+  const keyEl = document.querySelector<HTMLElement>("#key");
+  if (keyEl) {
+    keyEl.style.bottom = "";
+    if (toolbar && keyEl.getClientRects().length > 0 && keyEl.getBoundingClientRect().right > toolbar.getBoundingClientRect().left - 8) {
+      keyEl.style.bottom = `${below(toolbar) + 8}px`;
+    }
+  }
+  const bottomInset = Math.max(56, below(toolbar), below(keyEl)) + 8;
+  view = fitView(world, window.innerWidth - sidePanel, window.innerHeight, 24, 64, bottomInset);
 }
 window.addEventListener("resize", resize);
 
 // The key opens only when there's room beside the toolbar (ten tools); on a
 // narrower window it starts closed, one click away, instead of covering the map.
 const key = document.querySelector<HTMLDetailsElement>("#key");
-if (key) key.open = window.innerWidth >= 1560;
+if (key) {
+  key.open = window.innerWidth >= 1560;
+  key.addEventListener("toggle", resize); // opening it takes room from the map
+}
 resize();
 
 let toastTimer = 0;
@@ -807,6 +823,7 @@ function frame(now: number): void {
 }
 
 renderToolbar();
+resize(); // again, now the toolbar exists to be measured
 renderStrip();
 renderPanel();
 say("Danfos, kekes and okadas are already carrying your passengers. Click a town, then another, to run a bus.");

@@ -700,7 +700,10 @@ Steps, each played before the next:
      road and rail are infra; fix and the cheapest toggle are their own thing."* So a refusal
      never hides the price — short of money, the whole preview stays (route, riders, price,
      "you have ₦…"); and the toolbar is grouped with captions: On roads (tan), On rail
-     (dark), Build, Line (a Cheapest | Straight switch, not a tool), Upkeep, Time.
+     (dark), Build, Line (a Cheapest | Straight switch, not a tool), Upkeep, Time. Then
+     *"the key panel covers part of the map"*: the map's bottom inset is now measured
+     from the toolbar and the open key, not a fixed guess, and the key stacks above the
+     toolbar when they'd collide.
    - **No ▼ for noise:** a town reads as growing or shrinking only when its target is more
      than 5% of its *starting* size away (was 2% of its current size), so a town a
      thousand or two over its start, settling back, reads as steady (`growthTrend`, one

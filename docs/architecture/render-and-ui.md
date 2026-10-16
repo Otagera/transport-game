@@ -258,7 +258,10 @@ no-cached-view discipline as §2).
   draws the track path; freight trains draw as a dark engine and three brown wagons filling
   by load; their rows sit with the lorries under "Your goods", "by rail", reasons renamed
   (`forGoodsVehicle`). With ten tools the key is a `<details>` panel, open when the window is
-  ≥ 1560px wide, else a "Key" button.
+  ≥ 1560px wide, else a "Key" button; opened where it would run under the toolbar, it sits
+  above it. `resize()` measures the toolbar and the open key (`getClientRects`, since both
+  are `position: fixed`) and re-fits the map above whichever reaches higher, on resize and on
+  the key's `toggle`.
 - **Lorries** — the Lorry tool (`L`) buys a lorry for a route like the Bus tool; its ghost
   says the goods along it each way ("25 t/day out, 50 back") and draws its road. Lorries
   draw longer than buses, brown, with a cab, filled by load; their routes as a brown dashed
