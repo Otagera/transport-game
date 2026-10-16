@@ -16,7 +16,7 @@ import { isDirt } from "./congestion";
 import { buildSliceTerrain } from "./terrain";
 import { isRailRoute, railPath, rebuildNetworks, routingFor, vehicleCostPerDay } from "./rail";
 import { repairCost, upkeepPerDay, wearSpeed } from "./wear";
-import { planRoad, segmentLength, type Point } from "./roads";
+import { planRoad, segmentLength, type Alignment, type Point } from "./roads";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -160,8 +160,8 @@ export type ActionResult = { ok: true } | { ok: false; reason: string };
 // A new road's price is its plan's (roads.ts: engine/pathing's cost
 // function IS the build price, architecture hard rule 3). The preview and
 // the charge both call this; nothing else prices a road.
-export function roadCost(world: SliceWorld, a: string, b: string): number {
-  return planRoad(world, a, b)?.cost ?? Infinity;
+export function roadCost(world: SliceWorld, a: string, b: string, alignment: Alignment = "cheapest"): number {
+  return planRoad(world, a, b, alignment)?.cost ?? Infinity;
 }
 
 // Paving buys the surface, not the earthworks: the alignment is already
@@ -203,18 +203,18 @@ export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult 
   return { ok: true };
 }
 
-export function checkRoad(world: SliceWorld, a: string, b: string): ActionResult {
+export function checkRoad(world: SliceWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (directRoad(world, a, b)) return { ok: false, reason: "already connected directly" };
-  if (!planRoad(world, a, b)) return { ok: false, reason: "the water is too wide to bridge here" };
-  if (!canAfford(world.economy, roadCost(world, a, b))) return { ok: false, reason: "can't afford it" };
+  if (!planRoad(world, a, b, alignment)) return { ok: false, reason: "the water is too wide to bridge here" };
+  if (!canAfford(world.economy, roadCost(world, a, b, alignment))) return { ok: false, reason: "can't afford it" };
   return { ok: true };
 }
 
-export function buildRoad(world: SliceWorld, a: string, b: string): ActionResult {
-  const check = checkRoad(world, a, b);
+export function buildRoad(world: SliceWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
+  const check = checkRoad(world, a, b, alignment);
   if (!check.ok) return check;
-  const plan = planRoad(world, a, b)!;
+  const plan = planRoad(world, a, b, alignment)!;
   world.economy.funds -= plan.cost;
   addRoadToMap(world.simulation.map, `road-${world.nextId++}`, a, b, "built", plan);
   rebuildNetworks(world);

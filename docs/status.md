@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**429 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**433 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -38,6 +38,7 @@ step plan. Eras are paused. The slice is a second page beside the original game:
 | 4d | Rail: an old export line to restore, or new track through the towns; passenger trains | Built, **not yet played** |
 | 4d+ | Track wear: trains wear track; slow orders on worn track; the Fix tool keeps it up | Built, **not yet played** |
 | 4d++ | Goods trains + export: markets send produce on to the port; freight on track | Built, **not yet played** |
+| — | Alignment: build roads and track straight (pay the climb) or the cheapest way | Built, **not yet played** |
 | 4 | Depth, one at a time: decay, growth, goods, rail — all built (4a–4d) | Built, **not yet played** |
 
 Engine fixes found along the way, affecting the original game too: cyclic vehicles never
@@ -83,7 +84,8 @@ before it mentions wear. Details in principles.md §6's playtest log.
 - Is paving found, and worth it where buses run full?
 - Does "Inside <town>" read as informal's ground, not a loss?
 - Do the river and the ridge make you think about where to build — and do bends read as a
-  longer trip? Does "Run it through" get the Ikole bridge used as an Ilase–Ikole route?
+  longer trip? Is "straight or round" (A) a choice you make? Does "Run it through" get the
+  Ikole bridge used as an Ilase–Ikole route?
 - Is choosing which roads to maintain a decision, or does everything (or nothing) get kept?
 - Does a growing town (▲) read as a place developing, or as a treadmill of queues? Is money
   loose again by day 40?
@@ -93,8 +95,7 @@ before it mentions wear. Details in principles.md §6's playtest log.
   rail a mid-game goal, or out of reach? Does a slow order on worn track get noticed?
 - Freight: do you build feeder lorries to fill a freight train's load back, or ignore export?
 
-Write down what was felt before changing anything (principles.md §6's playtest log). Open
-after that: a formal town-service tier (§5, "make it fixable")
-if play wants inside-town trips; "hold the line" road alignment once a straight line is
-priced as a line; goods into growth (supplies developing towns) if play wants a reason
-beyond money.
+Write down what was felt before changing anything (principles.md §6's playtest log). Open,
+each waiting on what play says: a formal town-service tier (§5, "make it fixable") if play
+wants inside-town trips; goods into growth (supplies developing towns) if play wants a
+reason beyond money.

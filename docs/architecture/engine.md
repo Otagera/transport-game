@@ -85,9 +85,10 @@ returned null on dry ground. It now stops once the next crossing is at or past t
 (still taking both corner-adjacent cells at a corner tie). Affects the original game's
 straight mode too.
 
-**Known gap:** "straight" mode prices the supercover *staircase* of cells, not the line —
-on flat ground a straight road quotes ~2.5× the identical auto road. The slice uses auto
-only until a line is priced as a line.
+**Known gap (original game):** "straight" mode prices the supercover *staircase* of cells,
+not the line — on flat ground a straight road quotes ~2.5× the identical auto road. The
+slice prices straight lines itself (`roads.ts` `planDirect`, below) rather than change the
+original game's balance.
 
 ## simulation/ — the tick loop
 
@@ -464,7 +465,10 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   def's authored rivers (centre line + width) and hills (smooth bumps; elevation unbounded,
   since water is explicit) into the same `TerrainField` engine/map makes, and hard-fails a
   town in water. `planRoad` runs `pathing/plan.ts`'s `planCorridor` in auto mode (terrain A*,
-  bridges as jump edges, smoothing) and converts its `CostBreakdown` at one exchange rate,
+  bridges as jump edges, smoothing) — or, for `alignment: "direct"`, `planDirect`: water by
+  supercover, one span-capped bridge per crossing, ground priced by stepping the true line
+  through `stepCost` — and "cheapest" takes whichever of the two costs less. It converts the
+  `CostBreakdown` at one exchange rate,
   `roadCostPerCell / BASE_COST_PER_CELL`, naming the bridge and hills parts; plans are
   cached per pair (terrain never changes). A built road stores the plan's polyline on its
   corridor and its arc length on `Segment.length`, which routing and `tickVehicle` read

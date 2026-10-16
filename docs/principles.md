@@ -342,6 +342,15 @@ blow-by-blow; this section is the distilled rule.
 - **The A\* cost function IS the build price.** Where a system optimises against one
   function and reports or charges another, they will disagree. This was violated four
   separate times on the first attempt and each was a real bug.
+- **Price a straight line as a line** (slice). pathing/plan.ts's "straight" mode prices the
+  supercover staircase of cells a line touches, so a straight road on flat ground quoted
+  ~2.5× the same road found by search. The slice's `planDirect` finds water with supercover
+  (one bridge per crossing, span-capped) and prices the ground by stepping along the true
+  line through `stepCost` — every term still from cost.ts. "Cheapest" is then the cheaper of
+  the searched bend and the line: the search's own grid steps overcharge diagonals up to ~8%,
+  so where nothing's in the way the line wins. Measured: Ilaro–Owode straight over the ridge
+  ₦852 and 20% shorter, round it ₦555; a bus through it does ~₦28/day better on the shorter
+  road. Track over the same ridge: ₦4,989 straight, ₦1,671 round.
 - **Travel length must follow the alignment**, or going round is free (slice, step 3). Routing
   and vehicles measured every road as the straight line between its nodes, so a road bent
   round a ridge cost less *and* drove no slower — "around" always won. A segment now
@@ -612,8 +621,8 @@ Steps, each played before the next:
    Roads plan the cheapest way and the quote says why. Measured, Ikole: a ₦581 bridge from
    Kuto with a bus from Ilase loses ₦12/day and serves ₦452/day of trips; a direct ₦850
    bridge from Ilase loses ₦63 (₦181); the dry ₦472 road from Ado loses ₦67 (₦134). The
-   cheap crossing that a bus can also serve on the way wins. Cheapest alignment only:
-   "hold the line and pay for it" waits on pricing a line as a line (engine.md §pathing/).
+   cheap crossing that a bus can also serve on the way wins. "Hold the line and pay for it"
+   came later (alignment toggle, A): see Findings, Geometry.
    Watch: do bends read as "longer trip", and does the river make you think about where to
    cross?
 4. **Depth, one at a time** — decay, goods, rail, growth of the original towns — each played
@@ -654,6 +663,10 @@ Steps, each played before the next:
      top of the usual wear. The Fix tool keeps track up like a road, at a road's upkeep
      price per cell; kept track draws on a pale bed. A worn train route says "worn track",
      never "jammed". See Findings, Demand.
+   - **Alignment** (built 2026-10-16): the Road and Track tools take `A` to switch between the
+     cheapest alignment and the straight line; the preview prices both ("straight ₦852, 20%
+     shorter" / "round it ₦555, 24% longer"). See Findings, Geometry. Watch: is "round or
+     over" a choice you make, or always the cheap one?
    - **Goods trains + export** (built 2026-10-16; export was the user's call): markets
      export half the produce delivered to them to the port; freight trains (Freight tool,
      G: ₦2,500, ₦180/day, 150 t, speed 6) are goods routes on track, loaded like lorries,

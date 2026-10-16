@@ -626,6 +626,51 @@ describe("slice: terrain (step 3)", () => {
     expect(bus.edgeProgress - start).toBeCloseTo((w.tuning.busSpeed * 1) / plan.length, 2);
   });
 
+  test("a straight road is priced as a line: on flat ground, exactly its length at the flat rate", () => {
+    const w = world(); // MAP: flat, dry
+    const plan = planRoad(w, "big", "far", "direct")!;
+    const length = Math.hypot(50 - 10, 5 - 20);
+    expect(plan.length).toBeCloseTo(length);
+    expect(plan.cost).toBe(Math.round(length * w.tuning.roadCostPerCell));
+    expect(plan.polyline).toHaveLength(2);
+  });
+
+  test("holding the line over a hill costs the climb and is shorter; the cheapest bends round", () => {
+    const w = terrainWorld();
+    const direct = planRoad(w, "sw", "se", "direct")!;
+    const cheapest = planRoad(w, "sw", "se")!;
+    expect(direct.length).toBeCloseTo(24);
+    expect(direct.hillsCost).toBeGreaterThan(0);
+    expect(direct.cost).toBeGreaterThan(cheapest.cost);
+    expect(cheapest.length).toBeGreaterThan(direct.length);
+    // And building it straight gives the straight road, at the quoted price.
+    const before = w.economy.funds;
+    buildRoad(w, "sw", "se", "direct");
+    expect(w.economy.funds).toBe(before - direct.cost);
+    const road = w.simulation.map.segments.find((s) => s.provenance === "built")!;
+    expect(road.length).toBeCloseTo(24);
+  });
+
+  test("a straight line across water pays one bridge, and is refused past the span cap", () => {
+    const w = terrainWorld();
+    const plan = planRoad(w, "west", "east", "direct")!;
+    expect(plan.bridgeCells).toBeGreaterThanOrEqual(3);
+    const wide = createSliceWorld(
+      { ...TERRAIN_MAP, towns: TERRAIN_MAP.towns.slice(0, 2), roads: [], terrain: { rivers: [{ points: [[24, -2], [24, 42]], width: 20 }] } },
+      { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6 },
+    );
+    expect(planRoad(wide, "west", "east", "direct")).toBeNull();
+  });
+
+  test("cheapest is never dearer than straight", () => {
+    const w = terrainWorld();
+    for (const [a, b] of [["west", "east"], ["sw", "se"], ["west", "se"], ["east", "sw"]] as const) {
+      const direct = planRoad(w, a, b, "direct");
+      const cheapest = planRoad(w, a, b);
+      if (direct && cheapest) expect(cheapest.cost).toBeLessThanOrEqual(direct.cost);
+    }
+  });
+
   test("an inherited road stays straight, whatever the terrain", () => {
     const w = terrainWorld();
     const road = w.simulation.map.segments.find((s) => s.provenance === "inherited")!;

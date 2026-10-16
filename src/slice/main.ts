@@ -29,7 +29,7 @@ import {
   tripsFrom,
 } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
-import { planRoad, segmentPolyline } from "@engine/slice/roads";
+import { planRoad, segmentPolyline, type Alignment, type RoadPlan } from "@engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
 import { addTrain, buildTrack, checkTrack, checkTrain, isRailRoute, planRail, railPath, restoreCost, trackAction } from "@engine/slice/rail";
@@ -63,6 +63,8 @@ const toolbar = document.querySelector<HTMLDivElement>("#toolbar")!;
 const toast = document.querySelector<HTMLDivElement>("#toast")!;
 
 let tool: Tool = "bus";
+// Road and Track tools: bend round the terrain where it's cheaper, or hold the straight line and pay (A).
+let alignment: Alignment = "cheapest";
 let selectedTown: string | null = null;
 let hoverTown: string | null = null;
 let mouse: { x: number; y: number } | null = null;
@@ -202,14 +204,14 @@ canvas.addEventListener("click", (event) => {
     if (result.ok) say(`Paved ${townName(from)} – ${townName(town)} for ${naira(cost)}: it now carries ${paveGain()}× the traffic`);
     else say(`Can't pave: ${result.reason}`, true);
   } else if (tool === "road") {
-    const cost = roadCost(world, from, town);
-    const result = buildRoad(world, from, town);
+    const cost = roadCost(world, from, town, alignment);
+    const result = buildRoad(world, from, town, alignment);
     if (result.ok) say(`Built road ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't build: ${result.reason}`, true);
   } else if (tool === "track") {
     const restoring = trackAction(world, from, town) === "restore";
-    const cost = restoring ? restoreCost(world, from, town) : (planRail(world, from, town)?.cost ?? 0);
-    const result = buildTrack(world, from, town);
+    const cost = restoring ? restoreCost(world, from, town) : (planRail(world, from, town, alignment)?.cost ?? 0);
+    const result = buildTrack(world, from, town, alignment);
     if (result.ok) say(restoring ? `Restored the old line ${townName(from)} – ${townName(town)} for ${naira(cost)}: trains can run on it` : `Laid track ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't lay track: ${result.reason}`, true);
   } else if (tool === "freight") {
@@ -243,6 +245,10 @@ window.addEventListener("keydown", (event) => {
   else if (event.key === "k" || event.key === "K") setTool("track");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
+  else if (event.key === "a" || event.key === "A") {
+    alignment = alignment === "cheapest" ? "direct" : "cheapest";
+    renderToolbar();
+  }
   else if (event.key === "Escape") selectedTown = null;
   else if (event.key === " ") {
     paused = !paused;
@@ -268,6 +274,17 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
     ? `${roadName(id)} · maintained, ${upkeep}/day · click to stop`
     : `${roadName(id)} · ${state} · maintain for ~${upkeep}/day`;
   return { segmentId: id, at: mouse, label };
+}
+
+// The other alignment, when it's a different road: the choice made legible
+// (principles §1: round, or over -- say what each costs).
+function otherWay(plan: RoadPlan, other: RoadPlan | null): string {
+  if (!other || Math.abs(other.cost - plan.cost) < 1) return "";
+  if (alignment === "direct") {
+    const longer = other.length / plan.length - 1;
+    return ` · round it ${naira(other.cost)}${longer >= 0.05 ? `, ${pct(longer)} longer` : ""} (A)`;
+  }
+  return ` · straight ${naira(other.cost)}, ${pct(1 - other.length / plan.length)} shorter (A)`;
 }
 
 // What a road's price is made of (principles §1: a quote must say *why*,
@@ -302,21 +319,23 @@ function ghost(): Ghost | null {
     return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Pave ${cost} · carries ${paveGain()}× the traffic` : `${cost} · ${check.reason}` };
   }
   if (tool === "road") {
-    const check = checkRoad(world, selectedTown, to);
-    const plan = planRoad(world, selectedTown, to);
+    const check = checkRoad(world, selectedTown, to, alignment);
+    const plan = planRoad(world, selectedTown, to, alignment);
     if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
-    const label = `Road ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)} · ${riders}`;
+    const other = planRoad(world, selectedTown, to, alignment === "direct" ? "cheapest" : "direct");
+    const label = `${alignment === "direct" ? "Direct road" : "Road"} ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders}`;
     return { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
   }
   if (tool === "track") {
-    const check = checkTrack(world, selectedTown, to);
+    const check = checkTrack(world, selectedTown, to, alignment);
     if (trackAction(world, selectedTown, to) === "restore") {
       const label = `Restore the old line ${naira(restoreCost(world, selectedTown, to))} · built for export: it stops nowhere between`;
       return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? label : check.reason };
     }
-    const plan = planRail(world, selectedTown, to);
+    const plan = planRail(world, selectedTown, to, alignment);
     if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
-    const label = `Track ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)} · ${riders}`;
+    const other = planRail(world, selectedTown, to, alignment === "direct" ? "cheapest" : "direct");
+    const label = `${alignment === "direct" ? "Direct track" : "Track"} ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders}`;
     return { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
   }
   if (tool === "train") {
@@ -370,6 +389,10 @@ function renderToolbar(): void {
     button("Road", "R", tool === "road", () => setTool("road")),
     button("Track", "K", tool === "track", () => setTool("track")),
     button("Fix", "F", tool === "fix", () => setTool("fix")),
+    button(alignment === "direct" ? "Straight" : "Cheapest", "A", false, () => {
+      alignment = alignment === "cheapest" ? "direct" : "cheapest";
+      renderToolbar();
+    }),
     Object.assign(document.createElement("span"), { className: "sep" }),
     button(paused ? "Paused" : "Pause", "Space", paused, () => {
       paused = !paused;

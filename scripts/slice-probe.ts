@@ -212,6 +212,11 @@ const allStrategies: Strategy[] = [
       keepTrack(w);
     },
   },
+  // Alignment: Ilaro-Owode over the ridge (straight) or round it (cheapest).
+  { name: "align: ilaro-owode round + 1 bus", setup: (w) => { buildRoad(w, "ilaro", "owode"); buses("ilaro", "owode", 1)(w); } },
+  { name: "align: ilaro-owode straight + 1 bus", setup: (w) => { buildRoad(w, "ilaro", "owode", "direct"); buses("ilaro", "owode", 1)(w); } },
+  { name: "align: ilaro-owode round + bus ilaro-ilase", setup: (w) => { buildRoad(w, "ilaro", "owode"); buses("ilaro", "ilase", 1)(w); } },
+  { name: "align: ilaro-owode straight + bus ilaro-ilase", setup: (w) => { buildRoad(w, "ilaro", "owode", "direct"); buses("ilaro", "ilase", 1)(w); } },
   // Freight trains + export: a freight train on the trunk alone (no produce
   // reaches Ado, so nothing to export), with lorries feeding Ado (export
   // back to the port), and on the restored old line.

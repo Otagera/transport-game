@@ -231,6 +231,9 @@ no-cached-view discipline as §2).
   inner outline (the Mini Metro convention), and its panel says how many change there.
 - **Town events** arrive from `sliceTick` and show as a longer toast. Ruins (abandoned
   emergent towns) draw as a grey dot with the name in italics.
+- **Alignment** — `A` (or the toolbar's "Cheapest"/"Straight") switches the Road and Track
+  tools between the cheapest alignment and the straight line; the preview names the other
+  one's price and length ("straight ₦852, 20% shorter (A)").
 - **Road preview** — the ghost draws the planned road itself, bends and all, and its label
   says what the price is made of: "Road ₦581 (bridge 4 cells ₦315, bends round: 10% longer
   trip)" (principles §1: a quote must say why). It flips left rather than run under the panel.
