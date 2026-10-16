@@ -5,12 +5,16 @@ import {
   addBus,
   buildRoad,
   checkBus,
+  checkPave,
   checkRoad,
   createSliceWorld,
   diagnoseRoute,
+  directRoad,
+  dirtRoadsOn,
   isCutOff,
   networkShare,
   pairDemand,
+  paveRoad,
   removeBus,
   roadCost,
   routeSummaries,
@@ -25,7 +29,8 @@ import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View 
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
 // list, one strip:
-//   R  road tool -- click a town, then another: build a straight road.
+//   R  road tool -- click a town, then another: build a straight road, or
+//      pave the dirt road already joining them.
 //   B  bus tool  -- click a town, then another: buy a bus running between them.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
@@ -125,7 +130,12 @@ canvas.addEventListener("click", (event) => {
     return;
   }
   const from = selectedTown;
-  if (tool === "road") {
+  if (tool === "road" && directRoad(world, from, town)) {
+    const cost = roadCost(world, from, town);
+    const result = paveRoad(world, from, town);
+    if (result.ok) say(`Paved ${townName(from)} – ${townName(town)} for ${naira(cost)}: it now carries ${paveGain()}× the traffic`);
+    else say(`Can't pave: ${result.reason}`, true);
+  } else if (tool === "road") {
     const cost = roadCost(world, from, town);
     const result = buildRoad(world, from, town);
     if (result.ok) say(`Built road ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
@@ -156,6 +166,11 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+/** How much more traffic a paved road carries than dirt, e.g. "1.7". */
+function paveGain(): string {
+  return (1 / world.tuning.dirtRoadCapacity).toFixed(1);
+}
+
 function ghost(): Ghost | null {
   if (!selectedTown || !mouse) return null;
   const to = hoverTown && hoverTown !== selectedTown ? hoverTown : null;
@@ -163,6 +178,11 @@ function ghost(): Ghost | null {
   if (!to) return { from: selectedTown, to: end, ok: true, label: "" };
   // The trip's demand rides along on every preview: what you'd be building for.
   const riders = `${Math.round(pairDemand(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want this trip`;
+  if (tool === "road" && directRoad(world, selectedTown, to)) {
+    const check = checkPave(world, selectedTown, to);
+    const cost = naira(roadCost(world, selectedTown, to));
+    return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Pave ${cost} · carries ${paveGain()}× the traffic` : `${cost} · ${check.reason}` };
+  }
   if (tool === "road") {
     const check = checkRoad(world, selectedTown, to);
     const cost = naira(roadCost(world, selectedTown, to));
@@ -279,14 +299,15 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 // One sentence: the biggest reason this route earns what it does, and the
 // lever that would change it. The engine picks the verdict; this says it.
-function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number): string {
+function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPerDay: number): string {
+  const dirt = dirtRoadsOn(world, d.routeId);
   switch (d.verdict) {
     case "thin":
       return `Thin: only ${Math.round(d.demand * SECONDS_PER_GAME_DAY)} riders/day want these trips. Carrying every one would earn ${naira(d.ceilingPerDay)}/day, but one bus catches only about half, not enough to cover its running cost (${naira(costPerDay / buses)}/day).`;
     case "overcapacity":
       return `Buses run ${pct(d.loadFactor)} full and already carry ${pct(d.carried)} of riders here: the last bus mostly carries empty seats. Selling one saves ${naira(costPerDay / buses)}/day.`;
     case "jammed":
-      return `Jammed: traffic holds your buses to ${pct(d.speed)} of free speed, so each makes fewer trips a day. ${pct(d.informalTraffic)} of the traffic is informal; every rider you take back is one fewer okada. Too many buses of your own add to it too.`;
+      return `Jammed: traffic holds your buses to ${pct(d.speed)} of free speed, so each makes fewer trips a day. ${pct(d.informalTraffic)} of the traffic is informal; every rider you take back is one fewer okada. Too many buses of your own add to it too.${dirt.length > 0 ? ` It runs on dirt: paving ${dirt.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ")} (Road tool, click both towns) carries ${paveGain()}× the traffic.` : ""}`;
     case "full":
       return `Buses leave ${pct(d.loadFactor)} full: more riders than seats. Another bus would carry the ones left behind.`;
     case "poached":
@@ -294,6 +315,11 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number): strin
     case "waiting":
       return `${pct(d.gaveUp + d.lost)} give up waiting before your bus comes. Another bus would catch more of them, if their fares cover its cost.`;
     case "healthy":
+      // No leak dominates, but that isn't the same as paying: with most
+      // riders already carried, a loss means more buses than they fill.
+      if (netPerDay < 0) {
+        return `You carry ${pct(d.carried)} of the riders who want these trips, but their fares don't cover ${buses} bus${buses === 1 ? "" : "es"}. Selling ${buses === 1 ? "it" : "one"} saves ${naira(costPerDay / buses)}/day.`;
+      }
       return `Earning well: you carry ${pct(d.carried)} of the riders who want these trips.`;
   }
 }
@@ -316,7 +342,7 @@ function renderRoutes(): void {
           <i style="width:${pct(d.gaveUp)};background:var(--danfo-light)"></i>
           <i style="width:${pct(d.lost)};background:var(--home)"></i>
         </div>
-        <div class="why why-${d.verdict}">${reasonText(d, s.buses, s.costPerDay)}</div>
+        <div class="why why-${d.verdict}">${reasonText(d, s.buses, s.costPerDay, s.netPerDay)}</div>
         <small>${Math.round(d.boardingsPerDay)} riders/day · buses ${pct(d.loadFactor)} full · ${pct(d.speed)} speed · ceiling ${naira(d.ceilingPerDay)}/day</small>`
       : "";
     return `

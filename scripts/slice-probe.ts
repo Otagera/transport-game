@@ -6,7 +6,7 @@
 //   bun scripts/slice-probe.ts            # built-in strategies
 //   bun scripts/slice-probe.ts 40         # ...over 40 game days
 import { SLICE_MAP } from "../src/slice/map";
-import { addBus, buildRoad, createSliceWorld, diagnoseRoute, networkShare, routeSummaries, waitingAt } from "../src/engine/slice/world";
+import { addBus, buildRoad, paveRoad, roadCost, createSliceWorld, diagnoseRoute, networkShare, routeSummaries, waitingAt } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
@@ -28,7 +28,9 @@ function buses(a: string, b: string, n: number) {
   };
 }
 
-const strategies: Strategy[] = [
+// SLICE_ONLY='pave' runs just the strategies whose name contains it.
+const only = process.env.SLICE_ONLY;
+const allStrategies: Strategy[] = [
   { name: "do nothing", setup: () => {} },
   { name: "1 bus ilase-owode", setup: buses("ilase", "owode", 1) },
   { name: "2 buses ilase-owode", setup: buses("ilase", "owode", 2) },
@@ -54,6 +56,46 @@ const strategies: Strategy[] = [
       buses("ilase", "ise", 1)(w);
     },
   },
+  // Paving (step 2c): the trunk is dirt, so it jams first. Pave cost is
+  // charged before startFunds is read, so net/day here is running profit;
+  // weigh it against the one-off price printed by the strategy.
+  { name: "pave ilase-owode, no buses", setup: (w) => void paveRoad(w, "ilase", "owode") },
+  {
+    name: "2 buses ilase-owode, paved",
+    setup: (w) => {
+      paveRoad(w, "ilase", "owode");
+      buses("ilase", "owode", 2)(w);
+    },
+  },
+  {
+    name: "4 buses ilase-owode, paved",
+    setup: (w) => {
+      w.economy.funds += 1000;
+      paveRoad(w, "ilase", "owode");
+      buses("ilase", "owode", 4)(w);
+      w.economy.funds -= 1000;
+    },
+  },
+  {
+    name: "6 buses ilase-owode, paved",
+    setup: (w) => {
+      const f = w.economy.funds;
+      w.economy.funds = 1e9;
+      paveRoad(w, "ilase", "owode");
+      buses("ilase", "owode", 6)(w);
+      w.economy.funds = f - 6 * w.tuning.busPurchaseCost - roadCost(w, "ilase", "owode");
+    },
+  },
+  {
+    name: "chain, trunk paved",
+    setup: (w) => {
+      w.economy.funds += 2500;
+      paveRoad(w, "ilase", "owode");
+      buses("ilase", "owode", 2)(w);
+      buses("owode", "ado", 2)(w);
+      w.economy.funds -= 2500;
+    },
+  },
   {
     name: "road ilase-ikole + 1 bus",
     setup: (w) => {
@@ -66,6 +108,8 @@ const strategies: Strategy[] = [
 const fmt = (n: number) => n.toFixed(0).padStart(6);
 const pct = (n: number) => `${(n * 100).toFixed(0).padStart(3)}%`;
 
+const strategies = only ? allStrategies.filter((s) => s.name.includes(only)) : allStrategies;
+console.log(`pave ilase-owode costs ${roadCost(createSliceWorld(SLICE_MAP, tuning), "ilase", "owode")}`);
 for (const strategy of strategies) {
   const world = createSliceWorld(SLICE_MAP, tuning);
   strategy.setup(world);

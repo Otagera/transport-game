@@ -1,4 +1,5 @@
 import { computeSegmentLoads } from "../simulation/congestion";
+import type { Segment } from "../map/types";
 import type { Vehicle } from "../simulation/types";
 import type { SliceWorld } from "./types";
 
@@ -32,10 +33,20 @@ const BPR_BETA = 4;
 /** How quickly a road's measured flow follows its traffic. */
 const FLOW_TAU_SECONDS = 10;
 
+/**
+ * Inherited roads are dirt until paved (world.ts paveRoad). Provenance is
+ * the surface in the slice: paving makes a road "built", so a town
+ * splitting a paved road leaves both halves paved, and the map draws it
+ * like any road you built.
+ */
+export function isDirt(segment: Segment): boolean {
+  return segment.provenance === "inherited";
+}
+
 export function roadCapacity(world: SliceWorld, segmentId: string): number {
   const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
   if (!segment) return Infinity;
-  return world.tuning.roadFlowCapacity * (segment.provenance === "inherited" ? world.tuning.dirtRoadCapacity : 1);
+  return world.tuning.roadFlowCapacity * (isDirt(segment) ? world.tuning.dirtRoadCapacity : 1);
 }
 
 export function speedFactor(flow: number, capacity: number, floor: number): number {

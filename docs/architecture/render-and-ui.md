@@ -224,11 +224,14 @@ no-cached-view discipline as §2).
   inner outline (the Mini Metro convention), and its panel says how many change there.
 - **Town events** arrive from `sliceTick` and show as a longer toast. Ruins (abandoned
   emergent towns) draw as a grey dot with the name in italics.
-- **`main.ts`** — two tools (Bus `B`, Road `R`): click a town, then another. Shift keeps
+- **`main.ts`** — two tools (Bus `B`, Road `R`): click a town, then another. The Road tool
+  on two towns a dirt road already joins paves it instead (ghost: "Pave ₦… · carries 1.7×
+  the traffic"); a jammed route on dirt names the roads to pave. Shift keeps
   the first town selected. Refusals come back as `reason` strings from `engine/slice`
   and show as a toast; the ghost previews the same `check*` result and `roadCost` before
   you click. The strip shows day, funds, net/day (economy's burn-rate EMA), the
   you/danfo/home share bar, and what danfos earned. The routes panel is worst-first with
-  +/− per route. Speed: Space pauses, 1/2/3 give 1×/2×/4×.
+  +/− per route; a "healthy" route that loses money says its riders don't fill its buses
+  instead of "earning well". Speed: Space pauses, 1/2/3 give 1×/2×/4×.
 - **`map.ts`** — the hand-made map as a TS constant, not yet content JSON (it moves to
   `public/content/` once the loop survives a playtest).

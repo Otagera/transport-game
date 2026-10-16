@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, paveRoad, checkPave, dirtRoadsOn } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -463,6 +463,61 @@ describe("slice: shared road", () => {
     for (let i = 0; i < 16; i += 1) addBus(w, "big", "mid");
     run(w, 200);
     for (const speed of w.segmentSpeed.values()) expect(speed).toBe(1);
+  });
+});
+
+describe("slice: paving a dirt road", () => {
+  test("paving charges the previewed price and makes the road carry what a built one does", () => {
+    const w = world();
+    const before = w.economy.funds;
+    const price = roadCost(w, "big", "mid");
+    expect(paveRoad(w, "big", "mid").ok).toBe(true);
+    expect(w.economy.funds).toBe(before - price);
+    const paved = w.simulation.map.segments.find((s) => s.fromNodeId === "big" && s.toNodeId === "mid")!;
+    buildRoad(w, "mid", "cut");
+    const built = w.simulation.map.segments.find((s) => s.toNodeId === "cut")!;
+    expect(roadCapacity(w, paved.id)).toBe(roadCapacity(w, built.id));
+  });
+
+  test("it refuses what isn't a dirt road between neighbours, and refusals cost nothing", () => {
+    const w = world();
+    const before = w.economy.funds;
+    expect(checkPave(w, "big", "far")).toEqual({ ok: false, reason: "no road joins them directly" });
+    expect(paveRoad(w, "mid", "cut")).toEqual({ ok: false, reason: "no road joins them directly" });
+    expect(w.economy.funds).toBe(before);
+    paveRoad(w, "big", "mid");
+    const after = w.economy.funds;
+    expect(paveRoad(w, "big", "mid")).toEqual({ ok: false, reason: "already paved" });
+    expect(w.economy.funds).toBe(after);
+    const poor = world({ startingFunds: 10 });
+    expect(paveRoad(poor, "big", "mid")).toEqual({ ok: false, reason: "can't afford it" });
+    expect(poor.economy.funds).toBe(10);
+  });
+
+  test("paving a road your buses jam lifts their speed, and the route stops listing it as dirt", () => {
+    const run16 = (pave: boolean) => {
+      const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+      if (pave) paveRoad(w, "big", "mid");
+      for (let i = 0; i < 16; i += 1) addBus(w, "big", "mid");
+      run(w, 300);
+      return w;
+    };
+    const dirt = run16(false);
+    const paved = run16(true);
+    expect(paved.routes[0]!.speedEMA).toBeGreaterThan(dirt.routes[0]!.speedEMA + 0.1);
+    expect(dirtRoadsOn(dirt, dirt.routes[0]!.id)).toEqual([{ a: "big", b: "mid" }]);
+    expect(dirtRoadsOn(paved, paved.routes[0]!.id)).toEqual([]);
+  });
+
+  test("a town founded on a paved road leaves both halves paved", () => {
+    const w = world({ startingFunds: 1e6, foundTownFlow: 1, foundTownPlayerFlow: 0.3, minSecondsBetweenTowns: 0 });
+    paveRoad(w, "big", "mid");
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    run(w, 400);
+    const town = [...w.settlement.emergent][0]!;
+    const halves = w.simulation.map.segments.filter((s) => s.fromNodeId === town || s.toNodeId === town);
+    expect(halves.length).toBe(2);
+    for (const half of halves) expect(half.provenance).toBe("built");
   });
 });
 

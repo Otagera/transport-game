@@ -10,6 +10,7 @@ import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, Sli
 import { DEFAULT_SLICE_TUNING } from "./tuning";
 import { createSettlementState } from "./settlement";
 import { routesOnTrip } from "./transfers";
+import { isDirt } from "./congestion";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -123,12 +124,6 @@ export function roadPath(world: SliceWorld, from: string, to: string): PathResul
 
 export type ActionResult = { ok: true } | { ok: false; reason: string };
 
-function hasDirectRoad(world: SliceWorld, a: string, b: string): boolean {
-  return world.simulation.map.segments.some(
-    (s) => (s.fromNodeId === a && s.toNodeId === b) || (s.fromNodeId === b && s.toNodeId === a),
-  );
-}
-
 // The one function that turns a road into money (architecture hard rule 3:
 // the cost function IS the build price). The preview and the charge both
 // call this; nothing else prices a road.
@@ -139,9 +134,34 @@ export function roadCost(world: SliceWorld, a: string, b: string): number {
   return Math.round(townDistance(townA, townB) * world.tuning.roadCostPerCell);
 }
 
+/** The one road segment joining two neighbouring towns, if there is one. */
+export function directRoad(world: SliceWorld, a: string, b: string): Segment | undefined {
+  return world.simulation.map.segments.find(
+    (s) => (s.fromNodeId === a && s.toNodeId === b) || (s.fromNodeId === b && s.toNodeId === a),
+  );
+}
+
+export function checkPave(world: SliceWorld, a: string, b: string): ActionResult {
+  const road = directRoad(world, a, b);
+  if (!road) return { ok: false, reason: "no road joins them directly" };
+  if (!isDirt(road)) return { ok: false, reason: "already paved" };
+  if (!canAfford(world.economy, roadCost(world, a, b))) return { ok: false, reason: "can't afford it" };
+  return { ok: true };
+}
+
+// Priced as building the road anew (roadCost): one price for road-making,
+// so paving is a decision about *which* road, not a cheaper road.
+export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult {
+  const check = checkPave(world, a, b);
+  if (!check.ok) return check;
+  world.economy.funds -= roadCost(world, a, b);
+  directRoad(world, a, b)!.provenance = "built";
+  return { ok: true };
+}
+
 export function checkRoad(world: SliceWorld, a: string, b: string): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
-  if (hasDirectRoad(world, a, b)) return { ok: false, reason: "already connected directly" };
+  if (directRoad(world, a, b)) return { ok: false, reason: "already connected directly" };
   if (!canAfford(world.economy, roadCost(world, a, b))) return { ok: false, reason: "can't afford it" };
   return { ok: true };
 }
@@ -397,17 +417,32 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
 }
 
 /** Of the road space in use on a route's roads right now, the share that's informal. */
-function informalTrafficShare(world: SliceWorld, routeId: string): number {
+/** The road segments a route's buses run over. */
+function routeSegments(world: SliceWorld, routeId: string): Set<string> {
   const route = world.routes.find((candidate) => candidate.id === routeId);
   const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
-  if (!vehicle) return 0;
   const segments = new Set<string>();
+  if (!vehicle) return segments;
   for (let i = 0; i < vehicle.path.length; i += 1) {
     const from = vehicle.path[i]!;
     const to = vehicle.path[(i + 1) % vehicle.path.length]!;
     const edge = world.simulation.routing.graph.get(from)?.find((candidate) => candidate.to === to);
     if (edge) segments.add(edge.segmentId);
   }
+  return segments;
+}
+
+/** The dirt roads on a route, as town pairs -- what paving it would mean. */
+export function dirtRoadsOn(world: SliceWorld, routeId: string): Array<{ a: string; b: string }> {
+  const ids = routeSegments(world, routeId);
+  return world.simulation.map.segments
+    .filter((segment) => ids.has(segment.id) && isDirt(segment))
+    .map((segment) => ({ a: segment.fromNodeId, b: segment.toNodeId }));
+}
+
+function informalTrafficShare(world: SliceWorld, routeId: string): number {
+  const segments = routeSegments(world, routeId);
+  if (segments.size === 0) return 0;
   // Same measure as segmentLoad -- vehicles on the road now -- not the
   // informal road-space reservation, which spans each vehicle's whole trip.
   const informalNow = computeSegmentLoads(

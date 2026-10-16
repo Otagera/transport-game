@@ -213,6 +213,12 @@ blow-by-blow; this section is the distilled rule.
 - **Count entries per leg, not per segment.** A shuttle uses the same segment both ways;
   keyed by segment it never re-entered, and its traffic was invisible until something split
   the road. Caught by a feel test, not the probe — the probe's map happened to split it.
+- **Paving only pays where riders are being left behind.** Measured on the slice's trunk:
+  paving lifts 4 buses from 75% to 95% speed, but fares barely move (₦514 → ₦505/day) —
+  78% of riders were already carried, so the faster buses run more empty trips. Where
+  buses run full (2 buses, or a chain feeding the trunk), it's worth +₦34–52/day, paying
+  back its ₦382 in 7–11 days. Capacity relief is worth what the jam was costing in
+  *riders*, not in speed.
 - Congestion is what couples informal traffic to player economics. Weak service invites
   the interference that weakens it further. **Keep this asymmetry** — it is the hook
   working — but make sure there is an exit.
@@ -509,6 +515,10 @@ Steps, each played before the next:
      −₦85/day); a 4-bus chain nets ~₦305/day by day 40, down from ~₦533. "Thin" now
      judges what one bus can catch, not the whole ceiling. Watch next playtest: is
      money now a constraint, or a grind?
+   - **2c. Paving** (before step 2 was played): the Road tool on two towns a dirt road
+     joins paves it, at the price of building it (₦382 for the trunk), so it carries 1.7×
+     the traffic. It pays only where riders are left behind (see Findings, Congestion):
+     a bus first, paving later. A jammed route on dirt now names the roads to pave.
 3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`
    and `engine/pathing`. The map stops being a diagram.
 4. **Depth, one at a time** — decay, goods, rail, growth of the original towns — each played

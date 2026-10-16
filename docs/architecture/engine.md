@@ -438,6 +438,12 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   Routes keep a speed EMA; `diagnoseRoute` adds `speed`, `informalTraffic` (informal share of
   the road space on its roads now) and the `jammed` verdict (speed < 70%), ranked after
   `thin` and `overcapacity`. A segment split carries its flow to both halves.
+- **Paving** (`paveRoad` / `checkPave` in `world.ts`, `isDirt` in `congestion.ts`) — turns the
+  one dirt segment directly joining two towns (`directRoad`) into a built one, at `roadCost`:
+  one price for road-making, so the decision is *which* road. Provenance is the surface in
+  the slice, so `splitSegment`'s copy leaves both halves of a paved road paved and the map
+  draws it like a built road. `dirtRoadsOn(route)` lists a route's dirt roads for the
+  jammed reason.
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
 
 Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,
