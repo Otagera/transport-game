@@ -217,19 +217,19 @@ canvas.addEventListener("click", (event) => {
   } else if (tool === "freight") {
     const result = addFreightTrain(world, from, town);
     if (result.ok) say(`Freight train added: ${townName(from)} ↔ ${townName(town)}`);
-    else say(`Can't add freight train: ${result.reason}`, true);
+    else say(`Can't add freight train (${naira(world.tuning.freightPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "train") {
     const result = addTrain(world, from, town);
     if (result.ok) say(`Train added: ${townName(from)} ↔ ${townName(town)}`);
-    else say(`Can't add train: ${result.reason}`, true);
+    else say(`Can't add train (${naira(world.tuning.trainPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "lorry") {
     const result = addLorry(world, from, town);
     if (result.ok) say(`Lorry added: ${townName(from)} ↔ ${townName(town)}`);
-    else say(`Can't add lorry: ${result.reason}`, true);
+    else say(`Can't add lorry (${naira(world.tuning.lorryPurchaseCost)}): ${result.reason}`, true);
   } else {
     const result = addBus(world, from, town);
     if (result.ok) say(`Bus added: ${townName(from)} ↔ ${townName(town)}`);
-    else say(`Can't add bus: ${result.reason}`, true);
+    else say(`Can't add bus (${naira(world.tuning.busPurchaseCost)}): ${result.reason}`, true);
   }
   // Shift keeps the first town selected: fanning roads or routes out of
   // one hub is the common case.
@@ -343,22 +343,22 @@ function ghost(): Ghost | null {
     const path = railPath(world, selectedTown, to)?.nodeIds;
     const along = path ? `${Math.round(demandAlong(world, selectedTown, to, path) * SECONDS_PER_GAME_DAY)} riders/day want trips along it` : "";
     const label = `Train ${naira(world.tuning.trainPurchaseCost)} · ${along}`;
-    return { from: selectedTown, to: end, ok: check.ok, path: check.ok ? path : undefined, rail: true, label: check.ok ? label : check.reason };
+    return { from: selectedTown, to: end, ok: check.ok, path: shownPath(check, path), rail: true, label: refusedOr(check, label, `Train ${naira(world.tuning.trainPurchaseCost)}`) };
   }
   if (tool === "freight") {
     const check = checkFreight(world, selectedTown, to);
     const goods = goodsAlong(world, selectedTown, to, true);
     const label = `Freight train ${naira(world.tuning.freightPurchaseCost)} · goods along the track: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back`;
-    const path = check.ok ? railPath(world, selectedTown, to)?.nodeIds : undefined;
-    return { from: selectedTown, to: end, ok: check.ok, path, rail: true, label: check.ok ? label : check.reason };
+    const path = shownPath(check, railPath(world, selectedTown, to)?.nodeIds);
+    return { from: selectedTown, to: end, ok: check.ok, path, rail: true, label: refusedOr(check, label, `Freight train ${naira(world.tuning.freightPurchaseCost)}`) };
   }
   if (tool === "lorry") {
     const check = checkLorry(world, selectedTown, to);
     // Both ways, because that's the decision: a lorry runs full only where goods go each way.
     const goods = goodsAlong(world, selectedTown, to);
     const label = `Lorry ${naira(world.tuning.lorryPurchaseCost)} · goods along it: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back`;
-    const path = check.ok ? roadPath(world, selectedTown, to)?.nodeIds : undefined;
-    return { from: selectedTown, to: end, ok: check.ok, path, label: check.ok ? label : check.reason };
+    const path = shownPath(check, roadPath(world, selectedTown, to)?.nodeIds);
+    return { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, label, `Lorry ${naira(world.tuning.lorryPurchaseCost)}`) };
   }
   const check = checkBus(world, selectedTown, to);
   const price = naira(world.tuning.busPurchaseCost);
@@ -367,8 +367,24 @@ function ghost(): Ghost | null {
   const along = `${Math.round(demandAlong(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want trips along it`;
   // Drawn along the road it would take, not straight across: a bus to Ikole
   // from Ilase goes through Kuto.
-  const path = check.ok ? roadPath(world, selectedTown, to)?.nodeIds : undefined;
-  return { from: selectedTown, to: end, ok: check.ok, path, label: check.ok ? `Bus ${price} · ${along}` : check.reason };
+  const path = shownPath(check, roadPath(world, selectedTown, to)?.nodeIds);
+  return { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, `Bus ${price} · ${along}`, `Bus ${price}`) };
+}
+
+// A refusal never hides the price (playtest: "I can't see the price for
+// train, it just says I can't afford it"). Short of money, the whole
+// preview stays -- route, riders, price -- with what you have; any other
+// refusal keeps the price and says why.
+function refusedOr(check: { ok: boolean; reason?: string }, label: string, priced: string): string {
+  if (check.ok) return label;
+  const reason = (check as { reason: string }).reason;
+  if (reason.startsWith("can't afford")) return `${label} · can't afford it yet (you have ${naira(world.economy.funds)})`;
+  return `${priced} · ${reason}`;
+}
+
+/** The route to draw: shown whenever the vehicle could run it, even if you can't pay for it yet. */
+function shownPath(check: { ok: boolean; reason?: string }, path: string[] | undefined): string[] | undefined {
+  return check.ok || (check as { reason?: string }).reason?.startsWith("can't afford") ? path : undefined;
 }
 
 // --- DOM panels -------------------------------------------------------
@@ -381,29 +397,56 @@ function renderToolbar(): void {
     el.onclick = onClick;
     return el;
   };
+  // Grouped by what each is for (playtest: "bus and lorry are for road,
+  // freight and train for rail; road and rail are infrastructure; fix and
+  // the cheapest toggle are their own thing") -- a caption over each group,
+  // road vehicles on the road's tan, rail vehicles on the track's dark.
+  const group = (caption: string, kind: string, ...children: HTMLElement[]) => {
+    const el = document.createElement("div");
+    el.className = `group ${kind}`;
+    const cap = document.createElement("span");
+    cap.className = "cap";
+    cap.textContent = caption;
+    const row = document.createElement("div");
+    row.className = "row";
+    row.append(...children);
+    el.append(cap, row);
+    return el;
+  };
+  // The line is a setting for the two build tools, not a tool: a switch.
+  const lineSwitch = document.createElement("div");
+  lineSwitch.className = "switch";
+  for (const [value, label] of [["cheapest", "Cheapest"], ["direct", "Straight"]] as const) {
+    const el = document.createElement("button");
+    el.textContent = label;
+    el.className = alignment === value ? "on" : "";
+    el.onclick = () => {
+      alignment = value;
+      renderToolbar();
+    };
+    lineSwitch.append(el);
+  }
+  lineSwitch.append(Object.assign(document.createElement("kbd"), { textContent: "A" }));
   toolbar.replaceChildren(
-    button("Bus", "B", tool === "bus", () => setTool("bus")),
-    button("Train", "T", tool === "train", () => setTool("train")),
-    button("Lorry", "L", tool === "lorry", () => setTool("lorry")),
-    button("Freight", "G", tool === "freight", () => setTool("freight")),
-    button("Road", "R", tool === "road", () => setTool("road")),
-    button("Track", "K", tool === "track", () => setTool("track")),
-    button("Fix", "F", tool === "fix", () => setTool("fix")),
-    button(alignment === "direct" ? "Straight" : "Cheapest", "A", false, () => {
-      alignment = alignment === "cheapest" ? "direct" : "cheapest";
-      renderToolbar();
-    }),
-    Object.assign(document.createElement("span"), { className: "sep" }),
-    button(paused ? "Paused" : "Pause", "Space", paused, () => {
-      paused = !paused;
-      renderToolbar();
-    }),
-    ...[1, 2, 4].map((s, i) =>
-      button(`${s}×`, String(i + 1), !paused && speed === s, () => {
-        speed = s;
-        paused = false;
+    group("On roads", "road", button("Bus", "B", tool === "bus", () => setTool("bus")), button("Lorry", "L", tool === "lorry", () => setTool("lorry"))),
+    group("On rail", "rail", button("Train", "T", tool === "train", () => setTool("train")), button("Freight", "G", tool === "freight", () => setTool("freight"))),
+    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), button("Track", "K", tool === "track", () => setTool("track"))),
+    group("Line (road, track)", "setting", lineSwitch),
+    group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix"))),
+    group(
+      "Time",
+      "time",
+      button(paused ? "Paused" : "Pause", "Space", paused, () => {
+        paused = !paused;
         renderToolbar();
       }),
+      ...[1, 2, 4].map((s, i) =>
+        button(`${s}×`, String(i + 1), !paused && speed === s, () => {
+          speed = s;
+          paused = false;
+          renderToolbar();
+        }),
+      ),
     ),
   );
 }
@@ -712,17 +755,18 @@ routesEl.addEventListener("click", (event) => {
     if (!route) return;
     const freight = isFreightRoute(addId);
     const result = freight ? addFreightTrain(world, route.a, route.b) : addLorry(world, route.a, route.b);
-    if (!result.ok) say(`Can't add ${freight ? "freight train" : "lorry"}: ${result.reason}`, true);
+    const price = freight ? world.tuning.freightPurchaseCost : world.tuning.lorryPurchaseCost;
+    if (!result.ok) say(`Can't add ${freight ? "freight train" : "lorry"} (${naira(price)}): ${result.reason}`, true);
   } else if (addId && isRailRoute(addId)) {
     const route = world.routes.find((candidate) => candidate.id === addId);
     if (!route) return;
     const result = addTrain(world, route.a, route.b);
-    if (!result.ok) say(`Can't add train: ${result.reason}`, true);
+    if (!result.ok) say(`Can't add train (${naira(world.tuning.trainPurchaseCost)}): ${result.reason}`, true);
   } else if (addId) {
     const route = world.routes.find((candidate) => candidate.id === addId);
     if (!route) return;
     const result = addBus(world, route.a, route.b);
-    if (!result.ok) say(`Can't add bus: ${result.reason}`, true);
+    if (!result.ok) say(`Can't add bus (${naira(world.tuning.busPurchaseCost)}): ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {
     const refund = removeLorry(world, removeId);
     if (refund > 0) say(`Sold a ${isFreightRoute(removeId) ? "freight train" : "lorry"} for ${naira(refund)}`);

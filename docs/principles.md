@@ -445,6 +445,11 @@ for if eras return; they are not live in the slice.*
   cell — on reach alone the longest route always won (Kuto–Ikole "should" start at Ipaja,
   five towns away); and 1.5× one bus's break-even — Owode–Ogbe via Ado reached 1.1× and
   still lost ₦72/day, while Ilase–Ise → Owode–Ise via Ilase went from ₦0 to +₦63/day.
+- **A refusal must not hide the price.** "Can't afford a train" without the price leaves the
+  player nothing to plan toward; keep the full preview and add what they have.
+- **Group tools by what they act on.** Ten flat buttons read as one list; captioned groups
+  (vehicles by network, infrastructure, settings, time), tinted like the thing they act
+  on, read at a glance. A setting is a switch, not a tool.
 - **Debt needs its exit named** (slice playtest, day 14). "Spending blocked, billing
   continues" is right, but a player in debt can't buy the bus that would earn, and reads
   the situation as stuck. Say the way out — which buses to sell, for how much, saving how
@@ -690,6 +695,12 @@ Steps, each played before the next:
      leads with "Run it through: a bus Ilase ↔ Ikole (via Kuto) reaches ₦456/day of trips,
      against ₦76"; the debt note offers the same; the bus preview counts every trip along
      its road and draws the road it would take. See Findings, Display.
+   - **Toolbar feedback** (later the same day): *"I can't see the price for train, it just
+     says I can't afford it"* and *"bus and lorry are for road, freight and train for rail;
+     road and rail are infra; fix and the cheapest toggle are their own thing."* So a refusal
+     never hides the price — short of money, the whole preview stays (route, riders, price,
+     "you have ₦…"); and the toolbar is grouped with captions: On roads (tan), On rail
+     (dark), Build, Line (a Cheapest | Straight switch, not a tool), Upkeep, Time.
    - **No ▼ for noise:** a town reads as growing or shrinking only when its target is more
      than 5% of its *starting* size away (was 2% of its current size), so a town a
      thousand or two over its start, settling back, reads as steady (`growthTrend`, one

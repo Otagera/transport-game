@@ -231,7 +231,12 @@ no-cached-view discipline as §2).
   inner outline (the Mini Metro convention), and its panel says how many change there.
 - **Town events** arrive from `sliceTick` and show as a longer toast. Ruins (abandoned
   emergent towns) draw as a grey dot with the name in italics.
-- **Alignment** — `A` (or the toolbar's "Cheapest"/"Straight") switches the Road and Track
+- **Toolbar** — captioned groups (`renderToolbar`'s `group`): On roads (Bus, Lorry; tan),
+  On rail (Train, Freight; dark), Build (Road, Track), Line (road, track) — a
+  Cheapest | Straight switch, not a tool — Upkeep (Fix), Time. Every vehicle preview keeps
+  its price on refusal (`refusedOr`); short of money it keeps the whole preview, the route
+  drawn (`shownPath`), and says what you have. Refusal toasts carry the price.
+- **Alignment** — `A` (or the toolbar's Cheapest | Straight switch) switches the Road and Track
   tools between the cheapest alignment and the straight line; the preview names the other
   one's price and length ("straight ₦852, 20% shorter (A)").
 - **Road preview** — the ghost draws the planned road itself, bends and all, and its label
