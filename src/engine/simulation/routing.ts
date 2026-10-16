@@ -14,7 +14,7 @@ export function buildRoutingContext(map: GeneratedMap): RoutingContext {
     const posA = positions.get(a);
     const posB = positions.get(b);
     if (!posA || !posB) continue;
-    const weight = Math.hypot(posA.x - posB.x, posA.y - posB.y);
+    const weight = segment.length ?? Math.hypot(posA.x - posB.x, posA.y - posB.y);
     graph.get(a)!.push({ to: b, segmentId: segment.id, weight });
     graph.get(b)!.push({ to: a, segmentId: segment.id, weight });
   }
@@ -29,8 +29,9 @@ function heuristic(a: { x: number; y: number }, b: { x: number; y: number }): nu
 // A* over the built-infrastructure graph -- not terrain. The terrain-aware,
 // authoring-time cost function ("the A* cost function IS the build price")
 // is Module 4's. This is runtime pathfinding for demand/vehicles over
-// whatever's already built. Edge weight is straight-line corridor length,
-// which is also an admissible heuristic here.
+// whatever's already built. Edge weight is the segment's travel length
+// (straight-line unless the segment says otherwise, never shorter), so
+// straight-line distance stays an admissible heuristic.
 export function findPath(context: RoutingContext, fromId: string, toId: string): PathResult | null {
   if (fromId === toId) {
     return { nodeIds: [fromId], segmentIds: [], distance: 0 };

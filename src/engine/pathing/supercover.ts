@@ -34,6 +34,21 @@ export function walkCellsAlongSegment(x0: number, y0: number, x1: number, y1: nu
 
   while ((x !== endX || y !== endY) && guard < guardLimit) {
     guard += 1;
+    // The next crossing is at or past the segment's end: the walk is done.
+    // Without this, a line running left or up to an integer endpoint ties
+    // both crossings at t = 1, steps past the end cell, and wanders until
+    // the guard -- off the map, which planning reads as water.
+    // At a corner tie the end still touches both corner-adjacent cells,
+    // like any other lattice corner the line passes through.
+    if (Math.min(tMaxX, tMaxY) >= 1 - 1e-9) {
+      if (Math.abs(tMaxX - tMaxY) < 1e-9) {
+        cells.push({ x: x + stepX, y });
+        cells.push({ x, y: y + stepY });
+      }
+      const last = cells[cells.length - 1]!;
+      if (last.x !== endX || last.y !== endY) cells.push({ x: endX, y: endY });
+      break;
+    }
     if (Math.abs(tMaxX - tMaxY) < 1e-9) {
       cells.push({ x: x + stepX, y });
       cells.push({ x, y: y + stepY });

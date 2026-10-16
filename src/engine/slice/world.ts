@@ -11,6 +11,8 @@ import { DEFAULT_SLICE_TUNING } from "./tuning";
 import { createSettlementState } from "./settlement";
 import { routesOnTrip } from "./transfers";
 import { isDirt } from "./congestion";
+import { buildSliceTerrain } from "./terrain";
+import { planRoad, segmentLength, type Point } from "./roads";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -48,18 +50,9 @@ function roadSegment(id: string, a: string, b: string, provenance: Segment["prov
 }
 
 function buildMap(def: SliceMapDef): GeneratedMap {
-  const cells = def.width * def.height;
   const map: GeneratedMap = {
     seed: 0,
-    // The slice has no terrain yet (step 3). A blank field keeps the
-    // GeneratedMap shape the rest of engine/ expects.
-    terrain: {
-      width: def.width,
-      height: def.height,
-      elevation: new Float32Array(cells),
-      water: new Uint8Array(cells),
-      settlementDensity: new Float32Array(cells),
-    },
+    terrain: buildSliceTerrain(def),
     nodes: def.towns.map((town) => ({ id: town.id, kind: "settlement" as const, x: town.x, y: town.y })),
     corridors: [],
     segments: [],
@@ -70,14 +63,23 @@ function buildMap(def: SliceMapDef): GeneratedMap {
   return map;
 }
 
-function addRoadToMap(map: GeneratedMap, id: string, a: string, b: string, provenance: Segment["provenance"]): void {
+function addRoadToMap(
+  map: GeneratedMap,
+  id: string,
+  a: string,
+  b: string,
+  provenance: Segment["provenance"],
+  alignment?: { polyline: Point[]; length: number },
+): void {
   const nodeA = map.nodes.find((node) => node.id === a)!;
   const nodeB = map.nodes.find((node) => node.id === b)!;
   const segment = roadSegment(id, a, b, provenance);
+  if (alignment) segment.length = alignment.length;
   map.segments.push(segment);
   // One geometry representation (docs/principles.md §3): a straight road
   // is still a two-point polyline.
-  map.corridors.push({ id: segment.corridorId, nodeIds: [a, b], polyline: [{ x: nodeA.x, y: nodeA.y }, { x: nodeB.x, y: nodeB.y }] });
+  const polyline = alignment?.polyline ?? [{ x: nodeA.x, y: nodeA.y }, { x: nodeB.x, y: nodeB.y }];
+  map.corridors.push({ id: segment.corridorId, nodeIds: [a, b], polyline });
 }
 
 export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT_SLICE_TUNING): SliceWorld {
@@ -103,6 +105,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     segmentSpeed: new Map(),
     ruins: new Map(),
     pathCache: new Map(),
+    roadPlans: new Map(),
     nextId: 0,
   };
   for (const pair of simulation.demand) world.pairOutcomes.set(pairKey(pair.from, pair.to), emptyOutcome());
@@ -124,14 +127,19 @@ export function roadPath(world: SliceWorld, from: string, to: string): PathResul
 
 export type ActionResult = { ok: true } | { ok: false; reason: string };
 
-// The one function that turns a road into money (architecture hard rule 3:
-// the cost function IS the build price). The preview and the charge both
-// call this; nothing else prices a road.
+// A new road's price is its plan's (roads.ts: engine/pathing's cost
+// function IS the build price, architecture hard rule 3). The preview and
+// the charge both call this; nothing else prices a road.
 export function roadCost(world: SliceWorld, a: string, b: string): number {
-  const townA = world.towns.get(a);
-  const townB = world.towns.get(b);
-  if (!townA || !townB) return Infinity;
-  return Math.round(townDistance(townA, townB) * world.tuning.roadCostPerCell);
+  return planRoad(world, a, b)?.cost ?? Infinity;
+}
+
+// Paving buys the surface, not the earthworks: the alignment is already
+// cut and any bridge already stands. So it's length times a flat cell's
+// price -- on flat ground, what building the same road would cost.
+export function paveCost(world: SliceWorld, a: string, b: string): number {
+  const road = directRoad(world, a, b);
+  return road ? Math.round(segmentLength(world, road) * world.tuning.roadCostPerCell) : Infinity;
 }
 
 /** The one road segment joining two neighbouring towns, if there is one. */
@@ -145,16 +153,14 @@ export function checkPave(world: SliceWorld, a: string, b: string): ActionResult
   const road = directRoad(world, a, b);
   if (!road) return { ok: false, reason: "no road joins them directly" };
   if (!isDirt(road)) return { ok: false, reason: "already paved" };
-  if (!canAfford(world.economy, roadCost(world, a, b))) return { ok: false, reason: "can't afford it" };
+  if (!canAfford(world.economy, paveCost(world, a, b))) return { ok: false, reason: "can't afford it" };
   return { ok: true };
 }
 
-// Priced as building the road anew (roadCost): one price for road-making,
-// so paving is a decision about *which* road, not a cheaper road.
 export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult {
   const check = checkPave(world, a, b);
   if (!check.ok) return check;
-  world.economy.funds -= roadCost(world, a, b);
+  world.economy.funds -= paveCost(world, a, b);
   directRoad(world, a, b)!.provenance = "built";
   return { ok: true };
 }
@@ -162,6 +168,7 @@ export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult 
 export function checkRoad(world: SliceWorld, a: string, b: string): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (directRoad(world, a, b)) return { ok: false, reason: "already connected directly" };
+  if (!planRoad(world, a, b)) return { ok: false, reason: "the water is too wide to bridge here" };
   if (!canAfford(world.economy, roadCost(world, a, b))) return { ok: false, reason: "can't afford it" };
   return { ok: true };
 }
@@ -169,8 +176,9 @@ export function checkRoad(world: SliceWorld, a: string, b: string): ActionResult
 export function buildRoad(world: SliceWorld, a: string, b: string): ActionResult {
   const check = checkRoad(world, a, b);
   if (!check.ok) return check;
-  world.economy.funds -= roadCost(world, a, b);
-  addRoadToMap(world.simulation.map, `road-${world.nextId++}`, a, b, "built");
+  const plan = planRoad(world, a, b)!;
+  world.economy.funds -= plan.cost;
+  addRoadToMap(world.simulation.map, `road-${world.nextId++}`, a, b, "built", plan);
   rebuildFromMap(world.simulation, world.simulation.map);
   world.pathCache.clear();
   return { ok: true };
@@ -230,11 +238,10 @@ export function addBus(world: SliceWorld, a: string, b: string): ActionResult {
 }
 
 function edgeLengths(world: SliceWorld, vehicle: Vehicle): number[] {
-  const { positions } = world.simulation.routing;
+  const { graph } = world.simulation.routing;
   return vehicle.path.map((nodeId, i) => {
-    const a = positions.get(nodeId)!;
-    const b = positions.get(vehicle.path[(i + 1) % vehicle.path.length]!)!;
-    return Math.hypot(a.x - b.x, a.y - b.y);
+    const next = vehicle.path[(i + 1) % vehicle.path.length]!;
+    return graph.get(nodeId)?.find((edge) => edge.to === next)?.weight ?? 0;
   });
 }
 

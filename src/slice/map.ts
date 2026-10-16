@@ -1,7 +1,7 @@
 import type { SliceMapDef } from "@engine/slice/types";
 
 // The slice's one hand-made map (docs/principles.md §6, step 1): no
-// generator, no terrain. Nine towns, one dominant city, and an inherited
+// generator; since step 3, authored terrain. Nine towns, one dominant city, and an inherited
 // road network that leaves three towns cut off -- so building a road has a
 // visible job from the first minute.
 //
@@ -30,4 +30,18 @@ export const SLICE_MAP: SliceMapDef = {
     { a: "ilase", b: "kuto" },
     { a: "ado", b: "ogbe" },
   ],
+  // Step 3: a river and a ridge, placed so a road is a decision.
+  //   - The river splits the west (Ilase, Owode, Kuto, Ise, Ilaro) from the
+  //     east (Ado, Ipaja, Ikole, Ogbe). Only the old Owode-Ado road crosses
+  //     it. Cut-off Ikole sits east of it: cheap from Ado (Ilase's riders go
+  //     the long way round) or across a bridge from Kuto or Ilase.
+  //   - The ridge sits between cut-off Ilaro and Owode: the cheapest road
+  //     bends round it (a longer trip), the direct one pays for the climb.
+  terrain: {
+    rivers: [{ points: [[55, -2], [53, 10], [56, 22], [52, 34], [54, 46], [50, 56], [53, 66]], width: 3 }],
+    hills: [
+      { x: 21, y: 14, radius: 8, height: 3 },
+      { x: 29, y: 18, radius: 7, height: 2.5 },
+    ],
+  },
 };

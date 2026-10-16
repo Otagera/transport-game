@@ -32,4 +32,14 @@ describe("walkCellsAlongSegment", () => {
   test("a zero-length segment returns just the one cell", () => {
     expect(walkCellsAlongSegment(1, 1, 1, 1)).toEqual([{ x: 1, y: 1 }]);
   });
+
+  test("a line running left and down to an integer endpoint ends there instead of wandering past it", () => {
+    const cells = walkCellsAlongSegment(78, 20, 60, 44);
+    expect(cells[cells.length - 1]).toEqual({ x: 60, y: 44 });
+    expect(cells.length).toBeLessThan(80);
+    for (const cell of cells) {
+      expect(cell.x).toBeGreaterThanOrEqual(59);
+      expect(cell.x).toBeLessThanOrEqual(78);
+    }
+  });
 });

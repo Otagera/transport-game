@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**380 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**387 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -31,7 +31,7 @@ step plan. Eras are paused. The slice is a second page beside the original game:
 | 2b | Running cost that bites: thin routes lose, trunk peaks at 2 buses | Built, **not yet played** |
 | 2c | Pave a dirt road: Road tool on two joined towns; 1.7× the traffic | Built, **not yet played** |
 | 2d | Inside towns: kekes' and okadas' own ground, shown as such; they feed your buses | Built, **not yet played** |
-| 3 | A place to build in: terrain, pathing, bridges | — |
+| 3 | A place to build in: river, ridge, terrain-priced roads, bridges | Built, **not yet played** |
 | 4 | Depth, one at a time: growth, decay, goods, rail | — |
 
 Engine fixes found along the way, affecting the original game too: cyclic vehicles never
@@ -64,14 +64,16 @@ live-verified; each links to where its detail actually lives now.
 
 ## What's next
 
-Play step 2 (with 2b–2d): does piling onto a trunk now hurt, does traffic read on the map,
-is money now a constraint rather than a grind, does paving get found and feel worth it, and
-does the "Inside <town>" block read as informal's ground rather than a loss? A bus now costs ~₦105/day to run
-(was ~₦48), so a thin route run alone loses money and says "thin" (principles.md §6).
-Paving (Road tool on two towns a dirt road joins) buys speed, but only pays where buses
-run full. Paratransit inside towns is answered "acknowledge it" (principles.md §5): display
-only, out of every share; a formal town-service tier waits on whether play wants it.
-Cut-off towns now say "no road" outright (dashed wish-lines, a map label, a sentence in
-the town panel), after a playtester read them as "nowhere to go" (day 17). Step 1's question is in principles.md §6. Whatever the answer, write down what was
-felt before changing anything — then step 2, or back to step 1's model if the loop didn't
-hold.
+**Play.** Everything since step 1e is built and unplayed: step 2 (congestion), 2b (running
+cost), 2c (paving), 2d (inside towns) and step 3 (terrain). Questions to bring back:
+
+- Does piling buses onto the trunk hurt, and does traffic read on the map?
+- Is money a constraint now (a bus costs ~₦105/day), or a grind?
+- Is paving found, and worth it where buses run full?
+- Does "Inside <town>" read as informal's ground, not a loss?
+- Do the river and the ridge make you think about where to build — and do bends read as a
+  longer trip?
+
+Write down what was felt before changing anything (principles.md §6's playtest log). Open
+after that: a formal town-service tier (§5, "make it fixable") if play wants inside-town
+trips; "hold the line" road alignment once a straight line is priced as a line; then step 4.

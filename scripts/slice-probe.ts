@@ -6,8 +6,9 @@
 //   bun scripts/slice-probe.ts            # built-in strategies
 //   bun scripts/slice-probe.ts 40         # ...over 40 game days
 import { SLICE_MAP } from "../src/slice/map";
-import { addBus, buildRoad, paveRoad, roadCost, createSliceWorld, diagnoseRoute, networkShare, routeSummaries, waitingAt } from "../src/engine/slice/world";
+import { addBus, buildRoad, paveRoad, paveCost, createSliceWorld, diagnoseRoute, networkShare, routeSummaries, waitingAt } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
+import { planRoad } from "../src/engine/slice/roads";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
@@ -83,7 +84,7 @@ const allStrategies: Strategy[] = [
       w.economy.funds = 1e9;
       paveRoad(w, "ilase", "owode");
       buses("ilase", "owode", 6)(w);
-      w.economy.funds = f - 6 * w.tuning.busPurchaseCost - roadCost(w, "ilase", "owode");
+      w.economy.funds = f - 6 * w.tuning.busPurchaseCost - paveCost(w, "ilase", "owode");
     },
   },
   {
@@ -96,11 +97,27 @@ const allStrategies: Strategy[] = [
       w.economy.funds -= 2500;
     },
   },
+  // Step 3: Ikole sits across the river. Bridge it from the west, or reach
+  // it dry from Ado and let Ilase's riders go round.
   {
-    name: "road ilase-ikole + 1 bus",
+    name: "ikole: bridge ilase-ikole + 1 bus",
     setup: (w) => {
       buildRoad(w, "ilase", "ikole");
       buses("ilase", "ikole", 1)(w);
+    },
+  },
+  {
+    name: "ikole: bridge kuto-ikole + 1 bus ilase-ikole",
+    setup: (w) => {
+      buildRoad(w, "kuto", "ikole");
+      buses("ilase", "ikole", 1)(w);
+    },
+  },
+  {
+    name: "ikole: dry road ado-ikole + 1 bus ado-ikole",
+    setup: (w) => {
+      buildRoad(w, "ado", "ikole");
+      buses("ado", "ikole", 1)(w);
     },
   },
 ];
@@ -108,8 +125,12 @@ const allStrategies: Strategy[] = [
 const fmt = (n: number) => n.toFixed(0).padStart(6);
 const pct = (n: number) => `${(n * 100).toFixed(0).padStart(3)}%`;
 
+for (const [a, b] of [["ilase", "ikole"], ["kuto", "ikole"], ["ado", "ikole"], ["ilaro", "owode"], ["ilaro", "ilase"]]) {
+  const plan = planRoad(createSliceWorld(SLICE_MAP, tuning), a!, b!);
+  console.log(`road ${a}-${b}: ` + (plan ? `₦${plan.cost} (bridge ${plan.bridgeCells} cells ₦${plan.bridgeCost}, hills ₦${plan.hillsCost}), ${plan.length.toFixed(1)} cells` : "can't be built"));
+}
 const strategies = only ? allStrategies.filter((s) => s.name.includes(only)) : allStrategies;
-console.log(`pave ilase-owode costs ${roadCost(createSliceWorld(SLICE_MAP, tuning), "ilase", "owode")}`);
+console.log(`pave ilase-owode costs ${paveCost(createSliceWorld(SLICE_MAP, tuning), "ilase", "owode")}`);
 for (const strategy of strategies) {
   const world = createSliceWorld(SLICE_MAP, tuning);
   strategy.setup(world);

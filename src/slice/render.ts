@@ -2,6 +2,7 @@ import type { InformalMode, SliceTown, SliceWorld } from "@engine/slice/types";
 import type { Vehicle } from "@engine/simulation/types";
 import { isCutOff, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
+import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -10,6 +11,10 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 
 export const COLORS = {
   ground: "#efe7d4",
+  water: "#a9cbd9",
+  waterEdge: "#8bb6c8",
+  hill: "#b5a27a",
+  bridge: "#7d7466",
   groundEdge: "#d9ccae",
   dirtRoad: "#c4ab7c",
   builtRoad: "#5d5a55",
@@ -66,6 +71,8 @@ export interface Ghost {
   to: { x: number; y: number };
   ok: boolean;
   label: string;
+  /** The planned road, map cells -- drawn instead of a straight line when there is one. */
+  line?: Point[];
 }
 
 export interface DrawState {
@@ -97,6 +104,87 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   ctx.restore();
 }
 
+// --- Geometry: every road is a polyline (principles §3, one geometry
+// representation), straight or bent round the terrain. Roads, route lines,
+// traffic and vehicles all draw along the same one.
+
+/** The road between two adjacent nodes, oriented from `from` to `to`. */
+function edgeLine(world: SliceWorld, from: string, to: string): Point[] {
+  const edge = world.simulation.routing.graph.get(from)?.find((candidate) => candidate.to === to);
+  const segment = edge && world.simulation.map.segments.find((candidate) => candidate.id === edge.segmentId);
+  if (!segment) {
+    const { positions } = world.simulation.routing;
+    return [positions.get(from)!, positions.get(to)!];
+  }
+  const line = segmentPolyline(world.simulation.map, segment);
+  return segment.fromNodeId === from ? line : [...line].reverse();
+}
+
+function strokeLine(ctx: CanvasRenderingContext2D, view: View, line: Point[], offset = 0): void {
+  ctx.beginPath();
+  line.forEach((p, i) => {
+    const s = toScreen(view, p.x, p.y);
+    if (i === 0) ctx.moveTo(s.x + offset, s.y + offset);
+    else ctx.lineTo(s.x + offset, s.y + offset);
+  });
+  ctx.stroke();
+}
+
+/** The stretches of a road that cross water -- its bridges -- sampled every half cell. */
+function bridgeRuns(world: SliceWorld, line: Point[]): Point[][] {
+  const length = polylineLength(line);
+  const runs: Point[][] = [];
+  let run: Point[] | null = null;
+  for (let at = 0; at <= length; at += 0.5) {
+    const p = splitPolyline(line, at)[1][0]!;
+    if (overWater(world, p)) {
+      run ??= [];
+      run.push(p);
+    } else if (run) {
+      run.push(p);
+      runs.push(run);
+      run = null;
+    }
+  }
+  if (run) runs.push(run);
+  return runs;
+}
+
+// Terrain changes never, so it's drawn once per view into its own canvas.
+let terrainCache: { key: string; canvas: HTMLCanvasElement } | null = null;
+
+function terrainLayer(world: SliceWorld, view: View, width: number, height: number): HTMLCanvasElement {
+  const key = `${view.scale}:${view.offsetX}:${view.offsetY}:${width}:${height}`;
+  if (terrainCache?.key === key) return terrainCache.canvas;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  const { terrain } = world.simulation.map;
+  const cell = view.scale;
+  let peak = 0;
+  for (const e of terrain.elevation) peak = Math.max(peak, e);
+  for (let y = 0; y < terrain.height; y += 1) {
+    for (let x = 0; x < terrain.width; x += 1) {
+      const i = y * terrain.width + x;
+      // Cells are sampled at their integer point, so each draws centred on it.
+      const s = toScreen(view, x - 0.5, y - 0.5);
+      if (terrain.water[i] === 1) {
+        ctx.fillStyle = COLORS.water;
+        ctx.fillRect(s.x, s.y, cell + 0.5, cell + 0.5);
+      } else if (peak > 0 && terrain.elevation[i]! > 0.05) {
+        // Hills: shaded by height, so a ridge reads as something a road climbs.
+        ctx.fillStyle = COLORS.hill;
+        ctx.globalAlpha = 0.45 * (terrain.elevation[i]! / peak);
+        ctx.fillRect(s.x, s.y, cell + 0.5, cell + 0.5);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  terrainCache = { key, canvas };
+  return canvas;
+}
+
 function drawGround(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
   const tl = toScreen(view, 0, 0);
   const w = world.width * view.scale;
@@ -108,16 +196,26 @@ function drawGround(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View
   ctx.roundRect(tl.x, tl.y, w, h, 12);
   ctx.fill();
   ctx.stroke();
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(tl.x, tl.y, w, h, 12);
+  ctx.clip();
+  const dpr = window.devicePixelRatio || 1;
+  ctx.drawImage(terrainLayer(world, view, ctx.canvas.width / dpr, ctx.canvas.height / dpr), 0, 0);
+  ctx.restore();
 }
 
 function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
-  const { positions } = world.simulation.routing;
   ctx.lineCap = "round";
   for (const segment of world.simulation.map.segments) {
-    const a = positions.get(segment.fromNodeId)!;
-    const b = positions.get(segment.toNodeId)!;
-    const pa = toScreen(view, a.x, a.y);
-    const pb = toScreen(view, b.x, b.y);
+    const line = segmentPolyline(world.simulation.map, segment);
+    // A bridge deck under the road where it crosses water.
+    ctx.strokeStyle = COLORS.bridge;
+    ctx.lineWidth = 13;
+    ctx.lineCap = "butt";
+    ctx.setLineDash([]);
+    for (const run of bridgeRuns(world, line)) strokeLine(ctx, view, run);
+    ctx.lineCap = "round";
     const built = segment.provenance === "built";
     // Traffic: a slowing road gets a casing from amber to red, under the
     // road itself -- the same speed that slows the buses on it.
@@ -128,19 +226,13 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
       ctx.globalAlpha = 0.35 + 0.55 * severity;
       ctx.lineWidth = 12 + 6 * severity;
       ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(pa.x, pa.y);
-      ctx.lineTo(pb.x, pb.y);
-      ctx.stroke();
+      strokeLine(ctx, view, line);
       ctx.globalAlpha = 1;
     }
     ctx.strokeStyle = built ? COLORS.builtRoad : COLORS.dirtRoad;
     ctx.lineWidth = built ? 7 : 6;
     ctx.setLineDash(built ? [] : [10, 5]);
-    ctx.beginPath();
-    ctx.moveTo(pa.x, pa.y);
-    ctx.lineTo(pb.x, pb.y);
-    ctx.stroke();
+    strokeLine(ctx, view, line);
   }
   ctx.setLineDash([]);
 }
@@ -151,7 +243,6 @@ const SLOW_ROAD_SPEED = 0.9;
 // Each route is drawn as a coloured line over the roads it runs on, offset
 // a little per route so two routes sharing a road both stay visible.
 function drawRouteLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
-  const { positions } = world.simulation.routing;
   world.routes.forEach((route, index) => {
     const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
     if (!vehicle) return;
@@ -159,15 +250,10 @@ function drawRouteLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: 
     ctx.strokeStyle = routeColor(index);
     ctx.lineWidth = 3;
     ctx.globalAlpha = 0.85;
-    ctx.beginPath();
     const half = halfPath(vehicle.path, route.a, route.b);
-    half.forEach((nodeId, i) => {
-      const p = positions.get(nodeId)!;
-      const s = toScreen(view, p.x, p.y);
-      if (i === 0) ctx.moveTo(s.x + offset, s.y + offset);
-      else ctx.lineTo(s.x + offset, s.y + offset);
-    });
-    ctx.stroke();
+    const line: Point[] = [];
+    for (let i = 1; i < half.length; i += 1) line.push(...edgeLine(world, half[i - 1]!, half[i]!));
+    strokeLine(ctx, view, line, offset);
     ctx.globalAlpha = 1;
   });
 }
@@ -244,15 +330,21 @@ function halfPath(path: string[], a: string, b: string): string[] {
 }
 
 function drawGhostLine(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, ghost: Ghost): void {
-  const from = world.towns.get(ghost.from)!;
-  const a = toScreen(view, from.x, from.y);
   ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 6]);
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(ghost.to.x, ghost.to.y);
-  ctx.stroke();
+  if (ghost.line) {
+    // The road you'd get, bends and all: where it goes round, it's longer.
+    ctx.lineWidth = 3;
+    strokeLine(ctx, view, ghost.line);
+  } else {
+    const from = world.towns.get(ghost.from)!;
+    const a = toScreen(view, from.x, from.y);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(ghost.to.x, ghost.to.y);
+    ctx.stroke();
+  }
   ctx.setLineDash([]);
 }
 
@@ -260,7 +352,10 @@ function drawGhostLabel(ctx: CanvasRenderingContext2D, ghost: Ghost): void {
   if (ghost.label) {
     ctx.font = "600 13px system-ui, sans-serif";
     const w = ctx.measureText(ghost.label).width + 12;
-    const x = ghost.to.x + 12;
+    // Flip left of the cursor rather than run under the side panel (main.ts
+    // fitView leaves it 300px when the window is wide enough to have one).
+    const right = window.innerWidth > 900 ? window.innerWidth - 300 : window.innerWidth;
+    const x = ghost.to.x + 12 + w > right - 8 ? Math.max(8, ghost.to.x - 12 - w) : ghost.to.x + 12;
     const y = ghost.to.y - 26;
     ctx.fillStyle = "rgba(255,253,248,0.95)";
     ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
@@ -277,11 +372,14 @@ function drawGhostLabel(ctx: CanvasRenderingContext2D, ghost: Ghost): void {
 function vehiclePose(world: SliceWorld, view: View, vehicle: Vehicle): { x: number; y: number; angle: number } | null {
   const length = vehicle.path.length;
   if (length < 2 || vehicle.pathIndex >= length) return null;
-  const { positions } = world.simulation.routing;
-  const a = positions.get(vehicle.path[(vehicle.pathIndex - 1 + length) % length]!)!;
-  const b = positions.get(vehicle.path[vehicle.pathIndex]!)!;
-  const angle = Math.atan2(b.y - a.y, b.x - a.x);
-  const p = toScreen(view, a.x + (b.x - a.x) * vehicle.edgeProgress, a.y + (b.y - a.y) * vehicle.edgeProgress);
+  const line = edgeLine(world, vehicle.path[(vehicle.pathIndex - 1 + length) % length]!, vehicle.path[vehicle.pathIndex]!);
+  // Along the road as it runs, facing the way it's heading there.
+  const [, ahead] = splitPolyline(line, polylineLength(line) * vehicle.edgeProgress);
+  const here = ahead[0]!;
+  const next = ahead.find((q) => Math.hypot(q.x - here.x, q.y - here.y) > 1e-6) ?? line[line.length - 1]!;
+  const prev = line[0]!;
+  const angle = next === here ? Math.atan2(here.y - prev.y, here.x - prev.x) : Math.atan2(next.y - here.y, next.x - here.x);
+  const p = toScreen(view, here.x, here.y);
   // Keep right: opposite directions on one road don't overlap.
   const side = 5;
   return { x: p.x - Math.sin(angle) * side, y: p.y + Math.cos(angle) * side, angle };

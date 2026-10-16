@@ -193,8 +193,11 @@ draws it.
 reads `engine/slice` state every frame and keeps no display state of its own (the same
 no-cached-view discipline as §2).
 
-- **`render.ts`** draws, back to front: ground, roads (dashed tan = inherited dirt, solid
-  grey = built), one coloured line per route (offset per route so shared roads show both),
+- **`render.ts`** draws, back to front: ground and terrain (water cells, hills shaded by height,
+  cached in an offscreen canvas per view since terrain never changes), roads along their
+  corridor polylines (dashed tan = inherited dirt, solid grey = built; a bridge deck under
+  every stretch over water), route lines, traffic casings and vehicles all along the same
+  polylines (`edgeLine`), one coloured line per route (offset per route so shared roads show both),
   the ghost line, vehicles, towns, and the ghost's price label last so nothing draws
   through it. Vehicles keep right of the road centre so opposite directions don't overlap.
   A bus is outlined in its route colour and filled from the back by how full it is. The
@@ -228,6 +231,9 @@ no-cached-view discipline as §2).
   inner outline (the Mini Metro convention), and its panel says how many change there.
 - **Town events** arrive from `sliceTick` and show as a longer toast. Ruins (abandoned
   emergent towns) draw as a grey dot with the name in italics.
+- **Road preview** — the ghost draws the planned road itself, bends and all, and its label
+  says what the price is made of: "Road ₦581 (bridge 4 cells ₦315, bends round: 10% longer
+  trip)" (principles §1: a quote must say why). It flips left rather than run under the panel.
 - **`main.ts`** — two tools (Bus `B`, Road `R`): click a town, then another. The Road tool
   on two towns a dirt road already joins paves it instead (ghost: "Pave ₦… · carries 1.7×
   the traffic"); a jammed route on dirt names the roads to pave. Shift keeps

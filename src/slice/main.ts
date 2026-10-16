@@ -17,12 +17,14 @@ import {
   pairDemand,
   paveRoad,
   removeBus,
+  paveCost,
   roadCost,
   routeSummaries,
   townShare,
   tripsFrom,
 } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
+import { planRoad } from "@engine/slice/roads";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
@@ -132,7 +134,7 @@ canvas.addEventListener("click", (event) => {
   }
   const from = selectedTown;
   if (tool === "road" && directRoad(world, from, town)) {
-    const cost = roadCost(world, from, town);
+    const cost = paveCost(world, from, town);
     const result = paveRoad(world, from, town);
     if (result.ok) say(`Paved ${townName(from)} – ${townName(town)} for ${naira(cost)}: it now carries ${paveGain()}× the traffic`);
     else say(`Can't pave: ${result.reason}`, true);
@@ -167,6 +169,20 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+// What a road's price is made of (principles §1: a quote must say *why*,
+// not just be a bigger number) and how much longer the trip is than the
+// straight line, when it bends round the terrain.
+function roadWhy(plan: NonNullable<ReturnType<typeof planRoad>>, a: string, b: string): string {
+  const parts: string[] = [];
+  if (plan.bridgeCells > 0) parts.push(`bridge ${plan.bridgeCells} cells ${naira(plan.bridgeCost)}`);
+  if (plan.hillsCost >= 20) parts.push(`hills ${naira(plan.hillsCost)}`);
+  const ta = world.towns.get(a)!;
+  const tb = world.towns.get(b)!;
+  const longer = plan.length / Math.hypot(ta.x - tb.x, ta.y - tb.y) - 1;
+  if (longer >= 0.08) parts.push(`bends round: ${pct(longer)} longer trip`);
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+}
+
 /** How much more traffic a paved road carries than dirt, e.g. "1.7". */
 function paveGain(): string {
   return (1 / world.tuning.dirtRoadCapacity).toFixed(1);
@@ -181,13 +197,15 @@ function ghost(): Ghost | null {
   const riders = `${Math.round(pairDemand(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want this trip`;
   if (tool === "road" && directRoad(world, selectedTown, to)) {
     const check = checkPave(world, selectedTown, to);
-    const cost = naira(roadCost(world, selectedTown, to));
+    const cost = naira(paveCost(world, selectedTown, to));
     return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Pave ${cost} · carries ${paveGain()}× the traffic` : `${cost} · ${check.reason}` };
   }
   if (tool === "road") {
     const check = checkRoad(world, selectedTown, to);
-    const cost = naira(roadCost(world, selectedTown, to));
-    return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Road ${cost} · ${riders}` : `${cost} · ${check.reason}` };
+    const plan = planRoad(world, selectedTown, to);
+    if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
+    const label = `Road ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)} · ${riders}`;
+    return { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
   }
   const check = checkBus(world, selectedTown, to);
   const price = naira(world.tuning.busPurchaseCost);

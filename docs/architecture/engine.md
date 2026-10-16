@@ -78,6 +78,17 @@ got misclassified as itself being a bridge, because the jump-distance check comp
 only distance without requiring chain-index adjacency (`idx === prevIdx + 1`). Fixed by
 requiring that adjacency explicitly.
 
+**Bug caught in the slice, step 3:** `supercover.ts`'s walk, on a line running left or up to
+an integer endpoint, tied both crossings at t = 1, stepped past the end cell and wandered
+until its guard — off the map, which `isWater` reads as water — so "straight" planning
+returned null on dry ground. It now stops once the next crossing is at or past the end
+(still taking both corner-adjacent cells at a corner tie). Affects the original game's
+straight mode too.
+
+**Known gap:** "straight" mode prices the supercover *staircase* of cells, not the line —
+on flat ground a straight road quotes ~2.5× the identical auto road. The slice uses auto
+only until a line is priced as a line.
+
 ## simulation/ — the tick loop
 
 `simulate.ts`'s `tick()` is the one integration point that threads economy, paratransit,
@@ -439,8 +450,8 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   the road space on its roads now) and the `jammed` verdict (speed < 70%), ranked after
   `thin` and `overcapacity`. A segment split carries its flow to both halves.
 - **Paving** (`paveRoad` / `checkPave` in `world.ts`, `isDirt` in `congestion.ts`) — turns the
-  one dirt segment directly joining two towns (`directRoad`) into a built one, at `roadCost`:
-  one price for road-making, so the decision is *which* road. Provenance is the surface in
+  one dirt segment directly joining two towns (`directRoad`) into a built one, at `paveCost`
+  (surface only since step 3; on flat ground what building it would cost). Provenance is the surface in
   the slice, so `splitSegment`'s copy leaves both halves of a paved road paved and the map
   draws it like a built road. `dirtRoadsOn(route)` lists a route's dirt roads for the
   jammed reason.
@@ -449,6 +460,18 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   by keke or okada (`pop / (pop + walkableTownPopulation)`), and that share of your riders
   starting or ending trips there (`pairOutcomes`, so riders changing buses aren't counted).
   Nothing in the tick reads it; it touches no share and no money (a test pins that).
+- **Terrain and roads** (step 3; `terrain.ts`, `roads.ts`) — `buildSliceTerrain` turns the map
+  def's authored rivers (centre line + width) and hills (smooth bumps; elevation unbounded,
+  since water is explicit) into the same `TerrainField` engine/map makes, and hard-fails a
+  town in water. `planRoad` runs `pathing/plan.ts`'s `planCorridor` in auto mode (terrain A*,
+  bridges as jump edges, smoothing) and converts its `CostBreakdown` at one exchange rate,
+  `roadCostPerCell / BASE_COST_PER_CELL`, naming the bridge and hills parts; plans are
+  cached per pair (terrain never changes). A built road stores the plan's polyline on its
+  corridor and its arc length on `Segment.length`, which routing and `tickVehicle` read
+  (`nodeDistance` uses the edge weight), so a bend is a longer trip. Inherited roads stay
+  straight with no `length` (brownfield premise). Paving prices the surface only:
+  `segmentLength × roadCostPerCell`. A roadside town is founded halfway along the road's
+  arc, never over water, and `splitSegment` splits the polyline there.
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
 
 Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,

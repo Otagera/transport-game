@@ -289,6 +289,10 @@ blow-by-blow; this section is the distilled rule.
 - **The A\* cost function IS the build price.** Where a system optimises against one
   function and reports or charges another, they will disagree. This was violated four
   separate times on the first attempt and each was a real bug.
+- **Travel length must follow the alignment**, or going round is free (slice, step 3). Routing
+  and vehicles measured every road as the straight line between its nodes, so a road bent
+  round a ridge cost less *and* drove no slower — "around" always won. A segment now
+  carries its alignment's length.
 - **One geometry representation.** Everything has a polyline, including straight-line
   corridors (a two-point polyline). Dual representations produce a bug class.
 - **No corner cutting in A\*.** A diagonal move between two land cells whose shared
@@ -534,7 +538,16 @@ Steps, each played before the next:
      they bring to your buses; none of it counts against you. Headlines now say "between
      towns". Watch next playtest: does it read as informal's ground, or as a loss after all?
 3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`
-   and `engine/pathing`. The map stops being a diagram.
+   and `engine/pathing`. The map stops being a diagram. *Built 2026-10-16, before step 2
+   was played* (at the user's call): a river splitting west from east (only the old
+   Owode–Ado road crosses it) and a ridge before Ilaro, authored into the hand-made map.
+   Roads plan the cheapest way and the quote says why. Measured, Ikole: a ₦581 bridge from
+   Kuto with a bus from Ilase loses ₦12/day and serves ₦452/day of trips; a direct ₦850
+   bridge from Ilase loses ₦63 (₦181); the dry ₦472 road from Ado loses ₦67 (₦134). The
+   cheap crossing that a bus can also serve on the way wins. Cheapest alignment only:
+   "hold the line and pay for it" waits on pricing a line as a line (engine.md §pathing/).
+   Watch: do bends read as "longer trip", and does the river make you think about where to
+   cross?
 4. **Depth, one at a time** — decay, goods, rail, growth of the original towns — each played
    before the next. Each must create a decision.
 

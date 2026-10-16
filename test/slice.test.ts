@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, paveRoad, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -8,6 +8,7 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/slice/settlement";
 import { routesOnTrip, tripPlans } from "@engine/slice/transfers";
 import { roadCapacity, speedFactor } from "@engine/slice/congestion";
+import { planRoad, polylineLength, segmentPolyline } from "@engine/slice/roads";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -471,7 +472,7 @@ describe("slice: paving a dirt road", () => {
   test("paving charges the previewed price and makes the road carry what a built one does", () => {
     const w = world();
     const before = w.economy.funds;
-    const price = roadCost(w, "big", "mid");
+    const price = paveCost(w, "big", "mid");
     expect(paveRoad(w, "big", "mid").ok).toBe(true);
     expect(w.economy.funds).toBe(before - price);
     const paved = w.simulation.map.segments.find((s) => s.fromNodeId === "big" && s.toNodeId === "mid")!;
@@ -550,6 +551,102 @@ describe("slice: inside towns", () => {
     run(bigger, 300);
     expect(networkShare(bigger)).toEqual(networkShare(served));
     expect(bigger.economy.funds).toBe(served.economy.funds);
+  });
+});
+
+describe("slice: terrain (step 3)", () => {
+  // West and east banks of a river; a hill sits between south and its neighbours.
+  const TERRAIN_MAP: SliceMapDef = {
+    width: 60,
+    height: 40,
+    towns: [
+      { id: "west", name: "West", x: 8, y: 10, population: 100 },
+      { id: "east", name: "East", x: 40, y: 10, population: 60 },
+      { id: "sw", name: "Sw", x: 4, y: 32, population: 50 },
+      { id: "se", name: "Se", x: 28, y: 32, population: 50 },
+    ],
+    roads: [{ a: "west", b: "sw" }],
+    terrain: {
+      rivers: [{ points: [[24, -2], [24, 42]], width: 3 }],
+      hills: [{ x: 16, y: 32, radius: 7, height: 4 }],
+    },
+  };
+  const terrainWorld = (overrides: Partial<SliceTuning> = {}) => createSliceWorld(TERRAIN_MAP, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, ...overrides });
+
+  test("crossing water costs a bridge, the quote says so, and the quote is the charge", () => {
+    const w = terrainWorld();
+    const plan = planRoad(w, "west", "east")!;
+    expect(plan.bridgeCells).toBeGreaterThanOrEqual(3);
+    expect(plan.bridgeCost).toBeGreaterThan(0);
+    // Dearer than the same length of dry road.
+    expect(plan.cost).toBeGreaterThan(plan.length * w.tuning.roadCostPerCell * 1.2);
+    const before = w.economy.funds;
+    expect(buildRoad(w, "west", "east").ok).toBe(true);
+    expect(w.economy.funds).toBe(before - plan.cost);
+  });
+
+  test("water wider than a bridge can span can't be crossed, and the refusal says why", () => {
+    const wide: SliceMapDef = { ...TERRAIN_MAP, towns: TERRAIN_MAP.towns.slice(0, 2), roads: [], terrain: { rivers: [{ points: [[24, -2], [24, 42]], width: 20 }] } };
+    const w = createSliceWorld(wide, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6 });
+    expect(buildRoad(w, "west", "east")).toEqual({ ok: false, reason: "the water is too wide to bridge here" });
+  });
+
+  test("the cheapest road bends round a hill, and the bend is a longer trip for the buses on it", () => {
+    const w = terrainWorld({ maxEmergentTowns: 0 });
+    const plan = planRoad(w, "sw", "se")!;
+    expect(plan.length).toBeGreaterThan(24 * 1.05); // the straight line is 24
+    buildRoad(w, "sw", "se");
+    const edge = w.simulation.routing.graph.get("sw")!.find((e) => e.to === "se")!;
+    expect(edge.weight).toBeCloseTo(plan.length);
+    // A bus covers the bent road at its speed: progress after 1s is speed/length, not speed/24.
+    addBus(w, "sw", "se");
+    const bus = w.simulation.vehicles.find((v) => v.lifecycle === "cyclic")!;
+    const start = bus.edgeProgress;
+    run(w, 1);
+    expect(bus.edgeProgress - start).toBeCloseTo((w.tuning.busSpeed * 1) / plan.length, 2);
+  });
+
+  test("an inherited road stays straight, whatever the terrain", () => {
+    const w = terrainWorld();
+    const road = w.simulation.map.segments.find((s) => s.provenance === "inherited")!;
+    expect(road.length).toBeUndefined();
+    expect(segmentPolyline(w.simulation.map, road)).toHaveLength(2);
+  });
+
+  test("a road whose middle is a bridge never grows a town in the river", () => {
+    const w = terrainWorld({ foundTownFlow: 1, foundTownPlayerFlow: 0.3, minSecondsBetweenTowns: 0 });
+    buildRoad(w, "west", "east");
+    for (let i = 0; i < 4; i += 1) addBus(w, "west", "east");
+    run(w, 400);
+    // Busy enough to found a town on any other road...
+    const road = w.simulation.map.segments.find((s) => s.provenance === "built")!;
+    expect(w.settlement.segmentFlowEMA.get(road.id)!).toBeGreaterThan(1);
+    expect(w.settlement.segmentPlayerFlowEMA.get(road.id)!).toBeGreaterThan(0.3);
+    // ...but its middle is the river.
+    expect(w.settlement.emergent.size).toBe(0);
+  });
+
+  test("a town founded on a bent road stands on it, and its halves add up to the road", () => {
+    const w = terrainWorld({ foundTownFlow: 1, foundTownPlayerFlow: 0.3, minSecondsBetweenTowns: 0 });
+    buildRoad(w, "sw", "se");
+    const road = w.simulation.map.segments.find((s) => s.provenance === "built")!;
+    const line = segmentPolyline(w.simulation.map, road);
+    const length = road.length!;
+    for (let i = 0; i < 3; i += 1) addBus(w, "sw", "se");
+    run(w, 400);
+    const town = [...w.settlement.emergent].map((id) => w.towns.get(id)!)[0];
+    expect(town).toBeDefined();
+    const toSegment = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((town!.x - a.x) * dx + (town!.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      return Math.hypot(town!.x - (a.x + t * dx), town!.y - (a.y + t * dy));
+    };
+    const nearest = Math.min(...line.slice(1).map((p, i) => toSegment(line[i]!, p)));
+    expect(nearest).toBeLessThan(1e-6);
+    const halves = w.simulation.map.segments.filter((s) => s.fromNodeId === town!.id || s.toNodeId === town!.id);
+    expect(halves.reduce((sum, s) => sum + (s.length ?? 0), 0)).toBeCloseTo(length, 1);
+    for (const half of halves) expect(polylineLength(segmentPolyline(w.simulation.map, half))).toBeCloseTo(half.length!, 5);
   });
 });
 

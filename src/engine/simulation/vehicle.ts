@@ -130,6 +130,9 @@ function recordCrossing(
 }
 
 function nodeDistance(context: RoutingContext, a: string, b: string): number {
+  // The edge's own length when the road between them isn't straight.
+  const edge = context.graph.get(a)?.find((candidate) => candidate.to === b);
+  if (edge) return edge.weight || 0.0001;
   const pa = context.positions.get(a);
   const pb = context.positions.get(b);
   if (!pa || !pb) return 0.0001;

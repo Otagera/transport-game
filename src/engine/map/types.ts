@@ -45,6 +45,11 @@ export interface Segment {
   level: SegmentLevel;
   condition: number;
   provenance: InfrastructureProvenance;
+  // Travel length along the alignment, when it isn't the straight line
+  // between the two nodes (the slice's terrain-planned roads bend round
+  // hills and water). Undefined means straight -- the original game never
+  // sets it, so its routing and vehicles are unchanged.
+  length?: number;
   // Which authored cross-section this segment was built to (Module 11).
   // A plain string, never the content type: engine/ stays content-unaware
   // and treats this as an opaque key, exactly as it treats a vehicle def

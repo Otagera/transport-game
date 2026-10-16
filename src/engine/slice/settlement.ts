@@ -3,6 +3,7 @@ import { rebuildFromMap } from "../simulation/simulate";
 import type { SliceTown, SliceWorld } from "./types";
 import { emptyOutcome, gravityDemand, pairKey } from "./world";
 import { parsePoolKey, parseQueueKey } from "./tick";
+import { overWater, pointAlong, polylineLength, segmentLength, segmentPolyline, splitPolyline } from "./roads";
 
 // Towns that appear along busy roads, and -- rarely -- fade (step 3 of
 // docs/principles.md §6). True to the setting: a roadside market grows
@@ -37,12 +38,9 @@ export function createSettlementState(): SettlementState {
   return { segmentFlowEMA: new Map(), segmentPlayerFlowEMA: new Map(), lastFoundedAtSeconds: -Infinity, nextCheckAtSeconds: 0, emergent: new Set(), elapsedSeconds: 0 };
 }
 
-function segmentLength(world: SliceWorld, segmentId: string): number {
+function roadLength(world: SliceWorld, segmentId: string): number {
   const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
-  if (!segment) return 0;
-  const a = world.simulation.routing.positions.get(segment.fromNodeId)!;
-  const b = world.simulation.routing.positions.get(segment.toNodeId)!;
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return segment ? segmentLength(world, segment) : 0;
 }
 
 /**
@@ -147,11 +145,12 @@ function tryFoundTown(world: SliceWorld): SliceEvent | null {
     // develop them. Without this, danfo traffic alone sits a hair under
     // the threshold on this map -- an accident, not a rule.
     if ((settlement.segmentPlayerFlowEMA.get(segment.id) ?? 0) < tuning.foundTownPlayerFlow) continue;
-    if (segmentLength(world, segment.id) < tuning.townSpacingCells * 2) continue;
-    const a = simulation.routing.positions.get(segment.fromNodeId)!;
-    const b = simulation.routing.positions.get(segment.toNodeId)!;
-    const x = (a.x + b.x) / 2;
-    const y = (a.y + b.y) / 2;
+    const length = roadLength(world, segment.id);
+    if (length < tuning.townSpacingCells * 2) continue;
+    // Halfway along the road as it runs, not between its ends -- a road
+    // bent round a hill has its middle on the bend. Never on a bridge.
+    const { x, y } = pointAlong(segmentPolyline(simulation.map, segment), length / 2);
+    if (overWater(world, { x, y })) continue;
     const crowded = simulation.map.nodes.some((node) => Math.hypot(node.x - x, node.y - y) < tuning.townSpacingCells);
     if (crowded) continue;
     best = { segmentId: segment.id, flow, x, y };
@@ -207,16 +206,25 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
   world.towns.set(town.id, town);
   simulation.queues.set(town.id, new Map());
 
+  // The road keeps its alignment: each half is its side of the old
+  // polyline, split where the town stands.
+  const polyline = segmentPolyline(map, segment);
+  const [firstLine, secondLine] = splitPolyline(polyline, polylineLength(polyline) / 2);
+  firstLine[firstLine.length - 1] = { x: town.x, y: town.y };
+  secondLine[0] = { x: town.x, y: town.y };
   const first = { ...segment, id: `${segment.id}.1`, corridorId: `corridor-${segment.id}.1`, toNodeId: town.id };
   const second = { ...segment, id: `${segment.id}.2`, corridorId: `corridor-${segment.id}.2`, fromNodeId: town.id };
+  // A straight road stays straight (no length); a bent one carries its halves' lengths.
+  if (segment.length !== undefined) {
+    first.length = polylineLength(firstLine);
+    second.length = polylineLength(secondLine);
+  }
   map.segments = map.segments.filter((candidate) => candidate.id !== segmentId).concat(first, second);
-  const posA = map.nodes.find((node) => node.id === a)!;
-  const posB = map.nodes.find((node) => node.id === b)!;
   map.corridors = map.corridors
     .filter((corridor) => corridor.id !== segment.corridorId)
     .concat(
-      { id: first.corridorId, nodeIds: [a, town.id], polyline: [{ x: posA.x, y: posA.y }, { x: town.x, y: town.y }] },
-      { id: second.corridorId, nodeIds: [town.id, b], polyline: [{ x: town.x, y: town.y }, { x: posB.x, y: posB.y }] },
+      { id: first.corridorId, nodeIds: [a, town.id], polyline: firstLine },
+      { id: second.corridorId, nodeIds: [town.id, b], polyline: secondLine },
     );
 
   for (const vehicle of simulation.vehicles) insertIntoPath(vehicle, a, b, town.id);

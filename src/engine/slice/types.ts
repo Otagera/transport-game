@@ -2,6 +2,7 @@ import type { PathResult, SimulationState } from "../simulation/types";
 import type { EconomyState } from "../economy/types";
 import type { SettlementState } from "./settlement";
 import type { TripPlans } from "./transfers";
+import type { RoadPlan } from "./roads";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
 // towns, straight roads, one bus type, passengers who give up, and the
@@ -24,12 +25,30 @@ export interface SliceRoadDef {
   b: string;
 }
 
+export interface SliceRiverDef {
+  /** Centre line, map cells. */
+  points: Array<[number, number]>;
+  /** Width in cells. */
+  width: number;
+}
+
+export interface SliceHillDef {
+  x: number;
+  y: number;
+  radius: number;
+  /** Elevation at the top; a road pays for every unit it climbs or descends (pathing/cost.ts). */
+  height: number;
+}
+
 export interface SliceMapDef {
   width: number;
   height: number;
   towns: SliceTown[];
-  /** Inherited roads -- the network that already exists at start. */
+  /** Inherited roads -- the network that already exists at start. Straight: they were built
+   * for another age's needs and never fixed (principles §1, brownfield premise). */
   roads: SliceRoadDef[];
+  /** Step 3: authored terrain. Absent means flat dry land. */
+  terrain?: { rivers?: SliceRiverDef[]; hills?: SliceHillDef[] };
 }
 
 /** A player route: an A<->B shuttle, running however many buses. */
@@ -175,5 +194,7 @@ export interface SliceWorld {
   plans: TripPlans | null;
   /** pairKey -> road path, or null if the pair isn't connected. Cleared on every road change. */
   pathCache: Map<string, PathResult | null>;
+  /** Planned roads by `a:b` (roads.ts planRoad). Terrain never changes, so plans never go stale. */
+  roadPlans: Map<string, RoadPlan | null>;
   nextId: number;
 }
