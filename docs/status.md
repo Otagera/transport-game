@@ -69,6 +69,20 @@ live-verified; each links to where its detail actually lives now.
 | 11b | Profiles applied to the map | Authored cross-sections drive real corridor rendering, decay, and cost | [architecture/render-and-ui.md](architecture/render-and-ui.md) §4, [architecture/content.md](architecture/content.md) |
 | 12 | Ambient private traffic | Prosperity → private cars → road friction, closing the growth/congestion loop | [architecture/engine.md](architecture/engine.md) §simulation/ |
 
+## Handoff (cloud session → laptop, 2026-10-16)
+
+Everything is committed and pushed on `slice`; the working tree is clean. This session built
+steps 2b through 4d++ and alignment (table above), then answered toolbar feedback:
+
+- A refusal keeps the price in view ("can't afford it" no longer hides what the train costs).
+- The toolbar is grouped by purpose: On roads (Bus, Lorry), On rail (Train, Freight), Build
+  (Road, Track), Line (Cheapest | Straight switch), Upkeep (Fix), Time.
+- The key never covers the map: the map's bottom inset is measured from the toolbar and the
+  open key, and the key stacks above the toolbar on narrow windows.
+
+The next step is the user's playtest — nothing is mid-build. Check UI changes in a real
+browser: `bunx vite --port 5199`, open `/slice.html`.
+
 ## What's next
 
 **Played 2026-10-16 to day 14** (steps 2–4b together): *"felt stuck, didn't know how to get
