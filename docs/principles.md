@@ -244,6 +244,11 @@ blow-by-blow; this section is the distilled rule.
   took net/day from ₦1,164 to ₦4,443 — revenue fell 2.7%, cost fell 11.3%.
 - **The failure mode is over-building past what the network reaches.** Not mispriced
   fares.
+- **Running cost has to make some routes lose.** In the slice at ~₦48/day a bus, every
+  route paid — thin feeders, a road to a cut-off town, even six buses jamming the trunk —
+  so the only decision was "more". At ~₦105/day (about a third of a good bus's fares) a
+  thin route run alone loses, the trunk peaks at 2 buses, and a 4-bus network nets ~40%
+  less. Congestion couldn't do this: it only punishes piling onto one road.
 
 ### Growth
 
@@ -356,7 +361,9 @@ for if eras return; they are not live in the slice.*
   2 buses on the slice's best route run ~35% full yet beat 1 bus, because they still catch
   riders who'd otherwise be lost. "Too many buses" needs low load *and* most riders already
   carried. Likewise "thin" means the trips can't pay for even one bus; comparing against
-  the whole fleet's cost called an over-bused strong route thin.
+  the whole fleet's cost called an over-bused strong route thin. And "pay for one bus" is
+  what one bus can *catch* (about half its trips, measured), not the whole ceiling: once
+  running cost bit, the ceiling test called a losing thin route "waiting" — add buses.
 - **Burn rate in the status strip** — income, cost, net per day. Balance without rate is
   unreadable.
 
@@ -497,6 +504,11 @@ Steps, each played before the next:
    (−₦95). A well-spread network stays at free speed — congestion punishes piling onto a
    trunk, not breadth — so it does *not* tighten money for a spread network. If play says
    money is still too loose, that's an economy lever (running cost), not a traffic one.
+   - **Running cost** (before step 2 was played): a bus's running cost went from ~₦48 to
+     ~₦105/day, so thin routes run alone lose and the trunk peaks at 2 buses (6 now lose,
+     −₦85/day); a 4-bus chain nets ~₦305/day by day 40, down from ~₦533. "Thin" now
+     judges what one bus can catch, not the whole ceiling. Watch next playtest: is
+     money now a constraint, or a grind?
 3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`
    and `engine/pathing`. The map stops being a diagram.
 4. **Depth, one at a time** — decay, goods, rail, growth of the original towns — each played

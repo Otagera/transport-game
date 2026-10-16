@@ -333,6 +333,12 @@ const FULL_LOAD = 0.85;
 const JAMMED_SPEED = 0.7;
 const POACHED_SHARE = 0.2;
 const WAITING_SHARE = 0.3;
+// About how much of a route's riders one bus catches, measured: ~35% on
+// ilase-owode, ~55% on the thin ilase-ise, ~33% on ilase-kuto -- the rest
+// give up, stay home, or take a danfo first. So a route is thin when even
+// this share of its ceiling can't pay one bus: comparing the whole ceiling
+// called ilase-ise "waiting" (add buses) while its one bus lost money.
+export const ONE_BUS_REACH = 0.5;
 
 /**
  * Why a route earns what it does (docs/principles.md §3: per-route P&L
@@ -359,7 +365,8 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
   const of = (n: number) => (total > 0 ? n / total : 0);
 
   const ceilingPerDay = demand * world.tuning.fare * SECONDS_PER_GAME_DAY;
-  // Thin means the trips can't pay for even one bus. Comparing against the
+  // Thin means the trips can't pay for even one bus, at what one bus can
+  // realistically catch (ONE_BUS_REACH). Comparing against the
   // whole fleet's cost instead would call an over-bused strong route
   // "thin" -- the fix there is fewer buses, not giving up on the route.
   const oneBusPerDay = world.tuning.busOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
@@ -378,7 +385,7 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
     verdict: "healthy",
   };
 
-  if (ceilingPerDay < oneBusPerDay) diagnosis.verdict = "thin";
+  if (ceilingPerDay * ONE_BUS_REACH < oneBusPerDay) diagnosis.verdict = "thin";
   else if (route.vehicleIds.length >= 2 && route.loadFactorEMA < OVERCAPACITY_LOAD && diagnosis.carried >= OVERCAPACITY_CARRIED) {
     diagnosis.verdict = "overcapacity";
   }

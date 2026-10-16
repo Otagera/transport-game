@@ -282,7 +282,7 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number): string {
   switch (d.verdict) {
     case "thin":
-      return `Thin: only ${Math.round(d.demand * SECONDS_PER_GAME_DAY)} riders/day want these trips. Carrying all of them would earn ${naira(d.ceilingPerDay)}/day, less than one bus costs to run (${naira(costPerDay / buses)}).`;
+      return `Thin: only ${Math.round(d.demand * SECONDS_PER_GAME_DAY)} riders/day want these trips. Carrying every one would earn ${naira(d.ceilingPerDay)}/day, but one bus catches only about half, not enough to cover its running cost (${naira(costPerDay / buses)}/day).`;
     case "overcapacity":
       return `Buses run ${pct(d.loadFactor)} full and already carry ${pct(d.carried)} of riders here: the last bus mostly carries empty seats. Selling one saves ${naira(costPerDay / buses)}/day.`;
     case "jammed":

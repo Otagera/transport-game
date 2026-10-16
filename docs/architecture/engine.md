@@ -401,8 +401,9 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   their buses). Route cost is buses × operating cost.
 - **`diagnoseRoute`** — measured, not modelled: sums the outcomes of trips whose planned
   journey rides this route for at least one leg (`plannedRoutes`) — so a feeder's numbers
-  include the riders it hands on — then picks one verdict, most structural first: `thin` (carrying
-  every possible rider wouldn't pay for one bus), `overcapacity` (≥2 buses, load < 35% *and*
+  include the riders it hands on — then picks one verdict, most structural first: `thin` (one bus,
+  catching about `ONE_BUS_REACH` — half — of every possible rider, wouldn't pay its running
+  cost; measured, one bus catches ~33–55%), `overcapacity` (≥2 buses, load < 35% *and*
   ≥ 60% of riders already carried), `full` (load ≥ 85%), `poached` (≥ 20% taken by passing
   danfos), `waiting` (≥ 30% gave up), else `healthy`. The page turns the verdict into a
   sentence; the engine never formats text.

@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**372 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**373 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -28,6 +28,7 @@ step plan. Eras are paused. The slice is a second page beside the original game:
 | 1d | Transfers: riders change buses at interchanges; fare per leg | Played to day 91: works; beat the danfos |
 | 1e | Kekes and okadas take riders who won't wait for a danfo | Played: works (to day 18) |
 | 2 | Shared road: flow-based congestion; traffic drawn on roads | Built, **not yet played** |
+| 2b | Running cost that bites: thin routes lose, trunk peaks at 2 buses | Built, **not yet played** |
 | 3 | A place to build in: terrain, pathing, bridges | — |
 | 4 | Depth, one at a time: growth, decay, goods, rail | — |
 
@@ -61,9 +62,10 @@ live-verified; each links to where its detail actually lives now.
 
 ## What's next
 
-Play step 2: does piling onto a trunk now hurt, and does traffic read on the map? Known
-open items: money is still loose for a well-spread network (an economy lever, not a traffic
-one); paving a dirt road could become its own decision now that dirt roads carry less.
+Play step 2 (with 2b): does piling onto a trunk now hurt, does traffic read on the map,
+and is money now a constraint rather than a grind? A bus now costs ~₦105/day to run
+(was ~₦48), so a thin route run alone loses money and says "thin" (principles.md §6).
+Known open items: paving a dirt road could become its own decision now that dirt roads carry less.
 Cut-off towns now say "no road" outright (dashed wish-lines, a map label, a sentence in
 the town panel), after a playtester read them as "nowhere to go" (day 17). Step 1's question is in principles.md §6. Whatever the answer, write down what was
 felt before changing anything — then step 2, or back to step 1's model if the loop didn't

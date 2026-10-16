@@ -93,6 +93,14 @@ describe("slice: buses and money", () => {
     expect(route!.netPerDay).toBeGreaterThan(0);
   });
 
+  test("a bus on a thin feeder costs more to run than it earns, and the route says why", () => {
+    const w = world();
+    addBus(w, "mid", "far");
+    run(w, 600);
+    expect(routeSummaries(w)[0]!.netPerDay).toBeLessThan(0);
+    expect(diagnoseRoute(w, w.routes[0]!.id)!.verdict).toBe("thin");
+  });
+
   test("more buses buy share with diminishing returns, and enough of them lose money", () => {
     const income = (n: number) => {
       const w = world({ startingFunds: 1e6 });
@@ -184,11 +192,15 @@ describe("slice: why a route earns what it does", () => {
     expect(d.loadFactor).toBeLessThan(0.35);
   });
 
-  test("a route whose every possible rider can't pay its running cost reads as thin", () => {
-    const w = world({ startingFunds: 1e6, busOperatingCostPerSecond: 50 });
+  test("a route one bus can't pay for, even catching all it realistically can, reads as thin", () => {
+    // ~₦60/day to run against a ~₦88/day ceiling: the whole ceiling would
+    // cover it, but one bus never catches the whole ceiling.
+    const w = world({ startingFunds: 1e6, busOperatingCostPerSecond: 2 });
     addBus(w, "mid", "far");
     run(w, 120);
-    expect(diagnoseRoute(w, w.routes[0]!.id)!.verdict).toBe("thin");
+    const d = diagnoseRoute(w, w.routes[0]!.id)!;
+    expect(d.ceilingPerDay).toBeGreaterThan(routeSummaries(w)[0]!.costPerDay);
+    expect(d.verdict).toBe("thin");
   });
 
   test("a route's outcome shares cover all its riders", () => {

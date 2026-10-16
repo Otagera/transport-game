@@ -5,10 +5,15 @@ import type { SliceTuning } from "./types";
 // after touching any of these. What they were tuned to produce on
 // src/slice/map.ts over 20 game days:
 //
-//   - the best route (ilase-owode) peaks at ~2 buses (+90/day) and goes
-//     negative by 6 -- frequency is worth paying for, up to a point;
-//   - a thin route makes a little; a road to a cut-off town plus one bus
-//     roughly breaks even on fares alone -- it pays in share, not money;
+//   - the best route (ilase-owode) peaks at ~2 buses (+228/day on the
+//     route; 1 bus +194, 4 buses +90) and goes negative by 6 (-69) --
+//     frequency is worth paying for, up to a point;
+//   - a thin route run on its own loses a little (ilase-ise -26/day) and
+//     says "thin"; as a feeder in a hub it about breaks even, because the
+//     riders it hands on pay a fare on its leg too;
+//   - a road to a cut-off town plus one bus loses ~40/day -- it pays in
+//     share, not money;
+//   - a 4-bus chain nets ~+258/day over 20 days, ~+305 over 40;
 //   - doing nothing, danfos carry ~48% and ~52% stay home (31% of all
 //     demand is between towns no road joins), and danfos passing through
 //     take a visible bite out of your route's queue.
@@ -23,7 +28,12 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   busCapacity: 20,
   busSpeed: 3,
   busPurchaseCost: 500,
-  busOperatingCostPerSecond: 1.6,
+  // Running cost, ~105/day a bus: about a third of what the trunk's first
+  // bus earns, more than a thin route's bus does. At 1.6 (~48/day) every
+  // route paid, even six buses on the trunk (+257/day), so which routes to
+  // run was never a decision; route composition is the lever that matters
+  // (docs/principles.md §3, Balance numbers).
+  busOperatingCostPerSecond: 3.5,
   // Informal modes, from the original game's catalog (public/content/
   // vehicles.json): capacity, speed, and congestion weight as road space.
   danfoCapacity: 14,
