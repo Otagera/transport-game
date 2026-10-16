@@ -1,4 +1,4 @@
-import type { PathResult, SimulationState } from "../simulation/types";
+import type { PathResult, RoutingContext, SimulationState } from "../simulation/types";
 import type { EconomyState } from "../economy/types";
 import type { SettlementState } from "./settlement";
 import type { TripPlans } from "./transfers";
@@ -52,6 +52,8 @@ export interface SliceMapDef {
   terrain?: { rivers?: SliceRiverDef[]; hills?: SliceHillDef[] };
   /** Step 4: the port city, where supplies come from (goods.ts). Absent means no supplies. */
   port?: string;
+  /** Step 4: inherited railway, straight and out of service until restored (rail.ts). */
+  rails?: SliceRoadDef[];
 }
 
 /** A player route: an A<->B shuttle, running however many buses. */
@@ -131,6 +133,17 @@ export interface SliceTuning {
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;
+  // Rail (step 4, rail.ts).
+  /** New track per flat cell -- the rail exchange rate onto pathing/cost.ts. */
+  railCostPerCell: number;
+  /** How much harder gradients bite rail than road (track hates climbs). */
+  railGradientMultiplier: number;
+  /** Restoring inherited track, per cell of it. */
+  railRestoreCostPerCell: number;
+  trainCapacity: number;
+  trainSpeed: number;
+  trainPurchaseCost: number;
+  trainOperatingCostPerSecond: number;
   // Goods (step 4, goods.ts).
   /** Towns at least this big (thousands) are markets: produce goes to the nearest one. */
   marketPopulation: number;
@@ -234,6 +247,15 @@ export interface SliceWorld {
   vehicleSegment: Map<string, string>;
   /** segmentId -> speed as a share of free flow this tick. What slows a bus is what the map draws. */
   segmentSpeed: Map<string, number>;
+  /** The rail network (rail.ts): in-service track only. `simulation.routing` is roads only. */
+  railRouting: RoutingContext;
+  railPathCache: Map<string, PathResult | null>;
+  /** Planned new track by `a:b` (rail.ts planRail). */
+  railPlans: Map<string, RoadPlan | null>;
+  /** Inherited track not yet restored -- on the map, not in the rail network. */
+  railOutOfService: Set<string>;
+  /** Vehicles that run on rail (trains): road systems skip them. */
+  railVehicles: Set<string>;
   /** Lorry routes (goods.ts) -- apart from `routes`, which every passenger system reads. */
   lorryRoutes: SliceRoute[];
   /** Goods waiting at each town's yard, and where each flow's goods ended up. */

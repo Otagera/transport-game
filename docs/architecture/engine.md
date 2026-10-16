@@ -499,6 +499,21 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   end to a town not on the route (one hop), keeps extensions whose reach per path length is
   no lower than the route's, and returns the best if its reach is ≥ 1.5× the route's and
   ≥ 1.5× one bus's break-even at `ONE_BUS_REACH`.
+- **Rail** (step 4d, `rail.ts`) — track is a `type: "rail"` segment on the same map.
+  `rebuildNetworks` (replacing the slice's `rebuildFromMap` calls) builds
+  `simulation.routing` from roads only and `world.railRouting` from in-service track
+  (`world.railOutOfService` holds inherited track until restored); `railPath` mirrors
+  `roadPath`. Trains are passenger routes `rail:a~b` in `world.routes` (`addTrain`), their
+  vehicles in `world.railVehicles`; `routingFor(world, vehicle)` picks the network for
+  `tickVehicle`, spacing (`edgeLengths`), `routeSegments`, `routeSpeed` and drawing.
+  Congestion's `currentSegment`, segment loads and roadside-town flows skip trains; track
+  gets speed 1 and no wear; towns are founded beside roads only; `splitSegment` splices
+  road vehicles only. `planRail` is `roads.ts`'s `planAlignment` (the one planner, which
+  `planRoad` now calls too) over a terrain with elevation × `railGradientMultiplier`, at
+  `railCostPerCell`; `buildTrack` restores the derelict track joining two towns
+  (`railRestoreCostPerCell` × length) or lays new. Route cost and the thin threshold are
+  per vehicle kind (`vehicleCostPerDay`). `isCutOff` / `TripSummary.reachable` count working
+  track. `throughRoute` extends bus routes along roads only, never trains.
 - **Goods** (step 4c, `goods.ts`) — `goodsFlows` derives one-way flows from the towns as they
   are: produce from each original town under `marketPopulation` to its nearest market
   (ties to the bigger), supplies from `world.port` (the map def's `port`) to every other town,

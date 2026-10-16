@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**417 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**424 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -35,7 +35,8 @@ step plan. Eras are paused. The slice is a second page beside the original game:
 | 4a | Decay: roads wear with use; the Fix tool keeps a road up for daily upkeep | Built, **not yet played** |
 | 4b | Growth of the original towns: served well, a town grows (to +50%) and makes more trips | Built, **not yet played** |
 | 4c | Goods: produce to market, supplies from Ilase; lorries pay where goods go both ways | Built, **not yet played** |
-| 4 | Depth, one at a time: rail (decay 4a, growth 4b, goods 4c done) | — |
+| 4d | Rail: an old export line to restore, or new track through the towns; passenger trains | Built, **not yet played** |
+| 4 | Depth, one at a time: decay, growth, goods, rail — all built (4a–4d) | Built, **not yet played** |
 
 Engine fixes found along the way, affecting the original game too: cyclic vehicles never
 loaded passengers whose destination lay behind the path's wrap-around, so every A↔B route
@@ -86,9 +87,11 @@ before it mentions wear. Details in principles.md §6's playtest log.
   loose again by day 40?
 - Goods: is "which routes carry goods both ways" a decision you make? Do lorries crowd the
   buses' roads, or wear them faster than you'd keep up?
+- Rail: restore the wrong old line, or build the right one — is that a choice you feel? Is
+  rail a mid-game goal, or out of reach?
 
 Write down what was felt before changing anything (principles.md §6's playtest log). Open
 after that: a formal town-service tier (§5, "make it fixable")
 if play wants inside-town trips; "hold the line" road alignment once a straight line is
 priced as a line; goods into growth (supplies developing towns) if play wants a reason
-beyond money; then rail.
+beyond money; track wear; goods trains.

@@ -32,6 +32,12 @@ export const SLICE_MAP: SliceMapDef = {
   ],
   // Step 4, goods: Ilase is the port -- supplies leave from here.
   port: "ilase",
+  // Step 4, rail: the colonial export line, port to the northern hinterland.
+  // It crosses the river on its own old bridge and runs four cells past
+  // Owode without stopping -- built for cargo, not for the trips people make
+  // now (principles §1, brownfield: its geometry is wrong, and stays wrong).
+  // Out of service until restored.
+  rails: [{ a: "ilase", b: "ipaja" }],
   // Step 3: a river and a ridge, placed so a road is a decision.
   //   - The river splits the west (Ilase, Owode, Kuto, Ise, Ilaro) from the
   //     east (Ado, Ipaja, Ikole, Ogbe). Only the old Owode-Ado road crosses

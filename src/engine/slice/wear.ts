@@ -72,6 +72,7 @@ export function updateRoadWear(world: SliceWorld, dt: number): number {
   let spent = 0;
   const alpha = 1 - Math.exp(-dt / UPKEEP_TAU_SECONDS);
   for (const segment of world.simulation.map.segments) {
+    if (segment.type === "rail") continue; // track doesn't wear in this first cut (rail.ts)
     const before = segment.condition;
     const worn = Math.max(MIN_CONDITION, before - wearRate(world, segment) * dt);
     let cost = 0;

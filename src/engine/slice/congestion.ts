@@ -55,6 +55,7 @@ export function speedFactor(flow: number, capacity: number, floor: number): numb
 }
 
 function currentSegment(world: SliceWorld, vehicle: Vehicle): string | null {
+  if (world.railVehicles.has(vehicle.id)) return null; // trains are never road traffic
   const length = vehicle.path.length;
   if (length < 2 || vehicle.pathIndex >= length) return null;
   const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length]!;
@@ -92,9 +93,16 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
   world.vehicleSegment = nowOn;
 
   const alpha = 1 - Math.exp(-dt / FLOW_TAU_SECONDS);
-  world.segmentLoad = computeSegmentLoads(simulation.vehicles, simulation.routing);
+  world.segmentLoad = computeSegmentLoads(
+    simulation.vehicles.filter((vehicle) => !world.railVehicles.has(vehicle.id)),
+    simulation.routing,
+  );
   world.segmentSpeed = new Map();
   for (const segment of simulation.map.segments) {
+    if (segment.type === "rail") {
+      world.segmentSpeed.set(segment.id, 1); // track has no traffic but its own trains
+      continue;
+    }
     const previous = world.roadFlowEMA.get(segment.id) ?? 0;
     const flow = previous + ((entering.get(segment.id) ?? 0) / dt - previous) * alpha;
     world.roadFlowEMA.set(segment.id, flow);

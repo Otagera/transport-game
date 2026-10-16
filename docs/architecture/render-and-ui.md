@@ -234,6 +234,15 @@ no-cached-view discipline as §2).
 - **Road preview** — the ghost draws the planned road itself, bends and all, and its label
   says what the price is made of: "Road ₦581 (bridge 4 cells ₦315, bends round: 10% longer
   trip)" (principles §1: a quote must say why). It flips left rather than run under the panel.
+- **Rail** — track draws as a dark rail line with sleepers across it (width and surface, not
+  hue — principles §3); derelict track faded, dashed, sleepers missing. Trains draw long
+  and dark with their route's colour along the side, filled by load; `edgeLine` takes the
+  network (`routingFor`) so trains, their route lines and the Train ghost follow track. The
+  Track tool (`K`) previews restoring the old line ("built for export: it stops nowhere
+  between") or new track (planned line, why it costs what it does); the Train tool (`T`)
+  counts riders along the track path. Train rows read "by rail", "1 train", and their
+  reasons are the bus reasons with the vehicle renamed (`forVehicle`). The toolbar (nine
+  tools) sits right of the key, left of the side panel; the key is 11px and four lines.
 - **Lorries** — the Lorry tool (`L`) buys a lorry for a route like the Bus tool; its ghost
   says the goods along it each way ("25 t/day out, 50 back") and draws its road. Lorries
   draw longer than buses, brown, with a cab, filled by load; their routes as a brown dashed

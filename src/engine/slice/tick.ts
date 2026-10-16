@@ -7,6 +7,7 @@ import { updateSettlements, type SliceEvent } from "./settlement";
 import { tripPlans } from "./transfers";
 import { updateRoadSpeeds } from "./congestion";
 import { segmentConditions, updateRoadWear } from "./wear";
+import { routingFor } from "./rail";
 import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
 
 // How much longer people wait at a motor park for a danfo to fill than
@@ -157,7 +158,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     const deliveries: DeliveryEvent[] = tickVehicle(
       vehicle,
       simulation.queues,
-      simulation.routing,
+      routingFor(world, vehicle), // trains on track, everything else on roads (rail.ts)
       simulation.segmentTraffic,
       world.segmentLoad,
       dt,
@@ -256,7 +257,7 @@ function routeSpeed(world: SliceWorld, vehicleIds: string[]): number {
     const length = vehicle.path.length;
     const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length]!;
     const to = vehicle.path[vehicle.pathIndex % length]!;
-    const edge = world.simulation.routing.graph.get(from)?.find((candidate) => candidate.to === to);
+    const edge = routingFor(world, vehicle).graph.get(from)?.find((candidate) => candidate.to === to);
     total += edge ? (world.segmentSpeed.get(edge.segmentId) ?? 1) : 1;
     count += 1;
   }

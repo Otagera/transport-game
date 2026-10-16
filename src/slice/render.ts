@@ -1,5 +1,6 @@
 import type { InformalMode, SliceTown, SliceWorld } from "@engine/slice/types";
-import type { Vehicle } from "@engine/simulation/types";
+import type { RoutingContext, Vehicle } from "@engine/simulation/types";
+import { routingFor } from "@engine/slice/rail";
 import { isCutOff, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/slice/growth";
@@ -17,6 +18,7 @@ export const COLORS = {
   hill: "#b5a27a",
   bridge: "#7d7466",
   crack: "#4a3b2a",
+  rail: "#3a3632",
   grow: "#2b8a3e",
   goods: "#8a5a2b",
   kept: "#fffdf8",
@@ -80,6 +82,8 @@ export interface Ghost {
   line?: Point[];
   /** Or the towns a bus would run through, drawn along their roads. */
   path?: string[];
+  /** `path` runs on track (a train), not roads. */
+  rail?: boolean;
 }
 
 export interface DrawState {
@@ -119,9 +123,9 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
 // representation), straight or bent round the terrain. Roads, route lines,
 // traffic and vehicles all draw along the same one.
 
-/** The road between two adjacent nodes, oriented from `from` to `to`. */
-function edgeLine(world: SliceWorld, from: string, to: string): Point[] {
-  const edge = world.simulation.routing.graph.get(from)?.find((candidate) => candidate.to === to);
+/** The road (or, on `routing` = the rail network, the track) between two adjacent nodes, oriented from `from` to `to`. */
+function edgeLine(world: SliceWorld, from: string, to: string, routing: RoutingContext = world.simulation.routing): Point[] {
+  const edge = routing.graph.get(from)?.find((candidate) => candidate.to === to);
   const segment = edge && world.simulation.map.segments.find((candidate) => candidate.id === edge.segmentId);
   if (!segment) {
     const { positions } = world.simulation.routing;
@@ -220,6 +224,10 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
   ctx.lineCap = "round";
   for (const segment of world.simulation.map.segments) {
     const line = segmentPolyline(world.simulation.map, segment);
+    if (segment.type === "rail") {
+      drawTrack(ctx, world, view, line, world.railOutOfService.has(segment.id));
+      continue;
+    }
     // A bridge deck under the road where it crosses water.
     ctx.strokeStyle = COLORS.bridge;
     ctx.lineWidth = 13;
@@ -258,6 +266,38 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
     }
   }
   ctx.setLineDash([]);
+}
+
+// Track: a dark rail line with sleepers across it -- width and surface, not
+// hue, tell road and rail apart (principles §3, Display). Derelict track is
+// faded, its sleepers broken up: on the map, but nothing runs on it.
+function drawTrack(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, line: Point[], derelict: boolean): void {
+  ctx.globalAlpha = derelict ? 0.45 : 1;
+  ctx.strokeStyle = COLORS.bridge;
+  ctx.lineWidth = 11;
+  ctx.lineCap = "butt";
+  for (const run of bridgeRuns(world, line)) strokeLine(ctx, view, run);
+  const length = polylineLength(line);
+  ctx.strokeStyle = COLORS.rail;
+  ctx.lineWidth = 1.5;
+  for (let at = 0.4; at < length; at += 0.8) {
+    if (derelict && Math.floor(at / 0.8) % 3 === 0) continue; // missing sleepers
+    const [, rest] = splitPolyline(line, at);
+    const p = rest[0]!;
+    const q = rest.find((r) => Math.hypot(r.x - p.x, r.y - p.y) > 1e-6) ?? p;
+    const angle = Math.atan2(q.y - p.y, q.x - p.x) + Math.PI / 2;
+    const s = toScreen(view, p.x, p.y);
+    ctx.beginPath();
+    ctx.moveTo(s.x - Math.cos(angle) * 5, s.y - Math.sin(angle) * 5);
+    ctx.lineTo(s.x + Math.cos(angle) * 5, s.y + Math.sin(angle) * 5);
+    ctx.stroke();
+  }
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash(derelict ? [6, 6] : []);
+  strokeLine(ctx, view, line);
+  ctx.setLineDash([]);
+  ctx.lineCap = "round";
+  ctx.globalAlpha = 1;
 }
 
 function drawCracks(ctx: CanvasRenderingContext2D, view: View, line: Point[], condition: number): void {
@@ -322,8 +362,9 @@ function drawRouteLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: 
     ctx.lineWidth = 3;
     ctx.globalAlpha = 0.85;
     const half = halfPath(vehicle.path, route.a, route.b);
+    const routing = routingFor(world, vehicle);
     const line: Point[] = [];
-    for (let i = 1; i < half.length; i += 1) line.push(...edgeLine(world, half[i - 1]!, half[i]!));
+    for (let i = 1; i < half.length; i += 1) line.push(...edgeLine(world, half[i - 1]!, half[i]!, routing));
     strokeLine(ctx, view, line, offset);
     ctx.globalAlpha = 1;
   });
@@ -404,7 +445,8 @@ function drawGhostLine(ctx: CanvasRenderingContext2D, world: SliceWorld, view: V
   ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 6]);
-  const line = ghost.line ?? (ghost.path ? ghost.path.slice(1).flatMap((to, i) => edgeLine(world, ghost.path![i]!, to)) : null);
+  const routing = ghost.rail ? world.railRouting : world.simulation.routing;
+  const line = ghost.line ?? (ghost.path ? ghost.path.slice(1).flatMap((to, i) => edgeLine(world, ghost.path![i]!, to, routing)) : null);
   if (line) {
     // The road you'd get, bends and all: where it goes round, it's longer.
     ctx.lineWidth = 3;
@@ -445,7 +487,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, 
 function vehiclePose(world: SliceWorld, view: View, vehicle: Vehicle): { x: number; y: number; angle: number } | null {
   const length = vehicle.path.length;
   if (length < 2 || vehicle.pathIndex >= length) return null;
-  const line = edgeLine(world, vehicle.path[(vehicle.pathIndex - 1 + length) % length]!, vehicle.path[vehicle.pathIndex]!);
+  const line = edgeLine(world, vehicle.path[(vehicle.pathIndex - 1 + length) % length]!, vehicle.path[vehicle.pathIndex]!, routingFor(world, vehicle));
   // Along the road as it runs, facing the way it's heading there.
   const [, ahead] = splitPolyline(line, polylineLength(line) * vehicle.edgeProgress);
   const here = ahead[0]!;
@@ -470,6 +512,19 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     ctx.rotate(pose.angle);
     if (vehicle.lifecycle === "one-shot") {
       drawInformal(ctx, world.informal.active.get(vehicle.id)?.mode ?? "danfo");
+    } else if (world.railVehicles.has(vehicle.id)) {
+      // A train: long, dark, its route's colour along the side, filled by load.
+      const color = routeColor(routeIndex.get(vehicle.id) ?? 0);
+      const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
+      ctx.fillStyle = COLORS.rail;
+      ctx.beginPath();
+      ctx.roundRect(-18, -5, 36, 10, 3);
+      ctx.fill();
+      ctx.fillStyle = color;
+      ctx.fillRect(-17, -3, 34 * Math.min(1, load), 6);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-17, -3, 34, 6);
     } else if (vehicle.carries === "goods") {
       // A lorry: longer than a bus, brown, filled from the back by its load.
       const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;

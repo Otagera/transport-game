@@ -139,6 +139,18 @@ blow-by-blow; this section is the distilled rule.
   Produce does not come back from market; supplies and imports go the other way.
   Mirroring goods flows is untrue and pointless.
 - Demand pairs are static topology; growth scales the *rate*, not the graph.
+- **Rail pays through the towns, not past them** (slice, §6 step 4d). One train, 40 days:
+  new track Ilase–Owode +₦298/day (₦3,146 of track and train; four buses on the same pair
+  +₦263 for ₦2,000), Ilase–Owode–Ado +₦437 (₦5,658) — the best strategy measured. Straight
+  lines that bypass the towns lose: the restored colonial line Ilase–Ipaja −₦125, new direct
+  Ilase–Ado −₦10 (skips Owode). The brownfield line is cheap to restore and wrong — keep it
+  that way. A train is fast or it's nothing: frequency is what one vehicle on a route lacks.
+- **Two networks, one map** (slice). Track is a segment on the same map, but everything that
+  drives routes on roads only and trains on track only; a train between two towns that also
+  share a road must never be read as road traffic (it was, once: route diagnosis looked a
+  train's edge up on the road network and reported the road's wear and danfos). Every
+  "all segments" loop has to ask which network it means — a bus "running on" to the next
+  town found it over the railway.
 - **Goods pay only where they go both ways** (slice, §6 step 4c). Produce to market, supplies
   from the port: a lorry running one flow comes back empty. Measured, one lorry, 20 days,
   ₦4/t: Ilase–Kuto (produce in, supplies out) +₦66/day, Ilase–Ise +₦26; supplies-only
@@ -488,7 +500,11 @@ for if eras return; they are not live in the slice.*
   bridge is legal (cheap and immediate versus expensive and permanent), or accept it as
   a fallback and stop giving it character.
 - **Does rail belong at this demand scale?** An informed player avoided it once the
-  catalog showed it goes dark in Informal.
+  catalog showed it goes dark in Informal. *Partly answered by the slice (§6 step 4d):* track
+  through the towns people travel between is the best investment in the probe — but only
+  once trains are fast (speed 8 to a bus's 3) and cheap to run; at ₦300/day and speed 5 one
+  train came round too rarely and lost to buses everywhere. Still open: whether it holds
+  once played, and in the slice there are no eras for it to go dark in.
 - ~~What does a warm-forwarded Modern-era game feel like?~~ Answered by a headless probe
   (2026-10-16): nothing to decide — queues pinned at cap, growth over in ~2 days, costs
   negligible. That answer is what started §6.
@@ -611,6 +627,14 @@ Steps, each played before the next:
      them; roadside towns count people, not tonnes. See Findings, Demand. Watch: is "which
      routes carry goods both ways" a decision you make, and do lorries crowd the buses'
      roads?
+   - **4d. Rail** (built 2026-10-16, the user's pick: an inherited line plus new track,
+     passenger trains): the map's colonial export line Ilase→Ipaja is straight, crosses the
+     river on its own bridge, runs past Owode without stopping, and is out of service. Track
+     tool (K): restore it (₦612) or lay new track (terrain-planned, ~3× a road, gradients 3×
+     worse). Train tool (T): ₦2,000, ₦180/day, 80 seats, speed 8. Trains are passenger
+     routes, so riders change bus ↔ train anywhere; no danfo or road traffic on the line;
+     track doesn't wear yet. See Findings, Demand. Watch: restore the wrong line or build
+     the right one — is that a choice you feel? Is rail a mid-game goal or out of reach?
 
    **Played 2026-10-16 (to day 14), steps 2–4b at once:** *"felt stuck, didn't know how to
    get out of debt."* The screenshot: −₦404, −₦40/day; four routes of one bus each — a

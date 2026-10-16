@@ -1,6 +1,6 @@
 import type { GeneratedMap, Segment } from "../map/types";
 import type { DemandPair, PathResult, Vehicle } from "../simulation/types";
-import { createSimulation, rebuildFromMap } from "../simulation/simulate";
+import { createSimulation } from "../simulation/simulate";
 import { findPath } from "../simulation/routing";
 import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
@@ -14,6 +14,7 @@ import { createGoodsState, lorryResale, lorrySummaries } from "./goods";
 import { routesOnTrip } from "./transfers";
 import { isDirt } from "./congestion";
 import { buildSliceTerrain } from "./terrain";
+import { isRailRoute, railPath, rebuildNetworks, routingFor, vehicleCostPerDay } from "./rail";
 import { repairCost, upkeepPerDay, wearSpeed } from "./wear";
 import { planRoad, segmentLength, type Point } from "./roads";
 
@@ -109,6 +110,11 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     ruins: new Map(),
     pathCache: new Map(),
     roadPlans: new Map(),
+    railRouting: { graph: new Map(), positions: new Map() },
+    railPathCache: new Map(),
+    railPlans: new Map(),
+    railOutOfService: new Set(),
+    railVehicles: new Set(),
     basePopulation: new Map(def.towns.map((town) => [town.id, town.population])),
     lorryRoutes: [],
     goods: createGoodsState(),
@@ -122,6 +128,16 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
   for (const pair of simulation.demand) world.pairOutcomes.set(pairKey(pair.from, pair.to), emptyOutcome());
   // The inherited network arrives neglected (principles §1, brownfield premise).
   for (const segment of map.segments) segment.condition = tuning.inheritedRoadCondition;
+  // And the old railway arrives out of service, straight as it was laid.
+  (def.rails ?? []).forEach((rail, i) => {
+    const id = `inherited-rail-${i}`;
+    addRoadToMap(map, id, rail.a, rail.b, "inherited");
+    const segment = map.segments.find((s) => s.id === id)!;
+    segment.type = "rail";
+    segment.condition = 0.3;
+    world.railOutOfService.add(id);
+  });
+  rebuildNetworks(world);
   return world;
 }
 
@@ -163,7 +179,7 @@ export function paveCost(world: SliceWorld, a: string, b: string): number {
 /** The one road segment joining two neighbouring towns, if there is one. */
 export function directRoad(world: SliceWorld, a: string, b: string): Segment | undefined {
   return world.simulation.map.segments.find(
-    (s) => (s.fromNodeId === a && s.toNodeId === b) || (s.fromNodeId === b && s.toNodeId === a),
+    (s) => s.type === "road" && ((s.fromNodeId === a && s.toNodeId === b) || (s.fromNodeId === b && s.toNodeId === a)),
   );
 }
 
@@ -200,8 +216,7 @@ export function buildRoad(world: SliceWorld, a: string, b: string): ActionResult
   const plan = planRoad(world, a, b)!;
   world.economy.funds -= plan.cost;
   addRoadToMap(world.simulation.map, `road-${world.nextId++}`, a, b, "built", plan);
-  rebuildFromMap(world.simulation, world.simulation.map);
-  world.pathCache.clear();
+  rebuildNetworks(world);
   return { ok: true };
 }
 
@@ -259,7 +274,7 @@ export function addBus(world: SliceWorld, a: string, b: string): ActionResult {
 }
 
 function edgeLengths(world: SliceWorld, vehicle: Vehicle): number[] {
-  const { graph } = world.simulation.routing;
+  const { graph } = routingFor(world, vehicle);
   return vehicle.path.map((nodeId, i) => {
     const next = vehicle.path[(i + 1) % vehicle.path.length]!;
     return graph.get(nodeId)?.find((edge) => edge.to === next)?.weight ?? 0;
@@ -314,6 +329,7 @@ export function removeBus(world: SliceWorld, routeId: string): number {
   const id = route.vehicleIds.pop();
   if (!id) return 0;
   world.simulation.vehicles = world.simulation.vehicles.filter((vehicle) => vehicle.id !== id);
+  world.railVehicles.delete(id);
   const resale = sellVehicle(world.economy, id);
   if (route.vehicleIds.length === 0) {
     world.routes = world.routes.filter((candidate) => candidate !== route);
@@ -382,7 +398,7 @@ export function routeSummaries(world: SliceWorld): RouteSummary[] {
   return world.routes
     .map((route) => {
       const incomePerDay = route.revenueRateEMA * SECONDS_PER_GAME_DAY;
-      const costPerDay = route.vehicleIds.length * world.tuning.busOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
+      const costPerDay = route.vehicleIds.length * vehicleCostPerDay(world, route.id, SECONDS_PER_GAME_DAY);
       return { id: route.id, a: route.a, b: route.b, buses: route.vehicleIds.length, incomePerDay, costPerDay, netPerDay: incomePerDay - costPerDay };
     })
     .sort((x, y) => x.netPerDay - y.netPerDay);
@@ -469,7 +485,7 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
   // realistically catch (ONE_BUS_REACH). Comparing against the
   // whole fleet's cost instead would call an over-bused strong route
   // "thin" -- the fix there is fewer buses, not giving up on the route.
-  const oneBusPerDay = world.tuning.busOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
+  const oneBusPerDay = vehicleCostPerDay(world, routeId, SECONDS_PER_GAME_DAY);
   const diagnosis: RouteDiagnosis = {
     routeId,
     demand,
@@ -505,10 +521,12 @@ function routeSegments(world: SliceWorld, routeId: string): Set<string> {
   const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
   const segments = new Set<string>();
   if (!vehicle) return segments;
+  // On the network it runs on: a train's track, not the road between the same towns.
+  const { graph } = routingFor(world, vehicle);
   for (let i = 0; i < vehicle.path.length; i += 1) {
     const from = vehicle.path[i]!;
     const to = vehicle.path[(i + 1) % vehicle.path.length]!;
-    const edge = world.simulation.routing.graph.get(from)?.find((candidate) => candidate.to === to);
+    const edge = graph.get(from)?.find((candidate) => candidate.to === to);
     if (edge) segments.add(edge.segmentId);
   }
   return segments;
@@ -518,7 +536,7 @@ function routeSegments(world: SliceWorld, routeId: string): Set<string> {
 export function wornRoadsOn(world: SliceWorld, routeId: string): Array<{ a: string; b: string; speed: number; upkeepPerDay: number; maintained: boolean }> {
   const ids = routeSegments(world, routeId);
   return world.simulation.map.segments
-    .filter((segment) => ids.has(segment.id) && wearSpeed(segment) < 0.95)
+    .filter((segment) => ids.has(segment.id) && segment.type === "road" && wearSpeed(segment) < 0.95)
     .map((segment) => ({
       a: segment.fromNodeId,
       b: segment.toNodeId,
@@ -533,7 +551,7 @@ export function wornRoadsOn(world: SliceWorld, routeId: string): Array<{ a: stri
 export function dirtRoadsOn(world: SliceWorld, routeId: string): Array<{ a: string; b: string }> {
   const ids = routeSegments(world, routeId);
   return world.simulation.map.segments
-    .filter((segment) => ids.has(segment.id) && isDirt(segment))
+    .filter((segment) => ids.has(segment.id) && segment.type === "road" && isDirt(segment))
     .map((segment) => ({ a: segment.fromNodeId, b: segment.toNodeId }));
 }
 
@@ -632,7 +650,7 @@ export interface TripSummary {
   /** Passengers per second wanting this trip, both directions combined. */
   demand: number;
   share: ShareSummary;
-  /** Whether any road joins the two towns -- if not, nobody can take this trip. */
+  /** Whether a road or working track joins the two towns -- if not, nobody can take this trip. */
   reachable: boolean;
 }
 
@@ -652,7 +670,7 @@ export function tripsFrom(world: SliceWorld, townId: string): TripSummary[] {
       to,
       demand,
       share: toShare(sumOutcomes(world, (a, b) => (a === townId && b === to) || (a === to && b === townId))),
-      reachable: roadPath(world, townId, to) !== null,
+      reachable: canTravel(world, townId, to),
     }))
     .sort((x, y) => y.demand - x.demand);
 }
@@ -664,9 +682,14 @@ export function tripsFrom(world: SliceWorld, townId: string): TripSummary[] {
  */
 export function isCutOff(world: SliceWorld, townId: string): boolean {
   for (const other of world.towns.keys()) {
-    if (other !== townId && roadPath(world, townId, other) !== null) return false;
+    if (other !== townId && canTravel(world, townId, other)) return false;
   }
   return true;
+}
+
+/** Whether anything could carry people between two towns: a road, or working track. */
+function canTravel(world: SliceWorld, a: string, b: string): boolean {
+  return roadPath(world, a, b) !== null || railPath(world, a, b) !== null;
 }
 
 /** Passengers per second wanting to travel between a and b, both directions. */
@@ -685,10 +708,11 @@ export function pairDemand(world: SliceWorld, a: string, b: string): number {
  * show when buying a bus, since a bus from Ilase to Ikole also carries
  * Ilase-Kuto and Kuto-Ikole riders, not only Ilase-Ikole ones.
  */
-export function demandAlong(world: SliceWorld, a: string, b: string): number {
-  const path = roadPath(world, a, b);
-  if (!path) return 0;
-  const stops = new Set(path.nodeIds);
+export function demandAlong(world: SliceWorld, a: string, b: string, along?: string[]): number {
+  // `along`: the stops of a path that isn't the road one (a train's, on track).
+  const nodeIds = along ?? roadPath(world, a, b)?.nodeIds;
+  if (!nodeIds) return 0;
+  const stops = new Set(nodeIds);
   let total = 0;
   for (const pair of world.simulation.demand) if (stops.has(pair.from) && stops.has(pair.to)) total += pair.rate;
   return total;
@@ -727,7 +751,8 @@ const THROUGH_ROUTE_PAY_MARGIN = 1.5;
  */
 export function throughRoute(world: SliceWorld, routeId: string): ThroughRoute | null {
   const route = world.routes.find((candidate) => candidate.id === routeId);
-  if (!route) return null;
+  // Roads only for now: running a train on is a track decision, not a bus one.
+  if (!route || isRailRoute(routeId)) return null;
   const perDay = (rate: number) => rate * world.tuning.fare * SECONDS_PER_GAME_DAY;
   const lengthOf = (from: string, to: string) => roadPath(world, from, to)?.distance ?? Infinity;
   const current = perDay(demandAlong(world, route.a, route.b));
@@ -735,6 +760,7 @@ export function throughRoute(world: SliceWorld, routeId: string): ThroughRoute |
   const oneBus = world.tuning.busOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
   let best: ThroughRoute | null = null;
   for (const segment of world.simulation.map.segments) {
+    if (segment.type !== "road") continue; // a bus runs on along roads, not track
     // A road leaving one end of the route, to a town not on it: past `a`
     // it runs t, a, ..., b; past `b` it runs a, ..., b, t.
     for (const [end, other] of [[route.a, route.b], [route.b, route.a]] as const) {

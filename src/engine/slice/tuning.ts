@@ -59,6 +59,25 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // bigger than the contest. A ~40k town is about as far as people walk to
   // the park: Ilase 75% of your riders arrive by keke/okada, Ise 27%.
   localTripsPerThousandPerDay: 10,
+  // Rail (step 4, rail.ts). New track ~3x a road per cell; gradients bite
+  // 3x harder relative to that, so track bends round hills more readily
+  // than a road does. Trains tuned with the probe's "rail:" strategies, one
+  // train, 40 days, whole-game net/day (track + train capital excluded):
+  //   - track through the towns pays: Ilase-Owode +298 (N3,146; 4 buses on
+  //     the same pair: +263 for N2,000), Ilase-Owode-Ado +437 (N5,658) --
+  //     the best strategy in the probe;
+  //   - straight lines that bypass them don't: the restored export line
+  //     Ilase-Ipaja -125, new direct Ilase-Ado -10 (skips Owode);
+  //   - a second train on Ilase-Owode: +204 -- one is enough there.
+  // At 300/day and speed 5 a train lost to buses everywhere: one train
+  // came round too rarely, and a third of its riders gave up between.
+  railCostPerCell: 45,
+  railGradientMultiplier: 3,
+  railRestoreCostPerCell: 11,
+  trainCapacity: 80,
+  trainSpeed: 8,
+  trainPurchaseCost: 2000,
+  trainOperatingCostPerSecond: 6,
   // Goods (step 4, goods.ts). Lorry from the original catalog
   // (public/content/vehicles.json): 30 t, slow, heavy. Fares tuned with the
   // probe's "goods:" strategies, one lorry, 20 days, whole-game net/day:

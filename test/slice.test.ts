@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -13,6 +13,7 @@ import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from
 import { computeBurnRate } from "@engine/economy/report";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
 import { addLorry, diagnoseLorryRoute, goodsFlows, removeLorry } from "@engine/slice/goods";
+import { addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -979,6 +980,93 @@ describe("slice: goods (step 4c)", () => {
     expect(quote.savesPerDay).toBeCloseTo(w.tuning.lorryOperatingCostPerSecond * 30);
     expect(removeLorry(w, quote.routeId)).toBeCloseTo(quote.refund, 6);
     expect(w.lorryRoutes).toHaveLength(0);
+  });
+});
+
+describe("slice: rail (step 4d)", () => {
+  // MAP plus an old export line from Big to Far, straight past Mid.
+  const railWorld = (overrides: Partial<SliceTuning> = {}) =>
+    createSliceWorld({ ...MAP, rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, ...overrides });
+
+  test("the inherited line is on the map but out of service: no train runs until it's restored", () => {
+    const w = railWorld();
+    expect(w.simulation.map.segments.some((s) => s.type === "rail")).toBe(true);
+    expect(checkTrain(w, "big", "far")).toEqual({ ok: false, reason: "no working track between them" });
+    expect(trackAction(w, "big", "far")).toBe("restore");
+    const quote = restoreCost(w, "big", "far");
+    const before = w.economy.funds;
+    expect(buildTrack(w, "big", "far").ok).toBe(true);
+    expect(w.economy.funds).toBe(before - quote);
+    expect(railPath(w, "big", "far")?.nodeIds).toEqual(["big", "far"]); // straight: it stops nowhere between
+    expect(checkTrain(w, "big", "far").ok).toBe(true);
+  });
+
+  test("two networks: buses never take track, trains never take roads", () => {
+    const w = railWorld();
+    buildTrack(w, "big", "far");
+    // The road from Big to Far goes through Mid; the track goes straight.
+    expect(roadPath(w, "big", "far")!.nodeIds).toEqual(["big", "mid", "far"]);
+    addBus(w, "big", "far");
+    addTrain(w, "big", "far");
+    const bus = w.simulation.vehicles.find((v) => v.id.startsWith("bus-"))!;
+    const train = w.simulation.vehicles.find((v) => v.id.startsWith("train-"))!;
+    expect(bus.path).toContain("mid");
+    expect(train.path).not.toContain("mid");
+    // New track where there was none doesn't give buses a road.
+    buildTrack(w, "mid", "cut");
+    expect(roadPath(w, "mid", "cut")).toBeNull();
+  });
+
+  test("a train is never road traffic: it adds no flow, wear or roadside-town traffic", () => {
+    // No informal sector: with only trains moving, any road flow would be the trains'.
+    // (With danfos about, trains do lower road traffic -- by taking riders who'd have given up.)
+    const w = railWorld({ informalRoadSpace: 0 });
+    buildTrack(w, "big", "far");
+    for (let i = 0; i < 6; i += 1) addTrain(w, "big", "far");
+    run(w, 200);
+    expect(w.simulation.vehicles.filter((v) => v.lifecycle === "one-shot")).toHaveLength(0);
+    for (const flow of w.roadFlowEMA.values()) expect(flow).toBe(0);
+    for (const flow of w.heavyFlowEMA.values()) expect(flow).toBe(0);
+    for (const flow of w.settlement.segmentPlayerFlowEMA.values()) expect(flow).toBe(0);
+  });
+
+  test("trains carry riders, and riders change between bus and train", () => {
+    const w = railWorld();
+    buildTrack(w, "big", "far");
+    addTrain(w, "big", "far");
+    addBus(w, "far", "mid"); // Big -> Mid can go by train to Far, then bus back... or the road
+    run(w, 300);
+    const train = w.routes.find((r) => r.id.startsWith("rail:"))!;
+    expect(train.revenueRateEMA).toBeGreaterThan(0);
+    expect(diagnoseRoute(w, train.id)!.informalTraffic).toBe(0);
+  });
+
+  test("new track is planned over the terrain at rail's price: dearer than the same road", () => {
+    const w = railWorld();
+    expect(trackAction(w, "mid", "cut")).toBe("build");
+    const before = w.economy.funds;
+    buildTrack(w, "mid", "cut");
+    const spent = before - w.economy.funds;
+    expect(spent).toBeGreaterThan(roadCost(w, "mid", "cut") * 2);
+  });
+
+  test("a town only track reaches isn't cut off once the track works", () => {
+    const w = createSliceWorld({ ...MAP, rails: [{ a: "mid", b: "cut" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6 });
+    expect(isCutOff(w, "cut")).toBe(true); // the old line is out of service
+    buildTrack(w, "mid", "cut");
+    expect(isCutOff(w, "cut")).toBe(false);
+    expect(tripsFrom(w, "cut").find((t) => t.to === "mid")!.reachable).toBe(true);
+    expect(roadPath(w, "mid", "cut")).toBeNull(); // still no road: no danfo gets there
+  });
+
+  test("selling a route's last train drops it, and the train leaves the rail set", () => {
+    const w = railWorld();
+    buildTrack(w, "big", "far");
+    addTrain(w, "big", "far");
+    const route = w.routes.find((r) => r.id.startsWith("rail:"))!;
+    expect(removeBus(w, route.id)).toBeGreaterThan(0);
+    expect(w.routes.some((r) => r.id === route.id)).toBe(false);
+    expect(w.railVehicles.size).toBe(0);
   });
 });
 

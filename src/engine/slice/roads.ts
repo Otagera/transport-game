@@ -1,4 +1,4 @@
-import type { GeneratedMap, Segment } from "../map/types";
+import type { GeneratedMap, Segment, TerrainField } from "../map/types";
 import { planCorridor } from "../pathing/plan";
 import { BASE_COST_PER_CELL, BRIDGE_PREMIUM_PER_CELL } from "../pathing/cost";
 import type { SliceWorld } from "./types";
@@ -94,8 +94,24 @@ export function segmentLength(world: SliceWorld, segment: Segment): number {
  * "hold the line and pay for it" waits on pricing a line as a line.
  */
 export function planRoad(world: SliceWorld, a: string, b: string): RoadPlan | null {
+  return planAlignment(world, a, b, world.simulation.map.terrain, exchangeRate(world), world.roadPlans);
+}
+
+/**
+ * The one planner for anything laid over the terrain between two towns --
+ * roads (planRoad) and track (rail.ts planRail) -- over a given terrain at
+ * a given exchange rate onto pathing/cost.ts, cached in `cache` per pair.
+ */
+export function planAlignment(
+  world: SliceWorld,
+  a: string,
+  b: string,
+  terrain: TerrainField,
+  rate: number,
+  cache: Map<string, RoadPlan | null>,
+): RoadPlan | null {
   const key = `${a}:${b}`;
-  if (world.roadPlans.has(key)) return world.roadPlans.get(key)!;
+  if (cache.has(key)) return cache.get(key)!;
   const townA = world.towns.get(a);
   const townB = world.towns.get(b);
   let plan: RoadPlan | null = null;
@@ -103,14 +119,13 @@ export function planRoad(world: SliceWorld, a: string, b: string): RoadPlan | nu
     const from = { x: Math.round(townA.x), y: Math.round(townA.y) };
     const to = { x: Math.round(townB.x), y: Math.round(townB.y) };
     // Both ends are existing towns: only bridge banks are new nodes.
-    const corridor = planCorridor(world.simulation.map.terrain, [from, to], "auto", new Set([0, 1]));
+    const corridor = planCorridor(terrain, [from, to], "auto", new Set([0, 1]));
     if (corridor) {
       // The grid plans between whole cells; the road starts and ends at
       // the towns themselves (a roadside town can sit between cells).
       const polyline = corridor.polyline.map((p) => ({ x: p.x, y: p.y }));
       polyline[0] = { x: townA.x, y: townA.y };
       polyline[polyline.length - 1] = { x: townB.x, y: townB.y };
-      const rate = exchangeRate(world);
       const { breakdown } = corridor;
       // A bridge's own deck is base cost too; name the whole crossing.
       const bridgeCells = breakdown.water / BRIDGE_PREMIUM_PER_CELL;
@@ -124,7 +139,7 @@ export function planRoad(world: SliceWorld, a: string, b: string): RoadPlan | nu
       };
     }
   }
-  world.roadPlans.set(key, plan);
+  cache.set(key, plan);
   return plan;
 }
 

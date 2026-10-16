@@ -11,6 +11,7 @@ import { sliceTick } from "../src/engine/slice/tick";
 import { planRoad } from "../src/engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "../src/engine/slice/wear";
 import { addLorry, diagnoseLorryRoute } from "../src/engine/slice/goods";
+import { addTrain, buildTrack, trackCost } from "../src/engine/slice/rail";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
@@ -28,6 +29,22 @@ interface Strategy {
 function buses(a: string, b: string, n: number) {
   return (world: SliceWorld) => {
     for (let i = 0; i < n; i += 1) addBus(world, a, b);
+  };
+}
+
+function rail(tracks: Array<[string, string]>, trains: Array<[string, string]>) {
+  return (world: SliceWorld) => {
+    const funds = world.economy.funds;
+    world.economy.funds = 1e9;
+    let spent = 0;
+    for (const [a, b] of tracks) {
+      spent += trackCost(world, a, b);
+      buildTrack(world, a, b);
+    }
+    for (const [a, b] of trains) addTrain(world, a, b);
+    spent += trains.length * world.tuning.trainPurchaseCost;
+    console.log(`    (track and trains: ₦${spent.toFixed(0)})`);
+    world.economy.funds = funds - spent;
   };
 }
 
@@ -138,6 +155,16 @@ const allStrategies: Strategy[] = [
       buses("owode", "ado", 2)(w);
       w.economy.funds -= 2500;
     },
+  },
+  // Rail (step 4d): restore the old export line, or lay track where people
+  // travel. Track and train bought with extra money so net/day compares.
+  { name: "rail: restore ilase-ipaja + 1 train", setup: rail([["ilase", "ipaja"]], [["ilase", "ipaja"]]) },
+  { name: "rail: track ilase-owode + 1 train", setup: rail([["ilase", "owode"]], [["ilase", "owode"]]) },
+  { name: "rail: track ilase-owode + 2 trains", setup: rail([["ilase", "owode"]], [["ilase", "owode"], ["ilase", "owode"]]) },
+  { name: "rail: track ilase-ado + 1 train", setup: rail([["ilase", "ado"]], [["ilase", "ado"]]) },
+  {
+    name: "rail: track ilase-owode-ado + 1 train",
+    setup: rail([["ilase", "owode"], ["owode", "ado"]], [["ilase", "ado"]]),
   },
   // Goods (step 4c): lorries where goods flow both ways against one-way
   // routes. Produce: Kuto/Ise -> Ilase, Ogbe -> Ado; supplies: Ilase -> all.

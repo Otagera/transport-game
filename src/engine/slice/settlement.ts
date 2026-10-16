@@ -1,9 +1,9 @@
 import type { Vehicle } from "../simulation/types";
-import { rebuildFromMap } from "../simulation/simulate";
 import type { SliceTown, SliceWorld } from "./types";
 import { emptyOutcome, gravityDemand, pairKey } from "./world";
 import { parsePoolKey, parseQueueKey } from "./tick";
 import { growTowns } from "./growth";
+import { rebuildNetworks } from "./rail";
 import { overWater, pointAlong, polylineLength, segmentLength, segmentPolyline, splitPolyline } from "./roads";
 
 // Towns that appear along busy roads, and -- rarely -- fade (step 3 of
@@ -77,8 +77,10 @@ export function updateSettlements(world: SliceWorld, dt: number): SliceEvent[] {
   const alpha = 1 - Math.exp(-dt / tuning.flowTauSeconds);
   // People passing, not tonnes: lorries don't grow roadside towns (yet --
   // goods are kept off growth for now, principles §6 step 4c).
-  const flow = instantaneousFlow(world, (vehicle) => vehicle.carries === "passengers");
-  const playerFlow = instantaneousFlow(world, (vehicle) => vehicle.lifecycle === "cyclic" && vehicle.carries === "passengers");
+  // Nor trains: a town grows beside a road, from the people passing on it.
+  const onRoad = (vehicle: Vehicle) => vehicle.carries === "passengers" && !world.railVehicles.has(vehicle.id);
+  const flow = instantaneousFlow(world, onRoad);
+  const playerFlow = instantaneousFlow(world, (vehicle) => vehicle.lifecycle === "cyclic" && onRoad(vehicle));
   for (const segment of world.simulation.map.segments) {
     const previous = settlement.segmentFlowEMA.get(segment.id) ?? 0;
     settlement.segmentFlowEMA.set(segment.id, previous + ((flow.get(segment.id) ?? 0) - previous) * alpha);
@@ -142,6 +144,7 @@ function tryFoundTown(world: SliceWorld): SliceEvent | null {
 
   let best: { segmentId: string; flow: number; x: number; y: number } | null = null;
   for (const segment of simulation.map.segments) {
+    if (segment.type !== "road") continue; // towns grow beside roads, not along track
     const flow = settlement.segmentFlowEMA.get(segment.id) ?? 0;
     if (flow < tuning.foundTownFlow || (best && flow <= best.flow)) continue;
     // Your service is a necessary condition, not just a contributor
@@ -231,7 +234,8 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
       { id: second.corridorId, nodeIds: [town.id, b], polyline: secondLine },
     );
 
-  for (const vehicle of simulation.vehicles) insertIntoPath(vehicle, a, b, town.id);
+  // Road vehicles only: a train running between the same two towns is on its own track.
+  for (const vehicle of simulation.vehicles) if (!world.railVehicles.has(vehicle.id)) insertIntoPath(vehicle, a, b, town.id);
 
   // Informal vehicles already on the road now occupy both halves.
   for (const info of informal.active.values()) {
@@ -260,7 +264,7 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
   world.upkeepRateEMA.delete(segmentId);
   world.bridgeCells.delete(segmentId);
 
-  rebuildFromMap(simulation, map);
+  rebuildNetworks(world);
   world.pathCache.clear();
   world.plans = null; // routes through here now stop here
   refreshDemand(world);
