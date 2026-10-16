@@ -472,6 +472,20 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   straight with no `length` (brownfield premise). Paving prices the surface only:
   `segmentLength × roadCostPerCell`. A roadside town is founded halfway along the road's
   arc, never over water, and `splitSegment` splits the polyline there.
+- **Wear** (step 4, `wear.ts`) — `updateRoadWear` runs each tick after the vehicles move:
+  every segment loses `(weatherPerSecond + wearPerFlow × roadFlowEMA) × dirt × bridge` per
+  second, floored at `map/decay.ts`'s `MIN_CONDITION`; maintained segments
+  (`world.maintained`) are held where they are and the wear is billed via `repairCost`,
+  which prices ground cells with `pathing/cost.ts`'s `maintenanceCost` and bridge cells
+  (`bridgeCellsOn`, cached) at 4× (the build ratio), × `repairCostScale` at the slice's
+  exchange rate. The tick charges that through `applyOperatingCosts`'s new
+  `otherCostThisTick` (the original game passes none), so upkeep is in the burn rate.
+  `tickVehicle` gets every segment's condition, so `conditionSpeedFactor` slows buses and
+  danfos alike — kept apart from `segmentSpeed`, which stays traffic only (the casing
+  means traffic). `setMaintained` charges the catch-up repair at once. `paveCost` includes
+  repairing the base. `diagnoseRoute` adds `wornSpeed` (the worst stretch) and the `worn`
+  verdict (< 85%, after `jammed`); `wornRoadsOn` names them with their upkeep. A split
+  carries maintenance to both halves.
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
 
 Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,

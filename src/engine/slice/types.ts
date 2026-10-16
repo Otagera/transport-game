@@ -128,6 +128,19 @@ export interface SliceTuning {
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;
+  // Wear (step 4, wear.ts).
+  /** Condition the inherited roads start at, 0.3..1 (map/decay.ts floors it at 0.3). */
+  inheritedRoadCondition: number;
+  /** Condition a paved road loses per second to weather alone. */
+  weatherPerSecond: number;
+  /** Condition a paved road loses per second per unit of traffic flow (road space entering per second). */
+  wearPerFlow: number;
+  /** Dirt wears this many times faster than paved. */
+  dirtWearMultiplier: number;
+  /** A road with a bridge on it wears this many times faster. */
+  bridgeWearMultiplier: number;
+  /** Repair price as a multiple of pathing/cost.ts maintenanceCost at the slice's exchange rate. */
+  repairCostScale: number;
   /** Inside-town trips per thousand people per day -- informal's own ground (world.ts localTravel). */
   localTripsPerThousandPerDay: number;
   /** Town size (thousands) at which half your riders reach the bus by keke or okada. */
@@ -188,6 +201,12 @@ export interface SliceWorld {
   vehicleSegment: Map<string, string>;
   /** segmentId -> speed as a share of free flow this tick. What slows a bus is what the map draws. */
   segmentSpeed: Map<string, number>;
+  /** Roads you maintain (wear.ts): repaired as they wear, billed as they go. */
+  maintained: Set<string>;
+  /** segmentId -> what maintaining it is costing, currency per second, rolling. */
+  upkeepRateEMA: Map<string, number>;
+  /** segmentId -> cells of it that are bridge (wear.ts bridgeCellsOn). */
+  bridgeCells: Map<string, number>;
   /** townId -> rolling riders per second changing buses there. */
   transferRateEMA: Map<string, number>;
   /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */

@@ -12,6 +12,7 @@ import { createSettlementState } from "./settlement";
 import { routesOnTrip } from "./transfers";
 import { isDirt } from "./congestion";
 import { buildSliceTerrain } from "./terrain";
+import { repairCost, upkeepPerDay, wearSpeed } from "./wear";
 import { planRoad, segmentLength, type Point } from "./roads";
 
 export const BUS_DEF_ID = "slice-bus";
@@ -106,9 +107,14 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     ruins: new Map(),
     pathCache: new Map(),
     roadPlans: new Map(),
+    maintained: new Set(),
+    upkeepRateEMA: new Map(),
+    bridgeCells: new Map(),
     nextId: 0,
   };
   for (const pair of simulation.demand) world.pairOutcomes.set(pairKey(pair.from, pair.to), emptyOutcome());
+  // The inherited network arrives neglected (principles §1, brownfield premise).
+  for (const segment of map.segments) segment.condition = tuning.inheritedRoadCondition;
   return world;
 }
 
@@ -136,10 +142,15 @@ export function roadCost(world: SliceWorld, a: string, b: string): number {
 
 // Paving buys the surface, not the earthworks: the alignment is already
 // cut and any bridge already stands. So it's length times a flat cell's
-// price -- on flat ground, what building the same road would cost.
+// price -- on flat ground, what building the same road would cost -- plus
+// repairing whatever wear the road has first: you can't pave over a broken
+// base. Without that, paving a worn dirt road (new surface and all) cost
+// less than repairing it, and repair was never the choice (step 4).
 export function paveCost(world: SliceWorld, a: string, b: string): number {
   const road = directRoad(world, a, b);
-  return road ? Math.round(segmentLength(world, road) * world.tuning.roadCostPerCell) : Infinity;
+  if (!road) return Infinity;
+  const surface = segmentLength(world, road) * world.tuning.roadCostPerCell;
+  return Math.round(surface + repairCost(world, road, 1 - road.condition));
 }
 
 /** The one road segment joining two neighbouring towns, if there is one. */
@@ -161,7 +172,10 @@ export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult 
   const check = checkPave(world, a, b);
   if (!check.ok) return check;
   world.economy.funds -= paveCost(world, a, b);
-  directRoad(world, a, b)!.provenance = "built";
+  const road = directRoad(world, a, b)!;
+  road.provenance = "built";
+  // A new surface: paving renews the road as well as widening what it carries.
+  road.condition = 1;
   return { ok: true };
 }
 
@@ -323,7 +337,7 @@ export function routeSummaries(world: SliceWorld): RouteSummary[] {
     .sort((x, y) => x.netPerDay - y.netPerDay);
 }
 
-export type RouteVerdict = "thin" | "overcapacity" | "jammed" | "full" | "poached" | "waiting" | "healthy";
+export type RouteVerdict = "thin" | "overcapacity" | "jammed" | "worn" | "full" | "poached" | "waiting" | "healthy";
 
 export interface RouteDiagnosis {
   routeId: string;
@@ -342,6 +356,8 @@ export interface RouteDiagnosis {
   speed: number;
   /** Of the traffic on this route's roads, the share that's informal (danfos, kekes, okadas). */
   informalTraffic: number;
+  /** How fast its roads' condition lets its buses go, 0..1 of free speed (the worst stretch it runs). */
+  wornSpeed: number;
   verdict: RouteVerdict;
 }
 
@@ -359,6 +375,9 @@ const FULL_LOAD = 0.85;
 // Below this share of free-flow speed, traffic is the story.
 const JAMMED_SPEED = 0.7;
 const POACHED_SHARE = 0.2;
+// Below this share of free speed from wear alone, the road is the story
+// (wear.ts). Ranked after jammed: traffic is the cause you can't repair.
+const WORN_SPEED = 0.85;
 const WAITING_SHARE = 0.3;
 // About how much of a route's riders one bus catches, measured: ~35% on
 // ilase-owode, ~55% on the thin ilase-ise, ~33% on ilase-kuto -- the rest
@@ -409,6 +428,7 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
     loadFactor: route.loadFactorEMA,
     speed: route.speedEMA,
     informalTraffic: informalTrafficShare(world, routeId),
+    wornSpeed: Math.min(1, ...[...routeSegments(world, routeId)].map((id) => wearSpeed(world.simulation.map.segments.find((s) => s.id === id)!))),
     verdict: "healthy",
   };
 
@@ -417,6 +437,7 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
     diagnosis.verdict = "overcapacity";
   }
   else if (route.speedEMA < JAMMED_SPEED) diagnosis.verdict = "jammed";
+  else if (diagnosis.wornSpeed < WORN_SPEED) diagnosis.verdict = "worn";
   else if (route.loadFactorEMA >= FULL_LOAD) diagnosis.verdict = "full";
   else if (diagnosis.poached >= POACHED_SHARE) diagnosis.verdict = "poached";
   else if (diagnosis.gaveUp + diagnosis.lost >= WAITING_SHARE) diagnosis.verdict = "waiting";
@@ -437,6 +458,21 @@ function routeSegments(world: SliceWorld, routeId: string): Set<string> {
     if (edge) segments.add(edge.segmentId);
   }
   return segments;
+}
+
+/** The worn roads on a route, worst first, with what keeping each one up would cost a day. */
+export function wornRoadsOn(world: SliceWorld, routeId: string): Array<{ a: string; b: string; speed: number; upkeepPerDay: number; maintained: boolean }> {
+  const ids = routeSegments(world, routeId);
+  return world.simulation.map.segments
+    .filter((segment) => ids.has(segment.id) && wearSpeed(segment) < 0.95)
+    .map((segment) => ({
+      a: segment.fromNodeId,
+      b: segment.toNodeId,
+      speed: wearSpeed(segment),
+      upkeepPerDay: upkeepPerDay(world, segment),
+      maintained: world.maintained.has(segment.id),
+    }))
+    .sort((p, q) => p.speed - q.speed);
 }
 
 /** The dirt roads on a route, as town pairs -- what paving it would mean. */

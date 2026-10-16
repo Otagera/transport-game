@@ -244,6 +244,17 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
     flows.set(second.id, flow);
     flows.delete(segmentId);
   }
+  // A maintained road stays maintained, both halves; its upkeep splits
+  // with its length. Bridge cells are recounted per half when next asked.
+  if (world.maintained.delete(segmentId)) {
+    world.maintained.add(first.id);
+    world.maintained.add(second.id);
+  }
+  const upkeep = world.upkeepRateEMA.get(segmentId) ?? 0;
+  world.upkeepRateEMA.set(first.id, upkeep / 2);
+  world.upkeepRateEMA.set(second.id, upkeep / 2);
+  world.upkeepRateEMA.delete(segmentId);
+  world.bridgeCells.delete(segmentId);
 
   rebuildFromMap(simulation, map);
   world.pathCache.clear();

@@ -8,7 +8,9 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/slice/settlement";
 import { routesOnTrip, tripPlans } from "@engine/slice/transfers";
 import { roadCapacity, speedFactor } from "@engine/slice/congestion";
-import { planRoad, polylineLength, segmentPolyline } from "@engine/slice/roads";
+import { planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
+import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
+import { computeBurnRate } from "@engine/economy/report";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -234,7 +236,7 @@ describe("slice: towns along busy roads", () => {
     expect(bus.path).toContain(town.id);
     // No per-road record outlives the road it described.
     const live = new Set(w.simulation.map.segments.map((s) => s.id));
-    for (const record of [w.roadFlowEMA, w.settlement.segmentFlowEMA, w.informal.segmentSpace]) {
+    for (const record of [w.roadFlowEMA, w.settlement.segmentFlowEMA, w.informal.segmentSpace, w.upkeepRateEMA, w.bridgeCells]) {
       for (const id of record.keys()) expect(live.has(id)).toBe(true);
     }
     // It wants trips like any town, and you carry some of them.
@@ -585,6 +587,19 @@ describe("slice: terrain (step 3)", () => {
     expect(w.economy.funds).toBe(before - plan.cost);
   });
 
+  test("a road with a bridge wears faster and costs more to keep than dry road (principles §3, Bridges)", () => {
+    const w = terrainWorld();
+    buildRoad(w, "west", "east");
+    paveRoad(w, "west", "sw"); // the inherited road on the west bank: dry, and now paved like the other
+    const wet = w.simulation.map.segments.find((s) => s.fromNodeId === "west" && s.toNodeId === "east")!;
+    const dry = w.simulation.map.segments.find((s) => s.fromNodeId === "west" && s.toNodeId === "sw")!;
+    expect(bridgeCellsOn(w, dry)).toBe(0);
+    expect(bridgeCellsOn(w, wet)).toBeGreaterThan(0);
+    // No traffic yet: weather alone, both paved.
+    expect(wearRate(w, wet)).toBeCloseTo(wearRate(w, dry) * DEFAULT_SLICE_TUNING.bridgeWearMultiplier);
+    expect(repairCost(w, wet, 0.5) / wet.length!).toBeGreaterThan(repairCost(w, dry, 0.5) / segmentLength(w, dry));
+  });
+
   test("water wider than a bridge can span can't be crossed, and the refusal says why", () => {
     const wide: SliceMapDef = { ...TERRAIN_MAP, towns: TERRAIN_MAP.towns.slice(0, 2), roads: [], terrain: { rivers: [{ points: [[24, -2], [24, 42]], width: 20 }] } };
     const w = createSliceWorld(wide, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6 });
@@ -647,6 +662,93 @@ describe("slice: terrain (step 3)", () => {
     const halves = w.simulation.map.segments.filter((s) => s.fromNodeId === town!.id || s.toNodeId === town!.id);
     expect(halves.reduce((sum, s) => sum + (s.length ?? 0), 0)).toBeCloseTo(length, 1);
     for (const half of halves) expect(polylineLength(segmentPolyline(w.simulation.map, half))).toBeCloseTo(half.length!, 5);
+  });
+});
+
+describe("slice: wear (step 4)", () => {
+  const road = (w: SliceWorld, a: string, b: string) =>
+    w.simulation.map.segments.find((s) => (s.fromNodeId === a && s.toNodeId === b) || (s.fromNodeId === b && s.toNodeId === a))!;
+  const calm = { startingFunds: 1e6, maxEmergentTowns: 0 };
+
+  test("the inherited network arrives worn; a road you build arrives new", () => {
+    const w = world(calm);
+    expect(road(w, "big", "mid").condition).toBe(DEFAULT_SLICE_TUNING.inheritedRoadCondition);
+    buildRoad(w, "mid", "cut");
+    expect(road(w, "mid", "cut").condition).toBe(1);
+  });
+
+  test("wear follows use: a busy road wears faster than a quiet one, dirt faster than paved", () => {
+    const w = world(calm);
+    for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    run(w, 60);
+    expect(wearRate(w, road(w, "big", "mid"))).toBeGreaterThan(wearRate(w, road(w, "mid", "far")));
+    const dirtRate = wearRate(w, road(w, "big", "mid"));
+    paveRoad(w, "big", "mid");
+    expect(wearRate(w, road(w, "big", "mid"))).toBeCloseTo(dirtRate / DEFAULT_SLICE_TUNING.dirtWearMultiplier);
+  });
+
+  test("a worn road slows the buses on it, down to a floor", () => {
+    const progressIn1s = (condition: number) => {
+      const w = world({ ...calm, congestion: false, wearPerFlow: 0, weatherPerSecond: 0 });
+      road(w, "big", "mid").condition = condition;
+      addBus(w, "big", "mid");
+      const bus = w.simulation.vehicles.find((v) => v.lifecycle === "cyclic")!;
+      const start = bus.edgeProgress;
+      run(w, 1);
+      return bus.edgeProgress - start;
+    };
+    expect(progressIn1s(0.3)).toBeLessThan(progressIn1s(1) * 0.8);
+    expect(progressIn1s(0.3)).toBeGreaterThan(progressIn1s(1) * 0.6);
+  });
+
+  test("left alone, a busy road wears to the floor and the route says it's worn", () => {
+    const w = world(calm);
+    for (let i = 0; i < 2; i += 1) addBus(w, "big", "mid");
+    run(w, 1200);
+    expect(road(w, "big", "mid").condition).toBeCloseTo(0.3);
+    expect(diagnoseRoute(w, w.routes[0]!.id)!.wornSpeed).toBeLessThan(0.8);
+  });
+
+  test("maintaining a road repairs it now for the quoted price, then keeps it new for upkeep that shows in net/day", () => {
+    const w = world(calm);
+    for (let i = 0; i < 2; i += 1) addBus(w, "big", "mid");
+    run(w, 120);
+    const trunk = road(w, "big", "mid");
+    const quote = repairCost(w, trunk, 1 - trunk.condition);
+    const before = w.economy.funds;
+    expect(setMaintained(w, trunk.id, true)).toEqual({ ok: true, charged: quote });
+    expect(w.economy.funds).toBe(before - quote);
+    const costBefore = computeBurnRate(w.economy).costPerDay;
+    run(w, 300);
+    expect(trunk.condition).toBe(1);
+    expect(upkeepPerDay(w, trunk)).toBeGreaterThan(0);
+    // Upkeep is a running cost: the burn rate now carries it on top of the buses.
+    expect(computeBurnRate(w.economy).costPerDay).toBeGreaterThan(costBefore + upkeepPerDay(w, trunk) * 0.5);
+    // Stopping costs nothing, and the road wears again.
+    const funds = w.economy.funds;
+    setMaintained(w, trunk.id, false);
+    expect(w.economy.funds).toBe(funds);
+    run(w, 60);
+    expect(trunk.condition).toBeLessThan(1);
+  });
+
+  test("a repair you can't afford is refused and costs nothing", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 0.01 });
+    const trunk = road(w, "big", "mid");
+    expect(setMaintained(w, trunk.id, true)).toEqual({ ok: false, reason: "can't afford the repair" });
+    expect(w.economy.funds).toBe(0.01);
+    expect(w.maintained.has(trunk.id)).toBe(false);
+  });
+
+  test("paving lays a new surface on a repaired base: on a worn road it costs more than the repair alone", () => {
+    const w = world(calm);
+    const trunk = road(w, "big", "mid");
+    trunk.condition = 0.3;
+    const repair = repairCost(w, trunk, 0.7);
+    expect(paveCost(w, "big", "mid")).toBeGreaterThan(repair);
+    expect(paveCost(w, "big", "mid")).toBe(Math.round(segmentLength(w, trunk) * w.tuning.roadCostPerCell + repair));
+    paveRoad(w, "big", "mid");
+    expect(trunk.condition).toBe(1);
   });
 });
 

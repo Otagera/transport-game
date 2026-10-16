@@ -6,6 +6,7 @@ import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { tripPlans } from "./transfers";
 import { updateRoadSpeeds } from "./congestion";
+import { segmentConditions, updateRoadWear } from "./wear";
 
 // How much longer people wait at a motor park for a danfo to fill than
 // they wait for your bus before giving up.
@@ -141,6 +142,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     }
   };
 
+  // Worn roads slow everything on them (wear.ts), on top of traffic.
+  const conditions = segmentConditions(world);
   let revenueThisTick = 0;
   for (const vehicle of simulation.vehicles) {
     const isDanfo = vehicle.lifecycle === "one-shot";
@@ -151,7 +154,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       simulation.segmentTraffic,
       world.segmentLoad,
       dt,
-      undefined,
+      conditions,
       undefined,
       isDanfo ? danfoLoader : busLoader,
       world.segmentSpeed,
@@ -182,8 +185,12 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   dispatchInformal(world, dt, lost, gaveUp);
   reapInformal(world);
 
+  // Roads wear with the traffic that just ran on them; maintained ones are
+  // repaired as they go, and that upkeep is a running cost like a bus's.
+  const upkeep = updateRoadWear(world, dt);
+
   // Money.
-  applyOperatingCosts(economy, dt);
+  applyOperatingCosts(economy, dt, 1, upkeep);
   updateIncomeRateEMA(economy, revenueThisTick, dt);
 
   // Rolling rates, each updated exactly once per tick (architecture hard

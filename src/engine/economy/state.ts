@@ -99,10 +99,14 @@ function emaUpdate(previous: number, instantaneous: number, dt: number, tau: num
 // every vehicle already on the road, not just ones bought after the
 // transition -- "Informal-era fuel spike bites operationally" is a felt
 // event, not a catalog footnote.
-export function applyOperatingCosts(state: EconomyState, dt: number, fuelMultiplier: number = 1): void {
+// `otherCostThisTick` is spending that isn't a vehicle's (the slice's road
+// upkeep), charged here so it counts in the same burn rate. The original
+// game passes none.
+export function applyOperatingCosts(state: EconomyState, dt: number, fuelMultiplier: number = 1, otherCostThisTick: number = 0): void {
   state.elapsedSeconds += dt;
 
-  let costThisTick = 0;
+  let costThisTick = otherCostThisTick;
+  state.funds -= otherCostThisTick;
   for (const [vehicleId, econ] of state.vehicleEconomics) {
     const cost = econ.operatingCostPerSecond * fuelMultiplier * obsolescenceMultiplier(econ, state.elapsedSeconds) * dt;
     costThisTick += cost;

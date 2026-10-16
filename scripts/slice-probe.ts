@@ -6,9 +6,10 @@
 //   bun scripts/slice-probe.ts            # built-in strategies
 //   bun scripts/slice-probe.ts 40         # ...over 40 game days
 import { SLICE_MAP } from "../src/slice/map";
-import { addBus, buildRoad, paveRoad, paveCost, createSliceWorld, diagnoseRoute, networkShare, routeSummaries, waitingAt } from "../src/engine/slice/world";
+import { addBus, buildRoad, directRoad, paveRoad, paveCost, createSliceWorld, diagnoseRoute, networkShare, routeSummaries, waitingAt } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { planRoad } from "../src/engine/slice/roads";
+import { setMaintained, upkeepPerDay, wearSpeed } from "../src/engine/slice/wear";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
@@ -87,6 +88,40 @@ const allStrategies: Strategy[] = [
       w.economy.funds = f - 6 * w.tuning.busPurchaseCost - paveCost(w, "ilase", "owode");
     },
   },
+  // Step 4, wear: the same chain, keeping up none, the trunk, or every road
+  // it runs on (setup charges the catch-up repair before net/day is read).
+  {
+    name: "wear: chain, maintain the trunk",
+    setup: (w) => {
+      w.economy.funds += 2500;
+      buses("ilase", "owode", 2)(w);
+      buses("owode", "ado", 2)(w);
+      setMaintained(w, directRoad(w, "ilase", "owode")!.id, true);
+      w.economy.funds -= 2500;
+    },
+  },
+  {
+    name: "wear: chain, maintain both its roads",
+    setup: (w) => {
+      w.economy.funds += 2500;
+      buses("ilase", "owode", 2)(w);
+      buses("owode", "ado", 2)(w);
+      setMaintained(w, directRoad(w, "ilase", "owode")!.id, true);
+      setMaintained(w, directRoad(w, "owode", "ado")!.id, true);
+      w.economy.funds -= 2500;
+    },
+  },
+  {
+    name: "wear: chain, trunk paved and maintained",
+    setup: (w) => {
+      w.economy.funds += 2500;
+      paveRoad(w, "ilase", "owode");
+      buses("ilase", "owode", 2)(w);
+      buses("owode", "ado", 2)(w);
+      setMaintained(w, directRoad(w, "ilase", "owode")!.id, true);
+      w.economy.funds -= 2500;
+    },
+  },
   {
     name: "chain, trunk paved",
     setup: (w) => {
@@ -152,6 +187,10 @@ for (const strategy of strategies) {
       `share you ${pct(share.player)} danfo ${pct(share.informal)} home ${pct(share.lost)}  ` +
       `danfos ${String(danfos).padStart(3)}  waiting@ilase ${fmt(waitingAt(world, "ilase"))}  informal ₦ ${fmt(world.informal.earnings)}`,
   );
+  const roads = world.simulation.map.segments
+    .filter((s) => (world.roadFlowEMA.get(s.id) ?? 0) > 0.2)
+    .map((s) => `${s.id}${world.maintained.has(s.id) ? "*" : ""} ${pct(s.condition)} (${pct(wearSpeed(s))} speed${world.maintained.has(s.id) ? `, upkeep ${upkeepPerDay(world, s).toFixed(0)}/day` : ""})`);
+  console.log(`    roads (* maintained): ${roads.join(", ")}`);
   const busiest = [...world.roadFlowEMA].sort((a, b) => b[1] - a[1])[0];
   if (busiest) console.log(`    busiest road: ${busiest[0]} flow ${busiest[1].toFixed(2)}/s at ${pct(world.segmentSpeed.get(busiest[0]) ?? 1)} speed`);
   const flows = [...world.settlement.segmentFlowEMA].sort((a, b) => b[1] - a[1]).slice(0, 3);

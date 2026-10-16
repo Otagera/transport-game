@@ -59,6 +59,21 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // bigger than the contest. A ~40k town is about as far as people walk to
   // the park: Ilase 75% of your riders arrive by keke/okada, Ise 27%.
   localTripsPerThousandPerDay: 10,
+  // Wear (step 4, wear.ts). Tuned with the probe's wear strategies, a
+  // 2+2-bus chain over 40 days (no wear at all: +305/day):
+  //   - left alone, every busy dirt road reaches the floor (72% speed)
+  //     within ~2 weeks, and the chain nets +154/day;
+  //   - maintaining the trunk (~47/day upkeep, dirt) nets +234 -- it pays;
+  //   - maintaining the Owode-Ado road too nets +140: its old bridge wears
+  //     2x and costs 4x a cell to repair, ~129/day, more than it gives back;
+  //   - paving the trunk and maintaining it (~15/day) nets +296.
+  // The step 2-3 numbers in the comments above were measured before wear.
+  inheritedRoadCondition: 0.75,
+  weatherPerSecond: 0.0001,
+  wearPerFlow: 0.00045,
+  dirtWearMultiplier: 3,
+  bridgeWearMultiplier: 2,
+  repairCostScale: 8,
   walkableTownPopulation: 40,
   outcomeTauSeconds: 30,
   // Shared road (congestion.ts). Capacity is road space entering per

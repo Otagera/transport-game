@@ -15,6 +15,8 @@ export const COLORS = {
   waterEdge: "#8bb6c8",
   hill: "#b5a27a",
   bridge: "#7d7466",
+  crack: "#4a3b2a",
+  kept: "#fffdf8",
   groundEdge: "#d9ccae",
   dirtRoad: "#c4ab7c",
   builtRoad: "#5d5a55",
@@ -81,6 +83,8 @@ export interface DrawState {
   /** The town whose trips are drawn as desire lines (hovered, else selected). */
   focusTown: string | null;
   ghost: Ghost | null;
+  /** The fix tool's hovered road, and what to say about it. */
+  road?: { segmentId: string; at: { x: number; y: number }; label: string } | null;
 }
 
 export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, state: DrawState): void {
@@ -92,6 +96,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
 
   drawGround(ctx, world, view);
   drawRoads(ctx, world, view);
+  if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawRouteLines(ctx, world, view);
   if (state.focusTown) drawDesireLines(ctx, world, view, state.focusTown);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
@@ -99,7 +104,8 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   for (const town of world.towns.values()) drawTown(ctx, world, view, town, state);
   // Last, so nothing on the map draws through the price.
-  if (state.ghost) drawGhostLabel(ctx, state.ghost);
+  if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok);
+  if (state.road) drawLabel(ctx, state.road.at, state.road.label, true);
 
   ctx.restore();
 }
@@ -233,8 +239,53 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
     ctx.lineWidth = built ? 7 : 6;
     ctx.setLineDash(built ? [] : [10, 5]);
     strokeLine(ctx, view, line);
+    // Wear: cracks across the road, closer together the worse it is.
+    // Maintained roads get a centre line instead -- someone keeps them.
+    ctx.setLineDash([]);
+    if (world.maintained.has(segment.id)) {
+      ctx.strokeStyle = COLORS.kept;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 6]);
+      strokeLine(ctx, view, line);
+      ctx.setLineDash([]);
+    } else if (segment.condition < 0.85) {
+      drawCracks(ctx, view, line, segment.condition);
+    }
   }
   ctx.setLineDash([]);
+}
+
+function drawCracks(ctx: CanvasRenderingContext2D, view: View, line: Point[], condition: number): void {
+  const length = polylineLength(line);
+  // From one crack every ~4 cells just below "fine" to one per cell at the floor.
+  const wear = Math.min(1, (0.85 - condition) / 0.55);
+  const spacing = 4 - 3 * wear;
+  ctx.strokeStyle = COLORS.crack;
+  ctx.globalAlpha = 0.45 + 0.4 * wear;
+  ctx.lineWidth = 1.5;
+  for (let at = spacing / 2; at < length; at += spacing) {
+    const [, rest] = splitPolyline(line, at);
+    const p = rest[0]!;
+    const q = rest.find((r) => Math.hypot(r.x - p.x, r.y - p.y) > 1e-6) ?? p;
+    const angle = Math.atan2(q.y - p.y, q.x - p.x) + Math.PI / 2 + (at % 2 > 1 ? 0.35 : -0.35);
+    const s = toScreen(view, p.x, p.y);
+    ctx.beginPath();
+    ctx.moveTo(s.x - Math.cos(angle) * 4, s.y - Math.sin(angle) * 4);
+    ctx.lineTo(s.x + Math.cos(angle) * 4, s.y + Math.sin(angle) * 4);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawRoadHighlight(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, segmentId: string): void {
+  const segment = world.simulation.map.segments.find((s) => s.id === segmentId);
+  if (!segment) return;
+  ctx.strokeStyle = COLORS.selection;
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 14;
+  ctx.lineCap = "round";
+  strokeLine(ctx, view, segmentPolyline(world.simulation.map, segment));
+  ctx.globalAlpha = 1;
 }
 
 /** Roads slower than this share of free flow draw a traffic casing. */
@@ -348,7 +399,8 @@ function drawGhostLine(ctx: CanvasRenderingContext2D, world: SliceWorld, view: V
   ctx.setLineDash([]);
 }
 
-function drawGhostLabel(ctx: CanvasRenderingContext2D, ghost: Ghost): void {
+function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, label: string, ok: boolean): void {
+  const ghost = { to, label, ok };
   if (ghost.label) {
     ctx.font = "600 13px system-ui, sans-serif";
     const w = ctx.measureText(ghost.label).width + 12;

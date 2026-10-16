@@ -11,6 +11,7 @@ import {
   diagnoseRoute,
   directRoad,
   dirtRoadsOn,
+  wornRoadsOn,
   isCutOff,
   localTravel,
   networkShare,
@@ -24,7 +25,8 @@ import {
   tripsFrom,
 } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
-import { planRoad } from "@engine/slice/roads";
+import { planRoad, segmentPolyline } from "@engine/slice/roads";
+import { setMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
@@ -35,9 +37,10 @@ import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View 
 //   R  road tool -- click a town, then another: build a straight road, or
 //      pave the dirt road already joining them.
 //   B  bus tool  -- click a town, then another: buy a bus running between them.
+//   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus";
+type Tool = "road" | "bus" | "fix";
 
 const world = createSliceWorld(SLICE_MAP);
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
@@ -95,6 +98,29 @@ function townAt(x: number, y: number): string | null {
   return null;
 }
 
+/** The road under the cursor (screen px), for the fix tool: nearest within a few pixels. */
+function roadAt(x: number, y: number): string | null {
+  let best: { id: string; d: number } | null = null;
+  for (const segment of world.simulation.map.segments) {
+    const line = segmentPolyline(world.simulation.map, segment).map((p) => toScreen(view, p.x, p.y));
+    for (let i = 1; i < line.length; i += 1) {
+      const a = line[i - 1]!;
+      const b = line[i]!;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      const d = Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy));
+      if (d <= 10 && (!best || d < best.d)) best = { id: segment.id, d };
+    }
+  }
+  return best?.id ?? null;
+}
+
+function roadName(segmentId: string): string {
+  const segment = world.simulation.map.segments.find((s) => s.id === segmentId)!;
+  return `${townName(segment.fromNodeId)} – ${townName(segment.toNodeId)}`;
+}
+
 function setTool(next: Tool): void {
   tool = next;
   selectedTown = null;
@@ -104,7 +130,7 @@ function setTool(next: Tool): void {
 canvas.addEventListener("mousemove", (event) => {
   mouse = { x: event.clientX, y: event.clientY };
   const next = townAt(event.clientX, event.clientY);
-  canvas.style.cursor = next ? "pointer" : "default";
+  canvas.style.cursor = next || (tool === "fix" && roadAt(event.clientX, event.clientY)) ? "pointer" : "default";
   if (next !== hoverTown) {
     hoverTown = next;
     renderPanel();
@@ -123,6 +149,19 @@ function focusTown(): string | null {
 }
 
 canvas.addEventListener("click", (event) => {
+  if (tool === "fix") {
+    const road = roadAt(event.clientX, event.clientY);
+    if (!road) return;
+    const on = !world.maintained.has(road);
+    const result = setMaintained(world, road, on);
+    if (!result.ok) say(`Can't maintain: ${result.reason}`, true);
+    else if (on) {
+      const segment = world.simulation.map.segments.find((s) => s.id === road)!;
+      say(`Maintaining ${roadName(road)}: repaired for ${naira(result.charged)}, about ${naira(upkeepPerDay(world, segment))}/day to keep at this traffic`);
+    } else say(`Stopped maintaining ${roadName(road)}: it will wear again`);
+    renderPanel();
+    return;
+  }
   const town = townAt(event.clientX, event.clientY);
   if (!town) {
     selectedTown = null;
@@ -157,6 +196,7 @@ canvas.addEventListener("click", (event) => {
 window.addEventListener("keydown", (event) => {
   if (event.key === "r" || event.key === "R") setTool("road");
   else if (event.key === "b" || event.key === "B") setTool("bus");
+  else if (event.key === "f" || event.key === "F") setTool("fix");
   else if (event.key === "Escape") selectedTown = null;
   else if (event.key === " ") {
     paused = !paused;
@@ -168,6 +208,21 @@ window.addEventListener("keydown", (event) => {
     renderToolbar();
   }
 });
+
+// The fix tool's preview: the road under the cursor, how worn it is, and
+// what keeping it up would cost -- or what it's costing now.
+function roadHover(): { segmentId: string; at: { x: number; y: number }; label: string } | null {
+  if (tool !== "fix" || !mouse) return null;
+  const id = roadAt(mouse.x, mouse.y);
+  if (!id) return null;
+  const segment = world.simulation.map.segments.find((s) => s.id === id)!;
+  const state = `${pct(segment.condition)} condition, traffic at ${pct(wearSpeed(segment))} speed`;
+  const upkeep = naira(upkeepPerDay(world, segment));
+  const label = world.maintained.has(id)
+    ? `${roadName(id)} · maintained, ${upkeep}/day · click to stop`
+    : `${roadName(id)} · ${state} · maintain for ~${upkeep}/day`;
+  return { segmentId: id, at: mouse, label };
+}
 
 // What a road's price is made of (principles §1: a quote must say *why*,
 // not just be a bigger number) and how much longer the trip is than the
@@ -225,6 +280,7 @@ function renderToolbar(): void {
   toolbar.replaceChildren(
     button("Bus", "B", tool === "bus", () => setTool("bus")),
     button("Road", "R", tool === "road", () => setTool("road")),
+    button("Fix", "F", tool === "fix", () => setTool("fix")),
     Object.assign(document.createElement("span"), { className: "sep" }),
     button(paused ? "Paused" : "Pause", "Space", paused, () => {
       paused = !paused;
@@ -340,6 +396,12 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
       return `Buses run ${pct(d.loadFactor)} full and already carry ${pct(d.carried)} of riders here: the last bus mostly carries empty seats. Selling one saves ${naira(costPerDay / buses)}/day.`;
     case "jammed":
       return `Jammed: traffic holds your buses to ${pct(d.speed)} of free speed, so each makes fewer trips a day. ${pct(d.informalTraffic)} of the traffic is informal; every rider you take back is one fewer okada. Too many buses of your own add to it too.${dirt.length > 0 ? ` It runs on dirt: paving ${dirt.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ")} (Road tool, click both towns) carries ${paveGain()}× the traffic.` : ""}`;
+    case "worn": {
+      const worn = wornRoadsOn(world, d.routeId).filter((r) => !r.maintained);
+      const roads = worn.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ");
+      const upkeep = worn.reduce((sum, r) => sum + r.upkeepPerDay, 0);
+      return `Worn roads hold your buses to ${pct(d.wornSpeed)} speed${roads ? ` (${roads})` : ""}. Maintain them (Fix tool, F) for about ${naira(upkeep)}/day, or pave the dirt ones: paved roads wear a third as fast.`;
+    }
     case "full":
       return `Buses leave ${pct(d.loadFactor)} full: more riders than seats. Another bus would carry the ones left behind.`;
     case "poached":
@@ -424,7 +486,7 @@ function frame(now: number): void {
       });
     }
   }
-  draw(ctx, world, view, { selectedTown, hoverTown, focusTown: focusTown(), ghost: ghost() });
+  draw(ctx, world, view, { selectedTown, hoverTown, focusTown: focusTown(), ghost: ghost(), road: roadHover() });
 
   panelTimer += elapsed;
   if (panelTimer > 0.25) {

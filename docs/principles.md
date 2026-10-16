@@ -251,6 +251,20 @@ blow-by-blow; this section is the distilled rule.
 - **Rising maintenance on obsolete stock** is the other half — without it nothing
   pressures replacement and era turnover never happens.
 
+### Decay (slice, §6 step 4)
+
+- **Make upkeep a choice of roads, not a chore of clicks.** A maintained road is repaired as
+  it wears and billed as it goes; the decision is *which* roads to keep. Repair-on-click
+  asks for the same click forever once it's worth it at all.
+- **Wear follows use**, plus a little weather. The roads you lean on are the ones that go —
+  and the roads only danfos use wear down on the informal sector, not on you.
+- **Paving must include repairing the base.** Priced as surface alone, paving a worn dirt
+  road (new surface, more capacity, a third of the wear) cost less than repairing it, and
+  repair was never the choice.
+- **The crossings are where it bites.** Measured: keeping the trunk up pays (+₦80/day over
+  neglect on a 4-bus chain); keeping the bridged Owode–Ado road up as well *loses* (₦129/day
+  upkeep for ₦72 back). A bridge wears 2× and costs 4× a cell to repair (the build ratio).
+
 ### Balance numbers (from the first attempt — starting points, not gospel)
 
 - Fleet optimum was ~15 vehicles under static demand; revenue plateaued around the
@@ -550,6 +564,15 @@ Steps, each played before the next:
    cross?
 4. **Depth, one at a time** — decay, goods, rail, growth of the original towns — each played
    before the next. Each must create a decision.
+   - **4a. Decay** (built 2026-10-16, user's pick of the four, still before any of 2–3 was
+     played): roads wear with traffic and weather, dirt 3× and bridges 2× faster, slowing
+     everything on them to a 72% floor; inherited roads start at 75%. The Fix tool (F) marks
+     a road maintained: repaired now, then kept new for upkeep that counts in net/day.
+     Worn routes say so. See Findings, Decay for what it measured. Watch: is choosing which
+     roads to keep a decision, or does everything simply get maintained (or nothing)? And
+     the "worn" verdict ranks above full/poached/waiting, so under neglect nearly every
+     route says "worn" — true (maintenance is the cheapest fix), but it can hide a bigger
+     leak (the long Ilase–Ado route says "worn" with 50% giving up). Re-rank if play says so.
 
 Rules for working this way:
 
