@@ -186,3 +186,27 @@ computation, same discipline as hard rule 3.
 [engine.md](engine.md)); deleting the renderer would change how the game *looks* and
 nothing about how it *plays* — the load exists in `engine/` whether or not anything
 draws it.
+
+## 7. The slice's page (principles.md §6)
+
+`slice.html` + `src/slice/` — a separate page, flat 2D canvas, no three.js, no Preact. It
+reads `engine/slice` state every frame and keeps no display state of its own (the same
+no-cached-view discipline as §2).
+
+- **`render.ts`** draws, back to front: ground, roads (dashed tan = inherited dirt, solid
+  grey = built), one coloured line per route (offset per route so shared roads show both),
+  the ghost line, vehicles, towns, and the ghost's price label last so nothing draws
+  through it. Vehicles keep right of the road centre so opposite directions don't overlap.
+  A bus is outlined in its route colour and filled from the back by how full it is; a
+  danfo is yellow with a black stripe.
+- **Each town carries the loop's two facts.** The ring: where its passengers went, as
+  shares of rolling rates — blue yours, yellow danfo, grey stayed home. The dots: people
+  waiting now, one per four. Both are always on; there is no overlay to switch.
+- **`main.ts`** — two tools (Bus `B`, Road `R`): click a town, then another. Shift keeps
+  the first town selected. Refusals come back as `reason` strings from `engine/slice`
+  and show as a toast; the ghost previews the same `check*` result and `roadCost` before
+  you click. The strip shows day, funds, net/day (economy's burn-rate EMA), the
+  you/danfo/home share bar, and what danfos earned. The routes panel is worst-first with
+  +/− per route. Speed: Space pauses, 1/2/3 give 1×/2×/4×.
+- **`map.ts`** — the hand-made map as a TS constant, not yet content JSON (it moves to
+  `public/content/` once the loop survives a playtest).

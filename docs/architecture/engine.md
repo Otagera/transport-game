@@ -338,3 +338,42 @@ mid-warm (that logic lives in `render/fleet.ts`'s `markObsoleteStock`, which nee
 content catalog `engine/` can't import). `main.ts` calls
 `fleetController.handleEraChanged()` once after a scenario/save is applied, which
 catches it for the *final* era reached, just not for eras passed through en route.
+
+## slice/ — the reset's loop (principles.md §6)
+
+`engine/slice/` composes existing modules into the slice's tick rather than extending
+`simulation/simulate.ts`'s `tick`. It reuses `createVehicle` / `createOneShotVehicle` /
+`tickVehicle`, `buildRoutingContext` / `findPath` / `rebuildFromMap`, and economy's
+purchase, sale, operating-cost and income-EMA functions unchanged. It does not use eras,
+growth, decay, ambient traffic, or `paratransit/spawn.ts`.
+
+- **`world.ts`** — `createSliceWorld(def, tuning)` builds a `GeneratedMap` (blank terrain,
+  every town a `settlement`, inherited roads as two-point corridors) and replaces the
+  generated demand with **gravity demand** (`k · popA · popB / distance`, passengers only,
+  reciprocal, between *every* pair whether or not a road joins them). Player actions —
+  `buildRoad`, `addBus`, `removeBus` — return `{ ok, reason }` and each has a matching
+  `check*` the UI uses for previews. `roadCost` is the only function that prices a road
+  (hard rule 3). Road paths are cached per pair in `pathCache`, cleared on every road change.
+- **`tick.ts`** — `sliceTick`, in order: arrivals; **giving up** (each queue loses
+  `1 − e^(−dt/patience)` per tick into a per-pair pool, so a queue settles at
+  rate × patience — no `QUEUE_CAP`); vehicle movement and fares; **danfo dispatch**; reap;
+  operating cost; rolling rates.
+- **Danfo dispatch** groups pooled riders by origin and first hop, picks the destination
+  whose path collects the most of them, and sends one danfo (capacity 14) if that's a full
+  load and no segment on the path is at `danfoCorridorCap`. Riders are taken
+  proportionally from every pool on the way. With no road, pooled riders stay home at once;
+  otherwise they drift home at `patience × 3`. A danfo is created with an *empty* queue map
+  so it leaves with the people who gave up, not the queue still waiting for you — but
+  `tickVehicle` still loads one-shot vehicles at intermediate stops, so a danfo passing
+  through takes your waiting passengers. That is deliberate and counts as danfo share.
+- **Outcomes** — every generated passenger ends in exactly one of: boarded your bus
+  (`cyclic` pickup), took a danfo (dispatch, or a danfo pickup en route), or stayed home.
+  `world.outcomes` keeps per-town EMA rates of each (τ = one game day); `networkShare`
+  sums them. Route income is a per-route EMA; route cost is buses × operating cost.
+- **Bus placement** — `addBus` creates the vehicle without queues (no teleport-load) and
+  places it at the midpoint of the largest gap between the route's existing buses
+  (`cycleFraction` / `largestGapMidpoint`).
+- **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
+  `congestion: false` in step 1; step 2 turns it on.
+
+Tests: `test/slice.test.ts` — feel invariants, see principles.md §6.

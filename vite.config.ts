@@ -13,6 +13,16 @@ export default defineConfig({
   oxc: {
     jsx: { runtime: "automatic", importSource: "preact" },
   },
+  // Two pages: the original game (index.html) and the slice (slice.html,
+  // docs/principles.md §6).
+  build: {
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        slice: fileURLToPath(new URL("./slice.html", import.meta.url)),
+      },
+    },
+  },
   resolve: {
     alias: {
       "@engine": fileURLToPath(new URL("./src/engine", import.meta.url)),

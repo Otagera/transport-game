@@ -148,12 +148,30 @@ blow-by-blow; this section is the distilled rule.
   whose destination lies ahead on its remaining route.
 - **Load entries must carry `from`**, or delivered trips cannot be attributed back to
   the origin that generated them — which growth needs.
+- **Cyclic loading must look across the wrap-around.** "Load demand whose destination is
+  ahead" has to mean ahead *round the cycle*, not ahead in the path array. Reading only the
+  array tail made every A↔B route run its return leg empty — reciprocal demand generated,
+  one direction served — and no test caught it for twelve modules, because every test
+  checked one direction. Found by a headless probe, not by play.
+- **A new vehicle on a route joins the largest gap**, not a terminus. Starting every bus at
+  an end sends them out as a convoy that serves the route exactly as often as one bus:
+  measured, 2, 4 and 8 buses earned identically.
 - **Player vehicles run cyclic routes. Paratransit is one-shot.** Cyclic paratransit
   drains queues to a comfortable equilibrium and removes the pressure to build.
   Measured, not assumed.
 
 ### Paratransit
 
+- **Paratransit is where abandoned passengers go** (slice model, §6). Waiting passengers give
+  up at a steady rate; the ones who give up board danfos if a road exists, and stay home if
+  not. This bounds every queue by construction (a queue settles at rate × patience) and makes
+  frequency worth paying for — a cap on queue length does neither, it just keeps every
+  vehicle full forever.
+- **Danfos run corridors, not pairs.** Dispatching one danfo per (origin, destination) pair
+  splits demand so thin that most never fill: measured, lifting every cap barely moved the
+  stayed-home share, while one-seat danfos cut it from 53% to 33%. Group riders by origin and
+  first hop; send the danfo where most of them are going; everyone whose stop is on the way
+  boards.
 - **Cap per corridor, not only per demand pair.** Many pairs route over one corridor;
   without a corridor-level cap, 20+ informal vehicles accumulate on one link and
   collapse throughput to ~10%.
@@ -276,6 +294,9 @@ blow-by-blow; this section is the distilled rule.
 
 ### Eras
 
+*Paused (2026-10-16): the slice (§6) runs in one present-day setting. These findings stand
+for if eras return; they are not live in the slice.*
+
 - **Four compressed eras:** Post-Independence → Oil Boom → Informal → Modern.
 - **Palette carries most of the era legibility.** Verified cheap; four
   screenshot-distinct worlds cost very little.
@@ -371,23 +392,57 @@ blow-by-blow; this section is the distilled rule.
   a fallback and stop giving it character.
 - **Does rail belong at this demand scale?** An informed player avoided it once the
   catalog showed it goes dark in Informal.
-- **Now that Module 10 (save/scenarios) exists, what does a warm-forwarded Modern-era
-  game actually feel like?** Ambient traffic's era factors (`architecture/engine.md`)
-  are unfelt starting points, not calibrated — this is the first open question a
-  playtest should answer.
+- ~~What does a warm-forwarded Modern-era game feel like?~~ Answered by a headless probe
+  (2026-10-16): nothing to decide — queues pinned at cap, growth over in ~2 days, costs
+  negligible. That answer is what started §6.
+- **Does the slice's loop hold up?** Step 1's question (§6): does being undercut by danfos
+  feel true, and make you want to act?
 
 ---
 
-## 6. How to decide what's next
+## 6. The reset: one loop, felt first (2026-10-16)
 
-Now that the module build order is complete, this is the whole decision process — there
-is no more prescribed order to fall back on.
+The module build order (0–12) shipped every system and none of them had been played
+together: a headless probe of the Modern-era scenario showed queues pinned at their cap
+(every vehicle full forever, so no fleet-size decision), growth finished in ~2 game-days,
+operating cost at 5–20% of revenue, and a top-down map where nothing visibly happened. The
+build went bottom-up — systems first, play last. The reset inverts that.
 
-1. **Is there an unplayed shipped thing?** Play it. Every finding that mattered came
-   from playing or from measuring the failing case — never from analysis of a healthy
-   one.
-2. **Is there a premise-level question open?** Those beat features. See §5.
-3. **Otherwise:** prefer the item that adds *meaning* over the item that adds *depth*.
+**Eras are paused.** Four eras × five modifiers on an untuned base made calibration
+impossible. The slice runs one present-day setting. The era code stays in the repo, unused
+by the slice.
 
-The standing test is *"does this hold up as a sandbox, and would the relevant system
-survive being lifted out on its own?"* (§2) — not "is this complete?"
+**The slice** lives beside the original game, not instead of it: `slice.html` +
+`src/slice/` (2D canvas, DOM panels) over `src/engine/slice/` (pure, tested), importing the
+existing engine modules — vehicles, routing, economy — rather than rewriting them. The rest
+of the codebase is a library to pull from as each step needs it.
+
+Steps, each played before the next:
+
+1. **The smallest loop** — hand-made map, straight roads, one bus type, passengers who give
+   up, danfos that carry them, tight money, a market-share headline. *Question: does being
+   undercut by danfos feel true, and make you want to act?*
+2. **Shared road** — danfos and buses congest each other (`tuning.congestion`), closing
+   "weak service invites the interference that weakens it further." Revisit the corridor cap.
+3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`
+   and `engine/pathing`. The map stops being a diagram.
+4. **Depth, one at a time** — growth, decay, goods, rail — each played before the next. Each
+   must create a decision.
+
+Rules for working this way:
+
+- **Every step is played before the next starts.** Every finding that mattered came from
+  playing or from measuring the failing case.
+- **`scripts/slice-probe.ts` is the calibration instrument.** It runs real ticks headlessly
+  and prints money, shares and per-route P&L for scripted strategies. Rerun it after any
+  tuning change; record what the numbers were tuned *to* next to the numbers
+  (`engine/slice/tuning.ts`).
+- **Feel tests, not just mechanics tests.** `test/slice.test.ts` pins what the player should
+  experience — queues settle, more buses have diminishing returns, enough of them lose
+  money, a cut-off town only ever stays home.
+- **A parameter enters only when it creates a player decision.**
+- **Legibility before looks.** Flat and top-down until the loop holds; a richer look can
+  come back over a loop that works.
+
+The standing test is unchanged: *"does this hold up as a sandbox, and would the relevant
+system survive being lifted out on its own?"* (§2).

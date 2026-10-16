@@ -6,10 +6,32 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**328 tests passing** across 47 files (`bun test`). Typecheck / test / build /
-verify:bundle all green as of the last commit on `main`.
+**341 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+verify:bundle all green.
 
-## What's built
+## Current direction: the slice
+
+The project reset on 2026-10-16 — see [principles.md](principles.md) §6 for why and the
+step plan. Eras are paused. The slice is a second page beside the original game:
+
+- Play: `bun run dev`, open `/slice.html` (the original game is still `/`).
+- Calibrate: `bun scripts/slice-probe.ts [days]`, with `SLICE_TUNING='{"fare":5}'` to try
+  overrides.
+- Detail: [architecture/engine.md](architecture/engine.md) §slice/,
+  [architecture/render-and-ui.md](architecture/render-and-ui.md) §7.
+
+| Step | What | State |
+|---|---|---|
+| 1 | Smallest loop: towns, roads, buses, giving up, danfos, money, share | Built, probe-calibrated, **not yet played** |
+| 2 | Shared road: congestion between danfos and buses | — |
+| 3 | A place to build in: terrain, pathing, bridges | — |
+| 4 | Depth, one at a time: growth, decay, goods, rail | — |
+
+Engine fix found along the way, affecting the original game too: cyclic vehicles never
+loaded passengers whose destination lay behind the path's wrap-around, so every A↔B route
+ran its return leg empty ([principles.md](principles.md) §3, Vehicles).
+
+## What's built (the original game, Modules 0–12)
 
 The original rebuild plan's module order (Module 0 → 10) is complete, followed by two
 modules added after the plan was written (11, 12). Everything below has shipped and is
@@ -34,9 +56,6 @@ live-verified; each links to where its detail actually lives now.
 
 ## What's next
 
-No more prescribed build order — see [principles.md](principles.md) §6 ("How to decide
-what's next"). The standing open questions are in principles.md §5; the nearest one:
-ambient traffic and growth are both live but **uncalibrated** — the era factors are
-starting points, and nobody has played a real warm-forwarded Modern-era game with
-genuinely grown settlements yet. That's now possible via `window.dev.warm()` /
-`scenario()` and is the natural next session.
+Play step 1. Its question is in principles.md §6. Whatever the answer, write down what was
+felt before changing anything — then step 2, or back to step 1's model if the loop didn't
+hold.

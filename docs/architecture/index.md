@@ -76,15 +76,21 @@ src/
     simulation/   The tick loop: demand, vehicles, congestion, routing, ambient traffic
     growth/       Logistic demand growth, service ratio, tier promotion
     save/         Versioned snapshot and scenario application/warm-forward
+    slice/        The reset's loop (principles.md §6): abandonment, corridor danfos,
+                  routes, share -- composes simulation/economy, doesn't replace them
   render/         three.js scene, camera, authoring UI logic, entity picking, overlay
                   layer, profile extrusion -- render-and-ui.md
   ui/             Plain-DOM panels, one per home: inspector, overlays, pnlPanel,
                   statusBar, eraBanner, costPanel -- plus selection.ts, the store all of
                   them agree on -- render-and-ui.md
   dev/            DEV-only Preact studio (`?studio=1`) -- dev-studio.md
+  slice/          The slice's page: 2D canvas renderer, DOM panels, hand-made map
+                  -- render-and-ui.md §7
   main.ts         Bootstrap: loads content, wires every controller, owns the frame loop
+slice.html         The slice's entry page (index.html is the original game)
 public/content/    eras.json, vehicles.json, profiles.json, scenarios.json
 public/mods/       Mod packages written by the Asset Modder tab (vehicle.json + mesh)
+scripts/slice-probe.ts  Headless calibration probe for the slice
 docs/
   principles.md   Design premise, scope, Findings (the "why")
   architecture/   This directory (the "how it's shaped")
