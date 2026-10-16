@@ -79,7 +79,7 @@ function loadAt(
     vehicle.cargo.push({ from: nodeId, to: destination, kind, amount: take });
     nodeQueue.set(key, amount - take);
     free -= take;
-    pickupEvents?.push({ nodeId, kind, amount: take, lifecycle: vehicle.lifecycle });
+    pickupEvents?.push({ nodeId, to: destination, vehicleId: vehicle.id, kind, amount: take, lifecycle: vehicle.lifecycle });
   }
 }
 

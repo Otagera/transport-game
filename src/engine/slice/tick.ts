@@ -4,6 +4,7 @@ import { createOneShotVehicle, hasCompletedTrip, tickVehicle } from "../simulati
 import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from "../economy/state";
 import type { SliceWorld } from "./types";
 import { pairKey, roadPath } from "./world";
+import { updateSettlements, type SliceEvent } from "./settlement";
 
 // How much longer people wait at a motor park for a danfo to fill than
 // they wait for your bus before giving up.
@@ -28,14 +29,16 @@ function bump(map: Map<string, number>, key: string, amount: number): void {
 //   4. People who gave up gather per (origin, destination). A full danfo's
 //      worth leaves as a one-shot danfo if a road exists and the caps
 //      allow; with no road, they stay home.
+//   5. Towns grow along busy roads, and rarely fade (settlement.ts).
+//      Returned as events so the page can say so.
 //
 // So the informal sector is not a parallel spawner reading queue depth --
 // it is, literally, where the passengers you failed to carry went
 // (docs/principles.md §1: it fills every gap you leave).
-export function sliceTick(world: SliceWorld, dt: number): void {
+export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   const { simulation, tuning, informal, economy } = world;
-  const lostByTown = new Map<string, number>();
-  const informalByTown = new Map<string, number>();
+  const lostByPair = new Map<string, number>();
+  const gaveUpByPair = new Map<string, number>();
 
   // 1. Arrivals.
   for (const pair of simulation.demand) {
@@ -86,7 +89,7 @@ export function sliceTick(world: SliceWorld, dt: number): void {
   }
 
   // 4. Danfos.
-  dispatchDanfos(world, dt, lostByTown, informalByTown);
+  dispatchDanfos(world, dt, lostByPair, gaveUpByPair);
   reapDanfos(world);
 
   // Money.
@@ -96,22 +99,47 @@ export function sliceTick(world: SliceWorld, dt: number): void {
   // Rolling rates, each updated exactly once per tick (architecture hard
   // rule 7).
   const alpha = emaAlpha(dt, tuning.outcomeTauSeconds);
-  for (const route of world.routes) {
-    const rate = (routeRevenue.get(route.id) ?? 0) / dt;
-    route.revenueRateEMA += (rate - route.revenueRateEMA) * alpha;
-  }
-  // A danfo passing through a town picks up your waiting passengers along
-  // the way (tickVehicle loads one-shot vehicles at intermediate stops).
-  // That is the competition, not a leak: it counts as informal share.
-  const playerByTown = new Map<string, number>();
+  const playerByPair = new Map<string, number>();
+  const poachedByPair = new Map<string, number>();
+  const boardingsByRoute = new Map<string, number>();
   for (const pickup of pickups) {
-    bump(pickup.lifecycle === "cyclic" ? playerByTown : informalByTown, pickup.nodeId, pickup.amount);
+    const key = pairKey(pickup.nodeId, pickup.to);
+    if (pickup.lifecycle === "cyclic") {
+      bump(playerByPair, key, pickup.amount);
+      bump(boardingsByRoute, routeIdOf(world, pickup.vehicleId), pickup.amount);
+    } else {
+      // A danfo passing through a town picks up your waiting passengers
+      // along the way (tickVehicle loads one-shot vehicles at intermediate
+      // stops). That is the competition, not a leak.
+      bump(poachedByPair, key, pickup.amount);
+    }
   }
-  for (const [townId, rates] of world.outcomes) {
-    rates.player += ((playerByTown.get(townId) ?? 0) / dt - rates.player) * alpha;
-    rates.informal += ((informalByTown.get(townId) ?? 0) / dt - rates.informal) * alpha;
-    rates.lost += ((lostByTown.get(townId) ?? 0) / dt - rates.lost) * alpha;
+  for (const route of world.routes) {
+    const revenueRate = (routeRevenue.get(route.id) ?? 0) / dt;
+    route.revenueRateEMA += (revenueRate - route.revenueRateEMA) * alpha;
+    const boardingRate = (boardingsByRoute.get(route.id) ?? 0) / dt;
+    route.boardingRateEMA += (boardingRate - route.boardingRateEMA) * alpha;
+    route.loadFactorEMA += (routeLoadFactor(world, route.vehicleIds) - route.loadFactorEMA) * alpha;
   }
+  for (const [key, rates] of world.pairOutcomes) {
+    rates.player += ((playerByPair.get(key) ?? 0) / dt - rates.player) * alpha;
+    rates.poached += ((poachedByPair.get(key) ?? 0) / dt - rates.poached) * alpha;
+    rates.gaveUp += ((gaveUpByPair.get(key) ?? 0) / dt - rates.gaveUp) * alpha;
+    rates.lost += ((lostByPair.get(key) ?? 0) / dt - rates.lost) * alpha;
+  }
+
+  return updateSettlements(world, dt);
+}
+
+function routeLoadFactor(world: SliceWorld, vehicleIds: string[]): number {
+  let total = 0;
+  let count = 0;
+  for (const vehicle of world.simulation.vehicles) {
+    if (!vehicleIds.includes(vehicle.id)) continue;
+    total += vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
+    count += 1;
+  }
+  return count > 0 ? total / count : 0;
 }
 
 function routeIdOf(world: SliceWorld, vehicleId: string): string {
@@ -131,7 +159,7 @@ interface PooledRider {
 // pair instead -- the first version -- split demand so thin that most danfos
 // never filled: measured, uncapping every danfo limit barely moved the
 // stayed-home share, while one-seat danfos cut it from 53% to 33%.
-function dispatchDanfos(world: SliceWorld, dt: number, lostByTown: Map<string, number>, informalByTown: Map<string, number>): void {
+function dispatchDanfos(world: SliceWorld, dt: number, lostByPair: Map<string, number>, gaveUpByPair: Map<string, number>): void {
   const { simulation, tuning, informal } = world;
   const cap = tuning.danfoCapacity;
   const drift = emaAlpha(dt, tuning.patienceSeconds * PARK_PATIENCE_MULTIPLIER);
@@ -146,7 +174,7 @@ function dispatchDanfos(world: SliceWorld, dt: number, lostByTown: Map<string, n
 
     // No road: nobody can take them. They stay home.
     if (!path || path.nodeIds.length < 2) {
-      bump(lostByTown, from, pooled);
+      bump(lostByPair, key, pooled);
       informal.pool.set(key, 0);
       continue;
     }
@@ -156,7 +184,7 @@ function dispatchDanfos(world: SliceWorld, dt: number, lostByTown: Map<string, n
     // when every danfo on a run is already out.
     const drifting = pooled * drift;
     informal.pool.set(key, pooled - drifting);
-    bump(lostByTown, from, drifting);
+    bump(lostByPair, key, drifting);
 
     const groupKey = `${from}>${path.nodeIds[1]}`;
     let group = groups.get(groupKey);
@@ -195,12 +223,12 @@ function dispatchDanfos(world: SliceWorld, dt: number, lostByTown: Map<string, n
     danfo.cargo = bestAboard.map((rider) => {
       const pooled = informal.pool.get(rider.key) ?? 0;
       informal.pool.set(rider.key, pooled * (1 - share));
+      bump(gaveUpByPair, rider.key, pooled * share);
       return { from, to: rider.to, kind: "passengers" as const, amount: pooled * share };
     });
     simulation.vehicles.push(danfo);
     informal.active.set(id, { segmentIds: best.path.segmentIds });
     for (const segmentId of best.path.segmentIds) bump(informal.segmentCounts, segmentId, 1);
-    bump(informalByTown, from, cap);
   }
 }
 

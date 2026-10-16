@@ -111,7 +111,7 @@ describe("tickVehicle", () => {
     // not at creation.
     tickVehicle(vehicle, queues, context, traffic, new Map(), 2, new Map(), pickupEvents);
 
-    expect(pickupEvents).toEqual([{ nodeId: "a", kind: "passengers", amount: 6, lifecycle: "cyclic" }]);
+    expect(pickupEvents).toEqual([{ nodeId: "a", to: "b", vehicleId: "v1", kind: "passengers", amount: 6, lifecycle: "cyclic" }]);
   });
 });
 

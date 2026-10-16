@@ -5,8 +5,9 @@ import { findPath } from "../simulation/routing";
 import { createVehicle } from "../simulation/vehicle";
 import { canAfford, createEconomyState, registerPurchase, sellVehicle } from "../economy/state";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
-import type { SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
+import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
+import { createSettlementState } from "./settlement";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -61,6 +62,8 @@ function buildMap(def: SliceMapDef): GeneratedMap {
     segments: [],
   };
   def.roads.forEach((road, i) => addRoadToMap(map, `inherited-${i}`, road.a, road.b, "inherited"));
+  // The def's towns are copied, not shared: emergent towns grow and the
+  // def is the map's starting state, not live state.
   return map;
 }
 
@@ -78,19 +81,27 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
   const map = buildMap(def);
   const simulation = createSimulation(map, []);
   simulation.demand = gravityDemand(def.towns, tuning.demandK);
-  return {
+  const world: SliceWorld = {
     width: def.width,
     height: def.height,
-    towns: new Map(def.towns.map((town) => [town.id, town])),
+    towns: new Map(def.towns.map((town) => [town.id, { ...town }])),
     tuning,
     simulation,
     economy: createEconomyState({ passengers: tuning.fare, produce: 0, supplies: 0 }, tuning.startingFunds),
     routes: [],
     informal: { pool: new Map(), active: new Map(), segmentCounts: new Map(), earnings: 0 },
-    outcomes: new Map(def.towns.map((town) => [town.id, { player: 0, informal: 0, lost: 0 }])),
+    pairOutcomes: new Map(),
+    settlement: createSettlementState(),
+    ruins: new Map(),
     pathCache: new Map(),
     nextId: 0,
   };
+  for (const pair of simulation.demand) world.pairOutcomes.set(pairKey(pair.from, pair.to), emptyOutcome());
+  return world;
+}
+
+export function emptyOutcome(): OutcomeRates {
+  return { player: 0, poached: 0, gaveUp: 0, lost: 0 };
 }
 
 export function roadPath(world: SliceWorld, from: string, to: string): PathResult | null {
@@ -158,7 +169,7 @@ export function addBus(world: SliceWorld, a: string, b: string): ActionResult {
 
   let route = findRoute(world, a, b);
   if (!route) {
-    route = { id: routeKey(a, b), a, b, vehicleIds: [], revenueRateEMA: 0 };
+    route = { id: routeKey(a, b), a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0 };
     world.routes.push(route);
   }
   const { tuning } = world;
@@ -264,25 +275,160 @@ export function routeSummaries(world: SliceWorld): RouteSummary[] {
     .sort((x, y) => x.netPerDay - y.netPerDay);
 }
 
+export type RouteVerdict = "thin" | "overcapacity" | "full" | "poached" | "waiting" | "healthy";
+
+export interface RouteDiagnosis {
+  routeId: string;
+  /** Passengers per second wanting trips this route can carry (both ends on its path). */
+  demand: number;
+  /** What carrying every one of them would earn per day -- the route's ceiling. */
+  ceilingPerDay: number;
+  /** Of the riders wanting this route's trips: where they went, 0..1 each. */
+  carried: number;
+  poached: number;
+  gaveUp: number;
+  lost: number;
+  boardingsPerDay: number;
+  loadFactor: number;
+  verdict: RouteVerdict;
+}
+
+// Thresholds for the one-line reason. Ordered most structural first: a
+// route whose ceiling can't cover one bus's running cost is "thin" however
+// it's run; past that, empty buses mean too many and full ones too few; past
+// that, the biggest leak.
+const OVERCAPACITY_LOAD = 0.35;
+// Low load alone isn't overcapacity: measured on ilase-owode, 2 buses run
+// ~35% full yet beat 1 bus, because they still catch riders who'd
+// otherwise be lost. It's only too many buses once there's little left to
+// catch.
+const OVERCAPACITY_CARRIED = 0.6;
+const FULL_LOAD = 0.85;
+const POACHED_SHARE = 0.2;
+const WAITING_SHARE = 0.3;
+
+/**
+ * Why a route earns what it does (docs/principles.md §3: per-route P&L
+ * must be diagnosable). Every number is measured, not modelled: the
+ * outcome rates of the trips whose both ends lie on the route's path.
+ */
+export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosis | null {
+  const route = world.routes.find((candidate) => candidate.id === routeId);
+  const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
+  if (!route || !vehicle) return null;
+  const stops = new Set(vehicle.path);
+
+  let demand = 0;
+  for (const pair of world.simulation.demand) {
+    if (stops.has(pair.from) && stops.has(pair.to)) demand += pair.rate;
+  }
+  const outcomes = sumOutcomes(world, (from, to) => stops.has(from) && stops.has(to));
+  const total = outcomes.player + outcomes.poached + outcomes.gaveUp + outcomes.lost;
+  const of = (n: number) => (total > 0 ? n / total : 0);
+
+  const ceilingPerDay = demand * world.tuning.fare * SECONDS_PER_GAME_DAY;
+  // Thin means the trips can't pay for even one bus. Comparing against the
+  // whole fleet's cost instead would call an over-bused strong route
+  // "thin" -- the fix there is fewer buses, not giving up on the route.
+  const oneBusPerDay = world.tuning.busOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
+  const diagnosis: RouteDiagnosis = {
+    routeId,
+    demand,
+    ceilingPerDay,
+    carried: of(outcomes.player),
+    poached: of(outcomes.poached),
+    gaveUp: of(outcomes.gaveUp),
+    lost: of(outcomes.lost),
+    boardingsPerDay: route.boardingRateEMA * SECONDS_PER_GAME_DAY,
+    loadFactor: route.loadFactorEMA,
+    verdict: "healthy",
+  };
+
+  if (ceilingPerDay < oneBusPerDay) diagnosis.verdict = "thin";
+  else if (route.vehicleIds.length >= 2 && route.loadFactorEMA < OVERCAPACITY_LOAD && diagnosis.carried >= OVERCAPACITY_CARRIED) {
+    diagnosis.verdict = "overcapacity";
+  }
+  else if (route.loadFactorEMA >= FULL_LOAD) diagnosis.verdict = "full";
+  else if (diagnosis.poached >= POACHED_SHARE) diagnosis.verdict = "poached";
+  else if (diagnosis.gaveUp + diagnosis.lost >= WAITING_SHARE) diagnosis.verdict = "waiting";
+  return diagnosis;
+}
+
 export interface ShareSummary {
   player: number;
   informal: number;
   lost: number;
 }
 
+function toShare(rates: OutcomeRates): ShareSummary {
+  const informal = rates.poached + rates.gaveUp;
+  const total = rates.player + informal + rates.lost;
+  if (total <= 0) return { player: 0, informal: 0, lost: 0 };
+  return { player: rates.player / total, informal: informal / total, lost: rates.lost / total };
+}
+
+function sumOutcomes(world: SliceWorld, include: (from: string, to: string) => boolean): OutcomeRates {
+  const sum = emptyOutcome();
+  for (const [key, rates] of world.pairOutcomes) {
+    const separator = key.indexOf(":");
+    if (!include(key.slice(0, separator), key.slice(separator + 1))) continue;
+    sum.player += rates.player;
+    sum.poached += rates.poached;
+    sum.gaveUp += rates.gaveUp;
+    sum.lost += rates.lost;
+  }
+  return sum;
+}
+
 /** Network-wide share of where passengers ended up, 0..1 each. */
 export function networkShare(world: SliceWorld): ShareSummary {
-  let player = 0;
-  let informal = 0;
-  let lost = 0;
-  for (const rates of world.outcomes.values()) {
-    player += rates.player;
-    informal += rates.informal;
-    lost += rates.lost;
+  return toShare(sumOutcomes(world, () => true));
+}
+
+/** Where passengers *leaving* this town ended up. */
+export function townOutcomes(world: SliceWorld, townId: string): OutcomeRates {
+  return sumOutcomes(world, (from) => from === townId);
+}
+
+export function townShare(world: SliceWorld, townId: string): ShareSummary {
+  return toShare(townOutcomes(world, townId));
+}
+
+export interface TripSummary {
+  /** The other town. */
+  to: string;
+  /** Passengers per second wanting this trip, both directions combined. */
+  demand: number;
+  share: ShareSummary;
+}
+
+/**
+ * Every trip touching a town, both directions combined, biggest first --
+ * what the player needs to see to route: where people want to go, and who
+ * is carrying them now.
+ */
+export function tripsFrom(world: SliceWorld, townId: string): TripSummary[] {
+  const demandByOther = new Map<string, number>();
+  for (const pair of world.simulation.demand) {
+    if (pair.from === townId) demandByOther.set(pair.to, (demandByOther.get(pair.to) ?? 0) + pair.rate);
+    else if (pair.to === townId) demandByOther.set(pair.from, (demandByOther.get(pair.from) ?? 0) + pair.rate);
   }
-  const total = player + informal + lost;
-  if (total <= 0) return { player: 0, informal: 0, lost: 0 };
-  return { player: player / total, informal: informal / total, lost: lost / total };
+  return [...demandByOther]
+    .map(([to, demand]) => ({
+      to,
+      demand,
+      share: toShare(sumOutcomes(world, (a, b) => (a === townId && b === to) || (a === to && b === townId))),
+    }))
+    .sort((x, y) => y.demand - x.demand);
+}
+
+/** Passengers per second wanting to travel between a and b, both directions. */
+export function pairDemand(world: SliceWorld, a: string, b: string): number {
+  let total = 0;
+  for (const pair of world.simulation.demand) {
+    if ((pair.from === a && pair.to === b) || (pair.from === b && pair.to === a)) total += pair.rate;
+  }
+  return total;
 }
 
 export function waitingAt(world: SliceWorld, townId: string): number {

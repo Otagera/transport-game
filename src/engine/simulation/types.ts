@@ -66,6 +66,10 @@ export interface DeliveryEvent {
 // that knows about vehicle movement -- growth only ever reads this.
 export interface PickupEvent {
   nodeId: string;
+  // Where the riders are going, and who picked them up -- the slice
+  // attributes outcomes per (origin, destination) pair and per route.
+  to: string;
+  vehicleId: string;
   kind: CargoKind;
   amount: number;
   lifecycle: Vehicle["lifecycle"];

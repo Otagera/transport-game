@@ -1,6 +1,7 @@
 import type { SliceTown, SliceWorld } from "@engine/slice/types";
 import type { Vehicle } from "@engine/simulation/types";
-import { waitingAt } from "@engine/slice/world";
+import { townShare, tripsFrom, waitingAt } from "@engine/slice/world";
+import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -66,6 +67,8 @@ export interface Ghost {
 export interface DrawState {
   selectedTown: string | null;
   hoverTown: string | null;
+  /** The town whose trips are drawn as desire lines (hovered, else selected). */
+  focusTown: string | null;
   ghost: Ghost | null;
 }
 
@@ -79,8 +82,10 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   drawGround(ctx, world, view);
   drawRoads(ctx, world, view);
   drawRouteLines(ctx, world, view);
+  if (state.focusTown) drawDesireLines(ctx, world, view, state.focusTown);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
   drawVehicles(ctx, world, view);
+  for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   for (const town of world.towns.values()) drawTown(ctx, world, view, town, state);
   // Last, so nothing on the map draws through the price.
   if (state.ghost) drawGhostLabel(ctx, state.ghost);
@@ -143,6 +148,60 @@ function drawRouteLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: 
     ctx.stroke();
     ctx.globalAlpha = 1;
   });
+}
+
+// Desire lines: straight from the focused town to every town its people
+// want to reach, thickness = how many want that trip, and the line itself a
+// stacked bar of who carries them -- blue from your end, then danfo, then
+// stayed home. A thick yellow or grey line is a route waiting to be built
+// (docs/principles.md §3: show relationships, not just state).
+function drawDesireLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, focus: string): void {
+  const from = world.towns.get(focus);
+  if (!from) return;
+  const trips = tripsFrom(world, focus);
+  const maxDemand = Math.max(...trips.map((trip) => trip.demand), 1e-9);
+  const a = toScreen(view, from.x, from.y);
+  ctx.lineCap = "butt";
+  for (const trip of trips) {
+    const other = world.towns.get(trip.to);
+    if (!other) continue;
+    const b = toScreen(view, other.x, other.y);
+    const width = 2 + 12 * Math.sqrt(trip.demand / maxDemand);
+    const { player, informal, lost } = trip.share;
+    const known = player + informal + lost;
+    // Before any outcome has been measured, draw it as unserved.
+    const parts: Array<[number, string]> = known > 0
+      ? [[player, COLORS.player], [informal, COLORS.danfo], [lost, COLORS.home]]
+      : [[1, COLORS.home]];
+    let t0 = 0;
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = width;
+    for (const [fraction, color] of parts) {
+      if (fraction <= 0) continue;
+      const t1 = t0 + fraction;
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0);
+      ctx.lineTo(a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1);
+      ctx.stroke();
+      t0 = t1;
+    }
+    ctx.globalAlpha = 1;
+    const perDay = Math.round(trip.demand * SECONDS_PER_GAME_DAY);
+    const mid = { x: a.x + (b.x - a.x) * 0.62, y: a.y + (b.y - a.y) * 0.62 };
+    ctx.font = "600 11px system-ui, sans-serif";
+    const label = `${perDay}/day`;
+    const w = ctx.measureText(label).width + 8;
+    ctx.fillStyle = "rgba(255,253,248,0.9)";
+    ctx.beginPath();
+    ctx.roundRect(mid.x - w / 2, mid.y - 9, w, 17, 4);
+    ctx.fill();
+    ctx.fillStyle = COLORS.label;
+    ctx.textAlign = "center";
+    ctx.fillText(label, mid.x, mid.y + 3);
+    ctx.textAlign = "left";
+  }
+  ctx.lineCap = "round";
 }
 
 /** One direction of a shuttle's cyclic path: a ... b. */
@@ -247,18 +306,17 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
   const p = toScreen(view, town.x, town.y);
   const r = townRadius(town, view);
 
-  const rates = world.outcomes.get(town.id)!;
-  const total = rates.player + rates.informal + rates.lost;
+  const share = townShare(world, town.id);
   const ringR = r + 5;
   ctx.lineWidth = 5;
-  if (total > 0) {
+  if (share.player + share.informal + share.lost > 0) {
     let start = -Math.PI / 2;
     for (const [value, color] of [
-      [rates.player, COLORS.player],
-      [rates.informal, COLORS.danfo],
-      [rates.lost, COLORS.home],
+      [share.player, COLORS.player],
+      [share.informal, COLORS.danfo],
+      [share.lost, COLORS.home],
     ] as const) {
-      const sweep = (value / total) * Math.PI * 2;
+      const sweep = value * Math.PI * 2;
       if (sweep <= 0) continue;
       ctx.strokeStyle = color;
       ctx.beginPath();
@@ -286,7 +344,22 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
   ctx.fillText(town.name, p.x, p.y + ringR + 16);
   ctx.fillStyle = COLORS.labelMuted;
   ctx.font = "11px system-ui, sans-serif";
-  ctx.fillText(`${town.population}k`, p.x, p.y + ringR + 29);
+  ctx.fillText(`${Math.round(town.population)}k`, p.x, p.y + ringR + 29);
+  ctx.textAlign = "left";
+}
+
+// A town that emptied out stays on the map as a name on a bend in the
+// road -- the loss should read, not vanish.
+function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: SliceTown): void {
+  const p = toScreen(view, town.x, town.y);
+  ctx.fillStyle = COLORS.home;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.textAlign = "center";
+  ctx.fillStyle = COLORS.labelMuted;
+  ctx.font = "italic 11px system-ui, sans-serif";
+  ctx.fillText(`${town.name} (empty)`, p.x, p.y + 16);
   ctx.textAlign = "left";
 }
 

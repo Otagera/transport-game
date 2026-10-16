@@ -202,6 +202,18 @@ no-cached-view discipline as §2).
 - **Each town carries the loop's two facts.** The ring: where its passengers went, as
   shares of rolling rates — blue yours, yellow danfo, grey stayed home. The dots: people
   waiting now, one per four. Both are always on; there is no overlay to switch.
+- **Desire lines** — hovering a town (or, failing that, the selected one) draws a straight
+  line to every other town: thickness = how many want that trip (√-scaled to the town's
+  biggest), and the line itself is a stacked bar of who carries them — blue from the
+  focused end, then yellow, then grey — labelled riders/day. The side panel swaps to that
+  town's trip list with the same bars. One home at a time: the panel shows the focused
+  town *or* your routes, never both.
+- **Route rows** show income/cost/net, a stacked bar of where the route's riders went
+  (you / poached / gave up → danfo / stayed home), and `diagnoseRoute`'s verdict as one
+  sentence with the lever that would change it. Build previews carry the trip's
+  riders/day alongside the price.
+- **Town events** arrive from `sliceTick` and show as a longer toast. Ruins (abandoned
+  emergent towns) draw as a grey dot with the name in italics.
 - **`main.ts`** — two tools (Bus `B`, Road `R`): click a town, then another. Shift keeps
   the first town selected. Refusals come back as `reason` strings from `engine/slice`
   and show as a toast; the ghost previews the same `check*` result and `roadCost` before

@@ -366,14 +366,43 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   so it leaves with the people who gave up, not the queue still waiting for you — but
   `tickVehicle` still loads one-shot vehicles at intermediate stops, so a danfo passing
   through takes your waiting passengers. That is deliberate and counts as danfo share.
-- **Outcomes** — every generated passenger ends in exactly one of: boarded your bus
-  (`cyclic` pickup), took a danfo (dispatch, or a danfo pickup en route), or stayed home.
-  `world.outcomes` keeps per-town EMA rates of each (τ = one game day); `networkShare`
-  sums them. Route income is a per-route EMA; route cost is buses × operating cost.
+- **Outcomes** — kept per (origin, destination) pair in `world.pairOutcomes`, as EMA rates
+  (τ = one game day) of four disjoint buckets: `player` (boarded your bus), `poached` (a
+  passing danfo picked them up from your stop), `gaveUp` (waited too long, then left on a
+  danfo), `lost` (stayed home). Danfo share is poached + gaveUp; they're kept apart because
+  they answer different questions about a losing route. Town and network shares
+  (`townShare`, `networkShare`) and the desire lines (`tripsFrom`) are all sums over pairs
+  — one source, no per-town copy to drift. Attribution needs each pickup's destination and
+  vehicle, so `simulation/types.ts`'s `PickupEvent` carries `to` and `vehicleId`.
+- **Routes** keep EMAs of fare income, boardings, and load factor (mean cargo/capacity of
+  their buses). Route cost is buses × operating cost.
+- **`diagnoseRoute`** — measured, not modelled: sums the outcomes of trips whose both ends
+  lie on the route's path, then picks one verdict, most structural first: `thin` (carrying
+  every possible rider wouldn't pay for one bus), `overcapacity` (≥2 buses, load < 35% *and*
+  ≥ 60% of riders already carried), `full` (load ≥ 85%), `poached` (≥ 20% taken by passing
+  danfos), `waiting` (≥ 30% gave up), else `healthy`. The page turns the verdict into a
+  sentence; the engine never formats text.
+- **Towns along busy roads** (`settlement.ts`) — each segment keeps EMAs of riders/second
+  passing a point (all vehicles, and yours alone). Once a game day: an emergent town below
+  `abandonBelowPopulation` is abandoned, then at most one town is founded — at the midpoint
+  of the busiest segment that's at least `2 × townSpacingCells` long, clear of every node by
+  the spacing, with total flow ≥ `foundTownFlow` *and* your flow ≥ `foundTownPlayerFlow`
+  (your service is a necessary condition — principles §3, Growth). Founding **splits the
+  segment** into two through the new node (a corridor is a chain of nodes), and
+  `insertIntoPath` threads the town into every vehicle path crossing it, keeping each
+  vehicle where it physically is — so a bus route on that road serves the new town at once.
+  The halves are too short to found on again, which is what keeps towns sparse; 
+  `maxEmergentTowns` is the backstop. Emergent populations drift (τ = 10 days) toward
+  `riders/s through it × populationPerFlow`; demand is regenerated once a day.
+  Abandoning turns the node into a `junction` (the road keeps its bend), moves the town to
+  `world.ruins` so its name stays on the map, and drops its queues, pools, demand and
+  outcomes. Original towns never change size and never fade. `sliceTick` returns these as
+  `SliceEvent`s.
 - **Bus placement** — `addBus` creates the vehicle without queues (no teleport-load) and
   places it at the midpoint of the largest gap between the route's existing buses
   (`cycleFraction` / `largestGapMidpoint`).
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
   `congestion: false` in step 1; step 2 turns it on.
 
-Tests: `test/slice.test.ts` — feel invariants, see principles.md §6.
+Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,
+town founding/abandonment rules, and `insertIntoPath`'s position-preserving split.

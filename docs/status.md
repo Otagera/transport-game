@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**341 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**354 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -22,7 +22,9 @@ step plan. Eras are paused. The slice is a second page beside the original game:
 
 | Step | What | State |
 |---|---|---|
-| 1 | Smallest loop: towns, roads, buses, giving up, danfos, money, share | Built, probe-calibrated, **not yet played** |
+| 1 | Smallest loop: towns, roads, buses, giving up, danfos, money, share | Played once: the loop reads; needed 1b |
+| 1b | Legibility: desire lines on hover, per-route diagnosis | Built, **not yet played** |
+| 1c | Towns grow along busy roads you serve; rarely fade | Built, **not yet played** |
 | 2 | Shared road: congestion between danfos and buses | — |
 | 3 | A place to build in: terrain, pathing, bridges | — |
 | 4 | Depth, one at a time: growth, decay, goods, rail | — |
@@ -56,6 +58,7 @@ live-verified; each links to where its detail actually lives now.
 
 ## What's next
 
-Play step 1. Its question is in principles.md §6. Whatever the answer, write down what was
+Play 1b and 1c: can you now see where to route, and why a route earns what it does? Do
+roadside towns feel earned, and sparse enough? Step 1's question is in principles.md §6. Whatever the answer, write down what was
 felt before changing anything — then step 2, or back to step 1's model if the loop didn't
 hold.

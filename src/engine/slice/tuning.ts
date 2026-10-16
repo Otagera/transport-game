@@ -33,4 +33,26 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   startingFunds: 2500,
   outcomeTauSeconds: 30,
   congestion: false,
+
+  flowTauSeconds: 60,
+  settlementCheckSeconds: 30,
+  // Riders/sec past a point, measured before any town exists: danfos
+  // alone carry ~6.6 on ilase-owode, ~4.3 on owode-ado, ~2.2 on
+  // ilase-kuto. Adding your buses barely moves the total (your riders are
+  // mostly ones danfos would have carried) but your share is what counts:
+  // 1 bus on ilase-owode carries ~1.0 of it. So a town needs a busy road
+  // *and* your service on it -- two or three roads on this map qualify
+  // once you run them, the rest never do.
+  foundTownFlow: 4,
+  foundTownPlayerFlow: 0.8,
+  townSpacingCells: 10,
+  maxEmergentTowns: 4,
+  minSecondsBetweenTowns: 120,
+  newTownPopulation: 5,
+  // ~10 riders/s through a roadside town supports ~13k people. Rider
+  // flow, not vehicle flow, so extra empty buses barely grow it.
+  populationPerFlow: 1.3,
+  maxEmergentPopulation: 30,
+  townPopulationTauSeconds: 300,
+  abandonBelowPopulation: 2,
 };

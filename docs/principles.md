@@ -233,6 +233,10 @@ blow-by-blow; this section is the distilled rule.
   cap arrives far too late to be felt.
 - `D_max` must be bounded independently of `D`, or the logistic cap chases the variable
   and growth is uncapped exponential wearing a logistic's clothing.
+- **Places grow from people passing, not vehicles.** In the slice, a roadside town's size
+  follows riders per second through it. Counting vehicles let empty buses inflate a town:
+  measured, 12 buses on one route grew its town to the cap and made over-busing pay for
+  itself, which deletes the fleet-size decision.
 - Growth **must be visible without reading a number**, or it reads as a treadmill —
   queues rising faster than you can add vehicles — rather than as a place developing.
 
@@ -324,6 +328,11 @@ for if eras return; they are not live in the slice.*
   destination" — not "has no built edge". A road to nowhere doesn't un-strand a node.
 - **Per-route P&L with worst-first sorting** is what makes the economy diagnosable.
   Three playthroughs on the first attempt ended in undiagnosable debt without it.
+- **A route's diagnosis must rank causes, and low load alone isn't overcapacity.** Measured:
+  2 buses on the slice's best route run ~35% full yet beat 1 bus, because they still catch
+  riders who'd otherwise be lost. "Too many buses" needs low load *and* most riders already
+  carried. Likewise "thin" means the trips can't pay for even one bus; comparing against
+  the whole fleet's cost called an over-bused strong route thin.
 - **Burn rate in the status strip** — income, cost, net per day. Balance without rate is
   unreadable.
 
@@ -395,6 +404,20 @@ for if eras return; they are not live in the slice.*
 - ~~What does a warm-forwarded Modern-era game feel like?~~ Answered by a headless probe
   (2026-10-16): nothing to decide — queues pinned at cap, growth over in ~2 days, costs
   negligible. That answer is what started §6.
+- **Can paratransit be replaced everywhere, or only on the trunk roads?** *(Raised
+  2026-10-16, for later.)* On major roads, formal service can plausibly displace danfos.
+  That's what a BRT corridor does. Inside towns, on the short local trips and the last mile,
+  it probably can't. Kekes and okadas persist there because nothing formal reaches that
+  finely. Two ways to answer it:
+  - **Acknowledge it:** model a permanent informal share inside towns that the player
+    can't win, and show it as such so it doesn't read as failure. The relationship flips
+    there from competitor to feeder.
+  - **Make it fixable:** the player addresses it with stops and lighter forms of transport
+    (a formal keke or minibus tier) that can reach inside.
+
+  Either way it touches the Stations row in §4 and brushes against §2's "no city scale".
+  Inside-town service must stay abstract (a town's internal share), not streets and
+  stops-as-nodes.
 - **Does the slice's loop hold up?** Step 1's question (§6): does being undercut by danfos
   feel true, and make you want to act?
 
@@ -421,13 +444,19 @@ Steps, each played before the next:
 
 1. **The smallest loop** — hand-made map, straight roads, one bus type, passengers who give
    up, danfos that carry them, tight money, a market-share headline. *Question: does being
-   undercut by danfos feel true, and make you want to act?*
+   undercut by danfos feel true, and make you want to act?* Played 2026-10-16: the
+   connecting loop read, and it plays like Mini Metro in a good way — but there was no way
+   to see where people wanted to go, nor why a route lost money. So, before step 2:
+   - **1b. Legibility** — desire lines on hover (where a town's people want to go, and who
+     carries them), and a one-line diagnosis per route.
+   - **1c. Towns along busy roads** — pulled forward from step 4 at the playtester's
+     request. Sparse by construction, and an emergent town can rarely fade.
 2. **Shared road** — danfos and buses congest each other (`tuning.congestion`), closing
    "weak service invites the interference that weakens it further." Revisit the corridor cap.
 3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`
    and `engine/pathing`. The map stops being a diagram.
-4. **Depth, one at a time** — growth, decay, goods, rail — each played before the next. Each
-   must create a decision.
+4. **Depth, one at a time** — decay, goods, rail, growth of the original towns — each played
+   before the next. Each must create a decision.
 
 Rules for working this way:
 
