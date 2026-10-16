@@ -2,6 +2,7 @@ import type { GeneratedMap, Segment } from "../map/types";
 import type { DemandPair, PathResult, Vehicle } from "../simulation/types";
 import { createSimulation, rebuildFromMap } from "../simulation/simulate";
 import { findPath } from "../simulation/routing";
+import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
 import { canAfford, createEconomyState, registerPurchase, sellVehicle } from "../economy/state";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
@@ -95,6 +96,10 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     settlement: createSettlementState(),
     plans: null,
     transferRateEMA: new Map(),
+    segmentLoad: new Map(),
+    roadFlowEMA: new Map(),
+    vehicleSegment: new Map(),
+    segmentSpeed: new Map(),
     ruins: new Map(),
     pathCache: new Map(),
     nextId: 0,
@@ -172,14 +177,23 @@ export function addBus(world: SliceWorld, a: string, b: string): ActionResult {
 
   let route = findRoute(world, a, b);
   if (!route) {
-    route = { id: routeKey(a, b), a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0 };
+    route = { id: routeKey(a, b), a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
     world.routes.push(route);
     world.plans = null; // a new route changes how riders cross the network
   }
   const { tuning } = world;
   const id = `bus-${world.nextId++}`;
   // No queues: a bus placed mid-route must not teleport-load at route.a.
-  const vehicle = createVehicle(id, [route.a, route.b], world.simulation.routing, tuning.busSpeed, tuning.busCapacity, undefined, "passengers");
+  const vehicle = createVehicle(
+    id,
+    [route.a, route.b],
+    world.simulation.routing,
+    tuning.busSpeed,
+    tuning.busCapacity,
+    undefined,
+    "passengers",
+    tuning.busRoadSpace,
+  );
   // Headway, not bunching, is what another bus on a route is supposed to
   // buy. Starting every new bus at a terminus sends them out as a convoy
   // that serves the route exactly as often as one bus would -- measured:
@@ -282,7 +296,7 @@ export function routeSummaries(world: SliceWorld): RouteSummary[] {
     .sort((x, y) => x.netPerDay - y.netPerDay);
 }
 
-export type RouteVerdict = "thin" | "overcapacity" | "full" | "poached" | "waiting" | "healthy";
+export type RouteVerdict = "thin" | "overcapacity" | "jammed" | "full" | "poached" | "waiting" | "healthy";
 
 export interface RouteDiagnosis {
   routeId: string;
@@ -297,6 +311,10 @@ export interface RouteDiagnosis {
   lost: number;
   boardingsPerDay: number;
   loadFactor: number;
+  /** Mean speed of this route's buses as a share of free flow. */
+  speed: number;
+  /** Of the traffic on this route's roads, the share that's informal (danfos, kekes, okadas). */
+  informalTraffic: number;
   verdict: RouteVerdict;
 }
 
@@ -311,6 +329,8 @@ const OVERCAPACITY_LOAD = 0.35;
 // catch.
 const OVERCAPACITY_CARRIED = 0.6;
 const FULL_LOAD = 0.85;
+// Below this share of free-flow speed, traffic is the story.
+const JAMMED_SPEED = 0.7;
 const POACHED_SHARE = 0.2;
 const WAITING_SHARE = 0.3;
 
@@ -353,6 +373,8 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
     lost: of(outcomes.lost),
     boardingsPerDay: route.boardingRateEMA * SECONDS_PER_GAME_DAY,
     loadFactor: route.loadFactorEMA,
+    speed: route.speedEMA,
+    informalTraffic: informalTrafficShare(world, routeId),
     verdict: "healthy",
   };
 
@@ -360,10 +382,38 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
   else if (route.vehicleIds.length >= 2 && route.loadFactorEMA < OVERCAPACITY_LOAD && diagnosis.carried >= OVERCAPACITY_CARRIED) {
     diagnosis.verdict = "overcapacity";
   }
+  else if (route.speedEMA < JAMMED_SPEED) diagnosis.verdict = "jammed";
   else if (route.loadFactorEMA >= FULL_LOAD) diagnosis.verdict = "full";
   else if (diagnosis.poached >= POACHED_SHARE) diagnosis.verdict = "poached";
   else if (diagnosis.gaveUp + diagnosis.lost >= WAITING_SHARE) diagnosis.verdict = "waiting";
   return diagnosis;
+}
+
+/** Of the road space in use on a route's roads right now, the share that's informal. */
+function informalTrafficShare(world: SliceWorld, routeId: string): number {
+  const route = world.routes.find((candidate) => candidate.id === routeId);
+  const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
+  if (!vehicle) return 0;
+  const segments = new Set<string>();
+  for (let i = 0; i < vehicle.path.length; i += 1) {
+    const from = vehicle.path[i]!;
+    const to = vehicle.path[(i + 1) % vehicle.path.length]!;
+    const edge = world.simulation.routing.graph.get(from)?.find((candidate) => candidate.to === to);
+    if (edge) segments.add(edge.segmentId);
+  }
+  // Same measure as segmentLoad -- vehicles on the road now -- not the
+  // informal road-space reservation, which spans each vehicle's whole trip.
+  const informalNow = computeSegmentLoads(
+    world.simulation.vehicles.filter((candidate) => candidate.lifecycle === "one-shot"),
+    world.simulation.routing,
+  );
+  let total = 0;
+  let informal = 0;
+  for (const id of segments) {
+    total += world.segmentLoad.get(id) ?? 0;
+    informal += informalNow.get(id) ?? 0;
+  }
+  return total > 0 ? Math.min(1, informal / total) : 0;
 }
 
 export interface ShareSummary {

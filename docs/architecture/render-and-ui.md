@@ -214,6 +214,9 @@ no-cached-view discipline as §2).
   (you / poached / gave up → danfo / stayed home), and `diagnoseRoute`'s verdict as one
   sentence with the lever that would change it. Build previews carry the trip's
   riders/day alongside the price.
+- **Traffic** — a road below 90% of free speed draws a casing under it, amber then red
+  as it slows, from the same `segmentSpeed` that slows the buses. Route rows report their
+  buses' speed, and a jammed route says how much of the traffic is informal.
 - **Interchanges** — a town where at least 3 riders/day change buses draws with a second,
   inner outline (the Mini Metro convention), and its panel says how many change there.
 - **Town events** arrive from `sliceTick` and show as a longer toast. Ruins (abandoned

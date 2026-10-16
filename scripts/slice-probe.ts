@@ -87,6 +87,8 @@ for (const strategy of strategies) {
       `share you ${pct(share.player)} danfo ${pct(share.informal)} home ${pct(share.lost)}  ` +
       `danfos ${String(danfos).padStart(3)}  waiting@ilase ${fmt(waitingAt(world, "ilase"))}  informal ₦ ${fmt(world.informal.earnings)}`,
   );
+  const busiest = [...world.roadFlowEMA].sort((a, b) => b[1] - a[1])[0];
+  if (busiest) console.log(`    busiest road: ${busiest[0]} flow ${busiest[1].toFixed(2)}/s at ${pct(world.segmentSpeed.get(busiest[0]) ?? 1)} speed`);
   const flows = [...world.settlement.segmentFlowEMA].sort((a, b) => b[1] - a[1]).slice(0, 3);
   console.log(
     `    busiest roads (riders/s, yours): ${flows.map(([id, f]) => `${id} ${f.toFixed(2)} (${(world.settlement.segmentPlayerFlowEMA.get(id) ?? 0).toFixed(2)})`).join(", ")}`,
@@ -97,7 +99,7 @@ for (const strategy of strategies) {
     const d = diagnoseRoute(world, route.id)!;
     console.log(
       `    ${route.id.padEnd(16)} buses ${route.buses}  in ${fmt(route.incomePerDay)}  cost ${fmt(route.costPerDay)}  net ${fmt(route.netPerDay)}/day  ` +
-        `→ ${d.verdict.padEnd(12)} carried ${pct(d.carried)} poached ${pct(d.poached)} gaveUp ${pct(d.gaveUp)} home ${pct(d.lost)} load ${pct(d.loadFactor)} ceiling ${fmt(d.ceilingPerDay)}`,
+        `→ ${d.verdict.padEnd(12)} speed ${pct(d.speed)} informal traffic ${pct(d.informalTraffic)} carried ${pct(d.carried)} poached ${pct(d.poached)} gaveUp ${pct(d.gaveUp)} home ${pct(d.lost)} load ${pct(d.loadFactor)} ceiling ${fmt(d.ceilingPerDay)}`,
     );
   }
 }

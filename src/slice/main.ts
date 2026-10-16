@@ -268,6 +268,8 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number): strin
       return `Thin: only ${Math.round(d.demand * SECONDS_PER_GAME_DAY)} riders/day want these trips. Carrying all of them would earn ${naira(d.ceilingPerDay)}/day, less than one bus costs to run (${naira(costPerDay / buses)}).`;
     case "overcapacity":
       return `Buses run ${pct(d.loadFactor)} full and already carry ${pct(d.carried)} of riders here: the last bus mostly carries empty seats. Selling one saves ${naira(costPerDay / buses)}/day.`;
+    case "jammed":
+      return `Jammed: traffic holds your buses to ${pct(d.speed)} of free speed, so each makes fewer trips a day. ${pct(d.informalTraffic)} of the traffic is informal; every rider you take back is one fewer okada. Too many buses of your own add to it too.`;
     case "full":
       return `Buses leave ${pct(d.loadFactor)} full: more riders than seats. Another bus would carry the ones left behind.`;
     case "poached":
@@ -298,7 +300,7 @@ function renderRoutes(): void {
           <i style="width:${pct(d.lost)};background:var(--home)"></i>
         </div>
         <div class="why why-${d.verdict}">${reasonText(d, s.buses, s.costPerDay)}</div>
-        <small>${Math.round(d.boardingsPerDay)} riders/day · buses ${pct(d.loadFactor)} full · ceiling ${naira(d.ceilingPerDay)}/day</small>`
+        <small>${Math.round(d.boardingsPerDay)} riders/day · buses ${pct(d.loadFactor)} full · ${pct(d.speed)} speed · ceiling ${naira(d.ceilingPerDay)}/day</small>`
       : "";
     return `
       <div class="route">

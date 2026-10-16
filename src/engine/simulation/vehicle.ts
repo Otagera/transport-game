@@ -239,6 +239,10 @@ export function tickVehicle(
   segmentConditions: Map<string, number> = new Map(),
   pickupEvents: PickupEvent[] = [],
   loader?: Loader,
+  // segmentId -> speed multiplier, overriding congestionFactor(load). The
+  // slice prices congestion by road length and type (slice/congestion.ts);
+  // the original game's count-based factor stays the default.
+  speedFactors?: ReadonlyMap<string, number>,
 ): DeliveryEvent[] {
   const pathLength = vehicle.path.length;
   if (pathLength < 2 || hasCompletedTrip(vehicle)) {
@@ -254,7 +258,11 @@ export function tickVehicle(
     const toNode = vehicle.path[vehicle.pathIndex]!;
     const edgeLength = nodeDistance(context, fromNode, toNode);
     const segmentId = findSegmentId(context, fromNode, toNode);
-    const factor = segmentId ? congestionFactor(segmentLoads.get(segmentId) ?? 0) : 1;
+    const factor = !segmentId
+      ? 1
+      : speedFactors
+        ? (speedFactors.get(segmentId) ?? 1)
+        : congestionFactor(segmentLoads.get(segmentId) ?? 0);
     const decayFactor = segmentId ? conditionSpeedFactor(segmentConditions.get(segmentId) ?? 1) : 1;
     const effectiveSpeed = vehicle.speed * factor * decayFactor;
 

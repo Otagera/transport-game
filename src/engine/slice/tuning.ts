@@ -42,7 +42,16 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   informalRoadSpace: 12,
   startingFunds: 2500,
   outcomeTauSeconds: 30,
-  congestion: false,
+  // Shared road (congestion.ts). Capacity is road space entering per
+  // second. With no service the busiest dirt road carries ~0.5-0.8/s
+  // (free flow); 2-4 buses on ilase-owode lift it to ~1.0-1.4 and slow it
+  // to ~80%, which is that route's best count; 6 jam it, 12 lose money.
+  congestion: true,
+  busRoadSpace: 1.2,
+  roadFlowCapacity: 1.6,
+  dirtRoadCapacity: 0.6,
+  minSpeedFactor: 0.15,
+  informalMinSpeed: 0.35,
 
   flowTauSeconds: 60,
   settlementCheckSeconds: 30,

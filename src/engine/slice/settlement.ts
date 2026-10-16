@@ -230,7 +230,7 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
   informal.segmentSpace.set(first.id, space);
   informal.segmentSpace.set(second.id, space);
   informal.segmentSpace.delete(segmentId);
-  for (const flows of [settlement.segmentFlowEMA, settlement.segmentPlayerFlowEMA]) {
+  for (const flows of [settlement.segmentFlowEMA, settlement.segmentPlayerFlowEMA, world.roadFlowEMA]) {
     const flow = flows.get(segmentId) ?? 0;
     flows.set(first.id, flow);
     flows.set(second.id, flow);

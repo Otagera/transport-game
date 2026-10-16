@@ -1,11 +1,11 @@
 import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
-import { computeSegmentLoads } from "../simulation/congestion";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
 import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from "../economy/state";
 import type { InformalMode, SliceTuning, SliceWorld } from "./types";
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { tripPlans } from "./transfers";
+import { updateRoadSpeeds } from "./congestion";
 
 // How much longer people wait at a motor park for a danfo to fill than
 // they wait for your bus before giving up.
@@ -92,9 +92,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     }
   }
 
-  // 3. Movement. Loads are computed once, before anything moves, so every
-  // vehicle sees the same road this tick.
-  const loads = tuning.congestion ? computeSegmentLoads(simulation.vehicles, simulation.routing) : new Map<string, number>();
+  // 3. Movement. Road speeds are computed once, before anything moves, so
+  // every vehicle sees the same road this tick (congestion.ts).
+  updateRoadSpeeds(world, dt);
   const routeOf = new Map<string, string>();
   for (const route of world.routes) for (const id of route.vehicleIds) routeOf.set(id, route.id);
   const boardings = new Map<string, number>();
@@ -149,11 +149,12 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       simulation.queues,
       simulation.routing,
       simulation.segmentTraffic,
-      loads,
+      world.segmentLoad,
       dt,
       undefined,
       undefined,
       isDanfo ? danfoLoader : busLoader,
+      world.segmentSpeed,
     );
     if (deliveries.length === 0) continue;
     if (isDanfo) {
@@ -192,6 +193,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     route.revenueRateEMA += ((routeRevenue.get(route.id) ?? 0) / dt - route.revenueRateEMA) * alpha;
     route.boardingRateEMA += ((boardings.get(route.id) ?? 0) / dt - route.boardingRateEMA) * alpha;
     route.loadFactorEMA += (routeLoadFactor(world, route.vehicleIds) - route.loadFactorEMA) * alpha;
+    route.speedEMA += (routeSpeed(world, route.vehicleIds) - route.speedEMA) * alpha;
   }
   for (const townId of world.towns.keys()) {
     const previous = world.transferRateEMA.get(townId) ?? 0;
@@ -216,6 +218,22 @@ function routeLoadFactor(world: SliceWorld, vehicleIds: string[]): number {
     count += 1;
   }
   return count > 0 ? total / count : 0;
+}
+
+/** Mean speed factor of a route's buses on the segments they're on now. */
+function routeSpeed(world: SliceWorld, vehicleIds: string[]): number {
+  let total = 0;
+  let count = 0;
+  for (const vehicle of world.simulation.vehicles) {
+    if (!vehicleIds.includes(vehicle.id)) continue;
+    const length = vehicle.path.length;
+    const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length]!;
+    const to = vehicle.path[vehicle.pathIndex % length]!;
+    const edge = world.simulation.routing.graph.get(from)?.find((candidate) => candidate.to === to);
+    total += edge ? (world.segmentSpeed.get(edge.segmentId) ?? 1) : 1;
+    count += 1;
+  }
+  return count > 0 ? total / count : 1;
 }
 
 interface PooledRider {
@@ -301,6 +319,8 @@ function sendInformal(
   const spec = informalSpec(tuning, mode);
   const space = run.path.segmentIds.map((id) => informal.segmentSpace.get(id) ?? 0);
   if (space.some((used) => used + spec.weight > tuning.informalRoadSpace)) return false;
+  // A real operator does not join a jam that pays nothing (principles §3).
+  if (run.path.segmentIds.some((id) => (world.segmentSpeed.get(id) ?? 1) < tuning.informalMinSpeed)) return false;
 
   const id = `${mode}-${world.nextId++}`;
   // An empty queue map: it leaves with the people who gave up on you, it

@@ -21,6 +21,8 @@ export const COLORS = {
   danfo: "#f2c200",
   danfoStripe: "#1d1b18",
   keke: "#2b8a3e",
+  slow: "#f08c00",
+  jam: "#d9480f",
   home: "#a59d90",
   waiting: "#2b2925",
   selection: "#d9480f",
@@ -117,6 +119,21 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
     const pa = toScreen(view, a.x, a.y);
     const pb = toScreen(view, b.x, b.y);
     const built = segment.provenance === "built";
+    // Traffic: a slowing road gets a casing from amber to red, under the
+    // road itself -- the same speed that slows the buses on it.
+    const speed = world.segmentSpeed.get(segment.id) ?? 1;
+    if (speed < SLOW_ROAD_SPEED) {
+      const severity = Math.min(1, (SLOW_ROAD_SPEED - speed) / (SLOW_ROAD_SPEED - 0.4));
+      ctx.strokeStyle = severity > 0.5 ? COLORS.jam : COLORS.slow;
+      ctx.globalAlpha = 0.35 + 0.55 * severity;
+      ctx.lineWidth = 12 + 6 * severity;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     ctx.strokeStyle = built ? COLORS.builtRoad : COLORS.dirtRoad;
     ctx.lineWidth = built ? 7 : 6;
     ctx.setLineDash(built ? [] : [10, 5]);
@@ -127,6 +144,9 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
   }
   ctx.setLineDash([]);
 }
+
+/** Roads slower than this share of free flow draw a traffic casing. */
+const SLOW_ROAD_SPEED = 0.9;
 
 // Each route is drawn as a coloured line over the roads it runs on, offset
 // a little per route so two routes sharing a road both stay visible.

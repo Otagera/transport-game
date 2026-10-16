@@ -6,6 +6,7 @@ import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { insertIntoPath } from "@engine/slice/settlement";
 import { routesOnTrip, tripPlans } from "@engine/slice/transfers";
+import { roadCapacity, speedFactor } from "@engine/slice/congestion";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -217,6 +218,11 @@ describe("slice: towns along busy roads", () => {
     expect(w.simulation.map.segments.some((s) => s.fromNodeId === "big" && s.toNodeId === "mid")).toBe(false);
     const bus = w.simulation.vehicles.find((vehicle) => vehicle.lifecycle === "cyclic")!;
     expect(bus.path).toContain(town.id);
+    // No per-road record outlives the road it described.
+    const live = new Set(w.simulation.map.segments.map((s) => s.id));
+    for (const record of [w.roadFlowEMA, w.settlement.segmentFlowEMA, w.informal.segmentSpace]) {
+      for (const id of record.keys()) expect(live.has(id)).toBe(true);
+    }
     // It wants trips like any town, and you carry some of them.
     expect(tripsFrom(w, town.id).length).toBe(w.towns.size - 1);
     run(w, 200);
@@ -396,5 +402,54 @@ describe("slice: kekes and okadas", () => {
     run(w, 200);
     expect(townOutcomes(w, "cut").lost).toBeGreaterThan(0);
     expect(townOutcomes(w, "cut").gaveUp).toBe(0);
+  });
+});
+
+describe("slice: shared road", () => {
+  test("speed follows the BPR curve: free flow, then a sharp fall, never below the floor", () => {
+    expect(speedFactor(0, 1, 0.15)).toBe(1);
+    expect(speedFactor(0.5, 1, 0.15)).toBeGreaterThan(0.99);
+    expect(speedFactor(1, 1, 0.15)).toBeCloseTo(1 / 1.15);
+    expect(speedFactor(2, 1, 0.15)).toBeLessThan(speedFactor(1.5, 1, 0.15));
+    expect(speedFactor(100, 1, 0.15)).toBe(0.15);
+  });
+
+  test("piling buses onto one road slows it, and the route says so", () => {
+    const light = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    addBus(light, "big", "mid");
+    run(light, 300);
+    const heavy = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    for (let i = 0; i < 16; i += 1) addBus(heavy, "big", "mid");
+    run(heavy, 300);
+    expect(heavy.routes[0]!.speedEMA).toBeLessThan(light.routes[0]!.speedEMA - 0.15);
+    expect(diagnoseRoute(heavy, heavy.routes[0]!.id)!.speed).toBeLessThan(0.8);
+  });
+
+  test("one bus never locks a road at the floor (congestion is stable)", () => {
+    const w = world({ startingFunds: 1e6 });
+    addBus(w, "big", "mid");
+    run(w, 600);
+    for (const speed of w.segmentSpeed.values()) expect(speed).toBeGreaterThan(0.5);
+  });
+
+  test("a built road carries more than an inherited dirt one", () => {
+    const w = world();
+    buildRoad(w, "mid", "cut");
+    const dirt = w.simulation.map.segments.find((s) => s.provenance === "inherited")!;
+    const built = w.simulation.map.segments.find((s) => s.provenance === "built")!;
+    expect(roadCapacity(w, built.id)).toBeGreaterThan(roadCapacity(w, dirt.id));
+  });
+
+  test("an informal operator won't set off into a jam", () => {
+    const w = world({ maxEmergentTowns: 0, informalMinSpeed: 1.01 }); // every road counts as too slow
+    run(w, 200);
+    expect(w.informal.active.size).toBe(0);
+  });
+
+  test("with congestion off, roads always run at free speed", () => {
+    const w = world({ startingFunds: 1e6, congestion: false });
+    for (let i = 0; i < 16; i += 1) addBus(w, "big", "mid");
+    run(w, 200);
+    for (const speed of w.segmentSpeed.values()) expect(speed).toBe(1);
   });
 });

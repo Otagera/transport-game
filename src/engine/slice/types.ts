@@ -44,6 +44,8 @@ export interface SliceRoute {
   boardingRateEMA: number;
   /** Rolling mean of how full this route's buses are, 0..1. */
   loadFactorEMA: number;
+  /** Rolling mean speed of this route's buses as a share of free flow, 0..1. */
+  speedEMA: number;
 }
 
 /**
@@ -107,8 +109,18 @@ export interface SliceTuning {
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;
-  /** Danfos and buses slow each other down on shared road (step 2). */
+  /** Danfos and buses slow each other down on shared road (step 2, congestion.ts). */
   congestion: boolean;
+  /** Road space a bus takes, in danfo-equivalents. */
+  busRoadSpace: number;
+  /** Capacity of a built road: road space (danfo-equivalents) entering per second before it slows. */
+  roadFlowCapacity: number;
+  /** An inherited dirt road carries this fraction of a built road. */
+  dirtRoadCapacity: number;
+  /** Jammed traffic still crawls: speed never falls below this share of free flow. */
+  minSpeedFactor: number;
+  /** An informal operator won't set off onto a road slower than this (principles §3). */
+  informalMinSpeed: number;
 
   // Towns along busy roads (settlement.ts).
   /** Time constant for each road's rolling traffic flow. */
@@ -145,6 +157,14 @@ export interface SliceWorld {
   settlement: SettlementState;
   /** Emergent towns that faded: kept so their names can stay on the map. */
   ruins: Map<string, SliceTown>;
+  /** segmentId -> road space on the road this tick (congestion.ts). */
+  segmentLoad: Map<string, number>;
+  /** segmentId -> rolling road space entering per second: what congests it. */
+  roadFlowEMA: Map<string, number>;
+  /** vehicleId -> the leg (segment#pathIndex) it was on last tick, to detect entering. */
+  vehicleSegment: Map<string, string>;
+  /** segmentId -> speed as a share of free flow this tick. What slows a bus is what the map draws. */
+  segmentSpeed: Map<string, number>;
   /** townId -> rolling riders per second changing buses there. */
   transferRateEMA: Map<string, number>;
   /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */

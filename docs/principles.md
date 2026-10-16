@@ -203,6 +203,16 @@ blow-by-blow; this section is the distilled rule.
 - **Congestion scales effective capacity, not just speed.** Speed-only means more
   vehicles is always better and there is no puzzle.
 - **Free first slot** — one vehicle on a corridor is not congested.
+- **Congest on flow, not occupancy** (slice, §6 step 2). Feeding the speed curve the
+  vehicles *on* a road feeds back on itself — a jam slows vehicles, so more sit on the road,
+  so the jam deepens: measured, one bus locked half a split road at the speed floor for
+  good. Flow (road space *entering* per second) has the stable feedback: a jammed bus makes
+  fewer round trips, so enters less often. Capacity is per road, not per cell — a lane
+  carries so many vehicles an hour whatever its length. Speed follows the BPR curve, the
+  standard speed-flow relation.
+- **Count entries per leg, not per segment.** A shuttle uses the same segment both ways;
+  keyed by segment it never re-entered, and its traffic was invisible until something split
+  the road. Caught by a feel test, not the probe — the probe's map happened to split it.
 - Congestion is what couples informal traffic to player economics. Weak service invites
   the interference that weakens it further. **Keep this asymmetry** — it is the hook
   working — but make sure there is an exit.
@@ -481,7 +491,12 @@ Steps, each played before the next:
      (a 4-bus chain nets ~₦590/day by day 40): step 2's congestion is where density
      should start costing.
 2. **Shared road** — danfos and buses congest each other (`tuning.congestion`), closing
-   "weak service invites the interference that weakens it further." Revisit the corridor cap.
+   "weak service invites the interference that weakens it further." *Built 2026-10-16,*
+   flow-based BPR (see Findings, Congestion). Measured on ilase-owode: 2–4 buses is the
+   best count (+₦315/day, road at ~80% speed); 6 buses jam it (63%, +₦184); 12 lose money
+   (−₦95). A well-spread network stays at free speed — congestion punishes piling onto a
+   trunk, not breadth — so it does *not* tighten money for a spread network. If play says
+   money is still too loose, that's an economy lever (running cost), not a traffic one.
 3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`
    and `engine/pathing`. The map stops being a diagram.
 4. **Depth, one at a time** — decay, goods, rail, growth of the original towns — each played

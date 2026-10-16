@@ -425,8 +425,19 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
 - **Bus placement** — `addBus` creates the vehicle without queues (no teleport-load) and
   places it at the midpoint of the largest gap between the route's existing buses
   (`cycleFraction` / `largestGapMidpoint`).
+- **Congestion** (`congestion.ts`) — `updateRoadSpeeds` runs once per tick before anything
+  moves. It detects road space *entering* each segment (a vehicle starting a new leg —
+  keyed `segment#pathIndex`, so a shuttle re-enters its one segment each way), keeps a
+  rolling flow per road (τ = 10 s), and sets `world.segmentSpeed` from the BPR curve,
+  `1 / (1 + 0.15·(flow/capacity)^4)`, floored at `minSpeedFactor`. Capacity is per road:
+  `roadFlowCapacity`, × `dirtRoadCapacity` for inherited roads. `tickVehicle` takes those
+  speeds through its `speedFactors` hook, so the number that slows a bus is the number the
+  map draws. Road space is each vehicle's congestion weight (bus 1.2, danfo 1, keke 0.5,
+  okada 0.3). Informal operators won't dispatch onto a road below `informalMinSpeed`.
+  Routes keep a speed EMA; `diagnoseRoute` adds `speed`, `informalTraffic` (informal share of
+  the road space on its roads now) and the `jammed` verdict (speed < 70%), ranked after
+  `thin` and `overcapacity`. A segment split carries its flow to both halves.
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
-  `congestion: false` in step 1; step 2 turns it on.
 
 Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,
 town founding/abandonment rules, and `insertIntoPath`'s position-preserving split.
