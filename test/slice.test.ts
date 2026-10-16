@@ -5,6 +5,7 @@ import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { insertIntoPath } from "@engine/slice/settlement";
+import { routesOnTrip, tripPlans } from "@engine/slice/transfers";
 import type { Vehicle } from "@engine/simulation/types";
 
 // Tests that pin what the player should *feel*, not just that the
@@ -303,3 +304,70 @@ describe("slice: inserting a town into a vehicle's path", () => {
     expect(v.path[v.pathIndex]).toBe("a");
   });
 });
+
+describe("slice: transfers", () => {
+  function network(): SliceWorld {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    for (let i = 0; i < 2; i += 1) addBus(w, "big", "mid");
+    for (let i = 0; i < 2; i += 1) addBus(w, "mid", "far");
+    return w;
+  }
+
+  test("a rider with no direct route plans to change buses at the interchange", () => {
+    const w = network();
+    const plans = tripPlans(w);
+    expect(plans.rides.get("big")!.get("far")).toBe(2);
+    expect(plans.alight.get("big")!.get("far")!.get(w.routes[0]!.id)).toBe("mid");
+    expect(routesOnTrip(w, "big", "far")).toEqual(new Set([w.routes[0]!.id, w.routes[1]!.id]));
+  });
+
+  test("riders take the fewest buses: a direct route beats a change", () => {
+    const w = network();
+    addBus(w, "big", "far"); // runs big-mid-far on the roads
+    expect(tripPlans(w).rides.get("big")!.get("far")).toBe(1);
+  });
+
+  test("riders actually change buses and arrive, and both legs earn", () => {
+    const w = network();
+    run(w, 400);
+    const trip = tripsFrom(w, "big").find((candidate) => candidate.to === "far")!;
+    expect(trip.share.player).toBeGreaterThan(0.1);
+    // The feeder's diagnosis counts the riders it hands on.
+    const feeder = diagnoseRoute(w, w.routes[0]!.id)!;
+    const ownTripsOnly = pairDemandOn(w, ["big", "mid"]);
+    expect(feeder.demand).toBeGreaterThan(ownTripsOnly);
+  });
+
+  test("a missed connection can be lost: riders waiting at the interchange give up too", () => {
+    const w = network();
+    run(w, 400);
+    const trip = townOutcomes(w, "big");
+    expect(trip.gaveUp + trip.lost).toBeGreaterThan(0);
+  });
+
+  test("a trip two routes serve equally well counts toward both routes", () => {
+    const w = network();
+    addBus(w, "big", "far"); // big-mid-far: serves big->mid as well as big-mid does
+    const direct = w.routes.find((route) => route.id.includes("far") && route.id.includes("big"))!;
+    const shuttle = w.routes.find((route) => route.id.includes("big") && route.id.includes("mid"))!;
+    const on = routesOnTrip(w, "big", "mid");
+    expect(on.has(direct.id)).toBe(true);
+    expect(on.has(shuttle.id)).toBe(true);
+    run(w, 200);
+    expect(diagnoseRoute(w, direct.id)!.demand).toBeGreaterThan(0);
+    expect(diagnoseRoute(w, shuttle.id)!.demand).toBeGreaterThan(0);
+  });
+
+  test("the plan goes stale when routes change, and is rebuilt", () => {
+    const w = network();
+    tripPlans(w);
+    removeBus(w, w.routes[1]!.id);
+    removeBus(w, w.routes[1]!.id);
+    expect(w.plans).toBeNull();
+    expect(tripPlans(w).rides.get("big")?.get("far")).toBeUndefined();
+  });
+});
+
+function pairDemandOn(w: SliceWorld, towns: string[]): number {
+  return w.simulation.demand.filter((pair) => towns.includes(pair.from) && towns.includes(pair.to)).reduce((sum, pair) => sum + pair.rate, 0);
+}

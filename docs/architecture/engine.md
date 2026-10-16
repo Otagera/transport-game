@@ -342,7 +342,10 @@ catches it for the *final* era reached, just not for eras passed through en rout
 ## slice/ — the reset's loop (principles.md §6)
 
 `engine/slice/` composes existing modules into the slice's tick rather than extending
-`simulation/simulate.ts`'s `tick`. It reuses `createVehicle` / `createOneShotVehicle` /
+`simulation/simulate.ts`'s `tick`. Two hooks in `simulation/` exist for it: `tickVehicle`
+takes an optional `Loader` that replaces the default boarding rule at each stop, and
+`LoadEntry` carries an optional `trip` (origin, final destination) that `DeliveryEvent`
+hands back on unload. `nodesAhead` is exported and shared. It reuses `createVehicle` / `createOneShotVehicle` /
 `tickVehicle`, `buildRoutingContext` / `findPath` / `rebuildFromMap`, and economy's
 purchase, sale, operating-cost and income-EMA functions unchanged. It does not use eras,
 growth, decay, ambient traffic, or `paratransit/spawn.ts`.
@@ -355,9 +358,21 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   `check*` the UI uses for previews. `roadCost` is the only function that prices a road
   (hard rule 3). Road paths are cached per pair in `pathCache`, cleared on every road change.
 - **`tick.ts`** — `sliceTick`, in order: arrivals; **giving up** (each queue loses
-  `1 − e^(−dt/patience)` per tick into a per-pair pool, so a queue settles at
+  `1 − e^(−dt/patience)` per tick into a motor-park pool, so a queue settles at
   rate × patience — no `QUEUE_CAP`); vehicle movement and fares; **danfo dispatch**; reap;
-  operating cost; rolling rates.
+  operating cost; rolling rates; settlements. Every waiting rider remembers the trip
+  they're on: queue keys are `destination|origin`, pool keys `at>origin>destination`, so a
+  rider changing buses or giving up at an interchange is still counted against their
+  original trip.
+- **Transfers** (`transfers.ts`) — `buildTripPlans` does a breadth-first search over
+  routes per destination: a stop is *k* buses away if some route through it reaches a stop
+  *k − 1* away. For each (stop, destination, route) on a fewest-buses trip it records where
+  to get off — the qualifying stop nearest the destination. The slice's bus `Loader` boards
+  riders whose planned stop is in `nodesAhead`; on unload, a rider short of their
+  destination goes back into that stop's queue (same trip key) and counts toward its
+  interchange rate. Each leg pays a fare on getting off. Danfos' `Loader` takes anyone whose
+  final destination is ahead. The plan is cached on `world.plans`, nulled whenever a route
+  is created or removed, a town is founded (paths change) or abandoned.
 - **Danfo dispatch** groups pooled riders by origin and first hop, picks the destination
   whose path collects the most of them, and sends one danfo (capacity 14) if that's a full
   load and no segment on the path is at `danfoCorridorCap`. Riders are taken
@@ -367,17 +382,19 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   `tickVehicle` still loads one-shot vehicles at intermediate stops, so a danfo passing
   through takes your waiting passengers. That is deliberate and counts as danfo share.
 - **Outcomes** — kept per (origin, destination) pair in `world.pairOutcomes`, as EMA rates
-  (τ = one game day) of four disjoint buckets: `player` (boarded your bus), `poached` (a
-  passing danfo picked them up from your stop), `gaveUp` (waited too long, then left on a
-  danfo), `lost` (stayed home). Danfo share is poached + gaveUp; they're kept apart because
+  (τ = one game day) of four disjoint buckets, each counted once, *when the trip
+  resolves*: `player` (arrived at their destination on your buses, however many changes),
+  `poached` (a passing danfo picked them up from a stop), `gaveUp` (waited too long, then
+  left on a danfo), `lost` (stayed home). Danfo share is poached + gaveUp; they're kept apart because
   they answer different questions about a losing route. Town and network shares
   (`townShare`, `networkShare`) and the desire lines (`tripsFrom`) are all sums over pairs
   — one source, no per-town copy to drift. Attribution needs each pickup's destination and
   vehicle, so `simulation/types.ts`'s `PickupEvent` carries `to` and `vehicleId`.
 - **Routes** keep EMAs of fare income, boardings, and load factor (mean cargo/capacity of
   their buses). Route cost is buses × operating cost.
-- **`diagnoseRoute`** — measured, not modelled: sums the outcomes of trips whose both ends
-  lie on the route's path, then picks one verdict, most structural first: `thin` (carrying
+- **`diagnoseRoute`** — measured, not modelled: sums the outcomes of trips whose planned
+  journey rides this route for at least one leg (`plannedRoutes`) — so a feeder's numbers
+  include the riders it hands on — then picks one verdict, most structural first: `thin` (carrying
   every possible rider wouldn't pay for one bus), `overcapacity` (≥2 buses, load < 35% *and*
   ≥ 60% of riders already carried), `full` (load ≥ 85%), `poached` (≥ 20% taken by passing
   danfos), `waiting` (≥ 30% gave up), else `healthy`. The page turns the verdict into a

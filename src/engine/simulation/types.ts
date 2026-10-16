@@ -23,6 +23,10 @@ export interface LoadEntry {
   to: string;
   kind: CargoKind;
   amount: number;
+  // Set when riders are on one leg of a longer trip (the slice's
+  // transfers): `to` is where they get off *this* vehicle, `trip` is where
+  // they started and where they're ultimately going.
+  trip?: { origin: string; destination: string };
 }
 
 export interface Vehicle {
@@ -56,6 +60,8 @@ export interface Vehicle {
 export interface DeliveryEvent {
   kind: CargoKind;
   amount: number;
+  /** What got off -- lets a caller tell a finished trip from a transfer. */
+  entry?: LoadEntry;
 }
 
 // Module 9 (Growth): what engine/growth needs to compute a per-node

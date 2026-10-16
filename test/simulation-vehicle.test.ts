@@ -132,3 +132,32 @@ describe("cyclic loading wraps around the route", () => {
     expect(queues.get("b")!.get("a:passengers")).toBe(0);
   });
 });
+
+describe("boarding is directional at mid-route stops", () => {
+  // Regression: with "ahead" read as the whole cycle, a rider at x going to
+  // a boarded a bus heading for b and rode all the way round.
+  function lineMap(): GeneratedMap {
+    const map = fixtureMap();
+    map.nodes = [
+      { id: "a", kind: "settlement", x: 0, y: 0 },
+      { id: "x", kind: "settlement", x: 4, y: 0 },
+      { id: "b", kind: "settlement", x: 8, y: 0 },
+    ];
+    map.segments = [
+      { id: "s-ax", corridorId: "c1", fromNodeId: "a", toNodeId: "x", type: "road", level: "ground", condition: 1, provenance: "inherited" },
+      { id: "s-xb", corridorId: "c2", fromNodeId: "x", toNodeId: "b", type: "road", level: "ground", condition: 1, provenance: "inherited" },
+    ];
+    return map;
+  }
+
+  test("a bus at x heading for b leaves x's riders for a waiting", () => {
+    const context = buildRoutingContext(lineMap());
+    const vehicle = createVehicle("v1", ["a", "b"], context, 1, 10); // path a, x, b, x
+    const queues: NodeQueues = new Map([["a", new Map()], ["x", new Map([["a:passengers", 5], ["b:passengers", 5]])], ["b", new Map()]]);
+    // Arrive at x on the way to b.
+    tickVehicle(vehicle, queues, context, new Map(), new Map(), 4.01);
+    expect(vehicle.path[vehicle.pathIndex]).toBe("b");
+    expect(queues.get("x")!.get("b:passengers")).toBe(0);
+    expect(queues.get("x")!.get("a:passengers")).toBe(5);
+  });
+});

@@ -328,6 +328,10 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
 
   const selected = state.selectedTown === town.id;
   const hovered = state.hoverTown === town.id;
+  // An interchange -- riders changing buses here -- gets Mini Metro's
+  // double outline: a second, inner ring.
+  const changingPerDay = (world.transferRateEMA.get(town.id) ?? 0) * SECONDS_PER_GAME_DAY;
+  const interchange = changingPerDay >= INTERCHANGE_RIDERS_PER_DAY;
   ctx.fillStyle = COLORS.town;
   ctx.strokeStyle = selected ? COLORS.selection : COLORS.townEdge;
   ctx.lineWidth = selected ? 3.5 : hovered ? 3 : 2;
@@ -335,6 +339,13 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
   ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  if (interchange && r > 6) {
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = COLORS.townEdge;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r - 4, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   drawWaiting(ctx, p.x + ringR + 8, p.y - ringR + 2, waitingAt(world, town.id));
 
@@ -362,6 +373,9 @@ function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: SliceTown): v
   ctx.fillText(`${town.name} (empty)`, p.x, p.y + 16);
   ctx.textAlign = "left";
 }
+
+/** Riders changing buses per day before a town draws as an interchange. */
+const INTERCHANGE_RIDERS_PER_DAY = 3;
 
 const PEOPLE_PER_DOT = 4;
 const DOTS_PER_ROW = 6;

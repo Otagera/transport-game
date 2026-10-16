@@ -91,7 +91,7 @@ describe("hasCompletedTrip / one-shot tickVehicle", () => {
 
     const deliveries = tickVehicle(vehicle, queues, context, traffic, new Map(), 10);
 
-    expect(deliveries).toEqual([{ kind: "passengers", amount: 3 }]);
+    expect(deliveries).toEqual([{ kind: "passengers", amount: 3, entry: { from: "a", to: "c", kind: "passengers", amount: 3 } }]);
     expect(vehicle.cargo).toEqual([]);
     expect(queues.get("c")!.get("a:passengers")).toBe(9); // untouched
   });

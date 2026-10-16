@@ -1,6 +1,7 @@
 import type { PathResult, SimulationState } from "../simulation/types";
 import type { EconomyState } from "../economy/types";
 import type { SettlementState } from "./settlement";
+import type { TripPlans } from "./transfers";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
 // towns, straight roads, one bus type, passengers who give up, and the
@@ -130,6 +131,10 @@ export interface SliceWorld {
   settlement: SettlementState;
   /** Emergent towns that faded: kept so their names can stay on the map. */
   ruins: Map<string, SliceTown>;
+  /** townId -> rolling riders per second changing buses there. */
+  transferRateEMA: Map<string, number>;
+  /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */
+  plans: TripPlans | null;
   /** pairKey -> road path, or null if the pair isn't connected. Cleared on every road change. */
   pathCache: Map<string, PathResult | null>;
   nextId: number;

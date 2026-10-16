@@ -2,6 +2,7 @@ import type { Vehicle } from "../simulation/types";
 import { rebuildFromMap } from "../simulation/simulate";
 import type { SliceTown, SliceWorld } from "./types";
 import { emptyOutcome, gravityDemand, pairKey } from "./world";
+import { parsePoolKey, parseQueueKey } from "./tick";
 
 // Towns that appear along busy roads, and -- rarely -- fade (step 3 of
 // docs/principles.md §6). True to the setting: a roadside market grows
@@ -238,6 +239,7 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
 
   rebuildFromMap(simulation, map);
   world.pathCache.clear();
+  world.plans = null; // routes through here now stop here
   refreshDemand(world);
 }
 
@@ -308,11 +310,16 @@ function abandonTown(world: SliceWorld, townId: string): SliceEvent {
 
   simulation.queues.set(townId, new Map());
   for (const queue of simulation.queues.values()) {
-    for (const key of [...queue.keys()]) if (key.startsWith(`${townId}:`)) queue.delete(key);
+    for (const key of [...queue.keys()]) {
+      const { destination, origin } = parseQueueKey(key);
+      if (destination === townId || origin === townId) queue.delete(key);
+    }
   }
   for (const key of [...informal.pool.keys()]) {
-    if (key.startsWith(`${townId}:`) || key.endsWith(`:${townId}`)) informal.pool.delete(key);
+    const { at, origin, destination } = parsePoolKey(key);
+    if (at === townId || origin === townId || destination === townId) informal.pool.delete(key);
   }
+  world.plans = null;
   for (const key of [...world.pairOutcomes.keys()]) {
     if (key.startsWith(`${townId}:`) || key.endsWith(`:${townId}`)) world.pairOutcomes.delete(key);
   }

@@ -8,6 +8,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
 import { createSettlementState } from "./settlement";
+import { routesOnTrip } from "./transfers";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -92,6 +93,8 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     informal: { pool: new Map(), active: new Map(), segmentCounts: new Map(), earnings: 0 },
     pairOutcomes: new Map(),
     settlement: createSettlementState(),
+    plans: null,
+    transferRateEMA: new Map(),
     ruins: new Map(),
     pathCache: new Map(),
     nextId: 0,
@@ -171,6 +174,7 @@ export function addBus(world: SliceWorld, a: string, b: string): ActionResult {
   if (!route) {
     route = { id: routeKey(a, b), a, b, vehicleIds: [], revenueRateEMA: 0, boardingRateEMA: 0, loadFactorEMA: 0 };
     world.routes.push(route);
+    world.plans = null; // a new route changes how riders cross the network
   }
   const { tuning } = world;
   const id = `bus-${world.nextId++}`;
@@ -249,7 +253,10 @@ export function removeBus(world: SliceWorld, routeId: string): number {
   if (!id) return 0;
   world.simulation.vehicles = world.simulation.vehicles.filter((vehicle) => vehicle.id !== id);
   const resale = sellVehicle(world.economy, id);
-  if (route.vehicleIds.length === 0) world.routes = world.routes.filter((candidate) => candidate !== route);
+  if (route.vehicleIds.length === 0) {
+    world.routes = world.routes.filter((candidate) => candidate !== route);
+    world.plans = null;
+  }
   return resale;
 }
 
@@ -314,15 +321,20 @@ const WAITING_SHARE = 0.3;
  */
 export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosis | null {
   const route = world.routes.find((candidate) => candidate.id === routeId);
-  const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
-  if (!route || !vehicle) return null;
-  const stops = new Set(vehicle.path);
+  if (!route || route.vehicleIds.length === 0) return null;
 
+  // The trips this route carries: every trip that might ride it for a leg
+  // on a fewest-buses journey -- including riders changing buses, which is
+  // what makes a feeder route's numbers honest, and trips it shares with a
+  // parallel route.
+  const carried = new Set<string>();
   let demand = 0;
   for (const pair of world.simulation.demand) {
-    if (stops.has(pair.from) && stops.has(pair.to)) demand += pair.rate;
+    if (!routesOnTrip(world, pair.from, pair.to).has(routeId)) continue;
+    carried.add(pairKey(pair.from, pair.to));
+    demand += pair.rate;
   }
-  const outcomes = sumOutcomes(world, (from, to) => stops.has(from) && stops.has(to));
+  const outcomes = sumOutcomes(world, (from, to) => carried.has(pairKey(from, to)));
   const total = outcomes.player + outcomes.poached + outcomes.gaveUp + outcomes.lost;
   const of = (n: number) => (total > 0 ? n / total : 0);
 

@@ -148,11 +148,18 @@ blow-by-blow; this section is the distilled rule.
   whose destination lies ahead on its remaining route.
 - **Load entries must carry `from`**, or delivered trips cannot be attributed back to
   the origin that generated them — which growth needs.
-- **Cyclic loading must look across the wrap-around.** "Load demand whose destination is
-  ahead" has to mean ahead *round the cycle*, not ahead in the path array. Reading only the
-  array tail made every A↔B route run its return leg empty — reciprocal demand generated,
-  one direction served — and no test caught it for twelve modules, because every test
-  checked one direction. Found by a headless probe, not by play.
+- **"Ahead" means: before the vehicle next comes back through this stop.** Both simpler
+  readings are bugs. The array tail made every A↔B route run its return leg empty —
+  reciprocal demand generated, one direction served — and no test caught it for twelve
+  modules, because every test checked one direction. The whole cycle made a rider at a
+  mid-route stop board a bus heading the wrong way and ride all the way round. Found by a
+  headless probe and by designing transfers, not by play.
+- **Riders change buses** (slice, §6). Without transfers a network is only a pile of
+  separate shuttles, and the one winning play is a direct route per big pair — the
+  playtest's thin connector routes all lost money for exactly this reason. Each leg pays a
+  fare, as each danfo does; that is what makes a feeder route earn from the riders it hands
+  on, and makes connecting things compound. Measured: 4 buses as a chain or hub earn about
+  twice what the same 4 buses earn on one route.
 - **A new vehicle on a route joins the largest gap**, not a terminus. Starting every bus at
   an end sends them out as a convoy that serves the route exactly as often as one bus:
   measured, 2, 4 and 8 buses earned identically.
@@ -451,6 +458,13 @@ Steps, each played before the next:
      carries them), and a one-line diagnosis per route.
    - **1c. Towns along busy roads** — pulled forward from step 4 at the playtester's
      request. Sparse by construction, and an emergent town can rarely fade.
+
+   Played again 2026-10-16 (to day 61): *fun, but grindy later — chasing money.* The
+   screenshot showed why: long connector routes between towns that barely want each other,
+   all losing money, because riders couldn't change buses. So:
+   - **1d. Transfers** — riders plan the fewest-buses trip across your routes and change
+     at interchanges; each leg pays a fare. Watch next playtest: whether money now
+     loosens too far once a network exists.
 2. **Shared road** — danfos and buses congest each other (`tuning.congestion`), closing
    "weak service invites the interference that weakens it further." Revisit the corridor cap.
 3. **A place to build in** — terrain, terrain-priced pathing, bridges, ported from `engine/map`

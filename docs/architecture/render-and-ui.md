@@ -212,6 +212,8 @@ no-cached-view discipline as §2).
   (you / poached / gave up → danfo / stayed home), and `diagnoseRoute`'s verdict as one
   sentence with the lever that would change it. Build previews carry the trip's
   riders/day alongside the price.
+- **Interchanges** — a town where at least 3 riders/day change buses draws with a second,
+  inner outline (the Mini Metro convention), and its panel says how many change there.
 - **Town events** arrive from `sliceTick` and show as a longer toast. Ruins (abandoned
   emergent towns) draw as a grey dot with the name in italics.
 - **`main.ts`** — two tools (Bus `B`, Road `R`): click a town, then another. Shift keeps

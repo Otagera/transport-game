@@ -27,19 +27,40 @@ function isCompatibleCargo(carries: Vehicle["carries"], kind: CargoKind): boolea
   return kind === "produce" || kind === "supplies";
 }
 
-// The nodes a vehicle standing at path[currentIndex] will still reach
-// before it next returns here. A cyclic route wraps: on an A<->B shuttle
-// (path [A, B]) standing at B, A is ahead. Reading only the tail of the
-// path array -- what this used to do -- meant every cyclic route ran its
-// return leg empty: the destinations behind the wrap point were never
-// "ahead", so reciprocal demand (docs/principles.md §3) was generated in
-// both directions but only ever served in one.
-function nodesAhead(vehicle: Vehicle, currentIndex: number): Set<string> {
+// The nodes a vehicle standing at path[currentIndex] will reach before it
+// next comes back through this node. Two bugs bracket this rule:
+//
+// - Too short: reading only the tail of the path array meant a cyclic
+//   route never saw the stops behind the wrap point, so every A<->B route
+//   ran its return leg empty -- reciprocal demand (docs/principles.md §3)
+//   generated both ways, served one way.
+// - Too long: reading the whole cycle meant a rider at a mid-route stop
+//   (X on a shuttle A-X-B) boarded a bus heading the wrong way and rode all
+//   the way round. Stopping at the next visit to *this* node is what makes
+//   "ahead" directional: at X heading for B, A is not ahead -- the bus
+//   comes back through X first.
+export function nodesAhead(vehicle: Vehicle, currentIndex: number): Set<string> {
   const length = vehicle.path.length;
+  const here = vehicle.path[currentIndex];
   if (vehicle.lifecycle === "one-shot") return new Set(vehicle.path.slice(currentIndex + 1));
   const ahead = new Set<string>();
-  for (let k = 1; k < length; k += 1) ahead.add(vehicle.path[(currentIndex + k) % length]!);
+  for (let k = 1; k < length; k += 1) {
+    const node = vehicle.path[(currentIndex + k) % length]!;
+    if (node === here) break;
+    ahead.add(node);
+  }
   return ahead;
+}
+
+/**
+ * Replaces a vehicle's default boarding rule at a stop. The slice uses it
+ * for transfers: which riders board depends on their whole trip, not just
+ * on whether their destination is ahead. Called where loadAt would be.
+ */
+export type Loader = (vehicle: Vehicle, nodeId: string, currentIndex: number) => void;
+
+export function freeSeats(vehicle: Vehicle): number {
+  return vehicle.capacity - cargoAmount(vehicle.cargo);
 }
 
 // Opportunistic loading, no manifests (docs/principles.md §3): at each
@@ -217,6 +238,7 @@ export function tickVehicle(
   dt: number,
   segmentConditions: Map<string, number> = new Map(),
   pickupEvents: PickupEvent[] = [],
+  loader?: Loader,
 ): DeliveryEvent[] {
   const pathLength = vehicle.path.length;
   if (pathLength < 2 || hasCompletedTrip(vehicle)) {
@@ -250,13 +272,14 @@ export function tickVehicle(
       let deliveredHere = 0;
       for (const entry of delivered) {
         deliveredHere += entry.amount;
-        deliveries.push({ kind: entry.kind, amount: entry.amount });
+        deliveries.push({ kind: entry.kind, amount: entry.amount, entry });
       }
       const cargoAfterUnload = cargoAmount(vehicle.cargo);
 
       const arrivedAtEnd = vehicle.lifecycle === "one-shot" && vehicle.pathIndex === pathLength - 1;
       if (!arrivedAtEnd) {
-        loadAt(vehicle, toNode, vehicle.pathIndex, queues, pickupEvents);
+        if (loader) loader(vehicle, toNode, vehicle.pathIndex);
+        else loadAt(vehicle, toNode, vehicle.pathIndex, queues, pickupEvents);
       }
 
       if (segmentId) {

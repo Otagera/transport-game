@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**354 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**360 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: the slice
@@ -23,15 +23,17 @@ step plan. Eras are paused. The slice is a second page beside the original game:
 | Step | What | State |
 |---|---|---|
 | 1 | Smallest loop: towns, roads, buses, giving up, danfos, money, share | Played once: the loop reads; needed 1b |
-| 1b | Legibility: desire lines on hover, per-route diagnosis | Built, **not yet played** |
-| 1c | Towns grow along busy roads you serve; rarely fade | Built, **not yet played** |
+| 1b | Legibility: desire lines on hover, per-route diagnosis | Played to day 61: reads well |
+| 1c | Towns grow along busy roads you serve; rarely fade | Played: one town in 61 days |
+| 1d | Transfers: riders change buses at interchanges; fare per leg | Built, **not yet played** |
 | 2 | Shared road: congestion between danfos and buses | — |
 | 3 | A place to build in: terrain, pathing, bridges | — |
 | 4 | Depth, one at a time: growth, decay, goods, rail | — |
 
-Engine fix found along the way, affecting the original game too: cyclic vehicles never
+Engine fixes found along the way, affecting the original game too: cyclic vehicles never
 loaded passengers whose destination lay behind the path's wrap-around, so every A↔B route
-ran its return leg empty ([principles.md](principles.md) §3, Vehicles).
+ran its return leg empty; and the first fix overshot, letting mid-route riders board a bus
+heading the wrong way ([principles.md](principles.md) §3, Vehicles).
 
 ## What's built (the original game, Modules 0–12)
 
@@ -58,7 +60,7 @@ live-verified; each links to where its detail actually lives now.
 
 ## What's next
 
-Play 1b and 1c: can you now see where to route, and why a route earns what it does? Do
-roadside towns feel earned, and sparse enough? Step 1's question is in principles.md §6. Whatever the answer, write down what was
+Play 1d: does building a network now feel worth it, and does the money stop being a
+grind — or does it get too easy once a network exists? Step 1's question is in principles.md §6. Whatever the answer, write down what was
 felt before changing anything — then step 2, or back to step 1's model if the loop didn't
 hold.

@@ -38,6 +38,23 @@ const strategies: Strategy[] = [
   { name: "1 bus ilase-ise (thin)", setup: buses("ilase", "ise", 1) },
   { name: "1 bus ilase-ado (long, via owode)", setup: buses("ilase", "ado", 1) },
   {
+    name: "chain: 2 ilase-owode + 2 owode-ado",
+    setup: (w) => {
+      w.economy.funds += 2000;
+      buses("ilase", "owode", 2)(w);
+      buses("owode", "ado", 2)(w);
+      w.economy.funds -= 2000;
+    },
+  },
+  {
+    name: "hub: 2 ilase-owode, 1 ilase-kuto, 1 ilase-ise",
+    setup: (w) => {
+      buses("ilase", "owode", 2)(w);
+      buses("ilase", "kuto", 1)(w);
+      buses("ilase", "ise", 1)(w);
+    },
+  },
+  {
     name: "road ilase-ikole + 1 bus",
     setup: (w) => {
       buildRoad(w, "ilase", "ikole");

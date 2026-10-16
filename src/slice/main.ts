@@ -229,6 +229,11 @@ function renderPanel(): void {
   else renderRoutes();
 }
 
+function changingText(townId: string): string {
+  const perDay = Math.round((world.transferRateEMA.get(townId) ?? 0) * SECONDS_PER_GAME_DAY);
+  return perDay > 0 ? ` <b>${perDay} riders/day change buses here.</b>` : "";
+}
+
 function renderTown(townId: string): void {
   const town = world.towns.get(townId)!;
   const share = townShare(world, townId);
@@ -249,7 +254,7 @@ function renderTown(townId: string): void {
   routesEl.innerHTML = `
     <h2>${town.name} <span class="muted">· ${Math.round(town.population)}k people${world.settlement.emergent.has(townId) ? " · grew on the road" : ""}</span></h2>
     <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">danfo</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
-    <p class="townshare">Of everyone leaving ${town.name}: you ${pct(share.player)}, danfo ${pct(share.informal)}, stayed home ${pct(share.lost)}.</p>
+    <p class="townshare">Of everyone leaving ${town.name}: you ${pct(share.player)}, danfo ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
     ${rows}`;
 }
 
