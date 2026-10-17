@@ -24,18 +24,29 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // Slice zero (docs/brief.md): wear, goods, rail and the straight
   // alignment are off, and return one per playtest in the brief's order.
   wearEnabled: false,
+  // Routine upkeep (step 5, upkeep.ts): per cell per game day on every road
+  // you built or paved, wear or no wear. More on paved roads, more again on
+  // bridges. Inherited roads you haven't paved are the state's, and free.
+  routineUpkeepDirtPerCell: 1,
+  routineUpkeepPavedPerCell: 3,
+  routineUpkeepBridgeMultiplier: 3,
   // The world runs 5 game days before day 1 (docs/brief.md, Slice zero:
   // warm-up), so the danfos are running and queues have settled when you
   // arrive. A cold start broke the brownfield pillar and put the day-1
   // forecasts wrong in sign (brief, Evidence 2).
-  warmUpDays: 5,
+  // 7 since the post-5b baseline: at 5 the informal share still moved 6
+  // points by day 10 (M7's limit is 5); at 7, about 2.
+  warmUpDays: 7,
   goodsEnabled: false,
   railEnabled: false,
   straightAlignmentEnabled: false,
   patienceSeconds: 12,
   demandK: 0.008,
   fare: 4,
-  roadCostPerCell: 15,
+  // A dirt road you build, per flat cell (step 5: roads are born dirt and
+  // paving is the dear upgrade, pathing/cost.ts PAVE_COST_PER_CELL). Was 15
+  // when a built road came paved.
+  roadCostPerCell: 10,
   busCapacity: 20,
   busSpeed: 3,
   busPurchaseCost: 500,
@@ -52,7 +63,15 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // move many people (₦1.20 per seat-cell against the minibus's ₦1.50), or
   // the minibus wins everywhere -- it did at 3.0, being faster as well as
   // cheaper (playtest: "if I buy a normal bus it bleeds money").
-  busOperatingCostPerSecond: 2.4,
+  // Step 5 (2026-10-17): most of the rough-road discount reversed. With
+  // wear off, nothing charges a bus for worn roads, so 3.0 -> 2.4 was money
+  // handed back for a cost that no longer exists; trips-greedy never once
+  // waited for money (M10). The full reversal (2.8) sank every opening but
+  // greedy's -- a builder's minibuses to the towns it connected never broke
+  // even -- so 2.6, with the money taken from roads instead (routine upkeep
+  // on paved roads, upkeep.ts). Minibus at the same ratio (₦1.30 per
+  // seat-cell against the minibus's ₦1.63).
+  busOperatingCostPerSecond: 2.6,
   // Small and nimble against big and roomy. Cheaper to run in total (₦63/day
   // against the bus's ₦72), dearer per seat-cell carried (₦1.50 against
   // ₦1.20): so the minibus is for routes too thin to fill a bus, and the bus
@@ -67,7 +86,7 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   minibusCapacity: 12,
   minibusSpeed: 3.5,
   minibusPurchaseCost: 250,
-  minibusOperatingCostPerSecond: 2.1,
+  minibusOperatingCostPerSecond: 2.275,
   minibusRoadSpace: 1,
   // Informal modes, from the original game's catalog (public/content/
   // vehicles.json): capacity, speed, and congestion weight as road space.

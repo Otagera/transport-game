@@ -39,6 +39,18 @@ export function bridgeStepCost(span: number): StepCost {
   return { base: BASE_COST_PER_CELL * span, gradient: 0, water: BRIDGE_PREMIUM_PER_CELL * span, density: 0 };
 }
 
+// Surfacing an alignment that's already cut (the slice's Pave): no
+// gradient, water or density -- the earthworks and any bridge are there --
+// only the surface, per cell. Dear against building a dirt road (a flat
+// cell's BASE_COST_PER_CELL): a paved surface is most of what a good road
+// costs. Tuned so paving the slice's trunk costs about 3-4 buses (brief,
+// step 5).
+export const PAVE_COST_PER_CELL = 65;
+
+export function paveStepCost(cells: number): StepCost {
+  return { base: PAVE_COST_PER_CELL * cells, gradient: 0, water: 0, density: 0 };
+}
+
 export interface CostBreakdown {
   base: number;
   gradient: number;

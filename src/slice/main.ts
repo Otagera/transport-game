@@ -52,6 +52,7 @@ import { applyAction, type ActionSpec } from "@engine/slice/actions";
 import { vehicleMoves } from "@engine/slice/moves";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { startSliceGame } from "@engine/slice/start";
+import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -635,7 +636,8 @@ function ghost(): Ghost | null {
   if (tool === "road" && roadChain(world, selectedTown, to)) {
     const check = checkPave(world, selectedTown, to);
     const cost = naira(paveCost(world, selectedTown, to));
-    const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Pave ${cost} · carries ${paveGain()}× the traffic` : `${cost} · ${check.reason}` };
+    const keep = naira(paveUpkeepPerDay(world, selectedTown, to));
+    const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Pave ${cost} · carries ${paveGain()}× the traffic · +${keep}/day to keep` : `${cost} · ${check.reason}` };
     return withForecast(ghost, { kind: "pave", a: selectedTown, b: to }, { label: "paving", towns: [selectedTown, to] });
   }
   if (tool === "road") {
@@ -643,10 +645,12 @@ function ghost(): Ghost | null {
     const plan = planRoad(world, selectedTown, to, alignment);
     if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
     const other = planRoad(world, selectedTown, to, alignment === "direct" ? "cheapest" : "direct");
-    // Said up front: a road takes no fares. It pays in who it lets travel --
-    // and only in money once you run something on it (playtest, day 31:
-    // two roads drained the funds and earned nothing).
-    const label = `${alignment === "direct" ? "Direct road" : "Road"} ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders} · earns no fares itself: run a bus on it`;
+    // Said up front: a road takes no fares, and costs its upkeep every day
+    // (step 5). It pays in who it lets travel -- and only in money once you
+    // run something on it (playtest, day 31: two roads drained the funds
+    // and earned nothing).
+    const keep = naira(upkeepFor(world.tuning, plan.length, plan.bridgeCells, false));
+    const label = `${alignment === "direct" ? "Direct road" : "Road"} ${naira(plan.cost)} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders} · earns no fares itself: run a bus on it`;
     const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
     return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment }, { label: "the road", towns: [selectedTown, to] });
   }

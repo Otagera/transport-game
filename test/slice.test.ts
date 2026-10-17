@@ -6,6 +6,8 @@ import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "@engine/slice/ledger";
 import { forecast } from "@engine/slice/forecast";
+import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upkeep";
+import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { averageHeadline, averageNet } from "@engine/slice/history";
@@ -16,7 +18,7 @@ import { insertIntoPath } from "@engine/slice/settlement";
 import { setRoadMaintained } from "@engine/slice/wear";
 import { routesOnTrip, tripPlans } from "@engine/slice/transfers";
 import { roadCapacity, speedFactor } from "@engine/slice/congestion";
-import { planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
+import { costRate, planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
 import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
@@ -626,12 +628,14 @@ describe("slice: shared road", () => {
     for (const speed of w.segmentSpeed.values()) expect(speed).toBeGreaterThan(0.5);
   });
 
-  test("a built road carries more than an inherited dirt one", () => {
-    const w = world();
+  test("a road you build is born dirt; paved, it carries more", () => {
+    const w = world({ startingFunds: 1e6 });
     buildRoad(w, "mid", "cut");
-    const dirt = w.simulation.map.segments.find((s) => s.provenance === "inherited")!;
+    const inherited = w.simulation.map.segments.find((s) => s.provenance === "inherited")!;
     const built = w.simulation.map.segments.find((s) => s.provenance === "built")!;
-    expect(roadCapacity(w, built.id)).toBeGreaterThan(roadCapacity(w, dirt.id));
+    expect(roadCapacity(w, built.id)).toBe(roadCapacity(w, inherited.id));
+    paveRoad(w, "mid", "cut");
+    expect(roadCapacity(w, built.id)).toBeGreaterThan(roadCapacity(w, inherited.id));
   });
 
   test("an informal operator won't set off into a jam", () => {
@@ -649,16 +653,16 @@ describe("slice: shared road", () => {
 });
 
 describe("slice: paving a dirt road", () => {
-  test("paving charges the previewed price and makes the road carry what a built one does", () => {
-    const w = world();
+  test("paving charges the previewed price and gives the road a paved road's capacity", () => {
+    const w = world({ startingFunds: 1e6 });
     const before = w.economy.funds;
     const price = paveCost(w, "big", "mid");
     expect(paveRoad(w, "big", "mid").ok).toBe(true);
     expect(w.economy.funds).toBe(before - price);
     const paved = w.simulation.map.segments.find((s) => s.fromNodeId === "big" && s.toNodeId === "mid")!;
-    buildRoad(w, "mid", "cut");
-    const built = w.simulation.map.segments.find((s) => s.toNodeId === "cut")!;
-    expect(roadCapacity(w, paved.id)).toBe(roadCapacity(w, built.id));
+    expect(paved.surface).toBe("paved");
+    expect(paved.provenance).toBe("inherited"); // still the state's road, now paved
+    expect(roadCapacity(w, paved.id)).toBe(w.tuning.roadFlowCapacity);
   });
 
   test("it refuses what isn't a dirt road between neighbours, and refusals cost nothing", () => {
@@ -699,7 +703,33 @@ describe("slice: paving a dirt road", () => {
     const town = [...w.settlement.emergent][0]!;
     const halves = w.simulation.map.segments.filter((s) => s.fromNodeId === town || s.toNodeId === town);
     expect(halves.length).toBe(2);
-    for (const half of halves) expect(half.provenance).toBe("built");
+    for (const half of halves) expect(half.surface).toBe("paved");
+  });
+});
+
+describe("slice: routine upkeep on the roads you keep (step 5)", () => {
+  test("inherited dirt roads are free; a road you build costs its dirt rate per cell; paved costs more", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    const inherited = directRoad(w, "big", "mid")!;
+    expect(routineUpkeepPerDay(w, inherited)).toBe(0);
+    buildRoad(w, "mid", "cut");
+    const built = w.simulation.map.segments.find((s) => s.provenance === "built")!;
+    expect(routineUpkeepPerDay(w, built)).toBeCloseTo(segmentLength(w, built) * w.tuning.routineUpkeepDirtPerCell);
+    const dirtUpkeep = routineUpkeepPerDay(w, built);
+    paveRoad(w, "mid", "cut");
+    expect(routineUpkeepPerDay(w, built)).toBeGreaterThan(dirtUpkeep);
+    // Paving the state's road makes it yours to keep.
+    paveRoad(w, "big", "mid");
+    expect(routineUpkeepPerDay(w, inherited)).toBeCloseTo(segmentLength(w, inherited) * w.tuning.routineUpkeepPavedPerCell);
+  });
+
+  test("it leaves the funds a day at a time, with nothing else running", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    buildRoad(w, "mid", "cut");
+    const perDay = totalRoutineUpkeepPerDay(w);
+    const before = w.economy.funds;
+    run(w, SECONDS_PER_GAME_DAY);
+    expect(before - w.economy.funds).toBeCloseTo(perDay, 0);
   });
 });
 
@@ -969,7 +999,7 @@ describe("slice: wear (step 4)", () => {
     trunk.condition = 0.3;
     const repair = repairCost(w, trunk, 0.7);
     expect(paveCost(w, "big", "mid")).toBeGreaterThan(repair);
-    expect(paveCost(w, "big", "mid")).toBe(Math.round(segmentLength(w, trunk) * w.tuning.roadCostPerCell + repair));
+    expect(paveCost(w, "big", "mid")).toBe(Math.round(paveStepCost(segmentLength(w, trunk)).base * costRate(w) + repair));
     paveRoad(w, "big", "mid");
     expect(trunk.condition).toBe(1);
   });
@@ -1553,7 +1583,7 @@ describe("slice: a road split by roadside towns is still one road", () => {
   test("paving it by its end towns paves every piece", () => {
     const w = splitRoad();
     expect(paveRoad(w, "big", "mid").ok).toBe(true);
-    for (const piece of roadChain(w, "big", "mid")!) expect(piece.provenance).toBe("built");
+    for (const piece of roadChain(w, "big", "mid")!) expect(piece.surface).toBe("paved");
   });
 
   test("you can't build a second road alongside it", () => {
@@ -1723,11 +1753,15 @@ describe("slice: forecast before acting (playtest, day 31)", () => {
     expect(forecast(w, { kind: "bus", a: "big", b: "cut" }, { label: "nowhere", towns: [] })).toBeNull();
   });
 
-  test("a road alone forecasts no fares, only who it lets travel", () => {
+  test("a road alone forecasts no fares, only its upkeep and who it lets travel", () => {
     const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
     run(w, 60);
     const predicted = forecast(w, { kind: "road", a: "mid", b: "cut", alignment: "cheapest" }, { label: "road", towns: ["cut"] })!;
-    expect(Math.abs(predicted.moneyPerDay)).toBeLessThan(5);
+    const built = structuredClone(w);
+    buildRoad(built, "mid", "cut");
+    const upkeep = routineUpkeepPerDay(built, built.simulation.map.segments.find((s) => s.provenance === "built")!);
+    expect(upkeep).toBeGreaterThan(0);
+    expect(predicted.moneyPerDay).toBeCloseTo(-upkeep, 0);
     expect(predicted.towns[0]!.informal).toBeGreaterThan(0);
   });
 });

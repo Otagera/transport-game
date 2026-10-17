@@ -5,6 +5,7 @@ import { isCutOff, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/slice/growth";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
+import { isDirt } from "@engine/slice/congestion";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -256,7 +257,9 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
     ctx.setLineDash([]);
     for (const run of bridgeRuns(world, line)) strokeLine(ctx, view, run);
     ctx.lineCap = "round";
-    const built = segment.provenance === "built";
+    // Paved roads drawn solid, dirt dashed -- by surface, not by who built
+    // it: since step 5 the roads you build are born dirt.
+    const built = !isDirt(segment);
     // Traffic: a slowing road gets a casing from amber to red, under the
     // road itself -- the same speed that slows the buses on it.
     const speed = world.segmentSpeed.get(segment.id) ?? 1;

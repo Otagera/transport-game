@@ -26,6 +26,8 @@ export interface Trajectory {
   measured: number;
   /** With `tripDays`: trips made a day at the end of each day. */
   trips?: number[];
+  /** With `tripDays`: your riders a day at the end of each day. */
+  riders?: number[];
 }
 
 self.onmessage = (event: MessageEvent<{ id: number; world: SliceWorld; action: ActionSpec | null; tripDays?: number }>) => {
@@ -37,10 +39,13 @@ self.onmessage = (event: MessageEvent<{ id: number; world: SliceWorld; action: A
   }
   if (tripDays) {
     result.trips = [];
+    result.riders = [];
     const ticks = Math.round(SECONDS_PER_GAME_DAY / SIM_DT);
     for (let d = 0; d < tripDays; d += 1) {
       for (let i = 0; i < ticks; i += 1) sliceTick(world, SIM_DT);
-      result.trips.push(headline(world).tripsPerDay);
+      const h = headline(world);
+      result.trips.push(h.tripsPerDay);
+      result.riders.push(h.yourRidersPerDay);
     }
     self.postMessage(result);
     return;

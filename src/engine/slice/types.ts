@@ -113,6 +113,11 @@ export interface InformalState {
 }
 
 export interface SliceTuning {
+  /** Routine upkeep per cell per game day, on roads you built or paved (upkeep.ts). */
+  routineUpkeepDirtPerCell: number;
+  routineUpkeepPavedPerCell: number;
+  /** Bridge cells cost this many times a road cell to keep. */
+  routineUpkeepBridgeMultiplier: number;
   /** Game days the world runs before the player arrives (start.ts). */
   warmUpDays: number;
   /**

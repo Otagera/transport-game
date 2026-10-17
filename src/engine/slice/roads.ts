@@ -32,6 +32,10 @@ export interface RoadPlan {
  * cell); the slice's money prices a flat cell at `roadCostPerCell`. One
  * exchange rate for every term, so the breakdown still sums to the total.
  */
+export function costRate(world: SliceWorld): number {
+  return exchangeRate(world);
+}
+
 function exchangeRate(world: SliceWorld): number {
   return world.tuning.roadCostPerCell / BASE_COST_PER_CELL;
 }

@@ -17,7 +17,8 @@ import { isDirt } from "./congestion";
 import { buildSliceTerrain } from "./terrain";
 import { isRailRoute, railPath, rebuildNetworks, routingFor, vehicleCostPerDay } from "./rail";
 import { repairCost, roughCostPerDay, upkeepPerDay, wearSpeed } from "./wear";
-import { planRoad, segmentLength, type Alignment, type Point } from "./roads";
+import { costRate, planRoad, segmentLength, type Alignment, type Point } from "./roads";
+import { paveStepCost } from "../pathing/cost";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -51,7 +52,7 @@ export function gravityDemand(towns: SliceTown[], demandK: number): DemandPair[]
 }
 
 function roadSegment(id: string, a: string, b: string, provenance: Segment["provenance"]): Segment {
-  return { id, corridorId: `corridor-${id}`, fromNodeId: a, toNodeId: b, type: "road", level: "ground", condition: 1, provenance };
+  return { id, corridorId: `corridor-${id}`, fromNodeId: a, toNodeId: b, type: "road", level: "ground", condition: 1, provenance, surface: "dirt" };
 }
 
 function buildMap(def: SliceMapDef): GeneratedMap {
@@ -173,17 +174,19 @@ export function roadCost(world: SliceWorld, a: string, b: string, alignment: Ali
 }
 
 // Paving buys the surface, not the earthworks: the alignment is already
-// cut and any bridge already stands. So it's length times a flat cell's
-// price -- on flat ground, what building the same road would cost -- plus
-// repairing whatever wear the road has first: you can't pave over a broken
-// base. Without that, paving a worn dirt road (new surface and all) cost
-// less than repairing it, and repair was never the choice (step 4).
+// cut and any bridge already stands. Priced by pathing/cost.ts
+// (paveStepCost: the cost function is the build price, hard rule 3) at the
+// slice's exchange rate, plus repairing whatever wear the road has first:
+// you can't pave over a broken base. Since step 5 it's the dear upgrade:
+// paving the trunk costs about 3-4 buses where it cost under one, and was
+// the dominant opening -- ~158 more trips a day for ~₦400, six times a bus
+// per naira (status.md, 5b part 2).
 export function paveCost(world: SliceWorld, a: string, b: string): number {
   const chain = roadChain(world, a, b);
   if (!chain) return Infinity;
   let cost = 0;
   for (const road of chain.filter(isDirt)) {
-    cost += segmentLength(world, road) * world.tuning.roadCostPerCell + repairCost(world, road, 1 - road.condition);
+    cost += paveStepCost(segmentLength(world, road)).base * costRate(world) + repairCost(world, road, 1 - road.condition);
   }
   return Math.round(cost);
 }
@@ -263,7 +266,7 @@ export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult 
   if (!check.ok) return check;
   world.economy.funds -= paveCost(world, a, b);
   for (const road of roadChain(world, a, b)!.filter(isDirt)) {
-    road.provenance = "built";
+    road.surface = "paved";
     // A new surface: paving renews the road as well as widening what it carries.
     road.condition = 1;
   }

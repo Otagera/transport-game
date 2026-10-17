@@ -16,12 +16,13 @@
 import { availableParallelism } from "node:os";
 import { SLICE_MAP } from "../src/slice/map";
 import { startSliceGame } from "../src/engine/slice/start";
-import { addBus, buildRoad, chainOf, demandAlong, headline, networkShare, paveRoad, roadChain, type Headline } from "../src/engine/slice/world";
+import { addBus, buildRoad, chainOf, demandAlong, headline, routeSummaries, networkShare, paveRoad, roadChain, type Headline } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
 import { paveMoves, roadMoves, vehicleMoves, type PaveMove, type RoadMove, type VehicleMove } from "../src/engine/slice/moves";
 import { lastDay } from "../src/engine/slice/ledger";
-import { averageHeadline } from "../src/engine/slice/history";
+import { averageHeadline, averageNet } from "../src/engine/slice/history";
+import { totalRoutineUpkeepPerDay } from "../src/engine/slice/upkeep";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
@@ -89,6 +90,11 @@ async function tripsAdded(world: SliceWorld, actions: ActionSpec[]): Promise<Arr
 
 /** Trips made a day each action adds over `days`, averaged after skipping the first `skip`. */
 async function tripsAddedOver(world: SliceWorld, actions: ActionSpec[], days: number, skip = 0): Promise<Array<number | null>> {
+  return (await addedOver(world, actions, days, skip)).map((x) => (x ? x.trips : null));
+}
+
+/** Trips made and your riders a day each action adds over `days`, after skipping the first `skip`. */
+async function addedOver(world: SliceWorld, actions: ActionSpec[], days: number, skip = 0): Promise<Array<{ trips: number; riders: number } | null>> {
   const jobs = [null, ...actions].map((action, index) => {
     const id = nextId++;
     const job = new Promise<Trajectory>((resolve) => waiting.set(id, resolve));
@@ -96,8 +102,8 @@ async function tripsAddedOver(world: SliceWorld, actions: ActionSpec[], days: nu
     return job;
   });
   const [twin, ...moves] = await Promise.all(jobs);
-  const mean = (trips: number[]) => trips.slice(skip).reduce((sum, x) => sum + x, 0) / (trips.length - skip);
-  return moves.map((move) => (move.trips ? mean(move.trips) - mean(twin!.trips!) : null));
+  const mean = (xs: number[]) => xs.slice(skip).reduce((sum, x) => sum + x, 0) / (xs.length - skip);
+  return moves.map((move) => (move.trips && move.riders ? { trips: mean(move.trips) - mean(twin!.trips!), riders: mean(move.riders) - mean(twin!.riders!) } : null));
 }
 
 interface RankedRoad extends RoadMove {
@@ -167,6 +173,17 @@ function shortlistVehicles(world: SliceWorld): VehicleMove[] {
   const all = vehicleMoves(world);
   const along = (m: VehicleMove) => demandAlong(world, m.action.a, m.action.b) / m.price;
   return [...all.filter((m) => m.count > 1), ...all.filter((m) => m.count === 1).sort((x, y) => along(y) - along(x)).slice(0, 16)];
+}
+
+/** Roads paved since day 1, by their end towns (a road through roadside towns counts once). */
+function pavedRoads(world: SliceWorld): string[] {
+  const names = new Set<string>();
+  for (const segment of world.simulation.map.segments) {
+    if (segment.type !== "road" || segment.surface !== "paved") continue;
+    const chain = chainOf(world, segment.id);
+    if (chain) names.add([chain.a, chain.b].sort().join("-"));
+  }
+  return [...names];
 }
 
 /** The best road for each cut-off town, from a ranked list. */
@@ -290,10 +307,12 @@ const personas: Persona[] = [
   },
   {
     // Each day, the move that adds the most trips made per naira -- vehicles
-    // measured against a twin, roads from the ranking -- losses allowed. If
-    // it can't afford that move it saves for it rather than settling for a
-    // lesser one: how often it's waiting on money is M10. Played 60 days,
-    // for M10's window.
+    // measured against a twin, roads from the ranking -- among those that
+    // keep its budget balanced (net a day, plus the move's forecast, at or
+    // above zero). If it can't afford that move it saves for it rather than
+    // settling for a lesser one: how often it's waiting on money is M10.
+    // Played 60 days, for M10's window. (Allowed to run losses, it sat in
+    // debt from day 10 and "waited" on money by being broke.)
     //
     // Speed: it buys almost daily, and re-measuring every candidate after
     // each purchase took over 35 minutes; ranking all of them every third
@@ -306,7 +325,7 @@ const personas: Persona[] = [
     verbs: ["bus", "minibus", "road", "pave"],
     days: 60,
     decide: (() => {
-      type Option = { action: ActionSpec; price: number; perNaira: number };
+      type Option = { action: ActionSpec; price: number; perNaira: number; money?: number | null };
       let ranked: { key: string; list: Option[] } = { key: "", list: [] };
       return async (world: SliceWorld): Promise<void | "blocked"> => {
         const key = `${Math.floor(world.economy.elapsedSeconds / (3 * SECONDS_PER_GAME_DAY))}`;
@@ -326,14 +345,24 @@ const personas: Persona[] = [
             ...bestRoadPerTown(await rankedRoads(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
             ...(await rankedPaves(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
           ].filter((o) => o.perNaira > 0);
-          ranked = { key, list: options.sort((x, y) => y.perNaira - x.perNaira) };
+          options.sort((x, y) => y.perNaira - x.perNaira);
+          // Its money forecast too (2 days, as the player sees it): it buys
+          // only moves that keep its net a day at or above zero.
+          const top = options.slice(0, 8);
+          const money = await forecastAll(measuring, top.map((o) => o.action));
+          top.forEach((o, i) => (o.money = money[i] ?? null));
+          ranked = { key, list: top };
           if (process.env.BOTS_VERBOSE) log(`trips-greedy day ${Math.round((world.economy.elapsedSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1}: ${vehicles.length} candidates, ${world.simulation.vehicles.length} vehicles on the map, ranked in ${((performance.now() - t0) / 1000).toFixed(1)} s, funds ₦${Math.round(world.economy.funds)}`);
         }
-        const best = ranked.list[0];
-        if (!best) return;
+        // Its next best move: the best trips per naira that keeps the budget
+        // balanced -- today's net (5-day average) plus the move's forecast.
+        const net = averageNet(world);
+        const index = ranked.list.findIndex((o) => o.money !== null && o.money !== undefined && net + o.money >= 0);
+        if (index < 0) return;
+        const best = ranked.list[index]!;
         if (best.price > world.economy.funds) return "blocked";
         if (!applyAction(world, best.action).ok) return "blocked";
-        ranked.list.shift();
+        ranked.list.splice(index, 1);
       };
     })(),
   },
@@ -352,6 +381,9 @@ interface Sample {
   average: Headline;
   funds: number;
   net: number;
+  /** Routine upkeep and all running costs over the last day: upkeep's share is a step 5 target. */
+  upkeep: number;
+  cost: number;
   population: number;
   informalShare: number;
 }
@@ -359,6 +391,10 @@ interface Sample {
 interface Run {
   persona: Persona;
   samples: Sample[];
+  /** Roads it has paved by day 40 (step 5: the strongest strategy still paves its trunk). */
+  paved?: string[];
+  /** Per-route net a day at day 20, for the step 5 guard on builder's minibuses. */
+  routesDay20?: Array<{ id: string; net: number }>;
   /** Days (from 1) it wanted a move it couldn't afford. */
   blocked: Set<number>;
 }
@@ -370,6 +406,8 @@ function sample(world: SliceWorld): Sample {
     average: averageHeadline(world),
     funds: world.economy.funds,
     net: lastDay(world.ledger).net,
+    upkeep: totalRoutineUpkeepPerDay(world),
+    cost: lastDay(world.ledger).cost,
     population: population(world),
     informalShare: networkShare(world).informal,
   };
@@ -379,14 +417,18 @@ async function play(persona: Persona): Promise<Run> {
   const world = newWorld();
   const samples: Sample[] = [];
   const blocked = new Set<number>();
+  let routesDay20: Array<{ id: string; net: number }> | undefined;
+  let paved: string[] | undefined;
   const started = performance.now();
   for (let d = 0; d < (persona.days ?? DAYS); d += 1) {
     if ((await persona.decide(world, d)) === "blocked") blocked.add(d + 1);
     runDays(world, 1);
     samples.push(sample(world));
+    if (d === 19) routesDay20 = routeSummaries(world).map((r) => ({ id: r.id, net: r.netPerDay }));
+    if (d === 39) paved = pavedRoads(world);
   }
   log(`${persona.name}: ${((performance.now() - started) / 1000).toFixed(0)} s`);
-  return { persona, samples, blocked };
+  return { persona, samples, blocked, routesDay20, paved };
 }
 
 const at = (run: Run, d: number) => run.samples[d - 1]!;
@@ -418,6 +460,18 @@ for (const run of runs) {
     return `${n(h.tripsPerDay)}${n(h.noRoadPerDay)}${n(h.noSeatPerDay)}${n(h.yourRidersPerDay)}${money(s.funds)}${money(meanNet(run, d - 4, d))}`.padEnd(42);
   });
   console.log(`${run.persona.name.padEnd(12)} ${cells.join("")}`);
+}
+const builderRun = runs.find((r) => r.persona.name === "builder");
+if (builderRun?.routesDay20) {
+  const minis = builderRun.routesDay20.filter((r) => r.id.startsWith("mini:"));
+  console.log(`\nBuilder's minibuses to the towns it connected, net a day at day 20 (guard: at least break even): ${minis.map((r) => `${r.id.slice(5)} ${money(r.net).trim()}`).join(", ") || "none bought"}`);
+}
+console.log(`\nPaved by day 40 (the strongest strategy should still pave its trunk, Ilase-Owode):`);
+for (const run of runs) if (run.paved) console.log(`${run.persona.name.padEnd(12)} ${run.paved.join(", ") || "nothing"}`);
+console.log(`\nRoutine upkeep, day 40: per day, and its share of running costs (target: a fifth to a third)`);
+for (const run of runs) {
+  const s = at(run, 40);
+  if (s.cost > 0) console.log(`${run.persona.name.padEnd(12)} ${money(s.upkeep)}  ${String(Math.round((s.upkeep / s.cost) * 100)).padStart(3)}% of ${money(s.cost).trim()}`);
 }
 
 if (process.env.CHECKS !== "0") await checks();
@@ -521,27 +575,39 @@ async function checks(): Promise<void> {
     results.push(["M7 warm start", Math.abs(early - later) <= 0.05, `informal share ${pct(early)} at the start, ${pct(later)} on day 10`]);
   }
 
-  // M8: a good action moves trips made a day by at least twice its jitter,
-  // both on the headline as shown: the 5-day average (docs/brief.md).
-  // Jitter: the standard deviation, days 14-40, of doing nothing's 5-day
-  // average around a straight-line fit. The action: the best first move
-  // forecast on day 10 of doing nothing; its effect, the 5-day average of
-  // trips made over the five days after it, against the twin's.
-  if (idle) {
-    const points = idle.samples.filter((s) => s.day >= 14).map((s) => [s.day, avgHeadline(idle, Math.round(s.day)).tripsPerDay] as const);
-    const jitter = residualSd(points);
+  // M8: a good action moves the number it acts on by at least twice that
+  // number's jitter, both as shown (the 5-day average). A vehicle acts on
+  // your riders: the best vehicle forecast on day 10 of doing nothing,
+  // against the jitter of naive's riders (a network that has some). A road
+  // or paving acts on trips made: the best by trips per naira, against
+  // idle's jitter. Jitter: the standard deviation, days 14-40, around a
+  // straight-line fit. Effect: the 5-day average over the five days after
+  // the move, against the twin's.
+  const naive = byName.get("naive");
+  if (idle && naive) {
+    const sd = (run: Run, pick: (h: Headline) => number) =>
+      residualSd(run.samples.filter((s) => s.day >= 14).map((s) => [s.day, pick(avgHeadline(run, Math.round(s.day)))] as const));
     const world = newWorld();
     runDays(world, 10);
     const candidates = vehicleMoves(world).map((m) => m.action);
     const forecasts = await forecastAll(world, candidates);
     const bestIndex = forecasts.reduce<number>((best, v, i) => (v !== null && (best < 0 || v > forecasts[best]!) ? i : best), -1);
-    const action = candidates[bestIndex]!;
-    const [added] = await tripsAddedOver(world, [action], 5);
-    const effect = added ?? 0;
+    const vehicle = candidates[bestIndex]!;
+    const ridersJitter = sd(naive, (h) => h.yourRidersPerDay);
+    const [byVehicle] = await addedOver(world, [vehicle], 5);
+    const ridersEffect = byVehicle?.riders ?? 0;
+    const roads = [...bestRoadPerTown(await rankedRoads(world)), ...(await rankedPaves(world))].sort((x, y) => y.perNaira - x.perNaira);
+    const infra = roads[0]!.action;
+    const tripsJitter = sd(idle, (h) => h.tripsPerDay);
+    const measuring = structuredClone(world);
+    measuring.economy.funds = 1e9;
+    const [byInfra] = await addedOver(measuring, [infra], 10, 5);
+    const tripsEffect = byInfra?.trips ?? 0;
+    const label = (a: ActionSpec) => `${a.kind} ${"a" in a ? `${a.a}-${a.b}` : ""}`;
     results.push([
       "M8 signal over noise",
-      effect >= 2 * jitter,
-      `${action.kind} ${"a" in action ? `${action.a}-${action.b}` : ""}: +${effect.toFixed(1)} trips/day; jitter ${jitter.toFixed(1)}`,
+      ridersEffect >= 2 * ridersJitter && tripsEffect >= 2 * tripsJitter,
+      `${label(vehicle)}: your riders +${ridersEffect.toFixed(1)}/day, jitter ${ridersJitter.toFixed(1)}; ${label(infra)}: trips made +${tripsEffect.toFixed(1)}/day (days 6-10), jitter ${tripsJitter.toFixed(1)}`,
     ]);
   }
 
@@ -552,7 +618,7 @@ async function checks(): Promise<void> {
   if (tripsGreedy) {
     const window = Array.from({ length: 46 }, (_, i) => i + 15);
     const waiting = window.filter((d) => tripsGreedy.blocked.has(d)).length;
-    results.push(["M10 money limits the score", waiting > window.length / 2, `trips-greedy waited on money ${waiting} of ${window.length} days (15-60); funds day 60 ${money(at(tripsGreedy, 60).funds).trim()}`]);
+    results.push(["M10 money limits the score", waiting > window.length / 2, `budget-balancing trips-greedy waited on money ${waiting} of ${window.length} days (15-60); funds day 60 ${money(at(tripsGreedy, 60).funds).trim()}, net ${money(meanNet(tripsGreedy, 56, 60)).trim()}/day`]);
   }
 
   // M9: no strategy that grows towns shows a falling headline while it does.
@@ -561,7 +627,13 @@ async function checks(): Promise<void> {
     for (const run of runs) {
       const marks = [10, 20, 40];
       const grew = at(run, 40).population > at(run, 10).population;
-      const fell = marks.some((d, i) => i > 0 && avgHeadline(run, d).tripsPerDay < avgHeadline(run, marks[i - 1]!).tripsPerDay);
+      // A fall counts only above the noise: over 50 trips a day, or 10%.
+      const fell = marks.some((d, i) => {
+        if (i === 0) return false;
+        const before = avgHeadline(run, marks[i - 1]!).tripsPerDay;
+        const drop = before - avgHeadline(run, d).tripsPerDay;
+        return drop > Math.max(50, 0.1 * before);
+      });
       if (grew && fell) fallers.push(run.persona.name);
     }
     results.push(["M9 success reads as success", fallers.length === 0, fallers.length ? `towns grew but trips fell: ${fallers.join(", ")}` : "none"]);

@@ -644,6 +644,24 @@ nothing can change would be a parameter without a decision. `ALL_SYSTEMS_ON` tur
 everything back on: the probe, the lever audit, the Evidence scripts and most tests use it;
 the page does with `?systems=all`.
 
+### Surface, paving and routine upkeep (step 5)
+
+A road's surface is `Segment.surface` (`"dirt" | "paved"`, optional in `map/types.ts`: the
+original game never sets it). Every slice road is created dirt -- inherited or built -- and
+`paveRoad` sets `"paved"`; a roadside town splitting a road copies it to both halves.
+`congestion.ts` `isDirt` reads the surface (falling back to provenance for segments without
+one, i.e. track). Provenance now only says whose road it is. The map draws by surface.
+
+Prices, all through `pathing/cost.ts` at the slice's exchange rate (`roads.ts` `costRate`,
+`roadCostPerCell / BASE_COST_PER_CELL`): building a dirt road is the terrain plan as before,
+at `roadCostPerCell` 10 a flat cell; paving is `paveStepCost` (`PAVE_COST_PER_CELL` 65 a
+cell, no terrain terms: the earthworks are there) plus any repair first.
+
+`upkeep.ts` — routine upkeep, per cell per game day, on every road you built or paved
+(`isYourRoad`): `routineUpkeepDirtPerCell` or `routineUpkeepPavedPerCell`, bridge cells
+times `routineUpkeepBridgeMultiplier`. Inherited dirt roads cost nothing. Charged each tick
+with wear upkeep into `applyOperatingCosts`, so the ledger counts it as running cost.
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

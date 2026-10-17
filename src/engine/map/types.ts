@@ -57,6 +57,9 @@ export interface Segment {
   // considers the default for this infrastructure type" -- the generator
   // places inherited road and rail without knowing content exists.
   profileId?: string;
+  // A road's surface, where the game models one (the slice: dirt until
+  // paved). Undefined in the original game, which never sets it.
+  surface?: "dirt" | "paved";
 }
 
 export interface TerrainField {

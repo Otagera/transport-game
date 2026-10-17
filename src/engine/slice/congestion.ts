@@ -35,13 +35,15 @@ const BPR_BETA = 4;
 const FLOW_TAU_SECONDS = 10;
 
 /**
- * Inherited roads are dirt until paved (world.ts paveRoad). Provenance is
- * the surface in the slice: paving makes a road "built", so a town
- * splitting a paved road leaves both halves paved, and the map draws it
- * like any road you built.
+ * Every road is dirt until paved (world.ts paveRoad), inherited or built:
+ * since step 5 (brief, 2026-10-17) a road you build is born dirt, and
+ * paving is the dear upgrade. A town splitting a road copies its surface
+ * to both halves. Provenance still says whose road it is (routine upkeep
+ * is yours on roads you built). Track has no surface; inherited track
+ * counts as dirt here, as it always has, for its road capacity.
  */
 export function isDirt(segment: Segment): boolean {
-  return segment.provenance === "inherited";
+  return (segment.surface ?? (segment.provenance === "inherited" ? "dirt" : "paved")) === "dirt";
 }
 
 export function roadCapacity(world: SliceWorld, segmentId: string): number {

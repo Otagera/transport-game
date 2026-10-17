@@ -6,6 +6,7 @@ import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
+import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
 import { isDirt, updateRoadSpeeds } from "./congestion";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
@@ -205,7 +206,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
 
   // Roads wear with the traffic that just ran on them; maintained ones are
   // repaired as they go, and that upkeep is a running cost like a bus's.
-  const upkeep = tuning.wearEnabled ? updateRoadWear(world, dt) : 0;
+  // Routine upkeep on the roads you built or paved, wear or no wear (upkeep.ts).
+  const upkeep = (tuning.wearEnabled ? updateRoadWear(world, dt) : 0) + chargeRoutineUpkeep(world, dt);
   // ...and your road vehicles pay more to run on worn roads (wear.ts).
   const rough = tuning.wearEnabled ? chargeRoughRoads(world, dt, routeOf) : { total: 0, byRoute: new Map<string, number>() };
 

@@ -26,7 +26,49 @@ right after this file. Progress on that build order:
 | 5b, part 1 | Danfo road space released per segment; your vehicles' road space counts against the same budget | Done: results below |
 | 5b, part 2 | The shared informal budget by surface: dirt 9, paved 15 | Done: results below |
 | — | Bots baseline after 5b, with paving as a move | Done: results below |
-| 5 | Riders respond to price | Next |
+| 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep (M10 the gate) | In progress: costs in; fares by distance next |
+| 6 | Riders respond to price, with tolls, levies and the allocation | Next |
+
+**Step 5, money, 2026-10-17** (`BOTS_WORKERS=6`, ~15 min). Built roads are born dirt
+(`roadCostPerCell` 15 → 10); paving is `PAVE_COST_PER_CELL` 65 in `pathing/cost.ts` (the
+trunk ₦382 → ~₦1,660); routine upkeep 1 a cell a day on built dirt, 3 paved, bridges ×3;
+bus 2.4 → 2.6 and minibus 2.1 → 2.275 a second (most of the rough-road discount reversed;
+the full 2.8 sank every opening but greedy's); warm-up 7 days. Bots: trips-greedy balances
+its budget (buys only moves whose forecast keeps its net a day ≥ 0); M8 split by what an
+action moves; M9 above noise.
+
+| Persona | Day 40 (trips / no road / no seat / yours) | Funds, day 40 | Net/day, 36-40 | Paved by day 40 |
+|---|---|---|---|---|
+| idle | 335 / 211 / 137 / 0 | ₦2,500 | ₦0 | — |
+| naive | 528 / 267 / 328 / 308 | ₦6,941 | ₦186 | — |
+| builder | 422 / 0 / 269 / 18 | −₦4,116 | −₦148 | — |
+| roads only | 406 / 0 / 277 / 0 | −₦1,674 | −₦82 | — |
+| overbuilder | 565 / 248 / 187 / 129 | ₦4,750 | ₦126 | — |
+| greedy | 1,237 / 327 / 189 / 1,008 | ₦15,856 | ₦1,367 | Ilase-Owode |
+| trips-greedy | 1,264 / 0 / 389 / 716 | ₦3,270 | ₦634 | Ilase-Owode, Ikole-Kuto, Ilase-Kuto |
+
+| Check | Result | Measured |
+|---|---|---|
+| M1 | FAIL | days 16-20: greedy ₦574, naive ₦343, trips-greedy ₦313 (25% of the best is ₦430) |
+| M2, M3, M5 | FAIL | unchanged (step 6's income lines) |
+| M4 | PASS | trips-greedy: 1,264 trips, no road 0 |
+| M6 | PASS | none |
+| M7 | PASS | informal share 52% at the start, 50% on day 10 (warm-up 7) |
+| M8 | PASS | bus: your riders +35.8 against jitter 11.0; road Ikole-Kuto: trips +56.2 against 5.0 |
+| M9 | PASS | none above the noise |
+| **M10** | **FAIL** | budget-balancing trips-greedy waited on money 3 of 46 days; ₦8,520 at day 60, +₦788 a day |
+
+- **M10's first real reading fails.** A budget-balancing trips-maximiser is rarely short of
+  money: its moves pay. Greedy's money comes from its vehicles (₦1,367 a day, upkeep 3% of
+  its running costs), so the next lever is fares by distance with the fare level and the
+  bus running cost tuned against M10 and M1 together.
+- **Paving stays a decision:** greedy paves its trunk and nothing else; trips-greedy paves
+  three roads. A quiet road costs more than it returns: roads only loses ₦82 a day.
+- **Builder's guard fails:** its minibuses to the towns it connected net −₦43 (Ilaro-Owode)
+  and −₦2 (Ikole-Ilase) a day at day 20. Builder never recovers (−₦4,116 by day 40).
+- Earlier passes: the full reversal (bus 2.8) put trips-greedy in debt from day 10; raising
+  paved upkeep to hit "a fifth to a third of greedy's running costs" made greedy stop
+  paving (at 35 a cell its upkeep fell to 3%) -- that target was dropped as a proxy.
 
 **Step 5b part 2, 2026-10-17.** Each road's informal budget (your road space included) now
 depends on its surface: `informalRoadSpaceDirt` 9, `informalRoadSpace` (paved) 15, via
