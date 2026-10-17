@@ -80,11 +80,22 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   danfoRoadSpace: 1,
   kekeRoadSpace: 0.5,
   okadaRoadSpace: 0.3,
-  // Cap per corridor (docs/principles.md §3), as road space: a dozen danfos
-  // or forty okadas, your vehicles' road space included (tick.ts, step 5b). That finding was about congestion collapse; with
-  // congestion off the cap is loose enough that the informal sector
-  // visibly fills the gaps, and step 2 revisits it.
-  informalRoadSpace: 12,
+  // Cap per road (docs/principles.md §3), as road space in danfo-equivalents
+  // (a dozen danfos or forty okadas), your vehicles' road space included
+  // (tick.ts, step 5b). By surface (5b part 2), tuned to targets with your
+  // buses on the dirt trunk (roads to Ilaro and Ikole built), not to the raw
+  // capacity ratio -- 0.6 against 1.6 would evict every danfo at 4 dirt buses:
+  //   - dirt 9: idle trunk never below half speed; 2 buses below half 16% of
+  //     the time and carry 87 riders a day; 4 buses leave the danfos 52
+  //     trunk trips of their 99. At 12, 2 buses jammed 63% of the time; at
+  //     10 they carried 77; at 5 the danfos were all but evicted.
+  //   - paved 15 (dirt's 9 by the capacity ratio): the paved trunk is never
+  //     below half speed with 2 to 8 buses, and carries more danfo trips
+  //     (81 against 62 at 2 buses) and more trips in all (813 against 583).
+  //     Anywhere from 12 to 20 met the targets: on a paved road demand,
+  //     not road space, limits the danfos.
+  informalRoadSpace: 15,
+  informalRoadSpaceDirt: 9,
   startingFunds: 2500,
   // Inside towns (docs/principles.md §5, answered "acknowledge it"): short
   // trips and the last mile, which kekes and okadas carry and nothing you

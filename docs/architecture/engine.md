@@ -404,7 +404,10 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   made (brief step 5b). A roadside town splitting a segment behind a vehicle shifts its
   `released` count (settlement.ts). The budget is the road's, not the sector's:
   `dispatchInformal` adds the road space your vehicles are using on each segment now
-  (from `vehicleSegment`) to what informal vehicles hold before checking the cap. Capacities, speeds and weights come from the original catalog
+  (from `vehicleSegment`) to what informal vehicles hold before checking the cap. The cap
+  itself is by surface: `informalBudget(world, segmentId)` is `informalRoadSpaceDirt` (9)
+  on an inherited dirt road, `informalRoadSpace` (15) on a paved or built one, so paving
+  lets more danfos run (step 7's tolls collect from them). Capacities, speeds and weights come from the original catalog
   (`public/content/vehicles.json`).
 - **Outcomes** — kept per (origin, destination) pair in `world.pairOutcomes`, as EMA rates
   (τ = one game day) of four disjoint buckets, each counted once, *when the trip

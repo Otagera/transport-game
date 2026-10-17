@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**471 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**472 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: slice zero
@@ -24,7 +24,32 @@ right after this file. Progress on that build order:
 | 3 | Switches in tuning.ts for wear, goods, rail, the straight alignment | Done: results below |
 | 4 | Warm-up: 5 game days before day 1 | Done: results below |
 | 5b, part 1 | Danfo road space released per segment; your vehicles' road space counts against the same budget | Done: results below |
-| 5 | Riders respond to price; 5b part 2: the shared budget scaled with road capacity | Next |
+| 5b, part 2 | The shared informal budget by surface: dirt 9, paved 15 | Done: results below |
+| 5 | Riders respond to price | Next |
+
+**Step 5b part 2, 2026-10-17.** Each road's informal budget (your road space included) now
+depends on its surface: `informalRoadSpaceDirt` 9, `informalRoadSpace` (paved) 15, via
+`tick.ts` `informalBudget`. Tuned to targets, not to the raw capacity ratio (0.6 against
+1.6 would evict every danfo at 4 dirt buses). Same setup as part 1; the trunk dirt, or paved:
+
+| Trunk | Buses | Below half speed | Yours | Danfo trips on the trunk | Trips a day |
+|---|---|---|---|---|---|
+| dirt | 0 / 2 / 4 / 8 | 0 / 16 / 4 / 4% | 0 / 87 / 182 / 246 | 99 / 62 / 52 / 22 | 389 / 583 / 652 / 633 |
+| paved | 0 / 2 / 4 / 8 | 0 / 0 / 0 / 0% | 0 / 140 / 234 / 304 | 101 / 81 / 61 / 40 | 547 / 813 / 812 / 823 |
+
+Targets, all met: dirt idle below half ≤ ~25% (0%); dirt with 2 buses ≤ ~30% (16%) and
+your riders ≥ 78 (87); dirt with 4 buses, danfos ≥ a quarter of their no-bus trunk trips
+(52 of 99); paved with 2 and 4 buses ≤ ~10% (0%), with more danfo trips and more trips in
+all than dirt. Dirt budgets tried: 12 (2 buses jammed 63% of the time), 11 (55%), 10 (77
+riders), 7 (danfos at 30 of 98, marginal), 5 (danfos all but evicted). Paved 12-20 all met
+the targets: on a paved road demand, not road space, limits the danfos; 15 is dirt's 9 by
+the capacity ratio.
+
+Two cautions. Trips a day over days 21-25 swing by about ±50 between near-identical runs
+(roadside towns found at different moments), so read total-trip differences under that
+as noise. And the smaller dirt budget carries fewer people where you've built nothing:
+with no buses, 389 trips a day against 504 at the old 12. The bots haven't been re-run
+since (they run hot); every M check above predates parts 1 and 2.
 
 **Step 5b part 1, 2026-10-17.** A danfo held road space on its whole path from dispatch
 until its trip completed, so a long run kept its share of the trunk long after leaving it,

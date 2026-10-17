@@ -7,7 +7,7 @@ import { updateSettlements, type SliceEvent } from "./settlement";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
 import { tripPlans } from "./transfers";
-import { updateRoadSpeeds } from "./congestion";
+import { isDirt, updateRoadSpeeds } from "./congestion";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
@@ -361,7 +361,7 @@ function sendInformal(
   // instead of 289, the trunk below half speed 94% of the time; counted,
   // 225 and 34%, and the danfos on Ilase-Owode fall as you add buses.
   const space = run.path.segmentIds.map((id) => (informal.segmentSpace.get(id) ?? 0) + (yours.get(id) ?? 0));
-  if (space.some((used) => used + spec.weight > tuning.informalRoadSpace)) return false;
+  if (space.some((used, i) => used + spec.weight > informalBudget(world, run.path.segmentIds[i]!))) return false;
   // A real operator does not join a jam that pays nothing (principles §3).
   if (run.path.segmentIds.some((id) => (world.segmentSpeed.get(id) ?? 1) < tuning.informalMinSpeed)) return false;
 
@@ -382,6 +382,16 @@ function sendInformal(
   informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode, released: 0 });
   for (const segmentId of run.path.segmentIds) bump(informal.segmentSpace, segmentId, spec.weight);
   return true;
+}
+
+/**
+ * A road's informal budget in danfo-equivalents, by surface (brief, step
+ * 5b part 2): a paved road carries more than a dirt one, so paving lets
+ * more danfos run -- and step 7's tolls collect from more of them.
+ */
+export function informalBudget(world: SliceWorld, segmentId: string): number {
+  const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
+  return segment && isDirt(segment) ? world.tuning.informalRoadSpaceDirt : world.tuning.informalRoadSpace;
 }
 
 export function informalSpec(tuning: SliceTuning, mode: InformalMode): { capacity: number; speed: number; weight: number } {

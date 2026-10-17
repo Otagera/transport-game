@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/slice/world";
-import { sliceTick } from "@engine/slice/tick";
+import { informalBudget, sliceTick } from "@engine/slice/tick";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
@@ -275,10 +275,21 @@ describe("slice zero: the world is already running on day 1", () => {
   });
 });
 
+describe("the informal budget by surface", () => {
+  test("a paved road holds more danfos than a dirt one", () => {
+    const w = world({ maxEmergentTowns: 0 });
+    const bigMid = directRoad(w, "big", "mid")!.id;
+    expect(informalBudget(w, bigMid)).toBe(DEFAULT_SLICE_TUNING.informalRoadSpaceDirt);
+    paveRoad(w, "big", "mid");
+    expect(informalBudget(w, bigMid)).toBe(DEFAULT_SLICE_TUNING.informalRoadSpace);
+    expect(DEFAULT_SLICE_TUNING.informalRoadSpace).toBeGreaterThan(DEFAULT_SLICE_TUNING.informalRoadSpaceDirt);
+  });
+});
+
 describe("one road, one budget: your vehicles' road space counts against the informal cap", () => {
   test("a road your buses fill has no room for a danfo", () => {
     // Room for one danfo; one of your buses (road space 1.2) is always on the only road out of Big.
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, informalRoadSpace: 1 });
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, informalRoadSpace: 1, informalRoadSpaceDirt: 1 });
     addBus(w, "big", "mid");
     const bigMid = directRoad(w, "big", "mid")!.id;
     let informalOnIt = 0;
@@ -288,7 +299,7 @@ describe("one road, one budget: your vehicles' road space counts against the inf
     }
     expect(informalOnIt).toBe(0);
     // Without your bus the same road carries danfos.
-    const empty = world({ startingFunds: 1e6, maxEmergentTowns: 0, informalRoadSpace: 1 });
+    const empty = world({ startingFunds: 1e6, maxEmergentTowns: 0, informalRoadSpace: 1, informalRoadSpaceDirt: 1 });
     let informalOnEmpty = 0;
     for (let t = 0; t < 300; t += SIM_DT) {
       sliceTick(empty, SIM_DT);
@@ -561,7 +572,7 @@ describe("slice: kekes and okadas", () => {
   });
 
   test("road space caps the informal sector in danfo-equivalents", () => {
-    const w = world({ maxEmergentTowns: 0, informalRoadSpace: 1 });
+    const w = world({ maxEmergentTowns: 0, informalRoadSpace: 1, informalRoadSpaceDirt: 1 });
     for (let t = 0; t < 120; t += SIM_DT) {
       sliceTick(w, SIM_DT);
       for (const used of w.informal.segmentSpace.values()) expect(used).toBeLessThanOrEqual(1 + 1e-9);
@@ -1262,7 +1273,7 @@ describe("slice: rail (step 4d)", () => {
   test("a train is never road traffic: it adds no flow, wear or roadside-town traffic", () => {
     // No informal sector: with only trains moving, any road flow would be the trains'.
     // (With danfos about, trains do lower road traffic -- by taking riders who'd have given up.)
-    const w = railWorld({ informalRoadSpace: 0 });
+    const w = railWorld({ informalRoadSpace: 0, informalRoadSpaceDirt: 0 });
     buildTrack(w, "big", "far");
     for (let i = 0; i < 6; i += 1) addTrain(w, "big", "far");
     run(w, 200);

@@ -152,7 +152,10 @@ export interface SliceTuning {
   kekeRoadSpace: number;
   okadaRoadSpace: number;
   /** Informal road space per segment, in danfo-equivalents (principles §3: cap per corridor). */
+  /** Informal road budget on a paved road, danfo-equivalents, your vehicles included. */
   informalRoadSpace: number;
+  /** The same on a dirt road. */
+  informalRoadSpaceDirt: number;
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;
