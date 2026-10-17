@@ -27,6 +27,9 @@ const forbidden = [
   // the gate stopped being a real assertion.
   "transport-game: dev console ready",
   "transport-game:boot-override",
+  // The design lab (design-lab.html, docs/architecture/dev-studio.md §4) is not a build
+  // input at all; its storage key here keeps it that way.
+  "design-lab:v1",
 ];
 
 const files = readdirSync(distAssets).filter((file) => file.endsWith(".js"));

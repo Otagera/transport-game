@@ -106,3 +106,27 @@ immediately on the exact string. Fixed by moving the *entire* `devApi` construct
 unreachable in a production build and strip it. The lesson generalises: **gating the
 installation of a DEV-only object is not the same as gating its construction** — only
 the latter is guaranteed to tree-shake.
+
+## 4. The design lab (`/design-lab.html`)
+
+A mock of the slice's screen where every look is a token, for picking the step 8 look
+([brief.md](../brief.md), Information design) by trying it. `design-lab.html` holds the
+CSS; `src/design-lab/main.ts` holds the option groups (theme, your colour, panel
+material, panel pose and tilt angle, docking, one panel or two wings, headline, town
+panel, route rows, type, corners, terrain, map plate, control hint) and the presets
+(today's slice, the brief's step 8, the video-inspired daylight and night looks).
+
+- **Tokens compose.** An option is a set of CSS custom properties set on `#stage`, or a
+  `data-<group>` attribute for options that change structure; the stage's CSS reads only
+  those, so any theme works with any pose or dock. Panel tilt and docking are one
+  `transform` built from `--tilt-*` and `--dock-*`; hover, focus, a town hovered on the
+  map, or a click on the spine (pin) brings a wing out and flat.
+- **Real map, made-up state.** Towns, roads, river and hills come from `src/slice/map.ts`;
+  contours are the engine's own terrain (`buildSliceTerrain`, on the map scaled 2× for
+  half-cell resolution); trip counts are the engine's gravity demand. Shares, routes and
+  money are a fixed mid-game mock: the lab judges looks, not numbers.
+- **Verdicts.** Each option takes Keep or Drop; picks and notes save in localStorage
+  (`design-lab:v1`), the URL hash carries the look (a link opens it), and Export writes
+  markdown with the composed tokens for the brief or another session.
+- **Dev-only by construction.** It is not a `vite.config.ts` build input, so `vite build`
+  never sees it; `verify:bundle` also forbids its storage key (§3).
