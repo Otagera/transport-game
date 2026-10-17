@@ -2,7 +2,7 @@ import { computeSegmentLoads } from "../simulation/congestion";
 import type { Segment } from "../map/types";
 import type { Vehicle } from "../simulation/types";
 import type { SliceWorld } from "./types";
-import { slowOrder } from "./wear";
+import { lineSpeed } from "./wear";
 
 // Shared road (docs/principles.md §6, step 2). Your buses and the informal
 // sector slow each other down -- which closes the loop the hook depends on
@@ -119,7 +119,7 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
   for (const segment of simulation.map.segments) {
     if (segment.type === "rail") {
       // Track has no traffic but its own trains; worn track runs under a slow order (wear.ts).
-      world.segmentSpeed.set(segment.id, slowOrder(world, segment));
+      world.segmentSpeed.set(segment.id, lineSpeed(world, segment));
       const previousTrains = world.railFlowEMA.get(segment.id) ?? 0;
       world.railFlowEMA.set(segment.id, previousTrains + ((trainsEntering.get(segment.id) ?? 0) / dt - previousTrains) * alpha);
       continue;

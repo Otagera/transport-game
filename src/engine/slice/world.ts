@@ -5,7 +5,7 @@ import { findPath } from "../simulation/routing";
 import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
 import { canAfford, createEconomyState, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
-import { createDayLedger, forgetRoute, lastDay, routeIncomeLastDay } from "./ledger";
+import { createDayLedger, forgetRoute, lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
@@ -15,7 +15,7 @@ import { routesOnTrip } from "./transfers";
 import { isDirt } from "./congestion";
 import { buildSliceTerrain } from "./terrain";
 import { isRailRoute, railPath, rebuildNetworks, routingFor, vehicleCostPerDay } from "./rail";
-import { repairCost, upkeepPerDay, wearSpeed } from "./wear";
+import { repairCost, roughCostPerDay, upkeepPerDay, wearSpeed } from "./wear";
 import { planRoad, segmentLength, type Alignment, type Point } from "./roads";
 
 export const BUS_DEF_ID = "slice-bus";
@@ -103,6 +103,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     settlement: createSettlementState(),
     plans: null,
     transferRateEMA: new Map(),
+    roughCostRateEMA: new Map(),
     ledger: createDayLedger(),
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
@@ -460,7 +461,9 @@ export function routeSummaries(world: SliceWorld): RouteSummary[] {
   return world.routes
     .map((route) => {
       const incomePerDay = routeIncomeLastDay(world.ledger, route.id, world.economy.elapsedSeconds - route.openedAtSeconds);
-      const costPerDay = route.vehicleIds.length * vehicleCostPerDay(world, route.id, SECONDS_PER_GAME_DAY);
+      const costPerDay =
+        route.vehicleIds.length * vehicleCostPerDay(world, route.id, SECONDS_PER_GAME_DAY) +
+        routeExtraCostLastDay(world.ledger, route.id, world.economy.elapsedSeconds - route.openedAtSeconds);
       return { id: route.id, a: route.a, b: route.b, buses: route.vehicleIds.length, incomePerDay, costPerDay, netPerDay: incomePerDay - costPerDay };
     })
     .sort((x, y) => x.netPerDay - y.netPerDay);
@@ -596,7 +599,10 @@ function routeSegments(world: SliceWorld, routeId: string): Set<string> {
 }
 
 /** The worn roads on a route, worst first, with what keeping each one up would cost a day. */
-export function wornRoadsOn(world: SliceWorld, routeId: string): Array<{ a: string; b: string; speed: number; upkeepPerDay: number; maintained: boolean }> {
+export function wornRoadsOn(
+  world: SliceWorld,
+  routeId: string,
+): Array<{ a: string; b: string; speed: number; upkeepPerDay: number; roughPerDay: number; maintained: boolean }> {
   const ids = routeSegments(world, routeId);
   return world.simulation.map.segments
     // A bus route's roads, a train route's track (routeSegments is network-aware).
@@ -606,6 +612,7 @@ export function wornRoadsOn(world: SliceWorld, routeId: string): Array<{ a: stri
       b: segment.toNodeId,
       speed: wearSpeed(world, segment),
       upkeepPerDay: upkeepPerDay(world, segment),
+      roughPerDay: roughCostPerDay(world, segment),
       maintained: world.maintained.has(segment.id),
     }))
     .sort((p, q) => p.speed - q.speed);

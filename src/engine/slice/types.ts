@@ -141,6 +141,11 @@ export interface SliceTuning {
   railGradientMultiplier: number;
   /** Restoring inherited track, per cell of it. */
   railRestoreCostPerCell: number;
+  /** A halt: how near a line must pass a town, and the platform's fixed price (plus the spur, at railCostPerCell). */
+  haltReachCells: number;
+  /** The inherited narrow-gauge line's speed limit, as a share of a train's speed on new track (wear.ts lineSpeed). */
+  oldLineSpeed: number;
+  haltCost: number;
   trainCapacity: number;
   trainSpeed: number;
   trainPurchaseCost: number;
@@ -201,6 +206,8 @@ export interface SliceTuning {
   bridgeWearMultiplier: number;
   /** Repair price as a multiple of pathing/cost.ts maintenanceCost at the slice's exchange rate. */
   repairCostScale: number;
+  /** Extra running cost of a road vehicle on a road at the wear floor, as a share of its own (wear.ts roughCostFactor). */
+  roughRoadCostMax: number;
   /** Inside-town trips per thousand people per day -- informal's own ground (world.ts localTravel). */
   localTripsPerThousandPerDay: number;
   /** Town size (thousands) at which half your riders reach the bus by keke or okada. */
@@ -290,6 +297,8 @@ export interface SliceWorld {
   upkeepRateEMA: Map<string, number>;
   /** segmentId -> cells of it that are bridge (wear.ts bridgeCellsOn). */
   bridgeCells: Map<string, number>;
+  /** segmentId -> rolling extra running cost your vehicles pay on it for its wear, per second (wear.ts). */
+  roughCostRateEMA: Map<string, number>;
   /** townId -> rolling riders per second changing buses there. */
   transferRateEMA: Map<string, number>;
   /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */

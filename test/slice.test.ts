@@ -15,8 +15,8 @@ import { planRoad, polylineLength, segmentLength, segmentPolyline } from "@engin
 import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
-import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, removeLorry } from "@engine/slice/goods";
-import { addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
+import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, removeLorry, lorrySummaries } from "@engine/slice/goods";
+import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
 import { slowOrder } from "@engine/slice/wear";
 import type { Vehicle } from "@engine/simulation/types";
 
@@ -1069,7 +1069,9 @@ describe("slice: goods (step 4c)", () => {
     run(w, 200);
     w.economy.funds = -100;
     const quote = debtAdvice(w)!.sell.find((s) => s.routeId === w.lorryRoutes[0]!.id)!;
-    expect(quote.savesPerDay).toBeCloseTo(w.tuning.lorryOperatingCostPerSecond * 30);
+    // Its own running cost, plus what it was paying extra on worn roads.
+    expect(quote.savesPerDay).toBeGreaterThanOrEqual(w.tuning.lorryOperatingCostPerSecond * 30);
+    expect(quote.savesPerDay).toBeCloseTo(-lorrySummaries(w)[0]!.netPerDay, 6);
     expect(removeLorry(w, quote.routeId)).toBeCloseTo(quote.refund, 6);
     expect(w.lorryRoutes).toHaveLength(0);
   });
@@ -1396,5 +1398,95 @@ describe("slice: a road split by roadside towns is still one road", () => {
     for (const piece of chain) expect(w.maintained.has(piece.id)).toBe(true);
     setRoadMaintained(w, chain[1]!.id, false);
     for (const piece of chain) expect(w.maintained.has(piece.id)).toBe(false);
+  });
+});
+
+describe("slice: worn roads cost your vehicles (track 2)", () => {
+  // Same world twice, warmed, then one maintains the road: the money
+  // difference over the next days is what maintaining it was worth.
+  function maintainWorth(setup: (w: SliceWorld) => void, a: string, b: string): number {
+    const make = () => {
+      const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, inheritedRoadCondition: 0.6 });
+      setup(w);
+      run(w, 120);
+      return w;
+    };
+    const kept = make();
+    const left = make();
+    for (const piece of roadChain(kept, a, b)!) setRoadMaintained(kept, piece.id, true);
+    const start = kept.economy.funds - left.economy.funds; // the catch-up repair
+    run(kept, 300);
+    run(left, 300);
+    return kept.economy.funds - left.economy.funds - start;
+  }
+
+  test("a worn road makes your buses cost more to run", () => {
+    const sound = world({ startingFunds: 1e6, maxEmergentTowns: 0, inheritedRoadCondition: 1 });
+    const worn = world({ startingFunds: 1e6, maxEmergentTowns: 0, inheritedRoadCondition: 0.4 });
+    for (const w of [sound, worn]) {
+      addBus(w, "big", "mid");
+      run(w, 60);
+    }
+    const cost = (w: SliceWorld) => routeSummaries(w)[0]!.costPerDay;
+    expect(cost(worn)).toBeGreaterThan(cost(sound) * 1.2);
+  });
+
+  test("keeping up a road your buses run on pays; keeping up one only danfos use doesn't", () => {
+    const busy = maintainWorth((w) => {
+      for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    }, "big", "mid");
+    const danfosOnly = maintainWorth(() => {}, "mid", "far");
+    expect(busy).toBeGreaterThan(0);
+    expect(danfosOnly).toBeLessThan(0);
+  });
+});
+
+describe("slice: halts on the old line (track 2)", () => {
+  // MAP plus an old export line Big - Far, passing ~8 cells from Mid.
+  const railWorld = () =>
+    createSliceWorld(
+      { ...MAP, rails: [{ a: "big", b: "far" }] },
+      { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, haltReachCells: 10 },
+    );
+
+  test("the old line passing Mid offers a halt there, and nowhere it doesn't pass", () => {
+    const w = railWorld();
+    const site = haltSite(w, "mid")!;
+    expect(site.distance).toBeGreaterThan(5);
+    expect(site.distance).toBeLessThan(10);
+    expect(haltSite(w, "cut")).toBeNull();
+  });
+
+  test("a halt splits the line into the town, so each side can be restored on its own", () => {
+    const w = railWorld();
+    expect(buildHalt(w, "mid").ok).toBe(true);
+    expect(haltSite(w, "mid")).toBeNull(); // it's on the line now
+    expect(trackAction(w, "big", "mid")).toBe("restore");
+    expect(trackAction(w, "mid", "far")).toBe("restore");
+    expect(buildTrack(w, "big", "mid").ok).toBe(true); // just the useful stretch
+    expect(railPath(w, "big", "mid")).not.toBeNull();
+    expect(railPath(w, "big", "far")).toBeNull(); // the rest still out of service
+    expect(addTrain(w, "big", "mid").ok).toBe(true);
+  });
+
+  test("a train already on the line stops at a new halt", () => {
+    const w = railWorld();
+    buildTrack(w, "big", "far");
+    addTrain(w, "big", "far");
+    run(w, 30);
+    buildHalt(w, "mid");
+    const train = w.simulation.vehicles.find((v) => w.railVehicles.has(v.id))!;
+    expect(train.path).toContain("mid");
+  });
+
+  test("the old narrow-gauge line runs slower than new track", () => {
+    const w = railWorld();
+    buildTrack(w, "big", "far"); // restore
+    buildTrack(w, "big", "mid"); // new track
+    run(w, 1);
+    const old = w.simulation.map.segments.find((s) => s.type === "rail" && s.provenance === "inherited")!;
+    const fresh = w.simulation.map.segments.find((s) => s.type === "rail" && s.provenance === "built")!;
+    expect(w.segmentSpeed.get(old.id)).toBeCloseTo(w.tuning.oldLineSpeed);
+    expect(w.segmentSpeed.get(fresh.id)).toBe(1);
   });
 });

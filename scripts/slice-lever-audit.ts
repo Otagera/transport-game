@@ -16,7 +16,8 @@
 //            world: under ~2, the player can't tell the change from noise
 //
 //   bun scripts/slice-lever-audit.ts            # every lever
-//   bun scripts/slice-lever-audit.ts pave       # levers whose name matches
+//   bun scripts/slice-lever-audit.ts "fix|pave" # levers whose name matches
+//   SLICE_TUNING='{"fare":5}' AFTER_DAYS=20 bun scripts/slice-lever-audit.ts
 import { SLICE_MAP } from "../src/slice/map";
 import {
   addBus,
@@ -35,7 +36,7 @@ import { sliceTick } from "../src/engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { setMaintained } from "../src/engine/slice/wear";
 import { addLorry, lorrySummaries } from "../src/engine/slice/goods";
-import { addTrain, buildTrack } from "../src/engine/slice/rail";
+import { addTrain, buildHalt, buildTrack } from "../src/engine/slice/rail";
 import { addFreightTrain } from "../src/engine/slice/goods";
 import { computeBurnRate } from "../src/engine/economy/report";
 import { lastDay } from "../src/engine/slice/ledger";
@@ -46,11 +47,13 @@ import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
 const WARM_DAYS = 10;
 const AFTER_DAYS = Number(process.env.AFTER_DAYS ?? 10);
 const SAMPLE_SECONDS = 1;
-const filter = process.argv[2];
+// A regular expression over lever names; SLICE_TUNING='{"key":value}' overrides tuning.
+const filter = process.argv[2] ? new RegExp(process.argv[2], "i") : null;
+const overrides = JSON.parse(process.env.SLICE_TUNING ?? "{}");
 
 /** A mid-game network: the trunk, the river crossing, a southern feeder. */
 function baseline(): SliceWorld {
-  const world = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, startingFunds: 100_000 });
+  const world = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, startingFunds: 100_000, ...overrides });
   addBus(world, "ilase", "owode");
   addBus(world, "ilase", "owode");
   addBus(world, "owode", "ado");
@@ -73,6 +76,8 @@ interface Watch {
 
 interface Lever {
   name: string;
+  /** Extra setup for this lever, applied to both worlds before the warm-up. */
+  setup?: (world: SliceWorld) => void;
   /** Pull it. Returns what to watch beyond the network-wide numbers. */
   pull: (world: SliceWorld) => Watch[];
 }
@@ -156,7 +161,47 @@ const levers: Lever[] = [
     },
   },
   {
+    name: "fix a road your buses wear (Owode–Ado, 3 buses on it)",
+    setup: (w) => {
+      addBus(w, "owode", "ado");
+      addBus(w, "owode", "ado");
+    },
+    pull: (w) => {
+      for (const piece of roadPieces(w, "owode", "ado")) setMaintained(w, piece.id, true);
+      return [money("Owode–Ado route net/day", routeNet(routeKey("owode", "ado"))), share("road condition", roadCondition("owode", "ado"))];
+    },
+  },
+  {
+    name: "pave a road your buses wear (Owode–Ado, 3 buses on it)",
+    setup: (w) => {
+      addBus(w, "owode", "ado");
+      addBus(w, "owode", "ado");
+    },
+    pull: (w) => {
+      for (const piece of roadPieces(w, "owode", "ado")) paveRoad(w, piece.from, piece.to);
+      return [money("Owode–Ado route net/day", routeNet(routeKey("owode", "ado"))), share("road condition", roadCondition("owode", "ado"))];
+    },
+  },
+  {
+    name: "fix a road only danfos use (Ado–Ogbe)",
+    pull: (w) => {
+      for (const piece of roadPieces(w, "ado", "ogbe")) setMaintained(w, piece.id, true);
+      return [share("road condition", roadCondition("ado", "ogbe"))];
+    },
+  },
+  {
     name: "add a lorry (Ilase–Kuto: produce in, supplies out)",
+    pull: (w) => {
+      addLorry(w, "ilase", "kuto");
+      const id = w.lorryRoutes[w.lorryRoutes.length - 1]?.id ?? "";
+      return [money("lorry route net/day", lorryNet(id))];
+    },
+  },
+  {
+    name: "add a lorry on a paved road (Ilase–Kuto paved first)",
+    setup: (w) => {
+      paveRoad(w, "ilase", "kuto");
+    },
     pull: (w) => {
       addLorry(w, "ilase", "kuto");
       const id = w.lorryRoutes[w.lorryRoutes.length - 1]?.id ?? "";
@@ -170,6 +215,46 @@ const levers: Lever[] = [
       addTrain(w, "ilase", "ipaja");
       const id = w.routes[w.routes.length - 1]?.id ?? "";
       return [money("train route net/day", routeNet(id)), share("Ipaja ring: you", (x) => townShare(x, "ipaja").player)];
+    },
+  },
+  {
+    name: "halt at Owode, restore the old line to Owode + a passenger train (Ilase–Owode)",
+    pull: (w) => {
+      buildHalt(w, "owode");
+      buildTrack(w, "ilase", "owode"); // restores just that stretch of the old line
+      addTrain(w, "ilase", "owode");
+      const id = w.routes[w.routes.length - 1]?.id ?? "";
+      return [money("train route net/day", routeNet(id)), share("Owode ring: you", (x) => townShare(x, "owode").player)];
+    },
+  },
+  {
+    name: "halt at Owode, restore the whole old line + a passenger train (Ilase–Ipaja)",
+    pull: (w) => {
+      buildHalt(w, "owode");
+      buildTrack(w, "ilase", "owode");
+      buildTrack(w, "owode", "ipaja");
+      addTrain(w, "ilase", "ipaja");
+      const id = w.routes[w.routes.length - 1]?.id ?? "";
+      return [money("train route net/day", routeNet(id)), share("Owode ring: you", (x) => townShare(x, "owode").player)];
+    },
+  },
+  {
+    name: "build new track + a passenger train (Ilase–Owode)",
+    pull: (w) => {
+      buildTrack(w, "ilase", "owode");
+      addTrain(w, "ilase", "owode");
+      const id = w.routes[w.routes.length - 1]?.id ?? "";
+      return [money("train route net/day", routeNet(id)), share("Owode ring: you", (x) => townShare(x, "owode").player)];
+    },
+  },
+  {
+    name: "build new track through the towns + a passenger train (Ilase–Owode–Ado)",
+    pull: (w) => {
+      buildTrack(w, "ilase", "owode");
+      buildTrack(w, "owode", "ado");
+      addTrain(w, "ilase", "ado");
+      const id = w.routes[w.routes.length - 1]?.id ?? "";
+      return [money("train route net/day", routeNet(id)), share("Ado ring: you", (x) => townShare(x, "ado").player)];
     },
   },
   {
@@ -209,9 +294,11 @@ const fmt = (n: number, unit: Watch["unit"]) => (unit === "₦" ? `${n >= 0 ? "+
 }
 
 for (const lever of levers) {
-  if (filter && !lever.name.toLowerCase().includes(filter.toLowerCase())) continue;
+  if (filter && !filter.test(lever.name)) continue;
   const control = baseline();
   const treated = baseline();
+  lever.setup?.(control);
+  lever.setup?.(treated);
   run(control, WARM_DAYS * SECONDS_PER_GAME_DAY);
   run(treated, WARM_DAYS * SECONDS_PER_GAME_DAY);
 

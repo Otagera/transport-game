@@ -7,7 +7,7 @@ import { updateSettlements, type SliceEvent } from "./settlement";
 import { recordMoney } from "./ledger";
 import { tripPlans } from "./transfers";
 import { updateRoadSpeeds } from "./congestion";
-import { segmentConditions, updateRoadWear } from "./wear";
+import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
 
@@ -205,13 +205,15 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // Roads wear with the traffic that just ran on them; maintained ones are
   // repaired as they go, and that upkeep is a running cost like a bus's.
   const upkeep = updateRoadWear(world, dt);
+  // ...and your road vehicles pay more to run on worn roads (wear.ts).
+  const rough = chargeRoughRoads(world, dt, routeOf);
 
   // Money. Running cost is whatever left the funds this tick that fares
   // didn't bring in -- buses, lorries, trains and road upkeep alike --
   // so the ledger never has to know every way money is spent.
   applyOperatingCosts(economy, dt, 1, upkeep);
   updateIncomeRateEMA(economy, revenueThisTick, dt);
-  recordMoney(world.ledger, revenueThisTick, revenueThisTick - (economy.funds - fundsAtStart), routeRevenue, dt);
+  recordMoney(world.ledger, revenueThisTick, revenueThisTick - (economy.funds - fundsAtStart), routeRevenue, dt, rough.byRoute);
 
   // Rolling rates, each updated exactly once per tick (architecture hard
   // rule 7).

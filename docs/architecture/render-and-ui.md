@@ -310,3 +310,6 @@ no-cached-view discipline as §2).
   A finished receipt also shows as an 8-second toast.
 - Roads are named by their end towns even when roadside towns have split them; the Fix
   tool's hover shows the whole road's worst piece and total upkeep.
+- **Halts** — with the Track tool, clicking a town twice builds a halt where a line passes
+  it; back over the selected town, the preview offers it with distance and price. The town
+  panel names the passing line and how to build the halt.

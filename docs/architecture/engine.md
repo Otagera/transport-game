@@ -578,3 +578,27 @@ town founding/abandonment rules, and `insertIntoPath`'s position-preserving spli
   split by roadside towns as one road, continuing through any emergent town or ruin on
   exactly two roads. Paving, the "already connected" check, and `setRoadMaintained`
   (wear.ts, whole road at once, track per piece) all use them.
+
+### Rough roads (economics, track 2)
+
+`wear.ts` `roughCostFactor` — a road vehicle's extra running cost on a road, as a share of
+its own: 0 when sound, `roughRoadCostMax` at the condition floor, linear between. Track has
+none (worn track costs through slow orders). `chargeRoughRoads` runs each tick after wear:
+each of your road vehicles pays its own `operatingCostPerSecond` × the factor of the segment
+it's on (read from `world.vehicleSegment`); the total leaves the funds (so the ledger counts
+it), per route goes into the ledger's `extraCostByRoute` (route and lorry rows add it to
+their cost), and per road into `roughCostRateEMA` — what a worn road costs *you*, shown by
+the Fix tool and the worn-route reason next to its upkeep.
+
+### Halts and the narrow-gauge line (rail, track 2)
+
+`rail.ts` — `haltSite(town)` finds where any track passes a town (not at its ends) within
+`haltReachCells`, by projecting the town onto each rail polyline. `buildHalt` charges
+`haltCost` plus the spur at `railCostPerCell` (in and out), splits the track at that point
+into two segments through the town (each keeping its side of the old polyline plus the spur),
+and carries over out-of-service, maintained, train flow and upkeep to both halves; trains
+already on the line get the town threaded into their path (`insertIntoPath`). On the
+out-of-service old line, each side is then restored on its own. `wear.ts` `lineSpeed` — the
+speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narrow gauge),
+1 on new, times the slow order on worn track. Worn-track verdicts still read `wearSpeed`
+(wear only), so gauge never reads as wear.

@@ -33,7 +33,11 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // route paid, even six buses on the trunk (+257/day), so which routes to
   // run was never a decision; route composition is the lever that matters
   // (docs/principles.md §3, Balance numbers).
-  busOperatingCostPerSecond: 3.5,
+  // Track 2 (2026-10-17): 3.5 -> 3.0 when worn roads began costing buses
+  // extra to run (roughRoadCostMax). At 3.5 plus rough roads, a bus on the
+  // busiest route took 100 days to pay back and the early game went
+  // negative from two buses (lever audit + probe).
+  busOperatingCostPerSecond: 3,
   // Informal modes, from the original game's catalog (public/content/
   // vehicles.json): capacity, speed, and congestion weight as road space.
   danfoCapacity: 14,
@@ -74,6 +78,14 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   railCostPerCell: 45,
   railGradientMultiplier: 3,
   railRestoreCostPerCell: 11,
+  // Halts and the narrow-gauge line (rail.ts, wear.ts lineSpeed). Audit,
+  // 20 days on: old line to Owode via a halt + train +₦249/day (~12 days),
+  // new track Ilase-Owode + train +₦312 (~10), the whole old line to Ipaja
+  // +₦145 (~22). At 0.7 the old line beat new track; at 0.4 the long run
+  // to Ipaja barely paid.
+  haltReachCells: 6,
+  oldLineSpeed: 0.55,
+  haltCost: 300,
   trainCapacity: 80,
   trainSpeed: 8,
   trainPurchaseCost: 2000,
@@ -114,7 +126,10 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   lorryCapacity: 30,
   lorrySpeed: 2.5,
   lorryPurchaseCost: 550,
-  lorryOperatingCostPerSecond: 4,
+  // Track 2: 4 -> 3.6 with rough-road costs. Lorries wear roads hardest and
+  // pay the most on worn ones: a lorry on dirt Ilase-Kuto pays back in ~20
+  // days, on the same road paved in ~5 -- goods want good roads.
+  lorryOperatingCostPerSecond: 3.6,
   lorryRoadSpace: 1.5,
   // 1.5 road space x 1.6 = 2.4 against a bus's 1.2: a lorry wears a road
   // about twice what a bus does.
@@ -139,12 +154,22 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   //     2x and costs 4x a cell to repair, ~129/day, more than it gives back;
   //   - paving the trunk and maintaining it (~15/day) nets +296.
   // The step 2-3 numbers in the comments above were measured before wear.
-  inheritedRoadCondition: 0.75,
+  // Track 2: 0.75 -> 0.95. With rough-road costs, starting every inherited
+  // road worn taxed every bus from day one; starting them sound lets your
+  // own traffic wear them, so keeping roads up becomes a mid-game decision.
+  inheritedRoadCondition: 0.95,
   weatherPerSecond: 0.0001,
   wearPerFlow: 0.00045,
   dirtWearMultiplier: 3,
   bridgeWearMultiplier: 2,
   repairCostScale: 8,
+  // Worn roads cost your road vehicles extra to run (wear.ts): up to +70% at
+  // the floor, inside the range road agencies' vehicle-operating-cost models
+  // give for buses on very poor roads. Lever audit, 20 days after acting:
+  //   - maintaining a road 3 of your buses use pays back in ~10 days;
+  //   - paving it, ~9 days; maintaining a road only danfos use earns nothing;
+  //   - a bus on the busiest route pays back in ~10 days, a thin new route ~17.
+  roughRoadCostMax: 0.7,
   walkableTownPopulation: 40,
   outcomeTauSeconds: 30,
   // Shared road (congestion.ts). Capacity is road space entering per

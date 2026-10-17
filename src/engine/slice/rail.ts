@@ -6,7 +6,8 @@ import { createVehicle } from "../simulation/vehicle";
 import { canAfford, registerPurchase } from "../economy/state";
 import { BASE_COST_PER_CELL } from "../pathing/cost";
 import type { SliceWorld } from "./types";
-import { planAlignment, segmentLength, type Alignment, type RoadPlan } from "./roads";
+import { planAlignment, polylineLength, segmentLength, segmentPolyline, splitPolyline, type Alignment, type Point, type RoadPlan } from "./roads";
+import { insertIntoPath } from "./settlement";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, routeKey, type ActionResult } from "./world";
 
 // Rail (docs/principles.md §6, step 4: depth, one at a time -- rail last,
@@ -140,6 +141,129 @@ export function buildTrack(world: SliceWorld, a: string, b: string, alignment: A
     world.simulation.map.corridors.push({ id: `corridor-${id}`, nodeIds: [a, b], polyline: plan.polyline });
   }
   rebuildNetworks(world);
+  return { ok: true };
+}
+
+// --- Halts ------------------------------------------------------------------
+//
+// The old line runs four cells past Owode without stopping: built for
+// export, not for the trips people make (principles §1). A halt brings it
+// in -- a short spur where the line passes nearest -- so trains on it stop
+// at the town. Restoring the old line alone always lost money (lever audit:
+// −₦78/day with a passenger train), so "restore the wrong line or build the
+// right one" wasn't a choice; with a halt it is: cheap and roundabout, or
+// dear and direct. Historically true too -- colonial lines gained halts as
+// towns grew up beside them.
+
+export interface HaltSite {
+  segmentId: string;
+  townId: string;
+  /** Distance along the track's polyline to the point nearest the town. */
+  along: number;
+  point: Point;
+  /** How far that point is from the town: the spur's length. */
+  distance: number;
+}
+
+function nearestOnPolyline(line: Point[], p: Point): { along: number; point: Point; distance: number } {
+  let best = { along: 0, point: line[0]!, distance: Infinity };
+  let travelled = 0;
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const step = Math.hypot(dx, dy);
+    const t = step > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (step * step))) : 0;
+    const point = { x: a.x + dx * t, y: a.y + dy * t };
+    const distance = Math.hypot(p.x - point.x, p.y - point.y);
+    if (distance < best.distance) best = { along: travelled + step * t, point, distance };
+    travelled += step;
+  }
+  return best;
+}
+
+/** Where track passes a town without stopping, near enough for a halt. */
+export function haltSite(world: SliceWorld, townId: string): HaltSite | null {
+  const town = world.towns.get(townId);
+  if (!town) return null;
+  const map = world.simulation.map;
+  let best: HaltSite | null = null;
+  for (const segment of map.segments) {
+    if (segment.type !== "rail" || segment.fromNodeId === townId || segment.toNodeId === townId) continue;
+    const line = segmentPolyline(map, segment);
+    const nearest = nearestOnPolyline(line, town);
+    // Not at either end: a halt splits the line, it doesn't extend it.
+    const length = polylineLength(line);
+    if (nearest.along < 1 || nearest.along > length - 1) continue;
+    if (nearest.distance > world.tuning.haltReachCells) continue;
+    if (!best || nearest.distance < best.distance) best = { segmentId: segment.id, townId, ...nearest };
+  }
+  return best;
+}
+
+/** A halt's price: the platform, and a spur in and out. */
+export function haltCost(world: SliceWorld, site: HaltSite): number {
+  return Math.round(world.tuning.haltCost + 2 * site.distance * world.tuning.railCostPerCell);
+}
+
+export function checkHalt(world: SliceWorld, townId: string): ActionResult {
+  const site = haltSite(world, townId);
+  if (!site) return { ok: false, reason: "no line passes near enough for a halt" };
+  if (!canAfford(world.economy, haltCost(world, site))) return { ok: false, reason: "can't afford it" };
+  return { ok: true };
+}
+
+/**
+ * Builds a halt: the line is split where it passes nearest the town and
+ * runs in to it, so every train on it stops there. Works on the old line
+ * before it's restored -- then each side is restored on its own, which is
+ * what lets a player bring back just the useful stretch.
+ */
+export function buildHalt(world: SliceWorld, townId: string): ActionResult {
+  const check = checkHalt(world, townId);
+  if (!check.ok) return check;
+  const site = haltSite(world, townId)!;
+  world.economy.funds -= haltCost(world, site);
+
+  const map = world.simulation.map;
+  const segment = map.segments.find((candidate) => candidate.id === site.segmentId)!;
+  const town = world.towns.get(townId)!;
+  const [before, after] = splitPolyline(segmentPolyline(map, segment), site.along);
+  const firstLine = [...before, { x: town.x, y: town.y }];
+  const secondLine = [{ x: town.x, y: town.y }, ...after];
+  const first = { ...segment, id: `${segment.id}.h1`, corridorId: `corridor-${segment.id}.h1`, toNodeId: townId, length: polylineLength(firstLine) };
+  const second = { ...segment, id: `${segment.id}.h2`, corridorId: `corridor-${segment.id}.h2`, fromNodeId: townId, length: polylineLength(secondLine) };
+  map.segments = map.segments.filter((candidate) => candidate !== segment).concat(first, second);
+  map.corridors = map.corridors
+    .filter((corridor) => corridor.id !== segment.corridorId)
+    .concat(
+      { id: first.corridorId, nodeIds: [segment.fromNodeId, townId], polyline: firstLine },
+      { id: second.corridorId, nodeIds: [townId, segment.toNodeId], polyline: secondLine },
+    );
+
+  // Everything the old piece carried, both halves carry.
+  const carry = (set: Set<string>) => {
+    if (set.delete(segment.id)) {
+      set.add(first.id);
+      set.add(second.id);
+    }
+  };
+  carry(world.railOutOfService);
+  carry(world.maintained);
+  for (const rates of [world.railFlowEMA, world.upkeepRateEMA]) {
+    const rate = rates.get(segment.id) ?? 0;
+    rates.set(first.id, rate);
+    rates.set(second.id, rate);
+    rates.delete(segment.id);
+  }
+  world.bridgeCells.delete(segment.id);
+  // Trains on the line now stop at the halt.
+  for (const vehicle of world.simulation.vehicles) {
+    if (world.railVehicles.has(vehicle.id)) insertIntoPath(vehicle, segment.fromNodeId, segment.toNodeId, townId);
+  }
+  rebuildNetworks(world);
+  world.plans = null;
   return { ok: true };
 }
 

@@ -18,6 +18,8 @@ interface Slot {
   income: number;
   cost: number;
   byRoute: Map<string, number>;
+  /** Running cost a route ran up beyond its vehicles' own (rough roads). */
+  extraCostByRoute: Map<string, number>;
 }
 
 export interface DayLedger {
@@ -29,7 +31,7 @@ export interface DayLedger {
 }
 
 function emptySlot(): Slot {
-  return { income: 0, cost: 0, byRoute: new Map() };
+  return { income: 0, cost: 0, byRoute: new Map(), extraCostByRoute: new Map() };
 }
 
 export function createDayLedger(): DayLedger {
@@ -37,11 +39,19 @@ export function createDayLedger(): DayLedger {
 }
 
 /** One tick's money: running income and cost (never purchases or sales), and fares per route. */
-export function recordMoney(ledger: DayLedger, income: number, cost: number, byRoute: ReadonlyMap<string, number>, dt: number): void {
+export function recordMoney(
+  ledger: DayLedger,
+  income: number,
+  cost: number,
+  byRoute: ReadonlyMap<string, number>,
+  dt: number,
+  extraCostByRoute: ReadonlyMap<string, number> = new Map(),
+): void {
   const slot = ledger.slots[ledger.cursor]!;
   slot.income += income;
   slot.cost += cost;
   for (const [routeId, amount] of byRoute) slot.byRoute.set(routeId, (slot.byRoute.get(routeId) ?? 0) + amount);
+  for (const [routeId, amount] of extraCostByRoute) slot.extraCostByRoute.set(routeId, (slot.extraCostByRoute.get(routeId) ?? 0) + amount);
   ledger.slotElapsed += dt;
   ledger.seenSeconds = Math.min(SECONDS_PER_GAME_DAY, ledger.seenSeconds + dt);
   while (ledger.slotElapsed >= SLOT_SECONDS) {
@@ -84,7 +94,18 @@ export function routeIncomeLastDay(ledger: DayLedger, routeId: string, ageSecond
   return seen > 0 ? total * (SECONDS_PER_GAME_DAY / seen) : 0;
 }
 
-/** A route opened under an id that ran before: its old fares are not its own. */
+/** A route's extra running cost (rough roads) over the last day, scaled like its fares. */
+export function routeExtraCostLastDay(ledger: DayLedger, routeId: string, ageSeconds: number): number {
+  let total = 0;
+  for (const slot of ledger.slots) total += slot.extraCostByRoute.get(routeId) ?? 0;
+  const seen = Math.min(ledger.seenSeconds, Math.max(SLOT_SECONDS, ageSeconds));
+  return seen > 0 ? total * (SECONDS_PER_GAME_DAY / seen) : 0;
+}
+
+/** A route opened under an id that ran before: its old money is not its own. */
 export function forgetRoute(ledger: DayLedger, routeId: string): void {
-  for (const slot of ledger.slots) slot.byRoute.delete(routeId);
+  for (const slot of ledger.slots) {
+    slot.byRoute.delete(routeId);
+    slot.extraCostByRoute.delete(routeId);
+  }
 }

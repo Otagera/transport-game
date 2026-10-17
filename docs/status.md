@@ -107,6 +107,19 @@ the routes panel; and paving and fixing work on a whole road through roadside to
 receipts in the browser say buses are marginal early (+₦10–20/day on ₦500 at day 3–4) —
 an input to track 2.
 
+**Track 2 started (not yet played):** worn roads now raise your road vehicles' running cost
+(up to +70% at the floor), roads start sound (0.95) so your own traffic wears them, and bus
+and lorry running costs came down to match (₦90/day, ₦108/day). Audit, 20 days on: a bus on
+the busy route pays back in ~10 days, a thin new route ~17; maintaining a road 3 of your
+buses use ~10, paving it ~9; maintaining a danfo-only road earns nothing; a lorry ~20 days
+on dirt, ~5 paved. The Fix hover and the worn-route reason put both numbers side by side
+(what the wear costs you, what upkeep costs). Rail: new track through the towns pays
+(+₦212/day, ~27 days on ₦5.6k). Restoring the old line always lost (−₦78/day), so — the
+user's pick — it gained **halts** (Track tool, click a town the line passes twice: a short
+spur in, ₦300 + the spur) and a **narrow-gauge speed limit** (55% of new track). Now: old line
+to Owode via a halt +₦249/day (~12 days), new track +₦312 (~10), whole old line to Ipaja
++₦145 (~22). Freight on the old line still loses (−₦113): not yet looked at.
+
 Plan: **track 1, legibility** (a steady net/day, a receipt a day after each action, pave and
 fix a whole road through roadside towns), then **track 2, economics** of the dead levers
 (fix, pave, then rail).

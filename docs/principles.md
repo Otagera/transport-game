@@ -273,6 +273,15 @@ blow-by-blow; this section is the distilled rule.
 - **Revenue accrues on unload**, not on carriage.
 - **Operating cost is per-tick and unconditional.** Era fuel multipliers drive it, so
   the Informal-era spike bites operationally rather than only at purchase.
+- **A bad road's real cost is the vehicles, not the time.** Fuel, tyres, springs and
+  breakdowns rise steeply with roughness — the centre of road agencies' maintenance
+  economics (World Bank HDM-4). Without it, maintenance never paid: the player paid to
+  repair wear mostly made by danfos and okadas and got back only a little speed (lever
+  audit: −₦88/day net on the trunk over 30 days). With worn roads raising your vehicles'
+  running cost (up to +70%), maintaining a road your buses use pays back in ~10 days,
+  paving it in ~9, and maintaining one only danfos use earns nothing — the decision is
+  *whose* road it is. Roads must start sound for this to work: started worn, it taxed every
+  bus from day one and the early game went negative.
 - **Debt allowed** — no interest, no game over. Spending blocked, billing continues.
   Hard failure is wrong for a sandbox.
 - **Vehicle resale must be depreciated**, or a player in debt liquidates the fleet and
@@ -417,6 +426,13 @@ for if eras return; they are not live in the slice.*
 - **Era identity must be expressed mechanically**, not only in prices — per-era
   paratransit parameters made the Informal era feel like informal transport taking
   over.
+- **A wrong old line needs a way to be made useful, and must be slower than new track**
+  (slice, track 2). Restored as-is, the colonial line always lost money (−₦78/day): a trap,
+  not a choice. A halt where it passes a town (a short spur in) made it useful — but then it
+  earned exactly what new track did for ₦240 less, and there was nothing to weigh. The old
+  line is narrow gauge: at 55% of new track's speed, old-to-Owode-via-a-halt earns +₦249/day
+  (12-day payback) against new track's +₦312 (10), and the whole old line to Ipaja is a weak
+  but positive +₦145. Cheap and slow, or dear and fast.
 - **Rail goes dark through Informal and returns as standard gauge in Modern.**
   Historically exact. But a *designed absence* must be visible in advance via a catalog
   timeline, or it ambushes the player.

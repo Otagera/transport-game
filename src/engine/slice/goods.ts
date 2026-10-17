@@ -1,4 +1,4 @@
-import { forgetRoute, routeIncomeLastDay } from "./ledger";
+import { forgetRoute, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import type { CargoKind, DeliveryEvent, Vehicle } from "../simulation/types";
 import { createVehicle, freeSeats, nodesAhead, type Loader } from "../simulation/vehicle";
 import { canAfford, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
@@ -296,7 +296,9 @@ export function lorrySummaries(world: SliceWorld): LorrySummary[] {
   return world.lorryRoutes
     .map((route) => {
       const incomePerDay = routeIncomeLastDay(world.ledger, route.id, world.economy.elapsedSeconds - route.openedAtSeconds);
-      const costPerDay = route.vehicleIds.length * goodsVehicleCostPerDay(world, route.id);
+      const costPerDay =
+        route.vehicleIds.length * goodsVehicleCostPerDay(world, route.id) +
+        routeExtraCostLastDay(world.ledger, route.id, world.economy.elapsedSeconds - route.openedAtSeconds);
       return { id: route.id, a: route.a, b: route.b, lorries: route.vehicleIds.length, incomePerDay, costPerDay, netPerDay: incomePerDay - costPerDay };
     })
     .sort((p, q) => p.netPerDay - q.netPerDay);

@@ -33,11 +33,11 @@ import {
 } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { planRoad, segmentPolyline, type Alignment, type RoadPlan } from "@engine/slice/roads";
-import { setRoadMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
+import { roughCostPerDay, setRoadMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/slice/receipts";
 import type { SliceWorld } from "@engine/slice/types";
 import { growthTrend, townGrowth } from "@engine/slice/growth";
-import { addTrain, buildTrack, checkTrack, checkTrain, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction } from "@engine/slice/rail";
+import { addTrain, buildHalt, buildTrack, checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction } from "@engine/slice/rail";
 import { addFreightTrain, checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
 import { addLorry, checkLorry, diagnoseLorryRoute, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
@@ -250,6 +250,17 @@ canvas.addEventListener("click", (event) => {
     selectedTown = null;
     return;
   }
+  // Track tool, the same town twice: a halt where a line passes it by.
+  if (tool === "track" && selectedTown === town && haltSite(world, town)) {
+    const site = haltSite(world, town)!;
+    const cost = haltCost(world, site);
+    const result = act({ label: `a halt at ${townName(town)}`, towns: [town] }, (w) => buildHalt(w, town));
+    if (result.ok) say(`Built a halt at ${townName(town)} for ${naira(cost)}: trains on the line now stop here. Result in two days.`);
+    else say(`Can't build a halt (${naira(cost)}): ${result.reason}`, true);
+    selectedTown = null;
+    renderPanel();
+    return;
+  }
   if (!selectedTown || selectedTown === town) {
     selectedTown = selectedTown === town ? null : town;
     return;
@@ -336,9 +347,12 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
   const worst = pieces.reduce((low, piece) => (piece.condition < low.condition ? piece : low), pieces[0]!);
   const state = `${pct(worst.condition)} condition${pieces.length > 1 ? " at worst" : ""}, ${worst.type === "rail" ? "trains" : "traffic"} at ${pct(wearSpeed(world, worst))} speed`;
   const upkeep = naira(pieces.reduce((sum, piece) => sum + upkeepPerDay(world, piece), 0));
+  // What the wear is costing you now: your vehicles' extra running cost on it.
+  const roughPerDay = pieces.reduce((sum, piece) => sum + roughCostPerDay(world, piece), 0);
+  const costing = roughPerDay >= 1 ? ` · costs your vehicles ${naira(roughPerDay)}/day extra` : "";
   const label = world.maintained.has(id)
     ? `${roadName(id)} · maintained, ${upkeep}/day · click to stop`
-    : `${roadName(id)} · ${state} · maintain for ~${upkeep}/day`;
+    : `${roadName(id)} · ${state}${costing} · maintain for ~${upkeep}/day`;
   return { segmentId: id, at: mouse, label };
 }
 
@@ -374,6 +388,16 @@ function paveGain(): string {
 
 function ghost(): Ghost | null {
   if (!selectedTown || !mouse) return null;
+  // Track tool, back over the selected town: offer the halt if a line passes it.
+  if (tool === "track" && hoverTown === selectedTown) {
+    const site = haltSite(world, selectedTown);
+    if (site) {
+      const check = checkHalt(world, selectedTown);
+      const at = toScreen(view, world.towns.get(selectedTown)!.x, world.towns.get(selectedTown)!.y);
+      const cost = naira(haltCost(world, site));
+      return { from: selectedTown, to: at, ok: check.ok, label: check.ok ? `Click again: a halt on the line ${site.distance.toFixed(0)} cells away, ${cost}` : refusedOr(check, "Halt", cost) };
+    }
+  }
   const to = hoverTown && hoverTown !== selectedTown ? hoverTown : null;
   const end = to ? toScreen(view, world.towns.get(to)!.x, world.towns.get(to)!.y) : mouse;
   if (!to) return { from: selectedTown, to: end, ok: true, label: "" };
@@ -566,6 +590,15 @@ function reachNote(townId: string): string {
   return `<p class="callout">${stranded.length} of ${townName(townId)}'s trips have no road at all (dashed lines). The biggest is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
 }
 
+// A line that passes the town without stopping, said where the player looks
+// at the town: what a halt would cost and how to build one.
+function haltText(townId: string, name: string): string {
+  const site = haltSite(world, townId);
+  if (!site) return "";
+  const out = world.railOutOfService.has(site.segmentId) ? "the old line, out of service, " : "a railway ";
+  return `<p class="townshare"><b>Rail:</b> ${out}passes ${site.distance.toFixed(0)} cells from ${name} without stopping. A halt brings it in for ${naira(haltCost(world, site))} (Track tool, <kbd>K</kbd>: click ${name} twice).</p>`;
+}
+
 // Why a town is growing or not, in the terms that move it: your share, the
 // informal share at half, and the floor your share has to clear.
 function growthText(townId: string, name: string): string {
@@ -618,6 +651,7 @@ function renderTown(townId: string): void {
     <h2>${town.name} <span class="muted">· ${Math.round(town.population)}k people${world.settlement.emergent.has(townId) ? " · grew on the road" : ""}</span></h2>
     <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">informal</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
     <p class="townshare">Of everyone leaving ${town.name} for another town: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
+    ${haltText(townId, town.name)}
     ${growthText(townId, town.name)}
     ${goodsText(townId)}
     ${insideText(townId, town.name)}
@@ -662,7 +696,10 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
       }
       const roads = worn.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ");
       const upkeep = worn.reduce((sum, r) => sum + r.upkeepPerDay, 0);
-      return `Worn roads hold your buses to ${pct(d.wornSpeed)} speed${roads ? ` (${roads})` : ""}. Maintain them (Fix tool, F) for about ${naira(upkeep)}/day, or pave the dirt ones: paved roads wear a third as fast.`;
+      const rough = worn.reduce((sum, r) => sum + r.roughPerDay, 0);
+      // The decision in two numbers: what the wear costs you, what keeping it up would.
+      const verdict = rough > upkeep ? "worth it" : "more than the wear costs you";
+      return `Worn roads${roads ? ` (${roads})` : ""} cost your buses ${naira(rough)}/day extra to run and hold them to ${pct(d.wornSpeed)} speed. Maintaining them (Fix tool, F) costs about ${naira(upkeep)}/day: ${verdict}. Paved roads wear a third as fast.`;
     }
     case "full":
       return `Buses leave ${pct(d.loadFactor)} full: more riders than seats. Another bus would carry the ones left behind.`;

@@ -87,6 +87,21 @@ export function slowOrder(world: SliceWorld, segment: Segment): number {
 }
 
 /**
+ * How fast a train may run on track, before wear: the old line is narrow
+ * gauge -- tight curves, light rail, a low line speed -- and new track is
+ * built to standard gauge (principles §3, Eras: rail "returns as standard
+ * gauge"). It's what makes restoring the old line a real trade: cheap and
+ * slow against dear and fast. Without it, the old line restored as far as
+ * a new halt at Owode earned exactly what new track did (+₦318 vs +₦312 a
+ * day) for ₦240 less, and there was nothing to weigh. Times the slow
+ * order on worn track. 1 for roads.
+ */
+export function lineSpeed(world: SliceWorld, segment: Segment): number {
+  if (segment.type !== "rail") return 1;
+  return (segment.provenance === "inherited" ? world.tuning.oldLineSpeed : 1) * slowOrder(world, segment);
+}
+
+/**
  * Wears every road for this tick and repairs the maintained ones as they
  * go. Returns what the repairs cost, for the tick to charge with the rest
  * of the running costs (so it shows in net/day).
@@ -164,6 +179,64 @@ export function setRoadMaintained(world: SliceWorld, segmentId: string, on: bool
     if (result.ok) charged += result.charged;
   }
   return { ok: true, charged, pieces: pieces.length };
+}
+
+/**
+ * Extra running cost a road vehicle pays on this road, as a share of its
+ * own: 0 on a road in good condition, `roughRoadCostMax` at the floor.
+ *
+ * The biggest real cost of a bad road isn't time, it's the vehicles: fuel,
+ * tyres, springs, breakdowns -- what road agencies' vehicle-operating-cost
+ * models (World Bank HDM-4) put at the centre of every maintenance case.
+ * Without it the lever audit found maintenance never paid: you paid to
+ * repair wear mostly made by danfos and okadas, and got back only a little
+ * speed (−₦88/day net on the trunk over 30 days). With it, keeping up a
+ * road your own buses wear down pays; keeping up one only danfos use
+ * doesn't -- which is the decision.
+ *
+ * Track: none here -- worn track costs through slow orders instead.
+ */
+export function roughCostFactor(world: SliceWorld, segment: Segment): number {
+  if (segment.type === "rail") return 0;
+  const roughness = (1 - segment.condition) / (1 - MIN_CONDITION);
+  return world.tuning.roughRoadCostMax * Math.max(0, Math.min(1, roughness));
+}
+
+/**
+ * Charges your road vehicles the extra running cost of the road each is on
+ * this tick. Returns the total (for the funds), per route (for its row) and
+ * per road (for the Fix tool: what a worn road is costing *you*).
+ */
+export function chargeRoughRoads(world: SliceWorld, dt: number, routeOf: ReadonlyMap<string, string>): { total: number; byRoute: Map<string, number> } {
+  const byRoute = new Map<string, number>();
+  const bySegment = new Map<string, number>();
+  let total = 0;
+  for (const vehicle of world.simulation.vehicles) {
+    const routeId = routeOf.get(vehicle.id);
+    const econ = world.economy.vehicleEconomics.get(vehicle.id);
+    const leg = world.vehicleSegment.get(vehicle.id);
+    if (!routeId || !econ || !leg) continue;
+    const segmentId = leg.slice(0, leg.lastIndexOf("#"));
+    const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
+    if (!segment) continue;
+    const extra = econ.operatingCostPerSecond * roughCostFactor(world, segment) * dt;
+    if (extra <= 0) continue;
+    total += extra;
+    byRoute.set(routeId, (byRoute.get(routeId) ?? 0) + extra);
+    bySegment.set(segmentId, (bySegment.get(segmentId) ?? 0) + extra);
+  }
+  const alpha = 1 - Math.exp(-dt / UPKEEP_TAU_SECONDS);
+  for (const segment of world.simulation.map.segments) {
+    const previous = world.roughCostRateEMA.get(segment.id) ?? 0;
+    world.roughCostRateEMA.set(segment.id, previous + ((bySegment.get(segment.id) ?? 0) / dt - previous) * alpha);
+  }
+  world.economy.funds -= total;
+  return { total, byRoute };
+}
+
+/** What this road's wear costs your vehicles a day, at the traffic now (rolling). */
+export function roughCostPerDay(world: SliceWorld, segment: Segment): number {
+  return (world.roughCostRateEMA.get(segment.id) ?? 0) * SECONDS_PER_GAME_DAY;
 }
 
 /** Each road's condition, keyed by segment, for tickVehicle's speed. */
