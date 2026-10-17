@@ -24,6 +24,11 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // Slice zero (docs/brief.md): wear, goods, rail and the straight
   // alignment are off, and return one per playtest in the brief's order.
   wearEnabled: false,
+  // The world runs 5 game days before day 1 (docs/brief.md, Slice zero:
+  // warm-up), so the danfos are running and queues have settled when you
+  // arrive. A cold start broke the brownfield pillar and put the day-1
+  // forecasts wrong in sign (brief, Evidence 2).
+  warmUpDays: 5,
   goodsEnabled: false,
   railEnabled: false,
   straightAlignmentEnabled: false,

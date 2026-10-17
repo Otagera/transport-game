@@ -5,6 +5,7 @@ import type { DayLedger } from "./ledger";
 import type { TripPlans } from "./transfers";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
+import type { DayHistory } from "./history";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
 // towns, straight roads, one bus type, passengers who give up, and the
@@ -109,6 +110,8 @@ export interface InformalState {
 }
 
 export interface SliceTuning {
+  /** Game days the world runs before the player arrives (start.ts). */
+  warmUpDays: number;
   /**
    * Systems switched on (docs/brief.md, Slice zero). Slice zero is roads,
    * buses and danfos; each of these comes back one per playtest. Off means
@@ -265,6 +268,10 @@ export interface SliceTuning {
 export interface SliceWorld {
   /** Money over the last game day: what the strip and route rows read (ledger.ts). */
   ledger: DayLedger;
+  /** Sim time when the player's day 1 began: after the warm-up (start.ts), 0 for a cold world. */
+  startSeconds: number;
+  /** A sample of the headline and net at the end of each game day, for the 5-day averages (history.ts). */
+  history: DayHistory;
   width: number;
   height: number;
   towns: Map<string, SliceTown>;

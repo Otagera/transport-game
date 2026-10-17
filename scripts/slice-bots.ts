@@ -14,11 +14,13 @@
 // it's the slow one (a few minutes).
 import { availableParallelism } from "node:os";
 import { SLICE_MAP } from "../src/slice/map";
-import { addBus, buildRoad, chainOf, createSliceWorld, headline, networkShare, paveRoad, roadChain, type Headline } from "../src/engine/slice/world";
+import { startSliceGame } from "../src/engine/slice/start";
+import { addBus, buildRoad, chainOf, demandAlong, headline, networkShare, paveRoad, roadChain, type Headline } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
-import { roadMoves, vehicleMoves, type RoadMove } from "../src/engine/slice/moves";
+import { roadMoves, vehicleMoves, type RoadMove, type VehicleMove } from "../src/engine/slice/moves";
 import { lastDay } from "../src/engine/slice/ledger";
+import { averageHeadline } from "../src/engine/slice/history";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
@@ -27,7 +29,10 @@ import type { Trajectory } from "./slice-bots-worker";
 
 const DAYS = 40;
 const tuning = { ...DEFAULT_SLICE_TUNING, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
-const newWorld = () => createSliceWorld(SLICE_MAP, tuning);
+// Every persona and twin starts from the same warmed-up world (start.ts):
+// the game as the player meets it on day 1.
+const started = startSliceGame(SLICE_MAP, tuning);
+const newWorld = () => structuredClone(started);
 const log = (message: string) => process.stderr.write(`  ${message}\n`);
 
 function runDays(world: SliceWorld, days: number): void {
@@ -141,8 +146,13 @@ interface Persona {
   name: string;
   /** The verbs it ever uses: one verb is a candidate for M6's one-verb win. */
   verbs: string[];
-  /** Called at the start of each game day, before the day runs. */
-  decide: (world: SliceWorld, day: number) => Promise<void> | void;
+  /**
+   * Called at the start of each game day, before the day runs. "blocked":
+   * it wanted a move it couldn't afford (M10).
+   */
+  decide: (world: SliceWorld, day: number) => Promise<void | "blocked"> | void | "blocked";
+  /** Days it plays; DAYS unless a check needs longer. */
+  days?: number;
 }
 
 /** The two biggest towns a road joins directly (a road chain through roadside towns counts). */
@@ -233,6 +243,56 @@ const personas: Persona[] = [
       if (best >= 0) applyAction(world, actions[best]!);
     },
   },
+  {
+    // Each day, the move that adds the most trips made per naira -- vehicles
+    // measured against a twin, roads from the ranking -- losses allowed. If
+    // it can't afford that move it saves for it rather than settling for a
+    // lesser one: how often it's waiting on money is M10. Played 60 days,
+    // for M10's window.
+    //
+    // Speed: it buys almost daily, and re-measuring every candidate after
+    // each purchase took over 35 minutes; ranking all of them every third
+    // day still took 25 s a time once roads joined 110 candidate pairs. So
+    // it ranks every third day, works down that list as it buys, and
+    // measures in three stages: riders wanting trips along the route per
+    // naira picks 16 new routes (another vehicle on a route it runs always
+    // goes through), a 3-day run screens those, and days 3-5 rank the six best.
+    name: "trips-greedy",
+    verbs: ["bus", "minibus", "road"],
+    days: 60,
+    decide: (() => {
+      type Option = { action: ActionSpec; price: number; perNaira: number };
+      let ranked: { key: string; list: Option[] } = { key: "", list: [] };
+      return async (world: SliceWorld) => {
+        const key = `${Math.floor(world.economy.elapsedSeconds / (3 * SECONDS_PER_GAME_DAY))}`;
+        if (ranked.key !== key) {
+          const t0 = performance.now();
+          const all = vehicleMoves(world);
+          const along = (m: VehicleMove) => demandAlong(world, m.action.a, m.action.b) / m.price;
+          const vehicles = [...all.filter((m) => m.count > 1), ...all.filter((m) => m.count === 1).sort((x, y) => along(y) - along(x)).slice(0, 16)];
+          const measuring = structuredClone(world);
+          measuring.economy.funds = 1e9;
+          const screen = await tripsAddedOver(measuring, vehicles.map((m) => m.action), 3, 2);
+          const shortlist = vehicles
+            .map((m, i) => ({ action: m.action as ActionSpec, price: m.price, perNaira: (screen[i] ?? 0) / m.price }))
+            .sort((x, y) => y.perNaira - x.perNaira)
+            .slice(0, 6);
+          const measured = await tripsAddedOver(measuring, shortlist.map((o) => o.action), 5, 2);
+          const options: Option[] = [
+            ...shortlist.map((o, i) => ({ ...o, perNaira: (measured[i] ?? 0) / o.price })),
+            ...bestRoadPerTown(await rankedRoads(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
+          ].filter((o) => o.perNaira > 0);
+          ranked = { key, list: options.sort((x, y) => y.perNaira - x.perNaira) };
+          if (process.env.BOTS_VERBOSE) log(`trips-greedy day ${Math.round((world.economy.elapsedSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1}: ${vehicles.length} candidates, ${world.simulation.vehicles.length} vehicles on the map, ranked in ${((performance.now() - t0) / 1000).toFixed(1)} s, funds ₦${Math.round(world.economy.funds)}`);
+        }
+        const best = ranked.list[0];
+        if (!best) return;
+        if (best.price > world.economy.funds) return "blocked";
+        if (!applyAction(world, best.action).ok) return "blocked";
+        ranked.list.shift();
+      };
+    })(),
+  },
 ];
 
 function pairOf(pair: [string, string] | null): { a: string; b: string } {
@@ -244,6 +304,8 @@ function pairOf(pair: [string, string] | null): { a: string; b: string } {
 interface Sample {
   day: number;
   headline: Headline;
+  /** The headline as shown: the engine's 5-day average (history.ts), filled from the warm-up on day 1. */
+  average: Headline;
   funds: number;
   net: number;
   population: number;
@@ -253,12 +315,15 @@ interface Sample {
 interface Run {
   persona: Persona;
   samples: Sample[];
+  /** Days (from 1) it wanted a move it couldn't afford. */
+  blocked: Set<number>;
 }
 
 function sample(world: SliceWorld): Sample {
   return {
-    day: world.economy.elapsedSeconds / SECONDS_PER_GAME_DAY,
+    day: (world.economy.elapsedSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY,
     headline: headline(world),
+    average: averageHeadline(world),
     funds: world.economy.funds,
     net: lastDay(world.ledger).net,
     population: population(world),
@@ -269,32 +334,20 @@ function sample(world: SliceWorld): Sample {
 async function play(persona: Persona): Promise<Run> {
   const world = newWorld();
   const samples: Sample[] = [];
+  const blocked = new Set<number>();
   const started = performance.now();
-  for (let d = 0; d < DAYS; d += 1) {
-    await persona.decide(world, d);
+  for (let d = 0; d < (persona.days ?? DAYS); d += 1) {
+    if ((await persona.decide(world, d)) === "blocked") blocked.add(d + 1);
     runDays(world, 1);
     samples.push(sample(world));
   }
   log(`${persona.name}: ${((performance.now() - started) / 1000).toFixed(0)} s`);
-  return { persona, samples };
+  return { persona, samples, blocked };
 }
 
 const at = (run: Run, d: number) => run.samples[d - 1]!;
-/**
- * The headline as the brief reads it: a 5-day average (docs/brief.md, What
- * doing well means). A single day's trips made jitter by about as much as a
- * good move adds (baseline M8: +12.5 against 9.4).
- */
-function avgHeadline(run: Run, d: number): Headline {
-  const days = run.samples.slice(Math.max(0, d - 5), d);
-  const mean = (pick: (h: Headline) => number) => days.reduce((sum, s) => sum + pick(s.headline), 0) / days.length;
-  return {
-    tripsPerDay: mean((h) => h.tripsPerDay),
-    noRoadPerDay: mean((h) => h.noRoadPerDay),
-    noSeatPerDay: mean((h) => h.noSeatPerDay),
-    yourRidersPerDay: mean((h) => h.yourRidersPerDay),
-  };
-}
+/** The headline as the brief reads it: the engine's 5-day average (history.ts). */
+const avgHeadline = (run: Run, d: number): Headline => at(run, d).average;
 /**
  * Mean net per day over days from..to: the money a strategy makes, before
  * capital. One day's net is too noisy to rank by -- five buses' swings
@@ -413,7 +466,8 @@ async function checks(): Promise<void> {
   }
 
   // M7: on day 1 the informal share is within 5 points of its day-10 value.
-  // "Day 1" is the first moment a player reads the panel: 3 seconds in.
+  // "Day 1" is the first moment a player reads the panel: 3 seconds in,
+  // after the warm-up.
   {
     const world = newWorld();
     runDays(world, 0.1);
@@ -445,6 +499,16 @@ async function checks(): Promise<void> {
       effect >= 2 * jitter,
       `${action.kind} ${"a" in action ? `${action.a}-${action.b}` : ""}: +${effect.toFixed(1)} trips/day; jitter ${jitter.toFixed(1)}`,
     ]);
+  }
+
+  // M10: money limits the score -- trips-greedy, which buys whatever adds
+  // the most trips per naira and doesn't mind losing money, can't afford
+  // its next best move on most days, 15-60.
+  const tripsGreedy = byName.get("trips-greedy");
+  if (tripsGreedy) {
+    const window = Array.from({ length: 46 }, (_, i) => i + 15);
+    const waiting = window.filter((d) => tripsGreedy.blocked.has(d)).length;
+    results.push(["M10 money limits the score", waiting > window.length / 2, `trips-greedy waited on money ${waiting} of ${window.length} days (15-60); funds day 60 ${money(at(tripsGreedy, 60).funds).trim()}`]);
   }
 
   // M9: no strategy that grows towns shows a falling headline while it does.

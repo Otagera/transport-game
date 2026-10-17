@@ -5,6 +5,7 @@ import { findPath } from "../simulation/routing";
 import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
 import { canAfford, createEconomyState, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
+import { createDayHistory } from "./history";
 import { createDayLedger, forgetRoute, lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
@@ -105,6 +106,8 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     transferRateEMA: new Map(),
     roughCostRateEMA: new Map(),
     ledger: createDayLedger(),
+    startSeconds: 0,
+    history: createDayHistory(),
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),
@@ -891,6 +894,11 @@ function canTravel(world: SliceWorld, a: string, b: string): boolean {
  * no seat (run vehicles). "No road" means nothing joins the towns at all;
  * working track counts as a way, like a road.
  */
+/** The player's game day, from 1: counted from the end of the warm-up. */
+export function gameDay(world: SliceWorld, seconds: number = world.economy.elapsedSeconds): number {
+  return Math.floor((seconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1;
+}
+
 export interface Headline {
   /** Trips between towns that happened, by anyone. */
   tripsPerDay: number;

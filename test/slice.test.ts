@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "@engine/slice/ledger";
 import { forecast } from "@engine/slice/forecast";
+import { startSliceGame } from "@engine/slice/start";
+import { averageHeadline, averageNet } from "@engine/slice/history";
 import { applyAction } from "@engine/slice/actions";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/slice/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
@@ -236,6 +238,40 @@ describe("slice zero: systems switched off", () => {
     const w = zero();
     run(w, 300);
     expect(w.goods.yards.size).toBe(0);
+  });
+});
+
+describe("slice zero: the world is already running on day 1", () => {
+  test("startSliceGame warms the world up, then day 1 begins", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    expect(gameDay(w)).toBe(1);
+    expect(w.startSeconds).toBeCloseTo(DEFAULT_SLICE_TUNING.warmUpDays * SECONDS_PER_GAME_DAY);
+    // Danfos are already carrying people: the share you meet is the share that holds.
+    const early = networkShare(w).informal;
+    expect(early).toBeGreaterThan(0.2);
+    run(w, 9 * SECONDS_PER_GAME_DAY);
+    expect(gameDay(w)).toBe(10);
+    expect(Math.abs(networkShare(w).informal - early)).toBeLessThan(0.05);
+  });
+
+  test("the 5-day averages start filled; money averages only your days", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    // Trips made: five warm-up days already in the average on day 1.
+    expect(w.history.days).toHaveLength(5);
+    expect(averageHeadline(w).tripsPerDay).toBeGreaterThan(0);
+    expect(averageNet(w)).toBe(0);
+    addBus(w, "big", "mid");
+    run(w, SECONDS_PER_GAME_DAY);
+    // One day of yours: the money average is that day alone, not diluted by the warm-up's zeros.
+    expect(averageNet(w)).toBeCloseTo(w.history.days.at(-1)!.net);
+    expect(averageNet(w)).not.toBe(0);
+  });
+
+  test("the informal sector's earnings count from day 1, and your funds are untouched", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    expect(w.informal.earnings).toBe(0);
+    expect(w.economy.funds).toBe(DEFAULT_SLICE_TUNING.startingFunds);
+    expect(lastDay(w.ledger).net).toBe(0);
   });
 });
 

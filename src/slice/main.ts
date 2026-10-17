@@ -7,7 +7,7 @@ import {
   checkBus,
   checkPave,
   checkRoad,
-  createSliceWorld,
+  gameDay,
   debtAdvice,
   demandAlong,
   diagnoseRoute,
@@ -51,6 +51,7 @@ import type { ForecastLine } from "./render";
 import { applyAction, type ActionSpec } from "@engine/slice/actions";
 import { vehicleMoves } from "@engine/slice/moves";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
+import { startSliceGame } from "@engine/slice/start";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -70,7 +71,8 @@ type Tool = "road" | "bus" | "minibus" | "lorry" | "track" | "train" | "freight"
 // Slice zero (docs/brief.md): wear, goods, rail and the straight alignment
 // are off. `?systems=all` turns them back on, for comparing.
 const allSystems = new URLSearchParams(location.search).get("systems") === "all";
-const world = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...(allSystems ? ALL_SYSTEMS_ON : {}) });
+// The world has already run five days when you arrive (start.ts).
+const world = startSliceGame(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...(allSystems ? ALL_SYSTEMS_ON : {}) });
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
 const strip = document.querySelector<HTMLDivElement>("#strip")!;
@@ -801,7 +803,7 @@ function renderToolbar(): void {
 function renderStrip(): void {
   const burn = { netPerDay: lastDay(world.ledger).net };
   const share = networkShare(world);
-  const day = Math.floor(world.economy.elapsedSeconds / 30) + 1;
+  const day = gameDay(world);
   strip.innerHTML = `
     <div class="stat"><span class="k">Day</span><span class="v">${day}</span></div>
     <div class="stat"><span class="k">Funds</span><span class="v ${world.economy.funds < 0 ? "bad" : ""}">${naira(world.economy.funds)}</span></div>
@@ -1060,7 +1062,7 @@ function receiptLine(r: Receipt): string {
 // same world without the action, so the number is the action's own.
 function resultsHtml(): string {
   if (book.pending.length === 0 && book.done.length === 0) return "";
-  const dayOf = (seconds: number) => Math.floor(seconds / SECONDS_PER_GAME_DAY) + 1;
+  const dayOf = (seconds: number) => gameDay(world, seconds);
   const pending = book.pending
     .map((p) => `<li class="pending">Measuring ${p.spec.label}: result on day ${dayOf(p.startedAt + RECEIPT_SECONDS)}</li>`)
     .join("");

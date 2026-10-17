@@ -1,7 +1,7 @@
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { SliceWorld } from "./types";
 import { sliceTick } from "./tick";
-import { networkShare, townShare } from "./world";
+import { gameDay, networkShare, townShare } from "./world";
 import { routeIncomeLastDay } from "./ledger";
 
 // Receipts: a day after each action, exactly what it did.
@@ -132,7 +132,7 @@ function finish(world: SliceWorld, book: ReceiptBook, pending: Pending): Receipt
 
   const receipt: Receipt = {
     spec,
-    day: Math.floor(world.economy.elapsedSeconds / SECONDS_PER_GAME_DAY) + 1,
+    day: gameDay(world),
     measuredDays,
     capital,
     moneyPerDay,

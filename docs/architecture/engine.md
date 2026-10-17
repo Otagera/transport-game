@@ -635,6 +635,21 @@ nothing can change would be a parameter without a decision. `ALL_SYSTEMS_ON` tur
 everything back on: the probe, the lever audit, the Evidence scripts and most tests use it;
 the page does with `?systems=all`.
 
+### The warm-up, and day numbers
+
+`start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,
+then `warmUpDays` (5) of `sliceTick` with nobody playing, then `world.startSeconds` marks day
+1 and the informal sector's earnings reset to 0. Funds are untouched (nothing of yours runs).
+The page and the bots start here; tests use `createSliceWorld` (cold, fast). Day numbers
+the player sees come from `world.ts` `gameDay(world, seconds?)`, counted from
+`startSeconds`; sim timers (settlement, receipts' `startedAt`, routes' `openedAtSeconds`)
+stay on raw `elapsedSeconds`.
+
+`history.ts` — a sample of the headline and the day's net at the end of every game day
+(`recordDay`, called last in `sliceTick`), the last five kept. `averageHeadline` averages
+them all, warm-up days included, so it is filled on day 1; `averageNet` averages only days
+after `startSeconds`, so the warm-up's zeros don't dilute your first days' money.
+
 ### The headline
 
 `world.ts` `headline(world)` — the brief's headline (docs/brief.md, What doing well means)

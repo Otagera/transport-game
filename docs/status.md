@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**466 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**469 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: slice zero
@@ -22,7 +22,8 @@ right after this file. Progress on that build order:
 | 1 | Brief into the repo, linked from CLAUDE.md and here | Done |
 | 2 | Bot personas in the probe: baseline on today's game, M1-M9 | Done: baseline below |
 | 3 | Switches in tuning.ts for wear, goods, rail, the straight alignment | Done: results below |
-| 4 | Warm-up: 5 game days before day 1 | Next |
+| 4 | Warm-up: 5 game days before day 1 | Done: results below |
+| 5 | Riders respond to price (5b: danfo road space released per segment, scaled by capacity) | Next |
 
 **Bots baseline, 2026-10-17** (`bun scripts/slice-bots.ts`, ~5 min; Greedy forecasts every
 affordable move daily in a worker pool against one shared do-nothing twin). The game as it
@@ -111,6 +112,46 @@ What switching them off did:
   trips a day off the network for at least 20 days; Ilaro-Ogbe −94 at days 3-5. Likely the
   danfos' road-space budget: a long new corridor ties danfos up on long trips. To look at
   with step 5b (road space scaled by road capacity), which touches the same budget.
+
+**Step 4, the warm-up, 2026-10-17.** The world runs 5 game days before day 1
+(`start.ts`); those days count toward neither the day counter nor money, and the 5-day
+averages start filled from them (`history.ts`). Bots now also include **trips-greedy**
+(best trips made per naira, losses allowed, saves for its best move; 60 days) and check
+**M10**. Run time ~30 min (Greedy ~21, trips-greedy ~7).
+
+| Persona | Day 40 (trips / no road / no seat / yours) | Funds, day 40 | Net/day, days 36-40 |
+|---|---|---|---|
+| idle | 372 / 211 / 109 / 0 | ₦2,500 | ₦0 |
+| naive | 648 / 274 / 275 / 297 | ₦7,511 | ₦231 |
+| builder | 852 / 0 / 421 / 417 | ₦22,208 | ₦958 |
+| roads only | 448 / 0 / 245 / 0 | ₦1,299 | ₦0 |
+| overbuilder | 528 / 250 / 204 / 137 | ₦7,131 | ₦195 |
+| greedy | 1,188 / 113 / 397 / 827 | ₦36,624 | ₦1,776 |
+| trips-greedy | 1,027 / 0 / 439 / 634 | ₦7,257 | ₦622 |
+
+| Check | Step 3 | Step 4 | Measured |
+|---|---|---|---|
+| M1 | FAIL | FAIL | days 16-20: greedy ₦1,444, builder ₦755, naive ₦366, trips-greedy ₦365 |
+| M2 | FAIL | FAIL | Owode-Ikole (+54 trips/day) or Ilaro-Ilase (+35) plus a bus or minibus: no payback in 60 days |
+| M3 | FAIL | FAIL | paving alone never pays back (no tolls) |
+| M4 | FAIL | FAIL | greedy leaves no road at 113 of 211; builder and trips-greedy clear it to 0 |
+| M5 | FAIL | FAIL | greedy carries the most and earns the most |
+| M6 | FAIL | PASS | seven players now; naive is no longer in both top threes |
+| M7 | FAIL | **PASS** | informal share 55% at the start, 52% on day 10 |
+| M8 | PASS | PASS | best day-10 bus +14.8 trips/day against jitter 4.5 |
+| M9 | FAIL | FAIL | overbuilder: towns grow, trips fall from day 20 to 40 |
+| M10 | — | FAIL | trips-greedy waited on money 1 of 46 days (15-60) and ends day 60 with ₦8,359 |
+
+- **The warm start works (M7).** Day 1 opens with danfos running and the informal share
+  where it stays.
+- **Money doesn't limit the score (M10).** Even a player who buys trips regardless of
+  profit is almost never short of money after day 15: building trips is profitable on its
+  own. Step 7's income lines would make this worse, not better; the routine upkeep the
+  brief proposes, or re-tuned running costs (step 6), have to supply the constraint.
+- **Day-1 forecasts, warmed** (`START=warm bun scripts/coldstart.ts`): with every system on,
+  the three routes the cold forecast called winners and that lost are now forecast to lose.
+  In slice zero the 2-day forecast is cautious instead: it can't see growth (Ilase-Owode
+  forecast +₦51/day, earns +₦140-199; Ise-Ipaja forecast −₦13, earns ~+₦50).
 
 ## The slice so far
 

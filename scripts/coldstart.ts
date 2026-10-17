@@ -3,6 +3,7 @@ import { SLICE_MAP } from "../src/slice/map";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { createSliceWorld, networkShare } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
+import { startSliceGame } from "../src/engine/slice/start";
 import { forecast } from "../src/engine/slice/forecast";
 import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
 import { SIM_DT } from "../src/engine/loop";
@@ -12,8 +13,12 @@ const cands: ActionSpec[] = [
   { kind: "bus", a: "kuto", b: "ipaja" }, { kind: "minibus", a: "kuto", b: "ipaja" }, { kind: "bus", a: "ise", b: "ipaja" },
   { kind: "bus", a: "ilase", b: "owode" }, { kind: "minibus", a: "ilase", b: "ise" }, { kind: "bus", a: "owode", b: "ise" },
 ];
-for (const warm of [0, 3, 8]) {
-  const base = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON }); run(base, warm);
+// START=warm buys on day 1 of the warmed-up world (start.ts) instead of a
+// cold one; SYSTEMS=zero uses slice zero's tuning instead of every system on.
+const tuning = { ...DEFAULT_SLICE_TUNING, ...(process.env.SYSTEMS === "zero" ? {} : ALL_SYSTEMS_ON) };
+const warmStart = process.env.START === "warm";
+for (const warm of warmStart ? [0] : [0, 3, 8]) {
+  const base = warmStart ? startSliceGame(SLICE_MAP, tuning) : createSliceWorld(SLICE_MAP, tuning); run(base, warm);
   console.log(`\n--- bought at day ${warm + 1}; share now`, JSON.stringify(networkShare(base)));
   console.log("action                 forecast2d   days0-10   days10-20   days20-30");
   for (const c of cands) {

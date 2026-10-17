@@ -104,7 +104,8 @@ Costs:
 
 - **Capital:** roads, paving, track, halts, vehicles. Terrain-priced with a breakdown, as today.
 - **Running:** each vehicle, every second, unconditional, as today.
-- **Upkeep:** maintained roads and track. Returns with wear, after slice zero.
+- **Routine upkeep (proposed):** a cost per cell per day on every road you built or paved, independent of wear: verges, drains, patching, the road agency's standing bill. It is the cost that balances step 7's income lines. With wear off (slice zero step 3) the bots' money went loose: Greedy ended day 40 with ₦38,590 against ₦354 with wear on, so the budget stopped being a decision by about day 15. Tolls are earned on exactly the roads that carry this cost, so a road you built pays for itself only if traffic uses it: building more roads is never free, and an unused road is a standing loss. Inherited roads you haven't paved cost you nothing; they're the state's old network.
+- **Wear upkeep:** keeping a worn road up (the Fix tool). Returns with wear, after slice zero.
 - **Later:** pushback from the union (see The informal sector).
 
 Kept from principles.md §3, Economy: debt allowed, with no interest and no game over; in debt, spending is blocked and billing continues; resale is depreciated; fares are set by policy, never per route.
@@ -120,6 +121,8 @@ Calibration targets (probe, 40 days, today's map):
 | Allocation, day 40, well-connected network | None today | About a quarter to a third of income |
 | Levy lost by taking a corridor from danfos | None today | 20–40% of what your vehicles gain there: felt, never decisive |
 | The agberos' cut | None today | About half the levy, shown as its own line |
+| Routine upkeep, built and paved roads | None today | A busy toll road's tolls cover it several times; a road nobody uses costs its upkeep and earns nothing |
+| Money limits the score | Not before step 7: Greedy holds ₦38,590 by day 40 with wear off | Trips-greedy waits on money most days 15–60 (M10) |
 
 ## The informal sector: rival, revenue, interest group
 
@@ -305,11 +308,11 @@ Off, each behind a switch that defaults to off for slice zero:
 1. The brief into the repo as `docs/brief.md`, linked from CLAUDE.md and status.md, once you've agreed the role decision.
 2. Bot personas in the probe, run on today's game first, as a baseline before anything changes. First, copy `coldstart.ts`, `connect.ts` and `horizon.ts` into `scripts/` (done 2026-10-17, imports made relative). They report M1–M9, which means adding trips made a day, the no road / no seat split, and that number's daily jitter (M8). Done 2026-10-17: `scripts/slice-bots.ts`; baseline in status.md.
 3. Switches in `tuning.ts` for wear, goods, rail and the straight alignment, all off. Re-run the personas to see what switching them off did. The bots pick roads by trips unlocked per naira, measured, not the cheapest road (Ikole–Ogbe is cheapest and nobody would build it), and M2 tests that road.
-4. Warm-up: 5 game days before day 1.
+4. Warm-up: 5 game days before day 1. Warm-up days count toward neither the day counter nor money (funds untouched, the informal sector's earnings start at 0), and the 5-day averages start already filled from them. Re-run `coldstart.ts` after it (`START=warm`).
 5. Riders respond to price: the one mechanic that tolls, fares by distance and the fare dial all share.
-   5b. Beside it: scale `informalRoadSpace` with road capacity (dirt against paved), so paving lets more danfos run. Today the informal sector's road-space budget is one number for every road, so paving adds no danfos and a toll on a paved road would collect from no more of them. Step 7's tolls depend on it.
+   5b. Beside it: scale `informalRoadSpace` with road capacity (dirt against paved), so paving lets more danfos run. Today the informal sector's road-space budget is one number for every road, so paving adds no danfos and a toll on a paved road would collect from no more of them. Step 7's tolls depend on it. First, fix how the space is held: a danfo reserves road space on its whole path when it's dispatched (`tick.ts`, `dispatchInformal`) and releases it only when the trip completes (`reapInformal`), so a long run like Ilaro–Ipaja keeps trunk space long after it has left the trunk. That is the likely cause of roads that lower trips made (status.md, step 3: Ilaro–Ipaja takes 60–80 trips a day off the network). Release each segment as the danfo leaves it, then check the cap still prevents the collapse it was added for (principles.md §3, Paratransit).
 6. Fares by distance, then re-tune the vehicles' running costs.
-7. Tolls (passed on to danfo riders), levies and the allocation, tuned until M2, M3, M5 and M6 pass.
+7. Tolls (passed on to danfo riders), levies and the allocation, and routine upkeep on the roads you built or paved, tuned until M2, M3, M5, M6 and M10 pass.
 8. The new headline and the panel's budget breakdown.
 9. The advice moves to `?dev=1`, and the six hints arrive.
 10. The AI harness (`scripts/slice-play.ts`), then the A checks and your session.
@@ -339,6 +342,7 @@ Measured, by the probe (40 days unless stated):
 | M7 | Warm start | On day 1 the informal share is within 5 points of its day-10 value |
 | M8 | Signal over noise | A good action moves trips made a day, as shown (the 5-day average), by at least twice that average's own jitter |
 | M9 | Success reads as success | No strategy that grows towns shows a falling headline while it does |
+| M10 | Money limits the score | Trips-greedy (below) can't afford its next best move on most days, 15–60: money is the constraint on doing well, not an afterthought |
 
 Played, in your sessions (write down what you felt before changing anything):
 
@@ -369,6 +373,9 @@ AI harness:
    - *Builder:* roads to every cut-off town first, then vehicles.
    - *Overbuilder:* spends everything on day 1.
    - *Idle:* does nothing.
+   - *Roads only:* builds roads to cut-off towns, nothing else (a one-verb player, for M6).
+   - *Trips-greedy:* each move is the best trips made per naira available, losses allowed; if it can't afford that move it saves for it. Plays 60 days, for M10.
+   - Roads are chosen by trips unlocked per naira, measured against a twin, never by price alone.
 2. **AI playtester: OpenCode's free model, before each of your sessions.** A text harness, `scripts/slice-play.ts`:
    - It keeps an action log (JSON) and replays it from day 1 each turn. The sim replays identically, so it needs no save files, and it doesn't touch Module 10's save/load.
    - Commands: `status` (the strip and hints only), `details <town|route|budget>`, `act <action>`, `run <days>`.
@@ -413,10 +420,11 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Eleven decisions were drafted on 2026-10-17, three of them from a review of this brief; two are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Twelve decisions were drafted on 2026-10-17, three of them from a review of this brief; two are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-17 | Routine upkeep per cell on roads you built or paved, independent of wear, balances the income lines (step 7) | Proposed |
 | 2026-10-17 | Tolls are passed on to danfo riders as a higher fare, so riders respond to price: one mechanic for tolls, fares by distance and the later fare dial (from the review) | Proposed |
 | 2026-10-17 | The allocation rewards growth, which already requires your service; a region left to danfos earns only the base (from the review) | Proposed |
 | 2026-10-17 | Build order: fares and the income lines land before the advice moves to `?dev=1` (from the review) | Proposed |

@@ -5,6 +5,7 @@ import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types"
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { recordMoney } from "./ledger";
+import { recordDay } from "./history";
 import { tripPlans } from "./transfers";
 import { updateRoadSpeeds } from "./congestion";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
@@ -240,7 +241,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
 
-  return updateSettlements(world, dt);
+  const events = updateSettlements(world, dt);
+  recordDay(world);
+  return events;
 }
 
 function routeLoadFactor(world: SliceWorld, vehicleIds: string[]): number {
