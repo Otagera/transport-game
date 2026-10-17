@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**472 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**473 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: slice zero
@@ -25,6 +25,7 @@ right after this file. Progress on that build order:
 | 4 | Warm-up: 5 game days before day 1 | Done: results below |
 | 5b, part 1 | Danfo road space released per segment; your vehicles' road space counts against the same budget | Done: results below |
 | 5b, part 2 | The shared informal budget by surface: dirt 9, paved 15 | Done: results below |
+| — | Bots baseline after 5b, with paving as a move | Done: results below |
 | 5 | Riders respond to price | Next |
 
 **Step 5b part 2, 2026-10-17.** Each road's informal budget (your road space included) now
@@ -48,8 +49,46 @@ the capacity ratio.
 Two cautions. Trips a day over days 21-25 swing by about ±50 between near-identical runs
 (roadside towns found at different moments), so read total-trip differences under that
 as noise. And the smaller dirt budget carries fewer people where you've built nothing:
-with no buses, 389 trips a day against 504 at the old 12. The bots haven't been re-run
-since (they run hot); every M check above predates parts 1 and 2.
+with no buses, 389 trips a day against 504 at the old 12. Re-run below.
+
+**Bots baseline after 5b, 2026-10-17** (`BOTS_WORKERS=6 bun scripts/slice-bots.ts`, ~13
+min). Paving is now a move (`moves.ts` `paveMoves`), ranked with roads by trips added per
+naira; Greedy and trips-greedy consider it, and Greedy screens its vehicle moves like
+trips-greedy (every extra vehicle on its routes, the 16 new routes with the most trips
+along them per naira) -- 302 s instead of ~1,260. Differences under ±50 trips are noise.
+
+| Persona | Day 40 (trips / no road / no seat / yours) | Funds, day 40 | Net/day, days 36-40 |
+|---|---|---|---|
+| idle | 338 / 211 / 139 / 0 | ₦2,500 | ₦0 |
+| naive | 481 / 262 / 338 / 257 | ₦6,576 | ₦99 |
+| builder | 732 / 0 / 476 / 371 | ₦12,571 | ₦613 |
+| roads only | 433 / 0 / 264 / 0 | ₦1,462 | ₦0 |
+| overbuilder | 560 / 247 / 185 / 123 | ₦5,908 | ₦178 |
+| greedy | 1,371 / 0 / 363 / 893 | ₦27,044 | ₦1,590 |
+| trips-greedy | 1,293 / 0 / 369 / 698 | ₦8,982 | ₦924 |
+
+| Check | Step 4 | Now | Measured |
+|---|---|---|---|
+| M1 | FAIL | FAIL | days 16-20: greedy ₦868, builder ₦514, naive ₦372, trips-greedy ₦357 |
+| M2 | FAIL | FAIL | Ilaro-Ilase (+40 trips/day) or Kuto-Ikole (+49) plus a bus or minibus: no payback in 60 days |
+| M3 | FAIL | FAIL | paving alone never pays back (no tolls) |
+| M4 | FAIL | **PASS** | greedy: trips 1,371 against idle's 338, no road 0 of 211 |
+| M5 | FAIL | FAIL | greedy carries the most and earns the most |
+| M6 | PASS | PASS | none |
+| M7 | PASS | FAIL | informal share 56% at the start, 50% on day 10: 6 points, the limit is 5 |
+| M8 | PASS | FAIL | best day-10 bus +7.6 trips/day against jitter 6.1 |
+| M9 | FAIL | FAIL | naive: towns grow, trips fall from day 20 to 40 (505 → 481, inside the noise) |
+| M10 | FAIL | FAIL | trips-greedy never waited on money (0 of 46 days) and ends day 60 with ₦30,915 |
+
+- **Idle carries fewer people** (338 a day, 372 before 5b): the dirt budget of 9. The
+  noise grew with it -- M8's jitter is 6.1 against 4.5 -- so a good bus no longer clears
+  twice the noise, and M7 slips a point past its limit. Both are near their lines.
+- **Greedy now builds and paves its way to the most trips** (M4 passes: no road 0), and it
+  is still the richest: M5 has no tension until tolls and levies (step 7).
+- **Money is looser still** (M10): trips-greedy, which buys trips with no regard for
+  profit, ends day 60 with ₦30,915 and never waited for money. Step 6's reversed
+  rough-road discount, routine upkeep and dearer paving (proposed) are what tighten it.
+- **M9 for naive is inside the noise** (505 → 481); read it again after step 6.
 
 **Step 5b part 1, 2026-10-17.** A danfo held road space on its whole path from dispatch
 until its trip completed, so a long run kept its share of the trunk long after leaving it,

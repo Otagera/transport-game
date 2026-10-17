@@ -1,5 +1,6 @@
 import type { SliceWorld } from "./types";
-import { demandAlong, isCutOff, isMinibusRoute, minibusRouteId, roadCost, roadPath, routeKey } from "./world";
+import { chainOf, checkPave, demandAlong, isCutOff, isMinibusRoute, minibusRouteId, paveCost, roadCost, roadPath, routeKey } from "./world";
+import { isDirt } from "./congestion";
 import { isRailRoute } from "./rail";
 import type { ActionSpec } from "./actions";
 
@@ -74,6 +75,38 @@ export function roadMoves(world: SliceWorld): RoadMove[] {
       const price = roadCost(world, town, other);
       if (Number.isFinite(price)) moves.push({ action: { kind: "road", a: town, b: other, alignment: "cheapest" }, price });
     }
+  }
+  return moves;
+}
+
+export interface PaveMove {
+  action: Extract<ActionSpec, { kind: "pave" }>;
+  price: number;
+}
+
+/**
+ * Every road with dirt on it, as the player paves it: a whole road between
+ * two towns, through any roadside towns on it (world.ts roadChain). The bots
+ * couldn't see paving at all until this: paving the dirt trunk adds ~158
+ * trips a day with no buses (389 -> 547) for ~₦435, about six times a bus
+ * per naira -- the opening a player would find and the bots never tried.
+ */
+export function paveMoves(world: SliceWorld): PaveMove[] {
+  const moves: PaveMove[] = [];
+  const seen = new Set<string>();
+  for (const segment of world.simulation.map.segments) {
+    if (segment.type !== "road" || !isDirt(segment)) continue;
+    const chain = chainOf(world, segment.id);
+    if (!chain) continue;
+    const key = chain.a < chain.b ? `${chain.a}|${chain.b}` : `${chain.b}|${chain.a}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const price = paveCost(world, chain.a, chain.b);
+    if (!Number.isFinite(price)) continue;
+    // Refused for a reason other than money (no road chain between them as towns): skip.
+    const check = checkPave(world, chain.a, chain.b);
+    if (!check.ok && check.reason !== "can't afford it") continue;
+    moves.push({ action: { kind: "pave", a: chain.a, b: chain.b }, price });
   }
   return moves;
 }

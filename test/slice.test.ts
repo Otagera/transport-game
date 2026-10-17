@@ -6,6 +6,7 @@ import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "@engine/slice/ledger";
 import { forecast } from "@engine/slice/forecast";
+import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { averageHeadline, averageNet } from "@engine/slice/history";
 import { applyAction } from "@engine/slice/actions";
@@ -272,6 +273,17 @@ describe("slice zero: the world is already running on day 1", () => {
     expect(w.informal.earnings).toBe(0);
     expect(w.economy.funds).toBe(DEFAULT_SLICE_TUNING.startingFunds);
     expect(lastDay(w.ledger).net).toBe(0);
+  });
+});
+
+describe("moves: paving is a move", () => {
+  test("every dirt road is a pave move at its pave price, until it's paved", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    const moves = paveMoves(w);
+    expect(moves.map((m) => `${m.action.a}-${m.action.b}`).sort()).toEqual(["big-mid", "mid-far"]);
+    for (const move of moves) expect(move.price).toBe(paveCost(w, move.action.a, move.action.b));
+    paveRoad(w, "big", "mid");
+    expect(paveMoves(w).map((m) => `${m.action.a}-${m.action.b}`)).toEqual(["mid-far"]);
   });
 });
 

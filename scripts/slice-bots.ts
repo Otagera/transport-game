@@ -19,7 +19,7 @@ import { startSliceGame } from "../src/engine/slice/start";
 import { addBus, buildRoad, chainOf, demandAlong, headline, networkShare, paveRoad, roadChain, type Headline } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
-import { roadMoves, vehicleMoves, type RoadMove, type VehicleMove } from "../src/engine/slice/moves";
+import { paveMoves, roadMoves, vehicleMoves, type PaveMove, type RoadMove, type VehicleMove } from "../src/engine/slice/moves";
 import { lastDay } from "../src/engine/slice/ledger";
 import { averageHeadline } from "../src/engine/slice/history";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
@@ -130,6 +130,45 @@ async function rankedRoads(world: SliceWorld): Promise<RankedRoad[]> {
   return roads;
 }
 
+interface RankedPave extends PaveMove {
+  tripsAdded: number;
+  perNaira: number;
+}
+
+/**
+ * Roads to pave, best trips added per naira first, measured like roads
+ * (days 6-10 against a twin). Ranked again when anything is paved or built,
+ * or every ten days.
+ */
+const paveRanks = new WeakMap<SliceWorld, { key: string; paves: RankedPave[] }>();
+async function rankedPaves(world: SliceWorld): Promise<RankedPave[]> {
+  const dirt = world.simulation.map.segments.filter((segment) => segment.type === "road" && segment.provenance === "inherited").length;
+  const key = `${world.simulation.map.segments.length}|${dirt}|${Math.floor(world.economy.elapsedSeconds / (10 * SECONDS_PER_GAME_DAY))}`;
+  const cached = paveRanks.get(world);
+  if (cached?.key === key) return cached.paves;
+  const moves = paveMoves(world);
+  const measuring = structuredClone(world);
+  measuring.economy.funds = 1e9;
+  const added = await tripsAdded(measuring, moves.map((m) => m.action));
+  const paves = moves
+    .map((move, i) => ({ ...move, tripsAdded: added[i] ?? 0, perNaira: (added[i] ?? 0) / move.price }))
+    .sort((x, y) => y.perNaira - x.perNaira);
+  paveRanks.set(world, { key, paves });
+  return paves;
+}
+
+/**
+ * The vehicle moves worth forecasting: another vehicle on each route it
+ * runs, and the 16 new routes with the most riders wanting trips along them
+ * per naira. Forecasting every road-connected pair every day -- 110 of them
+ * once roads joined the cut-off towns -- took Greedy 20 minutes a run.
+ */
+function shortlistVehicles(world: SliceWorld): VehicleMove[] {
+  const all = vehicleMoves(world);
+  const along = (m: VehicleMove) => demandAlong(world, m.action.a, m.action.b) / m.price;
+  return [...all.filter((m) => m.count > 1), ...all.filter((m) => m.count === 1).sort((x, y) => along(y) - along(x)).slice(0, 16)];
+}
+
 /** The best road for each cut-off town, from a ranked list. */
 function bestRoadPerTown(roads: RankedRoad[]): RankedRoad[] {
   const best = new Map<string, RankedRoad>();
@@ -232,13 +271,15 @@ const personas: Persona[] = [
     // Each day, the move with the best forecast ₦/day that it can afford --
     // what the page's best-moves list would put first -- if it pays at all.
     name: "greedy",
-    verbs: ["bus", "minibus", "road"],
+    verbs: ["bus", "minibus", "road", "pave"],
     decide: async (world) => {
+      const affordable = (m: { price: number }) => m.price <= world.economy.funds;
       const actions: ActionSpec[] = [
-        ...vehicleMoves(world).filter((m) => m.price <= world.economy.funds).map((m) => m.action),
+        ...shortlistVehicles(world).filter(affordable).map((m) => m.action),
         // Roads: each cut-off town's best by trips per naira, not all of them:
         // forecasting every candidate road every day took 15 minutes.
-        ...bestRoadPerTown(await rankedRoads(world)).filter((m) => m.price <= world.economy.funds).map((m) => m.action),
+        ...bestRoadPerTown(await rankedRoads(world)).filter(affordable).map((m) => m.action),
+        ...(await rankedPaves(world)).filter(affordable).map((m) => m.action),
       ];
       if (actions.length === 0) return;
       const money = await forecastAll(world, actions);
@@ -262,18 +303,16 @@ const personas: Persona[] = [
     // naira picks 16 new routes (another vehicle on a route it runs always
     // goes through), a 3-day run screens those, and days 3-5 rank the six best.
     name: "trips-greedy",
-    verbs: ["bus", "minibus", "road"],
+    verbs: ["bus", "minibus", "road", "pave"],
     days: 60,
     decide: (() => {
       type Option = { action: ActionSpec; price: number; perNaira: number };
       let ranked: { key: string; list: Option[] } = { key: "", list: [] };
-      return async (world: SliceWorld) => {
+      return async (world: SliceWorld): Promise<void | "blocked"> => {
         const key = `${Math.floor(world.economy.elapsedSeconds / (3 * SECONDS_PER_GAME_DAY))}`;
         if (ranked.key !== key) {
           const t0 = performance.now();
-          const all = vehicleMoves(world);
-          const along = (m: VehicleMove) => demandAlong(world, m.action.a, m.action.b) / m.price;
-          const vehicles = [...all.filter((m) => m.count > 1), ...all.filter((m) => m.count === 1).sort((x, y) => along(y) - along(x)).slice(0, 16)];
+          const vehicles = shortlistVehicles(world);
           const measuring = structuredClone(world);
           measuring.economy.funds = 1e9;
           const screen = await tripsAddedOver(measuring, vehicles.map((m) => m.action), 3, 2);
@@ -285,6 +324,7 @@ const personas: Persona[] = [
           const options: Option[] = [
             ...shortlist.map((o, i) => ({ ...o, perNaira: (measured[i] ?? 0) / o.price })),
             ...bestRoadPerTown(await rankedRoads(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
+            ...(await rankedPaves(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
           ].filter((o) => o.perNaira > 0);
           ranked = { key, list: options.sort((x, y) => y.perNaira - x.perNaira) };
           if (process.env.BOTS_VERBOSE) log(`trips-greedy day ${Math.round((world.economy.elapsedSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1}: ${vehicles.length} candidates, ${world.simulation.vehicles.length} vehicles on the map, ranked in ${((performance.now() - t0) / 1000).toFixed(1)} s, funds ₦${Math.round(world.economy.funds)}`);
