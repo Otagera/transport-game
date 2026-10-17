@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -192,6 +192,24 @@ describe("slice: where people want to go", () => {
     expect(trips.get("far")!.share.informal).toBeGreaterThan(0);
     // No road: everyone stays home.
     expect(trips.get("cut")!.share.lost).toBeCloseTo(1);
+  });
+});
+
+describe("slice: the headline", () => {
+  test("counts trips a day, and splits stayed home into no road and no seat", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    run(w, 300);
+    const h = headline(w);
+    expect(h.yourRidersPerDay).toBeGreaterThan(0);
+    expect(h.tripsPerDay).toBeGreaterThan(h.yourRidersPerDay);
+    // Cut has no road: all of its trips stay home for want of one.
+    const cutDemand = tripsFrom(w, "cut").reduce((sum, trip) => sum + trip.demand, 0) * SECONDS_PER_GAME_DAY;
+    expect(h.noRoadPerDay).toBeGreaterThan(cutDemand * 0.8);
+    // A road to Cut moves its trips out of "no road".
+    buildRoad(w, "mid", "cut");
+    run(w, 300);
+    expect(headline(w).noRoadPerDay).toBeLessThan(h.noRoadPerDay * 0.2);
   });
 });
 

@@ -3,7 +3,10 @@
 A transport-infrastructure game. The original module build order (0 through 12) is complete —
 see [docs/status.md](docs/status.md) for current state.
 
-**Read [docs/status.md](docs/status.md) first** to see where things stand. Then:
+**Read [docs/status.md](docs/status.md) first** to see where things stand, then
+**[docs/brief.md](docs/brief.md)**: the design contract for what the game is and what gets built
+next. A new system, verb or screen element must point at a line in it; delegated work names the
+section it implements. Then:
 
 - [docs/principles.md](docs/principles.md) — design premise, scope, and §3 (Findings), the
   hard-won lessons from building this twice. **Read Findings before writing simulation, economy,

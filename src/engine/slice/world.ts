@@ -878,6 +878,40 @@ function canTravel(world: SliceWorld, a: string, b: string): boolean {
   return roadPath(world, a, b) !== null || railPath(world, a, b) !== null;
 }
 
+/**
+ * The headline (docs/brief.md, What doing well means): absolute counts per
+ * game day, not shares. A share hid success -- two trunk buses grew the
+ * towns they served, the towns made more trips than anyone carried, and
+ * "stayed home" rose as a share while more people travelled (brief,
+ * Evidence 1). Stayed home splits by whose job it is: no road (build) or
+ * no seat (run vehicles). "No road" means nothing joins the towns at all;
+ * working track counts as a way, like a road.
+ */
+export interface Headline {
+  /** Trips between towns that happened, by anyone. */
+  tripsPerDay: number;
+  /** Trips nothing joins the towns for. */
+  noRoadPerDay: number;
+  /** Trips a road or track joins, but nobody carried. */
+  noSeatPerDay: number;
+  /** Trips your vehicles carried. */
+  yourRidersPerDay: number;
+}
+
+export function headline(world: SliceWorld): Headline {
+  const result: Headline = { tripsPerDay: 0, noRoadPerDay: 0, noSeatPerDay: 0, yourRidersPerDay: 0 };
+  for (const [key, rates] of world.pairOutcomes) {
+    const separator = key.indexOf(":");
+    const joined = canTravel(world, key.slice(0, separator), key.slice(separator + 1));
+    result.tripsPerDay += rates.player + rates.poached + rates.gaveUp;
+    result.yourRidersPerDay += rates.player;
+    if (joined) result.noSeatPerDay += rates.lost;
+    else result.noRoadPerDay += rates.lost;
+  }
+  for (const k of Object.keys(result) as Array<keyof Headline>) result[k] *= SECONDS_PER_GAME_DAY;
+  return result;
+}
+
 /** Passengers per second wanting to travel between a and b, both directions. */
 export function pairDemand(world: SliceWorld, a: string, b: string): number {
   let total = 0;

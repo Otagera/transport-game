@@ -612,9 +612,24 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   machinery on the copy (`perform`, then ticks until the receipt finishes): the receipt the
   action would get two days on, if nothing else changes. The real world is untouched. A test
   pins that a forecast equals the receipt the same action then gets.
+- **`moves.ts`** — the moves worth forecasting, as data: `vehicleMoves(world)` (one more
+  vehicle on each road route, then a new bus and minibus on every road-connected pair, most
+  trips along first) and `roadMoves(world)` (each cut-off town's cheapest road to a reached
+  town). The page's best-moves list and the probe's Greedy bot read the same list, so a bot
+  playing "the best move" plays what the player was shown.
 - **`diagnoseRoute`** adds `incomePerVehicle`, `costPerVehicle`, `roundTripsPerDay`, and the
   `long` verdict (full, yet a full vehicle's fares are under its running cost on sound roads),
   with `shorter`: the route ending at the stop nearest halfway, from the bigger end.
+
+### The headline
+
+`world.ts` `headline(world)` — the brief's headline (docs/brief.md, What doing well means)
+as absolute counts per game day, summed over `pairOutcomes`: trips made (yours plus
+informal), stayed home split by `canTravel` into **no road** (nothing joins the towns; working
+track counts) and **no seat** (joined, but nobody carried them), and your riders. Counts,
+not shares: a share hid success, because towns you grow make more trips than anyone carries
+and "stayed home" rose as a share while more people travelled. Read by the bots
+(`scripts/slice-bots.ts`) today and by the strip once the brief's step 8 lands.
 
 ### The minibus
 

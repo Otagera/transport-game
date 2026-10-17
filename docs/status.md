@@ -6,15 +6,71 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**433 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**462 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
-## Current direction: the slice
+## Current direction: slice zero
+
+**The contract is [brief.md](brief.md)** (2026-10-17): you are the state's transport arm;
+money is a budget (fares, tolls, park levies, a state allocation), not the score; the
+headline is trips made and who stayed home. Its build order for slice zero and its
+pass/fail checks (M1-M9, P1-P6, A1-A3) are what work is measured against now. Read it
+right after this file. Progress on that build order:
+
+| Brief step | What | State |
+|---|---|---|
+| 1 | Brief into the repo, linked from CLAUDE.md and here | Done |
+| 2 | Bot personas in the probe: baseline on today's game, M1-M9 | Done: baseline below |
+| 3 | Switches in tuning.ts for wear, goods, rail, the straight alignment | Next |
+
+**Bots baseline, 2026-10-17** (`bun scripts/slice-bots.ts`, ~5 min; Greedy forecasts every
+affordable move daily in a worker pool against one shared do-nothing twin). The game as it
+stood before slice zero changed anything. Headline per game day at day 40 (trips made / no
+road / no seat / your riders), and mean net over days 36-40:
+
+| Persona | What it does | Day 40 | Net/day |
+|---|---|---|---|
+| idle | nothing | 309 / 211 / 164 / 0 | ₦0 |
+| naive | a bus on the two biggest towns a road joins, every 3rd day | 605 / 274 / 315 / 300 | −₦34 |
+| builder | roads to cut-off towns, a minibus to each, then naive | 716 / 0 / 506 / 399 | ₦132 |
+| roads only | roads to cut-off towns, nothing else | 309 / 0 / 357 / 0 | ₦0 |
+| overbuilder | a bus on every pair on day 1 | 422 / 242 / 273 / 123 | −₦144 (₦−4,086 funds) |
+| greedy | the best forecast move it can afford, daily | 825 / 106 / 527 / 561 | ₦90 |
+
+| Check | Result | Measured |
+|---|---|---|
+| M1 opening variety | FAIL | days 16-20 net: builder ₦227, greedy ₦74, naive ₦5, roads ₦0, overbuilder −₦101 |
+| M2 building pays | FAIL | road to Ilaro or Ikole plus a bus or minibus: none pays back in 60 days |
+| M3 paving | FAIL | paving the trunk or a quiet road alone never pays back (no tolls) |
+| M4 headline moves | FAIL (narrowly) | greedy lifts trips 167% over idle, but no road falls 211 → 106: 50.2%, not half |
+| M5 tension | PASS | most riders greedy, most money builder |
+| M6 no one-verb win | FAIL | naive (bus only) is top three on both, of only five players |
+| M7 warm start | FAIL | informal share 0% at the start, 50% by day 10 |
+| M8 signal over noise | FAIL | best day-10 bus adds 12.5 trips/day; doing nothing jitters 9.4 |
+| M9 success reads | PASS | no strategy grows towns while trips made falls |
+
+What it says, before anything changes:
+
+- **Doing nothing decays.** Idle's trips fall 336 → 309 as roads wear and danfos slow;
+  no seat rises 127 → 164.
+- **A road alone carries almost nobody.** Roads only clears "no road" but trips made end
+  where idle's do: the danfos that come don't fill the new demand. Building pays only with
+  vehicles on it, which is what tolls and the allocation are for (M2, M3).
+- **The Evidence guess holds.** Naive's towns grow, trips rise 432 → 605, and no seat
+  rises 135 → 315 with them: growth outruns seats. The split shows it; a share hid it.
+- **One day's net is noise.** Five buses' daily net swings between −₦2 and −₦255 on the
+  same network (ledger checked against funds: they agree). The checks rank strategies by
+  mean net over 5-10 days; the strip's "net, last day" has the same problem for the player.
+- **Six personas make M1 and M6 coarse.** Top three of five players is most of them. More
+  openings come with the later steps, when the checks start to pass.
+
+## The slice so far
 
 The project reset on 2026-10-16 — see [principles.md](principles.md) §6 for why and the
 step plan. Eras are paused. The slice is a second page beside the original game:
 
 - Play: `bun run dev`, open `/slice.html` (the original game is still `/`).
+- Bots and the brief's checks: `bun scripts/slice-bots.ts` (`BOTS=naive,idle`, `CHECKS=0`).
 - Calibrate: `bun scripts/slice-probe.ts [days]`, with `SLICE_TUNING='{"fare":5}'` to try
   overrides.
 - Detail: [architecture/engine.md](architecture/engine.md) §slice/,

@@ -91,6 +91,9 @@ slice.html         The slice's entry page (index.html is the original game)
 public/content/    eras.json, vehicles.json, profiles.json, scenarios.json
 public/mods/       Mod packages written by the Asset Modder tab (vehicle.json + mesh)
 scripts/slice-probe.ts  Headless calibration probe for the slice
+scripts/slice-bots.ts   Bot personas + the brief's measured checks M1-M9 (docs/brief.md)
+scripts/slice-lever-audit.ts  Each lever pulled in a twin world, measured against the original
+scripts/{coldstart,connect,horizon}.ts  The brief's Evidence measurements, re-runnable
 docs/
   principles.md   Design premise, scope, Findings (the "why")
   architecture/   This directory (the "how it's shaped")

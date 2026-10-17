@@ -49,6 +49,7 @@ import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
 import type { ForecastLine } from "./render";
 import { applyAction, type ActionSpec } from "@engine/slice/actions";
+import { vehicleMoves } from "@engine/slice/moves";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -257,47 +258,12 @@ function movesKey(): string {
 }
 
 function candidateMoves(): Move[] {
-  const list: Move[] = [];
-  const t = world.tuning;
-  for (const route of world.routes) {
-    if (isRailRoute(route.id)) continue;
-    const mini = isMinibusRoute(route.id);
-    const kind = mini ? "minibus" : "bus";
-    const n = route.vehicleIds.length + 1;
-    list.push({
-      action: { kind, a: route.a, b: route.b },
-      spec: { label: addLabel(kind, n, route.a, route.b), towns: [route.a, route.b], routeId: route.id },
-      title: `Another ${kind} on ${pair(route.a, route.b)}`,
-      price: mini ? t.minibusPurchaseCost : t.busPurchaseCost,
-    });
-  }
-  // New routes on every road-connected pair, the ones with the most riders
-  // wanting trips along them first so likely winners arrive early. Every
-  // pair, not the top few: trips-along ranked long through-routes first and
-  // missed Owode <-> Kuto, the best first minibus on the map (browser check).
-  const towns = [...world.towns.keys()];
-  const pairs: Array<{ a: string; b: string; along: number }> = [];
-  for (let i = 0; i < towns.length; i += 1) {
-    for (let j = i + 1; j < towns.length; j += 1) {
-      const a = towns[i]!;
-      const b = towns[j]!;
-      if (!roadPath(world, a, b)) continue;
-      pairs.push({ a, b, along: demandAlong(world, a, b) });
-    }
-  }
-  for (const { a, b } of pairs.sort((p, q) => q.along - p.along)) {
-    for (const kind of ["minibus", "bus"] as const) {
-      const routeId = kind === "minibus" ? minibusRouteId(a, b) : routeKey(a, b);
-      if (world.routes.some((r) => r.id === routeId)) continue;
-      list.push({
-        action: { kind, a, b },
-        spec: { label: addLabel(kind, 1, a, b), towns: [a, b], routeId },
-        title: `New ${kind} route ${pair(a, b)}`,
-        price: kind === "minibus" ? t.minibusPurchaseCost : t.busPurchaseCost,
-      });
-    }
-  }
-  return list;
+  return vehicleMoves(world).map(({ action, routeId, count, price }) => ({
+    action,
+    spec: { label: addLabel(action.kind, count, action.a, action.b), towns: [action.a, action.b], routeId },
+    title: count > 1 ? `Another ${action.kind} on ${pair(action.a, action.b)}` : `New ${action.kind} route ${pair(action.a, action.b)}`,
+    price,
+  }));
 }
 
 function refreshMoves(): void {
