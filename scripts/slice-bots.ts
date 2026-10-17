@@ -9,6 +9,7 @@
 //   BOTS=naive,idle bun scripts/slice-bots.ts # some personas (checks that need others are skipped)
 //   CHECKS=0 bun scripts/slice-bots.ts        # personas only
 //   SLICE_TUNING='{"fare":5}' ...             # tuning overrides, as in slice-probe.ts
+//   BOTS_WORKERS=6 ...                        # forecast threads (default 2: runs cool, ~3x slower)
 //
 // Greedy forecasts every move it could afford, every day, in a worker pool:
 // it's the slow one (a few minutes).
@@ -44,7 +45,10 @@ const population = (world: SliceWorld) => [...world.towns.values()].reduce((sum,
 
 // --- Forecasts, in a worker pool ------------------------------------------
 
-const workers = Array.from({ length: Math.max(1, availableParallelism() - 1) }, () => new Worker(new URL("./slice-bots-worker.ts", import.meta.url)));
+// Two worker threads by default: every core but one ran a laptop hot for
+// half an hour. BOTS_WORKERS=6 for a faster run on a machine that can take it.
+const workerCount = Math.max(1, Math.min(availableParallelism() - 1, Number(process.env.BOTS_WORKERS ?? 2)));
+const workers = Array.from({ length: workerCount }, () => new Worker(new URL("./slice-bots-worker.ts", import.meta.url)));
 let nextId = 0;
 const waiting = new Map<number, (trajectory: Trajectory) => void>();
 for (const worker of workers) {

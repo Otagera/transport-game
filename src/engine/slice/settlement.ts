@@ -239,8 +239,11 @@ function splitSegment(world: SliceWorld, segmentId: string, town: SliceTown): vo
 
   // Informal vehicles already on the road now occupy both halves.
   for (const info of informal.active.values()) {
-    if (!info.segmentIds.includes(segmentId)) continue;
+    const at = info.segmentIds.indexOf(segmentId);
+    if (at < 0) continue;
     info.segmentIds = info.segmentIds.flatMap((id) => (id === segmentId ? [first.id, second.id] : [id]));
+    // Already left behind and given back: both halves are behind it too.
+    if (at < info.released) info.released += 1;
   }
   const space = informal.segmentSpace.get(segmentId) ?? 0;
   informal.segmentSpace.set(first.id, space);

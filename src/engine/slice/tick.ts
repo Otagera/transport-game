@@ -351,10 +351,16 @@ function sendInformal(
   load: number,
   pool: Map<string, number>,
   gaveUp: Map<string, number>,
+  yours: ReadonlyMap<string, number>,
 ): boolean {
   const { simulation, tuning, informal } = world;
   const spec = informalSpec(tuning, mode);
-  const space = run.path.segmentIds.map((id) => informal.segmentSpace.get(id) ?? 0);
+  // One road, one budget: your vehicles' road space counts against it too
+  // (brief, step 5b). Released per segment, danfos otherwise filled the
+  // trunk around your buses -- 8 trunk buses carried 180 riders a day
+  // instead of 289, the trunk below half speed 94% of the time; counted,
+  // 225 and 34%, and the danfos on Ilase-Owode fall as you add buses.
+  const space = run.path.segmentIds.map((id) => (informal.segmentSpace.get(id) ?? 0) + (yours.get(id) ?? 0));
   if (space.some((used) => used + spec.weight > tuning.informalRoadSpace)) return false;
   // A real operator does not join a jam that pays nothing (principles §3).
   if (run.path.segmentIds.some((id) => (world.segmentSpeed.get(id) ?? 1) < tuning.informalMinSpeed)) return false;
@@ -373,7 +379,7 @@ function sendInformal(
     return { from: group.at, to: rider.destination, kind: "passengers" as const, amount: pooled * share, trip: { origin: rider.origin, destination: rider.destination } };
   });
   simulation.vehicles.push(vehicle);
-  informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode });
+  informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode, released: 0 });
   for (const segmentId of run.path.segmentIds) bump(informal.segmentSpace, segmentId, spec.weight);
   return true;
 }
@@ -410,11 +416,18 @@ export function informalSpec(tuning: SliceTuning, mode: InformalMode): { capacit
 function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, number>, gaveUp: Map<string, number>): void {
   const { tuning, informal } = world;
   const drift = emaAlpha(dt, tuning.patienceSeconds * PARK_PATIENCE_MULTIPLIER);
+  // Road space your vehicles are using now, per segment.
+  const yours = new Map<string, number>();
+  for (const vehicle of world.simulation.vehicles) {
+    if (informal.active.has(vehicle.id) || world.railVehicles.has(vehicle.id)) continue;
+    const leg = world.vehicleSegment.get(vehicle.id);
+    if (leg) bump(yours, leg.slice(0, leg.lastIndexOf("#")), vehicle.congestionWeight);
+  }
 
   const danfoGroups = groupPool(world, informal.pool, drift, lost, (key, _trip, amount) => bump(informal.smallPool, key, amount));
   for (const group of danfoGroups) {
     const best = bestRun(group, informal.pool);
-    if (best && best.load >= tuning.danfoCapacity) sendInformal(world, "danfo", group, best.run, best.aboard, best.load, informal.pool, gaveUp);
+    if (best && best.load >= tuning.danfoCapacity) sendInformal(world, "danfo", group, best.run, best.aboard, best.load, informal.pool, gaveUp, yours);
   }
 
   const smallGroups = groupPool(world, informal.smallPool, drift, lost, (_key, trip, amount) => bump(lost, trip, amount));
@@ -422,7 +435,7 @@ function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, numbe
     const best = bestRun(group, informal.smallPool);
     if (!best) continue;
     if (best.load >= tuning.kekeCapacity) {
-      if (sendInformal(world, "keke", group, best.run, best.aboard, best.load, informal.smallPool, gaveUp)) continue;
+      if (sendInformal(world, "keke", group, best.run, best.aboard, best.load, informal.smallPool, gaveUp, yours)) continue;
     }
     // An okada takes one rider, from whoever has waited in the biggest crowd.
     const single = group.riders.reduce<PooledRider | null>(
@@ -430,17 +443,32 @@ function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, numbe
       null,
     );
     const waiting = single ? informal.smallPool.get(single.key) ?? 0 : 0;
-    if (single && waiting >= tuning.okadaCapacity) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp);
+    if (single && waiting >= tuning.okadaCapacity) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp, yours);
   }
 }
 
+/**
+ * Gives back the road space an informal vehicle holds on segments it has
+ * left, and all of it once the trip is done. Space used to be held on the
+ * whole path until the trip completed, so a long run (Ilaro-Ipaja) kept its
+ * share of the trunk long after leaving it, and a new long road could lower
+ * trips made across the network (brief, step 5b).
+ */
 function reapInformal(world: SliceWorld): void {
   const { simulation, informal } = world;
+  const release = (info: { segmentIds: string[]; weight: number; released: number }, upTo: number) => {
+    for (; info.released < upTo; info.released += 1) bump(informal.segmentSpace, info.segmentIds[info.released]!, -info.weight);
+  };
   simulation.vehicles = simulation.vehicles.filter((vehicle: Vehicle) => {
-    if (!hasCompletedTrip(vehicle)) return true;
     const info = informal.active.get(vehicle.id);
+    if (!hasCompletedTrip(vehicle)) {
+      // pathIndex is the node it's driving to, so it's on segment pathIndex - 1;
+      // every segment before that one is behind it.
+      if (info && vehicle.path.length === info.segmentIds.length + 1) release(info, Math.min(vehicle.pathIndex - 1, info.segmentIds.length));
+      return true;
+    }
     if (info) {
-      for (const segmentId of info.segmentIds) bump(informal.segmentSpace, segmentId, -info.weight);
+      release(info, info.segmentIds.length);
       informal.active.delete(vehicle.id);
     }
     return false;

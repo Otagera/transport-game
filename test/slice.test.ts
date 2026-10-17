@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -272,6 +272,53 @@ describe("slice zero: the world is already running on day 1", () => {
     expect(w.informal.earnings).toBe(0);
     expect(w.economy.funds).toBe(DEFAULT_SLICE_TUNING.startingFunds);
     expect(lastDay(w.ledger).net).toBe(0);
+  });
+});
+
+describe("one road, one budget: your vehicles' road space counts against the informal cap", () => {
+  test("a road your buses fill has no room for a danfo", () => {
+    // Room for one danfo; one of your buses (road space 1.2) is always on the only road out of Big.
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, informalRoadSpace: 1 });
+    addBus(w, "big", "mid");
+    const bigMid = directRoad(w, "big", "mid")!.id;
+    let informalOnIt = 0;
+    for (let t = 0; t < 300; t += SIM_DT) {
+      sliceTick(w, SIM_DT);
+      for (const info of w.informal.active.values()) if (info.segmentIds.includes(bigMid)) informalOnIt += 1;
+    }
+    expect(informalOnIt).toBe(0);
+    // Without your bus the same road carries danfos.
+    const empty = world({ startingFunds: 1e6, maxEmergentTowns: 0, informalRoadSpace: 1 });
+    let informalOnEmpty = 0;
+    for (let t = 0; t < 300; t += SIM_DT) {
+      sliceTick(empty, SIM_DT);
+      for (const info of empty.informal.active.values()) if (info.segmentIds.includes(bigMid)) informalOnEmpty += 1;
+    }
+    expect(informalOnEmpty).toBeGreaterThan(0);
+  });
+});
+
+describe("informal road space is held only ahead of the vehicle", () => {
+  test("space on each road is what the informal vehicles still to drive it hold", () => {
+    const w = createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    let checked = 0;
+    let partlyReleased = 0;
+    for (let t = 0; t < 600; t += SIM_DT) {
+      sliceTick(w, SIM_DT);
+      const expected = new Map<string, number>();
+      for (const [id, info] of w.informal.active) {
+        const vehicle = w.simulation.vehicles.find((v) => v.id === id)!;
+        // Nothing behind the segment it's on is still held.
+        expect(info.released).toBeLessThanOrEqual(Math.max(0, vehicle.pathIndex - 1));
+        if (info.released > 0) partlyReleased += 1;
+        for (const segmentId of info.segmentIds.slice(info.released)) expected.set(segmentId, (expected.get(segmentId) ?? 0) + info.weight);
+      }
+      for (const [segmentId, used] of w.informal.segmentSpace) expect(used).toBeCloseTo(expected.get(segmentId) ?? 0, 6);
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(0);
+    // Big -> far runs two roads: some danfo gave back the first while on the second.
+    expect(partlyReleased).toBeGreaterThan(0);
   });
 });
 

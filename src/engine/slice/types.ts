@@ -101,8 +101,11 @@ export interface InformalState {
   pool: Map<string, number>;
   /** Same keys -- people who won't wait any longer for a danfo, looking for a keke or okada. */
   smallPool: Map<string, number>;
-  /** Informal vehicleId -> what it is and the road space it occupies. */
-  active: Map<string, { segmentIds: string[]; weight: number; mode: InformalMode }>;
+  /**
+   * Informal vehicleId -> what it is and the road space it holds: its path's
+   * segments from `released` on (the ones it has left are given back).
+   */
+  active: Map<string, { segmentIds: string[]; weight: number; mode: InformalMode; released: number }>;
   /** segmentId -> informal road space in use, in danfo-equivalents. */
   segmentSpace: Map<string, number>;
   /** Fares the informal sector has collected -- money you didn't make. */

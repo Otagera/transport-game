@@ -223,6 +223,14 @@ blow-by-blow; this section is the distilled rule.
 - **Cap per corridor, not only per demand pair.** Many pairs route over one corridor;
   without a corridor-level cap, 20+ informal vehicles accumulate on one link and
   collapse throughput to ~10%.
+- **Hold road space only ahead of the vehicle.** Held on the whole path until the trip
+  ended, a long run kept trunk space it had left: a new long road (Ilaro–Ipaja) took 60–80
+  trips a day off the network. Released as the vehicle leaves each segment, the same road
+  adds ~30. That held space had been an accidental second cap on the trunk: released,
+  danfos crowd your buses there (8 trunk buses: below half speed 60% of the time, your
+  riders 289 → 180). The cap must be honest about what it is capping: one road, one
+  budget, your vehicles' road space included (225 riders, and the danfos on the trunk fall
+  as you add buses; slice zero step 5b).
 - **Gate spawning on sustained congestion**, not queue depth alone. A real operator does
   not join a jam that pays nothing.
 - **Per-vehicle congestion weight.** An okada occupying the same road space as a bus is

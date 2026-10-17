@@ -81,7 +81,7 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   kekeRoadSpace: 0.5,
   okadaRoadSpace: 0.3,
   // Cap per corridor (docs/principles.md §3), as road space: a dozen danfos
-  // or forty okadas. That finding was about congestion collapse; with
+  // or forty okadas, your vehicles' road space included (tick.ts, step 5b). That finding was about congestion collapse; with
   // congestion off the cap is loose enough that the informal sector
   // visibly fills the gaps, and step 2 revisits it.
   informalRoadSpace: 12,

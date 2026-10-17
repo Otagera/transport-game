@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**469 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**471 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: slice zero
@@ -23,7 +23,31 @@ right after this file. Progress on that build order:
 | 2 | Bot personas in the probe: baseline on today's game, M1-M9 | Done: baseline below |
 | 3 | Switches in tuning.ts for wear, goods, rail, the straight alignment | Done: results below |
 | 4 | Warm-up: 5 game days before day 1 | Done: results below |
-| 5 | Riders respond to price (5b: danfo road space released per segment, scaled by capacity) | Next |
+| 5b, part 1 | Danfo road space released per segment; your vehicles' road space counts against the same budget | Done: results below |
+| 5 | Riders respond to price; 5b part 2: the shared budget scaled with road capacity | Next |
+
+**Step 5b part 1, 2026-10-17.** A danfo held road space on its whole path from dispatch
+until its trip completed, so a long run kept its share of the trunk long after leaving it,
+and a new long road could lower trips made. Now `reapInformal` gives back each segment
+once the danfo is past it, and your vehicles' road space counts against the same budget
+(rule 3 below: one road, one budget). From a 5-day warm-up, days 21-25, slice zero, with
+roads to Ilaro and Ikole plus Ilaro-Ipaja and Ikole-Ise, and your buses on Ilase-Owode:
+
+| Rule | Trips a day (0 / 2 / 4 / 8 buses) | Yours (2 / 4 / 8) | Danfo trips on Ilase-Owode (0 / 2 / 4 / 8) | Trunk below half speed (2 / 4 / 8) |
+|---|---|---|---|---|
+| 1. hold the whole path (old) | 457 / 628 / 711 / 760 | 134 / 224 / 289 | 94 / 54 / 42 / 34 | 0 / 0 / 3% |
+| 2. release per segment | 504 / 669 / 745 / 824 | 72 / 149 / 180 | 100 / 83 / 73 / 73 | 81 / 84 / 94% |
+| **3. release, yours in the budget** | 504 / 655 / 717 / 718 | 78 / 163 / 225 | 100 / 76 / 57 / 46 | 63 / 37 / 34% |
+| 4. release, `informalMinSpeed` 0.5 | 504 / 751 / 844 / 872 | 83 / 162 / 223 | 100 / 92 / 91 / 75 | 30 / 37 / 69% |
+
+Rule 3 chosen. Rule 4 matched it on your riders but not on winning the road back: the
+danfos on the trunk barely fall as you add buses, and at 8 buses the trunk jams twice as
+often. Releasing per segment fixes the anomaly (idle 359 → 354, unchanged; road Ilaro-Ipaja
+−62 → +31 trips a day against idle), and total throughput never collapses. Holding the whole
+path had been an accidental second cap on the trunk; without your vehicles in the budget,
+danfos filled the trunk around your buses. Still open for part 2: with 2 buses the trunk is
+below half speed 63% of the time under rule 3 -- the shared budget should scale with road
+capacity (dirt against paved), not be one number for every road.
 
 **Bots baseline, 2026-10-17** (`bun scripts/slice-bots.ts`, ~5 min; Greedy forecasts every
 affordable move daily in a worker pool against one shared do-nothing twin). The game as it

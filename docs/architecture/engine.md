@@ -397,8 +397,14 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   anyone at a stop it passes whose final destination is ahead, which counts as `poached`.
   **Road space** caps the sector per segment in danfo-equivalents
   (`informalRoadSpace`, each mode's congestion weight: danfo 1, keke 0.5, okada 0.3);
-  `informal.active` records each vehicle's mode, weight and segments so reaping frees the
-  space. Capacities, speeds and weights come from the original catalog
+  `informal.active` records each vehicle's mode, weight, segments and how many it has
+  `released`: `reapInformal` gives back each segment once the vehicle is past it (it's on
+  segment `pathIndex - 1`) and the rest when the trip ends. Holding the whole path until
+  the end let a long run keep trunk space it had left, and a new long road lowered trips
+  made (brief step 5b). A roadside town splitting a segment behind a vehicle shifts its
+  `released` count (settlement.ts). The budget is the road's, not the sector's:
+  `dispatchInformal` adds the road space your vehicles are using on each segment now
+  (from `vehicleSegment`) to what informal vehicles hold before checking the cap. Capacities, speeds and weights come from the original catalog
   (`public/content/vehicles.json`).
 - **Outcomes** — kept per (origin, destination) pair in `world.pairOutcomes`, as EMA rates
   (τ = one game day) of four disjoint buckets, each counted once, *when the trip
