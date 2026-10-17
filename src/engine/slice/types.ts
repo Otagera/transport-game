@@ -109,6 +109,16 @@ export interface InformalState {
 }
 
 export interface SliceTuning {
+  /**
+   * Systems switched on (docs/brief.md, Slice zero). Slice zero is roads,
+   * buses and danfos; each of these comes back one per playtest. Off means
+   * the system doesn't run and its actions are refused -- built and tested,
+   * not deleted.
+   */
+  wearEnabled: boolean;
+  goodsEnabled: boolean;
+  railEnabled: boolean;
+  straightAlignmentEnabled: boolean;
   /** Mean seconds a waiting passenger stays before giving up. */
   patienceSeconds: number;
   /** Gravity demand: passengers/sec = k * popA * popB / distance. */

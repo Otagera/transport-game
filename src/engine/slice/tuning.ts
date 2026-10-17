@@ -21,6 +21,12 @@ import type { SliceTuning } from "./types";
 // Time: one game day is 30 seconds (economy/state.ts SECONDS_PER_GAME_DAY).
 // Distance: map cells.
 export const DEFAULT_SLICE_TUNING: SliceTuning = {
+  // Slice zero (docs/brief.md): wear, goods, rail and the straight
+  // alignment are off, and return one per playtest in the brief's order.
+  wearEnabled: false,
+  goodsEnabled: false,
+  railEnabled: false,
+  straightAlignmentEnabled: false,
   patienceSeconds: 12,
   demandK: 0.008,
   fare: 4,
@@ -225,3 +231,14 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   townPopulationTauSeconds: 300,
   abandonBelowPopulation: 2,
 };
+
+/** Every system on: what the calibration probe and lever audit measure, and most tests. */
+export const ALL_SYSTEMS_ON: Pick<SliceTuning, "wearEnabled" | "goodsEnabled" | "railEnabled" | "straightAlignmentEnabled"> = {
+  wearEnabled: true,
+  goodsEnabled: true,
+  railEnabled: true,
+  straightAlignmentEnabled: true,
+};
+
+/** Why an action is refused when its system is off. */
+export const SWITCHED_OFF = "not in slice zero";

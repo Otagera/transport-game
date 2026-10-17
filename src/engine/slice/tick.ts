@@ -101,7 +101,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // every vehicle sees the same road this tick (congestion.ts).
   updateRoadSpeeds(world, dt);
   // Goods arrive at their yards, and some of what's waiting spoils (goods.ts).
-  produceAndSpoil(world, dt);
+  if (tuning.goodsEnabled) produceAndSpoil(world, dt);
   const routeOf = new Map<string, string>();
   for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
   const goodsDelivered = new Map<string, number>();
@@ -204,9 +204,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
 
   // Roads wear with the traffic that just ran on them; maintained ones are
   // repaired as they go, and that upkeep is a running cost like a bus's.
-  const upkeep = updateRoadWear(world, dt);
+  const upkeep = tuning.wearEnabled ? updateRoadWear(world, dt) : 0;
   // ...and your road vehicles pay more to run on worn roads (wear.ts).
-  const rough = chargeRoughRoads(world, dt, routeOf);
+  const rough = tuning.wearEnabled ? chargeRoughRoads(world, dt, routeOf) : { total: 0, byRoute: new Map<string, number>() };
 
   // Money. Running cost is whatever left the funds this tick that fares
   // didn't bring in -- buses, lorries, trains and road upkeep alike --

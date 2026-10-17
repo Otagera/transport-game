@@ -1,7 +1,8 @@
 import { SLICE_MAP } from "../src/slice/map";
 import { createSliceWorld, networkShare, addBus, addMinibus, buildRoad } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
-import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
+// The brief's Evidence 1, measured with every system on (before slice zero).
+import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
 const run = (w: any, days: number) => { const n = Math.round(days * SECONDS_PER_GAME_DAY / SIM_DT); for (let i = 0; i < n; i++) sliceTick(w, SIM_DT); };
@@ -13,7 +14,7 @@ const strategies: [string, (w: any) => void][] = [
   ["roads + 2 trunk + minibus Ilaro-Owode + bus Ilase-Ikole", (w) => { buildRoad(w, "ilaro", "ilase", "cheapest"); buildRoad(w, "kuto", "ikole", "cheapest"); addBus(w, "ilase", "owode"); addBus(w, "ilase", "owode"); addMinibus(w, "ilaro", "owode"); addBus(w, "ilase", "ikole"); }],
 ];
 for (const [name, act] of strategies) {
-  const w = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, startingFunds: 100000 });
+  const w = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 100000 });
   // createSliceWorld signature: (map, tuning?) -- merge defaults
   act(w); const f0 = w.economy.funds;
   const rows: string[] = [];

@@ -8,7 +8,7 @@ import { canAfford, createEconomyState, registerPurchase, resaleValue, sellVehic
 import { createDayLedger, forgetRoute, lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
-import { DEFAULT_SLICE_TUNING } from "./tuning";
+import { DEFAULT_SLICE_TUNING, SWITCHED_OFF } from "./tuning";
 import { createSettlementState } from "./settlement";
 import { createGoodsState, lorryResale, lorrySummaries } from "./goods";
 import { routesOnTrip } from "./transfers";
@@ -130,7 +130,10 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
   };
   for (const pair of simulation.demand) world.pairOutcomes.set(pairKey(pair.from, pair.to), emptyOutcome());
   // The inherited network arrives neglected (principles §1, brownfield premise).
-  for (const segment of map.segments) segment.condition = tuning.inheritedRoadCondition;
+  // Without wear, roads are as good as they'll ever be: a fixed toll on
+  // every bus from a condition nothing can change would be a parameter with
+  // no decision in it (principles §2).
+  for (const segment of map.segments) segment.condition = tuning.wearEnabled ? tuning.inheritedRoadCondition : 1;
   // And the old railway arrives out of service, straight as it was laid.
   (def.rails ?? []).forEach((rail, i) => {
     const id = `inherited-rail-${i}`;
@@ -266,6 +269,7 @@ export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult 
 
 export function checkRoad(world: SliceWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
+  if (alignment === "direct" && !world.tuning.straightAlignmentEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (roadChain(world, a, b)) return { ok: false, reason: "already connected directly" };
   if (!planRoad(world, a, b, alignment)) return { ok: false, reason: "the water is too wide to bridge here" };
   if (!canAfford(world.economy, roadCost(world, a, b, alignment))) return { ok: false, reason: "can't afford it" };

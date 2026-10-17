@@ -17,7 +17,7 @@ import { SLICE_MAP } from "../src/slice/map";
 import { addBus, buildRoad, chainOf, createSliceWorld, headline, networkShare, paveRoad, roadChain, type Headline } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
-import { roadMoves, vehicleMoves } from "../src/engine/slice/moves";
+import { roadMoves, vehicleMoves, type RoadMove } from "../src/engine/slice/moves";
 import { lastDay } from "../src/engine/slice/ledger";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
@@ -68,6 +68,73 @@ async function forecastAll(world: SliceWorld, actions: ActionSpec[]): Promise<Ar
   });
 }
 
+/**
+ * Trips made a day each action adds, against one shared do-nothing twin:
+ * the mean over days 6-10 after it. Danfos take days to find a new road:
+ * measured over days 3-5, Kuto-Ikole read -7 trips a day; over days 6-10,
+ * +16; by days 16-20, +15. Null if refused.
+ */
+async function tripsAdded(world: SliceWorld, actions: ActionSpec[]): Promise<Array<number | null>> {
+  return tripsAddedOver(world, actions, 10, 5);
+}
+
+/** Trips made a day each action adds over `days`, averaged after skipping the first `skip`. */
+async function tripsAddedOver(world: SliceWorld, actions: ActionSpec[], days: number, skip = 0): Promise<Array<number | null>> {
+  const jobs = [null, ...actions].map((action, index) => {
+    const id = nextId++;
+    const job = new Promise<Trajectory>((resolve) => waiting.set(id, resolve));
+    workers[index % workers.length]!.postMessage({ id, world, action, tripDays: days });
+    return job;
+  });
+  const [twin, ...moves] = await Promise.all(jobs);
+  const mean = (trips: number[]) => trips.slice(skip).reduce((sum, x) => sum + x, 0) / (trips.length - skip);
+  return moves.map((move) => (move.trips ? mean(move.trips) - mean(twin!.trips!) : null));
+}
+
+interface RankedRoad extends RoadMove {
+  tripsAdded: number;
+  perNaira: number;
+}
+
+/**
+ * Roads to cut-off towns, best trips unlocked per naira first. Measured,
+ * not guessed: the cheapest road from a town can be one nobody would build
+ * (Ikole-Ogbe reaches Ilase only the long way round). Ranked again when the
+ * road network changes, or every ten days as towns grow.
+ */
+const roadRanks = new WeakMap<SliceWorld, { key: string; roads: RankedRoad[] }>();
+async function rankedRoads(world: SliceWorld): Promise<RankedRoad[]> {
+  const key = `${world.simulation.map.segments.length}|${Math.floor(world.economy.elapsedSeconds / (10 * SECONDS_PER_GAME_DAY))}`;
+  const cached = roadRanks.get(world);
+  if (cached?.key === key) return cached.roads;
+  const moves = roadMoves(world);
+  const funds = world.economy.funds;
+  // Measured as if affordable: a road worth saving for is still worth knowing.
+  const measuring = structuredClone(world);
+  measuring.economy.funds = 1e9;
+  const added = await tripsAdded(measuring, moves.map((m) => m.action));
+  const roads = moves
+    .map((move, i) => ({ ...move, tripsAdded: added[i] ?? 0, perNaira: (added[i] ?? 0) / move.price }))
+    .sort((x, y) => y.perNaira - x.perNaira);
+  world.economy.funds = funds;
+  roadRanks.set(world, { key, roads });
+  return roads;
+}
+
+/** The best road for each cut-off town, from a ranked list. */
+function bestRoadPerTown(roads: RankedRoad[]): RankedRoad[] {
+  const best = new Map<string, RankedRoad>();
+  for (const road of roads) if (!best.has(road.action.a)) best.set(road.action.a, road);
+  return [...best.values()];
+}
+
+/** Builds the best road per naira if it can afford it; true if it built one. */
+async function buildBestRoad(world: SliceWorld): Promise<RankedRoad | null> {
+  const best = (await rankedRoads(world))[0];
+  if (best && best.price <= world.economy.funds && applyAction(world, best.action).ok) return best;
+  return null;
+}
+
 // --- Personas -------------------------------------------------------------
 
 interface Persona {
@@ -97,13 +164,6 @@ function biggestJoinedPair(world: SliceWorld): [string, string] | null {
   return best;
 }
 
-function buildCheapestRoad(world: SliceWorld): boolean {
-  const affordable = roadMoves(world)
-    .filter((move) => move.price <= world.economy.funds)
-    .sort((x, y) => x.price - y.price);
-  return affordable.length > 0 && applyAction(world, affordable[0]!.action).ok;
-}
-
 const personas: Persona[] = [
   { name: "idle", verbs: [], decide: () => {} },
   {
@@ -117,17 +177,16 @@ const personas: Persona[] = [
     },
   },
   {
-    // Roads to every cut-off town first, cheapest first; then a minibus to
-    // each town it reached, then buses as naive does.
+    // Roads to every cut-off town first, best trips unlocked per naira
+    // first; then a minibus to each town it reached, then buses as naive does.
     name: "builder",
     verbs: ["road", "minibus", "bus"],
     decide: (() => {
       const built: Array<[string, string]> = [];
-      return (world: SliceWorld, d: number) => {
-        const moves = roadMoves(world);
-        if (moves.length > 0) {
-          const cheapest = [...moves].sort((x, y) => x.price - y.price)[0]!;
-          if (cheapest.price <= world.economy.funds && applyAction(world, cheapest.action).ok) built.push([cheapest.action.a, cheapest.action.b]);
+      return async (world: SliceWorld, d: number) => {
+        if (roadMoves(world).length > 0) {
+          const road = await buildBestRoad(world);
+          if (road) built.push([road.action.a, road.action.b]);
           return; // saving for the next road
         }
         for (const [a, b] of built) {
@@ -138,7 +197,7 @@ const personas: Persona[] = [
       };
     })(),
   },
-  { name: "roads only", verbs: ["road"], decide: (world) => void buildCheapestRoad(world) },
+  { name: "roads only", verbs: ["road"], decide: async (world) => void (await buildBestRoad(world)) },
   {
     // Spends everything on day 1: a bus on each pair, most trips along first,
     // round again until it can't afford one.
@@ -163,7 +222,9 @@ const personas: Persona[] = [
     decide: async (world) => {
       const actions: ActionSpec[] = [
         ...vehicleMoves(world).filter((m) => m.price <= world.economy.funds).map((m) => m.action),
-        ...roadMoves(world).filter((m) => m.price <= world.economy.funds).map((m) => m.action),
+        // Roads: each cut-off town's best by trips per naira, not all of them:
+        // forecasting every candidate road every day took 15 minutes.
+        ...bestRoadPerTown(await rankedRoads(world)).filter((m) => m.price <= world.economy.funds).map((m) => m.action),
       ];
       if (actions.length === 0) return;
       const money = await forecastAll(world, actions);
@@ -220,6 +281,21 @@ async function play(persona: Persona): Promise<Run> {
 
 const at = (run: Run, d: number) => run.samples[d - 1]!;
 /**
+ * The headline as the brief reads it: a 5-day average (docs/brief.md, What
+ * doing well means). A single day's trips made jitter by about as much as a
+ * good move adds (baseline M8: +12.5 against 9.4).
+ */
+function avgHeadline(run: Run, d: number): Headline {
+  const days = run.samples.slice(Math.max(0, d - 5), d);
+  const mean = (pick: (h: Headline) => number) => days.reduce((sum, s) => sum + pick(s.headline), 0) / days.length;
+  return {
+    tripsPerDay: mean((h) => h.tripsPerDay),
+    noRoadPerDay: mean((h) => h.noRoadPerDay),
+    noSeatPerDay: mean((h) => h.noSeatPerDay),
+    yourRidersPerDay: mean((h) => h.yourRidersPerDay),
+  };
+}
+/**
  * Mean net per day over days from..to: the money a strategy makes, before
  * capital. One day's net is too noisy to rank by -- five buses' swings
  * between -₦2 and -₦255 from one day to the next -- and funds rank whoever
@@ -236,12 +312,12 @@ const chosen = personas.filter((p) => !only || only.includes(p.name));
 const runs: Run[] = [];
 for (const persona of chosen) runs.push(await play(persona));
 
-console.log(`\nHeadline per game day (trips made / no road / no seat / your riders), funds, mean net over the 5 days before`);
+console.log(`\nHeadline per game day, 5-day average (trips made / no road / no seat / your riders), funds, mean net over the same 5 days`);
 console.log(`${"persona".padEnd(12)} ${[10, 20, 40].map((d) => `day ${d}`.padEnd(42)).join("")}`);
 for (const run of runs) {
   const cells = [10, 20, 40].map((d) => {
     const s = at(run, d);
-    const h = s.headline;
+    const h = avgHeadline(run, d);
     return `${n(h.tripsPerDay)}${n(h.noRoadPerDay)}${n(h.noSeatPerDay)}${n(h.yourRidersPerDay)}${money(s.funds)}${money(meanNet(run, d - 4, d))}`.padEnd(42);
   });
   console.log(`${run.persona.name.padEnd(12)} ${cells.join("")}`);
@@ -267,16 +343,18 @@ async function checks(): Promise<void> {
   }
 
   // M2: a road to a cut-off town plus one vehicle pays back within 60 days.
+  // The road: each cut-off town's best by trips unlocked per naira, the one
+  // a player reading the desire lines would build.
   // M3: paving the busiest road pays back in 10-30 days; a quiet one not within 60.
   // Both against the same do-nothing twin, sampled daily for 60 days.
   log("M2/M3: twins over 60 days");
   const base = newWorld();
   const twins: Array<{ label: string; world: SliceWorld; check: "M2" | "M3busy" | "M3quiet" }> = [];
-  for (const road of roadMoves(base)) {
+  for (const road of bestRoadPerTown(await rankedRoads(base))) {
     for (const kind of ["bus", "minibus"] as const) {
       const world = newWorld();
       if (buildRoad(world, road.action.a, road.action.b).ok && applyAction(world, { kind, a: road.action.a, b: road.action.b }).ok) {
-        twins.push({ label: `road ${road.action.a}-${road.action.b} + ${kind}`, world, check: "M2" });
+        twins.push({ label: `road ${road.action.a}-${road.action.b} (+${Math.round(road.tripsAdded)} trips/day) + ${kind}`, world, check: "M2" });
       }
     }
   }
@@ -307,9 +385,9 @@ async function checks(): Promise<void> {
 
   // M4: the best strategy halves "no road" and lifts trips made 25% above doing nothing.
   if (idle && players.length > 0) {
-    const i40 = at(idle, 40).headline;
-    const best = [...players].sort((x, y) => at(y, 40).headline.tripsPerDay - at(x, 40).headline.tripsPerDay)[0]!;
-    const b40 = at(best, 40).headline;
+    const i40 = avgHeadline(idle, 40);
+    const best = [...players].sort((x, y) => avgHeadline(y, 40).tripsPerDay - avgHeadline(x, 40).tripsPerDay)[0]!;
+    const b40 = avgHeadline(best, 40);
     const pass = b40.noRoadPerDay <= i40.noRoadPerDay / 2 && b40.tripsPerDay >= i40.tripsPerDay * 1.25;
     results.push([
       "M4 the headline moves",
@@ -320,7 +398,7 @@ async function checks(): Promise<void> {
 
   // M5: the strategy carrying the most riders is not the one making the most money (net, days 31-40).
   if (players.length >= 2) {
-    const riders = [...players].sort((x, y) => at(y, 40).headline.yourRidersPerDay - at(x, 40).headline.yourRidersPerDay)[0]!;
+    const riders = [...players].sort((x, y) => avgHeadline(y, 40).yourRidersPerDay - avgHeadline(x, 40).yourRidersPerDay)[0]!;
     const rich = [...players].sort((x, y) => meanNet(y, 31, 40) - meanNet(x, 31, 40))[0]!;
     results.push(["M5 the tension is real", riders !== rich, `most riders: ${riders.persona.name}; most money: ${rich.persona.name} (${money(meanNet(rich, 31, 40)).trim()}/day)`]);
   }
@@ -328,7 +406,7 @@ async function checks(): Promise<void> {
   // M6: no single-verb strategy is in the top three on both trips made and money.
   if (players.length >= 3) {
     const top = (score: (run: Run) => number) => new Set([...players].sort((x, y) => score(y) - score(x)).slice(0, 3));
-    const topTrips = top((run) => at(run, 40).headline.tripsPerDay);
+    const topTrips = top((run) => avgHeadline(run, 40).tripsPerDay);
     const topMoney = top((run) => meanNet(run, 31, 40));
     const winners = players.filter((run) => run.persona.verbs.length === 1 && topTrips.has(run) && topMoney.has(run));
     results.push(["M6 no one-verb win", winners.length === 0, winners.length ? `one-verb in both top threes: ${winners.map((r) => r.persona.name).join(", ")}` : "none"]);
@@ -345,24 +423,23 @@ async function checks(): Promise<void> {
     results.push(["M7 warm start", Math.abs(early - later) <= 0.05, `informal share ${pct(early)} at the start, ${pct(later)} on day 10`]);
   }
 
-  // M8: a good action moves trips made a day by at least twice its daily jitter.
-  // Jitter: the standard deviation, days 10-40, of doing nothing's trips made
-  // around a straight-line fit. The action: the best first move forecast on
-  // day 10 of doing nothing, measured as trips made 3 days later against the twin.
+  // M8: a good action moves trips made a day by at least twice its jitter,
+  // both on the headline as shown: the 5-day average (docs/brief.md).
+  // Jitter: the standard deviation, days 14-40, of doing nothing's 5-day
+  // average around a straight-line fit. The action: the best first move
+  // forecast on day 10 of doing nothing; its effect, the 5-day average of
+  // trips made over the five days after it, against the twin's.
   if (idle) {
-    const points = idle.samples.filter((s) => s.day >= 10).map((s) => [s.day, s.headline.tripsPerDay] as const);
+    const points = idle.samples.filter((s) => s.day >= 14).map((s) => [s.day, avgHeadline(idle, Math.round(s.day)).tripsPerDay] as const);
     const jitter = residualSd(points);
     const world = newWorld();
     runDays(world, 10);
     const candidates = vehicleMoves(world).map((m) => m.action);
     const forecasts = await forecastAll(world, candidates);
     const bestIndex = forecasts.reduce<number>((best, v, i) => (v !== null && (best < 0 || v > forecasts[best]!) ? i : best), -1);
-    const twin = structuredClone(world);
     const action = candidates[bestIndex]!;
-    applyAction(world, action);
-    runDays(world, 3);
-    runDays(twin, 3);
-    const effect = headline(world).tripsPerDay - headline(twin).tripsPerDay;
+    const [added] = await tripsAddedOver(world, [action], 5);
+    const effect = added ?? 0;
     results.push([
       "M8 signal over noise",
       effect >= 2 * jitter,
@@ -374,9 +451,9 @@ async function checks(): Promise<void> {
   {
     const fallers: string[] = [];
     for (const run of runs) {
-      const marks = [10, 20, 40].map((d) => at(run, d));
-      const grew = marks[2]!.population > marks[0]!.population;
-      const fell = marks.some((s, i) => i > 0 && s.headline.tripsPerDay < marks[i - 1]!.headline.tripsPerDay);
+      const marks = [10, 20, 40];
+      const grew = at(run, 40).population > at(run, 10).population;
+      const fell = marks.some((d, i) => i > 0 && avgHeadline(run, d).tripsPerDay < avgHeadline(run, marks[i - 1]!).tripsPerDay);
       if (grew && fell) fallers.push(run.persona.name);
     }
     results.push(["M9 success reads as success", fallers.length === 0, fallers.length ? `towns grew but trips fell: ${fallers.join(", ")}` : "none"]);

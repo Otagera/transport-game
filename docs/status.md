@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**462 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**466 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: slice zero
@@ -21,7 +21,8 @@ right after this file. Progress on that build order:
 |---|---|---|
 | 1 | Brief into the repo, linked from CLAUDE.md and here | Done |
 | 2 | Bot personas in the probe: baseline on today's game, M1-M9 | Done: baseline below |
-| 3 | Switches in tuning.ts for wear, goods, rail, the straight alignment | Next |
+| 3 | Switches in tuning.ts for wear, goods, rail, the straight alignment | Done: results below |
+| 4 | Warm-up: 5 game days before day 1 | Next |
 
 **Bots baseline, 2026-10-17** (`bun scripts/slice-bots.ts`, ~5 min; Greedy forecasts every
 affordable move daily in a worker pool against one shared do-nothing twin). The game as it
@@ -64,12 +65,60 @@ What it says, before anything changes:
 - **Six personas make M1 and M6 coarse.** Top three of five players is most of them. More
   openings come with the later steps, when the checks start to pass.
 
+**Step 3, slice zero switched on, 2026-10-17** (wear, goods, rail and the straight alignment
+off; `?systems=all` on the page, `ALL_SYSTEMS_ON` in scripts). The headline is now a 5-day
+average (brief, What doing well means), and the bots pick roads by trips unlocked per
+naira, measured over days 6-10 after building against a twin, not the cheapest road.
+Run time ~18 min, Greedy ~15 of it.
+
+| Persona | Day 40 (trips / no road / no seat / yours) | Funds, day 40 | Net/day, days 36-40 |
+|---|---|---|---|
+| idle | 364 / 211 / 109 / 0 | ₦2,500 | ₦0 |
+| naive | 607 / 274 / 294 / 268 | ₦6,892 | ₦134 |
+| builder | 843 / 0 / 417 / 406 | ₦17,485 | ₦881 |
+| roads only | 428 / 0 / 265 / 0 | ₦1,193 | ₦0 |
+| overbuilder | 494 / 249 / 227 / 132 | ₦7,409 | ₦180 |
+| greedy | 1,163 / 112 / 362 / 771 | ₦38,590 | ₦1,915 |
+
+| Check | Baseline | Slice zero | Measured |
+|---|---|---|---|
+| M1 | FAIL | FAIL | days 16-20: greedy ₦1,397, builder ₦617, naive ₦376 |
+| M2 | FAIL | FAIL | Ilaro-Ilase (+26 trips/day) or Owode-Ikole (+25) plus a bus or minibus: neither pays back in 60 days |
+| M3 | FAIL | FAIL | paving alone never pays back (no tolls) |
+| M4 | FAIL | FAIL | greedy (most trips) leaves no road at 112 of 211; builder passes both halves (843 trips, no road 0) |
+| M5 | PASS | FAIL | greedy carries the most and earns the most: without tolls and levies there's no tension |
+| M6 | FAIL | FAIL | naive (bus only) in both top threes |
+| M7 | FAIL | FAIL | informal share 0% at the start, 53% by day 10 (step 4 is for this) |
+| M8 | FAIL | PASS | on the 5-day average: best day-10 bus +30.1 trips/day against jitter 3.4 |
+| M9 | PASS | FAIL | overbuilder: towns grow, trips fall 509 → 494 from day 20 to 40 |
+
+What switching them off did:
+
+- **Money got loose.** Greedy ends day 40 with ₦38,590 against ₦354 with everything on;
+  builder ₦17,485 against ₦1,429. Rough roads and wear were the game's money sink; without
+  them the budget stops being a constraint by day 15 or so. Step 6 re-tunes running costs
+  under fares by distance, and step 7's income lines land on top: both need this in mind,
+  or slice zero has no money decision after the opening.
+- **Doing nothing holds steady** (364 trips a day at days 10, 20 and 40) instead of decaying:
+  the decay was wear. The brief wants exactly this for idle.
+- **Roads alone do more.** Roads only reaches 428 trips against idle's 364 (+18%), against
+  +0% with wear on.
+- **The cheapest road is not the road.** Ranked at day 0 by trips unlocked over days 6-10:
+  Ilaro-Ilase +26 a day for ₦457, Owode-Ikole +25 for ₦744, Ado-Ikole +14 for ₦450,
+  Kuto-Ikole +16 for ₦581; Ikole-Ogbe (cheapest from Ikole, ₦430) −7. Measured too early
+  (days 3-5) the ranking is mostly the cold start: Kuto-Ikole read −7 there, +15 by days 16-20.
+- **Open: some roads make fewer people travel.** Ilaro-Ipaja costs ₦1,103 and takes 60-80
+  trips a day off the network for at least 20 days; Ilaro-Ogbe −94 at days 3-5. Likely the
+  danfos' road-space budget: a long new corridor ties danfos up on long trips. To look at
+  with step 5b (road space scaled by road capacity), which touches the same budget.
+
 ## The slice so far
 
 The project reset on 2026-10-16 — see [principles.md](principles.md) §6 for why and the
 step plan. Eras are paused. The slice is a second page beside the original game:
 
-- Play: `bun run dev`, open `/slice.html` (the original game is still `/`).
+- Play: `bun run dev`, open `/slice.html` (the original game is still `/`). Slice zero has
+  wear, goods, rail and the straight alignment off; `/slice.html?systems=all` turns them on.
 - Bots and the brief's checks: `bun scripts/slice-bots.ts` (`BOTS=naive,idle`, `CHECKS=0`).
 - Calibrate: `bun scripts/slice-probe.ts [days]`, with `SLICE_TUNING='{"fare":5}'` to try
   overrides.

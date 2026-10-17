@@ -57,18 +57,23 @@ export interface RoadMove {
   price: number;
 }
 
-/** For each town no road reaches, the cheapest road (cheapest alignment) to a town that has one. */
+/**
+ * Every road from a town no road reaches to a town one does (cheapest
+ * alignment). All of them, not the cheapest per town: the cheapest road can
+ * be one nobody would build -- Ikole-Ogbe joins Ikole to the network, but
+ * reaches Ilase only the long way round. Which is worth building is measured
+ * (scripts/slice-bots.ts ranks them by trips unlocked per naira), not
+ * guessed from price.
+ */
 export function roadMoves(world: SliceWorld): RoadMove[] {
   const moves: RoadMove[] = [];
   const towns = [...world.towns.keys()];
   const reached = towns.filter((id) => !isCutOff(world, id));
   for (const town of towns.filter((id) => isCutOff(world, id))) {
-    let best: RoadMove | null = null;
     for (const other of reached) {
       const price = roadCost(world, town, other);
-      if (price < (best?.price ?? Infinity)) best = { action: { kind: "road", a: town, b: other, alignment: "cheapest" }, price };
+      if (Number.isFinite(price)) moves.push({ action: { kind: "road", a: town, b: other, alignment: "cheapest" }, price });
     }
-    if (best) moves.push(best);
   }
   return moves;
 }

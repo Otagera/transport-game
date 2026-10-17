@@ -4,6 +4,7 @@ import { createVehicle, freeSeats, nodesAhead, type Loader } from "../simulation
 import { canAfford, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { SliceRoute, SliceWorld } from "./types";
+import { SWITCHED_OFF } from "./tuning";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, routeKey, type ActionResult } from "./world";
 import { railPath } from "./rail";
 
@@ -208,6 +209,7 @@ export function findLorryRoute(world: SliceWorld, a: string, b: string): SliceRo
 }
 
 export function checkLorry(world: SliceWorld, a: string, b: string): ActionResult {
+  if (!world.tuning.goodsEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!roadPath(world, a, b)) return { ok: false, reason: "no road between them" };
   if (!canAfford(world.economy, world.tuning.lorryPurchaseCost)) return { ok: false, reason: "can't afford a lorry" };
@@ -238,6 +240,7 @@ export function addLorry(world: SliceWorld, a: string, b: string): ActionResult 
 }
 
 export function checkFreight(world: SliceWorld, a: string, b: string): ActionResult {
+  if (!world.tuning.goodsEnabled || !world.tuning.railEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!railPath(world, a, b)) return { ok: false, reason: "no working track between them" };
   if (!canAfford(world.economy, world.tuning.freightPurchaseCost)) return { ok: false, reason: "can't afford a freight train" };

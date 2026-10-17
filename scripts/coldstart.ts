@@ -1,4 +1,6 @@
 import { SLICE_MAP } from "../src/slice/map";
+// The brief's Evidence, measured with every system on (before slice zero).
+import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { createSliceWorld, networkShare } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { forecast } from "../src/engine/slice/forecast";
@@ -11,7 +13,7 @@ const cands: ActionSpec[] = [
   { kind: "bus", a: "ilase", b: "owode" }, { kind: "minibus", a: "ilase", b: "ise" }, { kind: "bus", a: "owode", b: "ise" },
 ];
 for (const warm of [0, 3, 8]) {
-  const base = createSliceWorld(SLICE_MAP); run(base, warm);
+  const base = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON }); run(base, warm);
   console.log(`\n--- bought at day ${warm + 1}; share now`, JSON.stringify(networkShare(base)));
   console.log("action                 forecast2d   days0-10   days10-20   days20-30");
   for (const c of cands) {

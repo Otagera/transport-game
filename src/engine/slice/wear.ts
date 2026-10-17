@@ -5,6 +5,7 @@ import { canAfford } from "../economy/state";
 import { chainOf } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { SliceWorld } from "./types";
+import { SWITCHED_OFF } from "./tuning";
 import { isDirt } from "./congestion";
 import { overWater, polylineLength, segmentLength, segmentPolyline, splitPolyline } from "./roads";
 
@@ -145,6 +146,7 @@ export type MaintainResult = { ok: true; charged: number } | { ok: false; reason
 export function setMaintained(world: SliceWorld, segmentId: string, on: boolean): MaintainResult {
   const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
   if (!segment) return { ok: false, reason: "no such road" };
+  if (on && !world.tuning.wearEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (!on) {
     world.maintained.delete(segmentId);
     return { ok: true, charged: 0 };
@@ -165,6 +167,7 @@ export function setMaintained(world: SliceWorld, segmentId: string, on: boolean)
  */
 export function setRoadMaintained(world: SliceWorld, segmentId: string, on: boolean): MaintainResult & { pieces: number } {
   const pieces = chainOf(world, segmentId)?.pieces.map((piece) => piece.id) ?? [segmentId];
+  if (on && !world.tuning.wearEnabled) return { ok: false, reason: SWITCHED_OFF, pieces: pieces.length };
   if (on) {
     const catchUp = pieces.reduce((sum, id) => {
       const segment = world.simulation.map.segments.find((candidate) => candidate.id === id);

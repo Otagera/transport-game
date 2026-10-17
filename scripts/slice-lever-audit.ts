@@ -33,7 +33,7 @@ import {
   waitingAt,
 } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
-import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
+import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { setMaintained } from "../src/engine/slice/wear";
 import { addLorry, lorrySummaries } from "../src/engine/slice/goods";
 import { addTrain, buildHalt, buildTrack } from "../src/engine/slice/rail";
@@ -53,7 +53,7 @@ const overrides = JSON.parse(process.env.SLICE_TUNING ?? "{}");
 
 /** A mid-game network: the trunk, the river crossing, a southern feeder. */
 function baseline(): SliceWorld {
-  const world = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, startingFunds: 100_000, ...overrides });
+  const world = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 100_000, ...overrides });
   addBus(world, "ilase", "owode");
   addBus(world, "ilase", "owode");
   addBus(world, "owode", "ado");

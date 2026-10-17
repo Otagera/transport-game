@@ -50,6 +50,7 @@ import { SLICE_MAP } from "./map";
 import type { ForecastLine } from "./render";
 import { applyAction, type ActionSpec } from "@engine/slice/actions";
 import { vehicleMoves } from "@engine/slice/moves";
+import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -66,7 +67,10 @@ import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View 
 
 type Tool = "road" | "bus" | "minibus" | "lorry" | "track" | "train" | "freight" | "fix";
 
-const world = createSliceWorld(SLICE_MAP);
+// Slice zero (docs/brief.md): wear, goods, rail and the straight alignment
+// are off. `?systems=all` turns them back on, for comparing.
+const allSystems = new URLSearchParams(location.search).get("systems") === "all";
+const world = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...(allSystems ? ALL_SYSTEMS_ON : {}) });
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
 const strip = document.querySelector<HTMLDivElement>("#strip")!;
@@ -389,7 +393,18 @@ function roadPieces(segmentId: string) {
   return chainOf(world, segmentId)?.pieces ?? world.simulation.map.segments.filter((s) => s.id === segmentId);
 }
 
+/** Whether a tool's system is on (slice zero switches some off). */
+function toolOn(candidate: Tool): boolean {
+  const t = world.tuning;
+  if (candidate === "lorry") return t.goodsEnabled;
+  if (candidate === "freight") return t.goodsEnabled && t.railEnabled;
+  if (candidate === "track" || candidate === "train") return t.railEnabled;
+  if (candidate === "fix") return t.wearEnabled;
+  return true;
+}
+
 function setTool(next: Tool): void {
+  if (!toolOn(next)) return;
   tool = next;
   selectedTown = null;
   renderToolbar();
@@ -528,7 +543,7 @@ window.addEventListener("keydown", (event) => {
   else if (event.key === "k" || event.key === "K") setTool("track");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
-  else if (event.key === "a" || event.key === "A") {
+  else if ((event.key === "a" || event.key === "A") && world.tuning.straightAlignmentEnabled) {
     alignment = alignment === "cheapest" ? "direct" : "cheapest";
     renderToolbar();
   }
@@ -743,18 +758,28 @@ function renderToolbar(): void {
     lineSwitch.append(el);
   }
   lineSwitch.append(Object.assign(document.createElement("kbd"), { textContent: "A" }));
+  const t = world.tuning;
+  const on = <T,>(enabled: boolean, ...items: T[]): T[] => (enabled ? items : []);
   toolbar.replaceChildren(
     group(
       "On roads",
       "road",
       button("Bus", "B", tool === "bus", () => setTool("bus")),
       button("Minibus", "M", tool === "minibus", () => setTool("minibus")),
-      button("Lorry", "L", tool === "lorry", () => setTool("lorry")),
+      ...on(t.goodsEnabled, button("Lorry", "L", tool === "lorry", () => setTool("lorry"))),
     ),
-    group("On rail", "rail", button("Train", "T", tool === "train", () => setTool("train")), button("Freight", "G", tool === "freight", () => setTool("freight"))),
-    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), button("Track", "K", tool === "track", () => setTool("track"))),
-    group("Line (road, track)", "setting", lineSwitch),
-    group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix"))),
+    ...on(
+      t.railEnabled,
+      group(
+        "On rail",
+        "rail",
+        button("Train", "T", tool === "train", () => setTool("train")),
+        ...on(t.goodsEnabled, button("Freight", "G", tool === "freight", () => setTool("freight"))),
+      ),
+    ),
+    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track")))),
+    ...on(t.straightAlignmentEnabled, group(t.railEnabled ? "Line (road, track)" : "Line", "setting", lineSwitch)),
+    ...on(t.wearEnabled, group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix")))),
     group(
       "Time",
       "time",

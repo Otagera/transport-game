@@ -155,11 +155,11 @@ The headline, always on screen:
 
 | Number | What it is | Why it's there |
 | --- | --- | --- |
-| Trips made a day | Trips between towns that happened, by anyone; an absolute count | It rises with growth, so success reads as success. A share hid this (see Evidence) |
+| Trips made a day | Trips between towns that happened, by anyone; an absolute count, as a 5-day average | It rises with growth, so success reads as success. A share hid this (see Evidence). Averaged because one day's count jitters by about what a good move adds (bots baseline: +12.5 against 9.4) |
 | Stayed home: no road | Trips between towns that no road joins | Your build job: falls when you build |
 | Stayed home: no seat | Trips a road joins, but nobody carried | Your service job: falls when you run vehicles |
 | Your riders a day | Trips you carried | Your direct part |
-| Budget, and net over the last day | Funds and the last day's net | The means, not the score |
+| Budget, and net per day | Funds, and net per day averaged over the last 5 days | The means, not the score. One day's net swings from −₦2 to −₦255 on the same five buses (bots baseline) |
 
 On the map, not as numbers: towns growing (▲, and their circles), new towns appearing along your roads, town rings turning blue.
 
@@ -304,9 +304,10 @@ Off, each behind a switch that defaults to off for slice zero:
 
 1. The brief into the repo as `docs/brief.md`, linked from CLAUDE.md and status.md, once you've agreed the role decision.
 2. Bot personas in the probe, run on today's game first, as a baseline before anything changes. First, copy `coldstart.ts`, `connect.ts` and `horizon.ts` into `scripts/` (done 2026-10-17, imports made relative). They report M1–M9, which means adding trips made a day, the no road / no seat split, and that number's daily jitter (M8). Done 2026-10-17: `scripts/slice-bots.ts`; baseline in status.md.
-3. Switches in `tuning.ts` for wear, goods, rail and the straight alignment, all off. Re-run the personas to see what switching them off did.
+3. Switches in `tuning.ts` for wear, goods, rail and the straight alignment, all off. Re-run the personas to see what switching them off did. The bots pick roads by trips unlocked per naira, measured, not the cheapest road (Ikole–Ogbe is cheapest and nobody would build it), and M2 tests that road.
 4. Warm-up: 5 game days before day 1.
 5. Riders respond to price: the one mechanic that tolls, fares by distance and the fare dial all share.
+   5b. Beside it: scale `informalRoadSpace` with road capacity (dirt against paved), so paving lets more danfos run. Today the informal sector's road-space budget is one number for every road, so paving adds no danfos and a toll on a paved road would collect from no more of them. Step 7's tolls depend on it.
 6. Fares by distance, then re-tune the vehicles' running costs.
 7. Tolls (passed on to danfo riders), levies and the allocation, tuned until M2, M3, M5 and M6 pass.
 8. The new headline and the panel's budget breakdown.
@@ -330,13 +331,13 @@ Measured, by the probe (40 days unless stated):
 | # | Check | Passes when |
 | --- | --- | --- |
 | M1 | Opening variety | At least 3 different plans for the first ₦2,500 end day 20 within 25% of the best plan's net |
-| M2 | Building pays | A road to a cut-off town plus one vehicle pays back within 60 days, counting tolls, levies and allocation |
+| M2 | Building pays | A road to a cut-off town plus one vehicle pays back within 60 days, counting tolls, levies and allocation. The road: that town's best by trips unlocked per naira |
 | M3 | Paving isn't a no-brainer | Paving the busiest road pays back in 10–30 days; paving a quiet road doesn't within 60 |
 | M4 | The headline moves | The best strategy halves "no road" and lifts trips made a day 25% above doing nothing, by day 40 |
 | M5 | The tension is real | The strategy carrying the most riders is not the one making the most money; they differ on at least one corridor |
 | M6 | No one-verb win | No strategy using a single verb is in the top three on both trips made and money |
 | M7 | Warm start | On day 1 the informal share is within 5 points of its day-10 value |
-| M8 | Signal over noise | A good action moves trips made a day by at least twice that number's own daily jitter (a new figure the probe must measure first) |
+| M8 | Signal over noise | A good action moves trips made a day, as shown (the 5-day average), by at least twice that average's own jitter |
 | M9 | Success reads as success | No strategy that grows towns shows a falling headline while it does |
 
 Played, in your sessions (write down what you felt before changing anything):

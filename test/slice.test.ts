@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
-import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
+import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
-import { lastDay, routeIncomeLastDay } from "@engine/slice/ledger";
+import { lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "@engine/slice/ledger";
 import { forecast } from "@engine/slice/forecast";
 import { applyAction } from "@engine/slice/actions";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/slice/receipts";
@@ -46,7 +46,7 @@ function run(world: SliceWorld, seconds: number): void {
 }
 
 function world(overrides: Partial<SliceTuning> = {}): SliceWorld {
-  return createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, ...overrides });
+  return createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, ...overrides });
 }
 
 describe("slice: waiting passengers", () => {
@@ -192,6 +192,50 @@ describe("slice: where people want to go", () => {
     expect(trips.get("far")!.share.informal).toBeGreaterThan(0);
     // No road: everyone stays home.
     expect(trips.get("cut")!.share.lost).toBeCloseTo(1);
+  });
+});
+
+describe("slice zero: systems switched off", () => {
+  const zero = () => createSliceWorld({ ...MAP, port: "big", rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0 });
+
+  test("the default tuning is slice zero: wear, goods, rail and the straight alignment off", () => {
+    expect(DEFAULT_SLICE_TUNING.wearEnabled).toBe(false);
+    expect(DEFAULT_SLICE_TUNING.goodsEnabled).toBe(false);
+    expect(DEFAULT_SLICE_TUNING.railEnabled).toBe(false);
+    expect(DEFAULT_SLICE_TUNING.straightAlignmentEnabled).toBe(false);
+  });
+
+  test("their actions are refused; roads, buses and minibuses still work", () => {
+    const w = zero();
+    for (const spec of [
+      { kind: "lorry", a: "big", b: "mid" },
+      { kind: "train", a: "big", b: "far" },
+      { kind: "freight", a: "big", b: "far" },
+      { kind: "track", a: "big", b: "far", alignment: "cheapest" },
+      { kind: "road", a: "mid", b: "cut", alignment: "direct" },
+      { kind: "halt", town: "mid" },
+    ] as const) {
+      expect(applyAction(w, spec).ok).toBe(false);
+    }
+    const roadId = w.simulation.map.segments.find((s) => s.type === "road")!.id;
+    expect(applyAction(w, { kind: "fix", segmentId: roadId, on: true }).ok).toBe(false);
+    expect(applyAction(w, { kind: "road", a: "mid", b: "cut", alignment: "cheapest" }).ok).toBe(true);
+    expect(applyAction(w, { kind: "bus", a: "big", b: "mid" }).ok).toBe(true);
+    expect(applyAction(w, { kind: "minibus", a: "mid", b: "cut" }).ok).toBe(true);
+  });
+
+  test("roads start sound and stay sound, and your buses pay no rough-road cost", () => {
+    const w = zero();
+    for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    run(w, 600);
+    for (const segment of w.simulation.map.segments.filter((s) => s.type === "road")) expect(segment.condition).toBe(1);
+    expect(routeExtraCostLastDay(w.ledger, routeKey("big", "mid"), 600)).toBe(0);
+  });
+
+  test("no goods are produced", () => {
+    const w = zero();
+    run(w, 300);
+    expect(w.goods.yards.size).toBe(0);
   });
 });
 
@@ -601,7 +645,7 @@ describe("slice: terrain (step 3)", () => {
       hills: [{ x: 16, y: 32, radius: 7, height: 4 }],
     },
   };
-  const terrainWorld = (overrides: Partial<SliceTuning> = {}) => createSliceWorld(TERRAIN_MAP, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, ...overrides });
+  const terrainWorld = (overrides: Partial<SliceTuning> = {}) => createSliceWorld(TERRAIN_MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, ...overrides });
 
   test("crossing water costs a bridge, the quote says so, and the quote is the charge", () => {
     const w = terrainWorld();
@@ -630,7 +674,7 @@ describe("slice: terrain (step 3)", () => {
 
   test("water wider than a bridge can span can't be crossed, and the refusal says why", () => {
     const wide: SliceMapDef = { ...TERRAIN_MAP, towns: TERRAIN_MAP.towns.slice(0, 2), roads: [], terrain: { rivers: [{ points: [[24, -2], [24, 42]], width: 20 }] } };
-    const w = createSliceWorld(wide, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6 });
+    const w = createSliceWorld(wide, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6 });
     expect(buildRoad(w, "west", "east")).toEqual({ ok: false, reason: "the water is too wide to bridge here" });
   });
 
@@ -680,7 +724,7 @@ describe("slice: terrain (step 3)", () => {
     expect(plan.bridgeCells).toBeGreaterThanOrEqual(3);
     const wide = createSliceWorld(
       { ...TERRAIN_MAP, towns: TERRAIN_MAP.towns.slice(0, 2), roads: [], terrain: { rivers: [{ points: [[24, -2], [24, 42]], width: 20 }] } },
-      { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6 },
+      { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6 },
     );
     expect(planRoad(wide, "west", "east", "direct")).toBeNull();
   });
@@ -974,7 +1018,7 @@ describe("slice: through-routes (playtest, day 14)", () => {
 describe("slice: goods (step 4c)", () => {
   // MAP with Big as the port. Markets: Big and Mid (>= 40k). Far's produce goes to Mid, its nearest.
   const goodsWorld = (overrides: Partial<SliceTuning> = {}) =>
-    createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, ...overrides });
+    createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, ...overrides });
 
   test("goods are one-way: produce from farm towns to their nearest market, supplies from the port", () => {
     const w = goodsWorld();
@@ -1040,7 +1084,7 @@ describe("slice: goods (step 4c)", () => {
   test("a freight train carries goods on track only, and wears it harder than a passenger train", () => {
     const w = createSliceWorld(
       { ...MAP, port: "big", rails: [{ a: "big", b: "far" }] },
-      { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0 },
+      { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0 },
     );
     expect(addFreightTrain(w, "big", "far")).toEqual({ ok: false, reason: "no working track between them" });
     buildTrack(w, "big", "far");
@@ -1055,7 +1099,7 @@ describe("slice: goods (step 4c)", () => {
     const pair = (freight: boolean) => {
       const x = createSliceWorld(
         { ...MAP, port: "big", rails: [{ a: "big", b: "far" }] },
-        { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, freightSpeed: 8, trainSpeed: 8 },
+        { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, freightSpeed: 8, trainSpeed: 8 },
       );
       buildTrack(x, "big", "far");
       if (freight) addFreightTrain(x, "big", "far");
@@ -1101,7 +1145,7 @@ describe("slice: goods (step 4c)", () => {
 describe("slice: rail (step 4d)", () => {
   // MAP plus an old export line from Big to Far, straight past Mid.
   const railWorld = (overrides: Partial<SliceTuning> = {}) =>
-    createSliceWorld({ ...MAP, rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, ...overrides });
+    createSliceWorld({ ...MAP, rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, ...overrides });
 
   test("the inherited line is on the map but out of service: no train runs until it's restored", () => {
     const w = railWorld();
@@ -1166,7 +1210,7 @@ describe("slice: rail (step 4d)", () => {
   });
 
   test("a town only track reaches isn't cut off once the track works", () => {
-    const w = createSliceWorld({ ...MAP, rails: [{ a: "mid", b: "cut" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6 });
+    const w = createSliceWorld({ ...MAP, rails: [{ a: "mid", b: "cut" }] }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6 });
     expect(isCutOff(w, "cut")).toBe(true); // the old line is out of service
     buildTrack(w, "mid", "cut");
     expect(isCutOff(w, "cut")).toBe(false);
@@ -1177,7 +1221,7 @@ describe("slice: rail (step 4d)", () => {
   test("track wears with the trains that run on it; disused track doesn't change", () => {
     const w = createSliceWorld(
       { ...MAP, rails: [{ a: "big", b: "far" }, { a: "mid", b: "cut" }] },
-      { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0 },
+      { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0 },
     );
     buildTrack(w, "big", "far");
     for (let i = 0; i < 3; i += 1) addTrain(w, "big", "far");
@@ -1467,7 +1511,7 @@ describe("slice: halts on the old line (track 2)", () => {
   const railWorld = () =>
     createSliceWorld(
       { ...MAP, rails: [{ a: "big", b: "far" }] },
-      { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, haltReachCells: 10 },
+      { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, haltReachCells: 10 },
     );
 
   test("the old line passing Mid offers a halt there, and nowhere it doesn't pass", () => {
@@ -1515,7 +1559,7 @@ describe("slice: halts on the old line (track 2)", () => {
 describe("slice: a lorry on worn roads says so (track 2)", () => {
   test("worn dirt roads read as the lorry route's reason, naming the roads to pave", () => {
     // Big is the port: supplies out to Far, Far's produce in to market Mid -- goods both ways along it.
-    const w = createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, inheritedRoadCondition: 0.35 });
+    const w = createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, inheritedRoadCondition: 0.35 });
     addLorry(w, "big", "far");
     run(w, 120);
     const d = diagnoseLorryRoute(w, w.lorryRoutes[0]!.id)!;

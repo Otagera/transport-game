@@ -614,12 +614,26 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   pins that a forecast equals the receipt the same action then gets.
 - **`moves.ts`** — the moves worth forecasting, as data: `vehicleMoves(world)` (one more
   vehicle on each road route, then a new bus and minibus on every road-connected pair, most
-  trips along first) and `roadMoves(world)` (each cut-off town's cheapest road to a reached
-  town). The page's best-moves list and the probe's Greedy bot read the same list, so a bot
-  playing "the best move" plays what the player was shown.
+  trips along first) and `roadMoves(world)` (every road from a cut-off town to a reached
+  town; the bots measure which is worth it, by trips unlocked per naira). The page's
+  best-moves list and the probe's Greedy bot read the same vehicle list, so a bot playing
+  "the best move" plays what the player was shown.
 - **`diagnoseRoute`** adds `incomePerVehicle`, `costPerVehicle`, `roundTripsPerDay`, and the
   `long` verdict (full, yet a full vehicle's fares are under its running cost on sound roads),
   with `shorter`: the route ending at the stop nearest halfway, from the bigger end.
+
+### Slice zero: systems behind switches
+
+`SliceTuning` has `wearEnabled`, `goodsEnabled`, `railEnabled` and
+`straightAlignmentEnabled`, all false in `DEFAULT_SLICE_TUNING` (docs/brief.md, Slice zero).
+Off is enforced in the engine, not hidden in the page: `tick.ts` skips road wear, the
+rough-road charge and goods production; the check functions (`checkLorry`, `checkFreight`,
+`checkTrack`, `checkHalt`, `checkTrain`, `setMaintained`/`setRoadMaintained`, and
+`checkRoad`/`checkTrack` for the `"direct"` alignment) refuse with `SWITCHED_OFF`. Without
+wear, inherited roads start at condition 1, not `inheritedRoadCondition`: a fixed penalty
+nothing can change would be a parameter without a decision. `ALL_SYSTEMS_ON` turns
+everything back on: the probe, the lever audit, the Evidence scripts and most tests use it;
+the page does with `?systems=all`.
 
 ### The headline
 

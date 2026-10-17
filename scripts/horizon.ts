@@ -1,5 +1,7 @@
 // Does the 2-day forecast predict what the move earns over a month?
 import { SLICE_MAP } from "../src/slice/map";
+// The brief's Evidence, measured with every system on (before slice zero).
+import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { createSliceWorld, addBus } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { forecast } from "../src/engine/slice/forecast";
@@ -7,7 +9,7 @@ import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
 const run = (w: any, days: number) => { const n = Math.round(days * SECONDS_PER_GAME_DAY / SIM_DT); for (let i = 0; i < n; i++) sliceTick(w, SIM_DT); };
-const base = createSliceWorld(SLICE_MAP);
+const base = createSliceWorld(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON });
 addBus(base, "ilase", "owode");
 run(base, 5);
 const cands: ActionSpec[] = [

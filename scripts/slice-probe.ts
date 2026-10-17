@@ -12,14 +12,15 @@ import { planRoad } from "../src/engine/slice/roads";
 import { setMaintained, upkeepPerDay, wearSpeed } from "../src/engine/slice/wear";
 import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, goodsVehicleCostPerDay } from "../src/engine/slice/goods";
 import { addTrain, buildTrack, trackCost } from "../src/engine/slice/rail";
-import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
+import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
 
 const days = Number(process.argv[2] ?? 20);
 // SLICE_TUNING='{"demandK":0.008}' overrides individual tuning values.
-const tuning = { ...DEFAULT_SLICE_TUNING, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
+// Every system on: the probe calibrates all of them, slice zero or not.
+const tuning = { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
 
 interface Strategy {
   name: string;

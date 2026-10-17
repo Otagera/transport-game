@@ -6,6 +6,7 @@ import { createVehicle } from "../simulation/vehicle";
 import { canAfford, registerPurchase } from "../economy/state";
 import { BASE_COST_PER_CELL } from "../pathing/cost";
 import type { SliceWorld } from "./types";
+import { SWITCHED_OFF } from "./tuning";
 import { planAlignment, polylineLength, segmentLength, segmentPolyline, splitPolyline, type Alignment, type Point, type RoadPlan } from "./roads";
 import { insertIntoPath } from "./settlement";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, routeKey, type ActionResult } from "./world";
@@ -108,6 +109,8 @@ export function trackCost(world: SliceWorld, a: string, b: string, alignment: Al
 }
 
 export function checkTrack(world: SliceWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
+  if (!world.tuning.railEnabled) return { ok: false, reason: SWITCHED_OFF };
+  if (alignment === "direct" && !world.tuning.straightAlignmentEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (liveTrack(world, a, b)) return { ok: false, reason: "track already joins them" };
   if (trackAction(world, a, b) === "build" && !planRail(world, a, b, alignment)) return { ok: false, reason: "the water is too wide to bridge here" };
@@ -208,6 +211,7 @@ export function haltCost(world: SliceWorld, site: HaltSite): number {
 }
 
 export function checkHalt(world: SliceWorld, townId: string): ActionResult {
+  if (!world.tuning.railEnabled) return { ok: false, reason: SWITCHED_OFF };
   const site = haltSite(world, townId);
   if (!site) return { ok: false, reason: "no line passes near enough for a halt" };
   if (!canAfford(world.economy, haltCost(world, site))) return { ok: false, reason: "can't afford it" };
@@ -274,6 +278,7 @@ export function railRouteId(a: string, b: string): string {
 }
 
 export function checkTrain(world: SliceWorld, a: string, b: string): ActionResult {
+  if (!world.tuning.railEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!railPath(world, a, b)) return { ok: false, reason: "no working track between them" };
   if (!canAfford(world.economy, world.tuning.trainPurchaseCost)) return { ok: false, reason: "can't afford a train" };
