@@ -5,6 +5,8 @@ import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { lastDay, routeIncomeLastDay } from "@engine/slice/ledger";
+import { forecast } from "@engine/slice/forecast";
+import { applyAction } from "@engine/slice/actions";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/slice/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/slice/settlement";
@@ -909,7 +911,8 @@ describe("slice: the way out of debt (playtest, day 14)", () => {
   });
 
   test("a full route on worn roads asks for a bus, not a repair", () => {
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 8 });
+    // Small buses so it runs full, a fare high enough that a full one pays its way.
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 8, fare: 30 });
     addBus(w, "big", "mid");
     run(w, 1200);
     const d = diagnoseRoute(w, w.routes[0]!.id)!;
@@ -1501,5 +1504,62 @@ describe("slice: a lorry on worn roads says so (track 2)", () => {
     expect(d.roughPerDay).toBeGreaterThan(0);
     expect(d.verdict).toBe("worn");
     expect(dirtRoadsOn(w, w.lorryRoutes[0]!.id).length).toBeGreaterThan(0);
+  });
+});
+
+describe("slice: a route too long for flat fares (playtest, day 31)", () => {
+  test("full, but a full bus loses money: it says the route is too long, not to add a bus", () => {
+    // Small buses so it runs full; the long run big-mid-far makes few trips a day.
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 6 });
+    addBus(w, "big", "far");
+    run(w, 600);
+    const d = diagnoseRoute(w, w.routes[0]!.id)!;
+    expect(d.loadFactor).toBeGreaterThanOrEqual(0.85);
+    expect(d.incomePerVehicle).toBeLessThan(d.costPerVehicle);
+    expect(d.verdict).toBe("long");
+    // And it names the stop to end it at, which makes more round trips.
+    expect(d.shorter).not.toBeNull();
+    expect(d.shorter!.b).toBe("mid");
+    expect(d.shorter!.roundTripsPerDay).toBeGreaterThan(d.roundTripsPerDay);
+  });
+});
+
+describe("slice: forecast before acting (playtest, day 31)", () => {
+  test("a forecast is the receipt the same action then gets, if nothing else changes", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    run(w, 90);
+    const spec = { label: "2nd bus", towns: ["big", "mid"] };
+    const predicted = forecast(w, { kind: "bus", a: "big", b: "mid" }, spec)!;
+    const book = createReceiptBook();
+    perform(w, book, (x) => applyAction(x, { kind: "bus", a: "big", b: "mid" }).ok, spec);
+    let receipt: Receipt | undefined;
+    while (!receipt) {
+      sliceTick(w, SIM_DT);
+      [receipt] = tickReceipts(w, book, SIM_DT);
+    }
+    expect(predicted.moneyPerDay).toBeCloseTo(receipt.moneyPerDay, 6);
+    expect(predicted.you).toBeCloseTo(receipt.you, 6);
+  });
+
+  test("forecasting changes nothing in the real world", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    run(w, 30);
+    const before = { funds: w.economy.funds, routes: w.routes.length, t: w.economy.elapsedSeconds };
+    forecast(w, { kind: "bus", a: "big", b: "mid" }, { label: "a bus", towns: [] });
+    expect({ funds: w.economy.funds, routes: w.routes.length, t: w.economy.elapsedSeconds }).toEqual(before);
+  });
+
+  test("a refused action forecasts nothing", () => {
+    const w = world();
+    expect(forecast(w, { kind: "bus", a: "big", b: "cut" }, { label: "nowhere", towns: [] })).toBeNull();
+  });
+
+  test("a road alone forecasts no fares, only who it lets travel", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    run(w, 60);
+    const predicted = forecast(w, { kind: "road", a: "mid", b: "cut", alignment: "cheapest" }, { label: "road", towns: ["cut"] })!;
+    expect(Math.abs(predicted.moneyPerDay)).toBeLessThan(5);
+    expect(predicted.towns[0]!.informal).toBeGreaterThan(0);
   });
 });

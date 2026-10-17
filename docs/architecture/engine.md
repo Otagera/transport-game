@@ -602,3 +602,16 @@ out-of-service old line, each side is then restored on its own. `wear.ts` `lineS
 speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narrow gauge),
 1 on new, times the slow order on worn track. Worn-track verdicts still read `wearSpeed`
 (wear only), so gauge never reads as wear.
+
+### Actions as data, and forecasts
+
+- **`actions.ts`** — every player action as an `ActionSpec` (plain data: bus, lorry, train,
+  freight, road, pave, track, halt, fix, sell) and `applyAction(world, spec)`. Data rather
+  than closures so an action can be sent to a worker and replayed there.
+- **`forecast.ts`** — `forecast(world, action, spec)` copies the world and runs the receipt
+  machinery on the copy (`perform`, then ticks until the receipt finishes): the receipt the
+  action would get two days on, if nothing else changes. The real world is untouched. A test
+  pins that a forecast equals the receipt the same action then gets.
+- **`diagnoseRoute`** adds `incomePerVehicle`, `costPerVehicle`, `roundTripsPerDay`, and the
+  `long` verdict (full, yet a full vehicle's fares are under its running cost on sound roads),
+  with `shorter`: the route ending at the stop nearest halfway, from the bigger end.

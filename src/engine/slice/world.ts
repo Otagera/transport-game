@@ -469,7 +469,7 @@ export function routeSummaries(world: SliceWorld): RouteSummary[] {
     .sort((x, y) => x.netPerDay - y.netPerDay);
 }
 
-export type RouteVerdict = "thin" | "overcapacity" | "jammed" | "worn" | "full" | "poached" | "waiting" | "healthy";
+export type RouteVerdict = "thin" | "overcapacity" | "jammed" | "long" | "worn" | "full" | "poached" | "waiting" | "healthy";
 
 export interface RouteDiagnosis {
   routeId: string;
@@ -490,6 +490,13 @@ export interface RouteDiagnosis {
   informalTraffic: number;
   /** How fast its roads' condition lets its buses go, 0..1 of free speed (the worst stretch it runs). */
   wornSpeed: number;
+  /** Fares one of its vehicles takes a day, and what one costs to run on sound roads. */
+  incomePerVehicle: number;
+  costPerVehicle: number;
+  /** Round trips one vehicle makes a day, at its speed now. */
+  roundTripsPerDay: number;
+  /** For a route too long for flat fares: a stop to end it at instead, and the round trips that would make. */
+  shorter: { a: string; b: string; roundTripsPerDay: number } | null;
   verdict: RouteVerdict;
 }
 
@@ -506,6 +513,11 @@ const OVERCAPACITY_CARRIED = 0.6;
 const FULL_LOAD = 0.85;
 // Below this share of free-flow speed, traffic is the story.
 const JAMMED_SPEED = 0.7;
+// "Long": buses leave full, yet a full one takes less in fares than it
+// costs to run on sound roads. Fares are flat, so a vehicle earns per trip
+// and a long route makes few trips -- another bus would lose money too.
+// Before this verdict existed, "full" told a playtester to add a bus to a
+// 60-cell route whose one full bus took ₦87/day against ₦134 (day 31).
 const POACHED_SHARE = 0.2;
 // Below this share of free speed from wear alone, the road is the story
 // (wear.ts). Ranked after jammed (traffic is the cause you can't repair)
@@ -564,8 +576,16 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
     speed: route.speedEMA,
     informalTraffic: informalTrafficShare(world, routeId),
     wornSpeed: Math.min(1, ...[...routeSegments(world, routeId)].map((id) => wearSpeed(world, world.simulation.map.segments.find((s) => s.id === id)!))),
+    incomePerVehicle:
+      routeIncomeLastDay(world.ledger, routeId, world.economy.elapsedSeconds - route.openedAtSeconds) / route.vehicleIds.length,
+    costPerVehicle: oneBusPerDay,
+    roundTripsPerDay: 0,
+    shorter: null,
     verdict: "healthy",
   };
+  const trips = roundTrips(world, routeId);
+  diagnosis.roundTripsPerDay = trips?.perDay ?? 0;
+  const fullButLosing = route.loadFactorEMA >= FULL_LOAD && diagnosis.incomePerVehicle < oneBusPerDay;
 
   if (ceilingPerDay * ONE_BUS_REACH < oneBusPerDay) diagnosis.verdict = "thin";
   else if (route.vehicleIds.length >= 2 && route.loadFactorEMA < OVERCAPACITY_LOAD && diagnosis.carried >= OVERCAPACITY_CARRIED) {
@@ -573,11 +593,48 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
   }
   // Track has no traffic: a slow train is worn track under a slow order, not a jam.
   else if (!isRailRoute(routeId) && route.speedEMA < JAMMED_SPEED) diagnosis.verdict = "jammed";
-  else if (route.loadFactorEMA >= FULL_LOAD) diagnosis.verdict = "full";
+  else if (fullButLosing) {
+    diagnosis.verdict = "long";
+    diagnosis.shorter = trips?.shorter ?? null;
+  } else if (route.loadFactorEMA >= FULL_LOAD) diagnosis.verdict = "full";
   else if (diagnosis.wornSpeed < WORN_SPEED) diagnosis.verdict = "worn";
   else if (diagnosis.poached >= POACHED_SHARE) diagnosis.verdict = "poached";
   else if (diagnosis.gaveUp + diagnosis.lost >= WAITING_SHARE) diagnosis.verdict = "waiting";
   return diagnosis;
+}
+
+/**
+ * Round trips a route's vehicle makes a day at its speed now, and -- for
+ * a route with stops along it -- the shorter route ending at the stop
+ * nearest halfway, from the end with more people, with its round trips.
+ */
+function roundTrips(world: SliceWorld, routeId: string): { perDay: number; shorter: { a: string; b: string; roundTripsPerDay: number } | null } | null {
+  const route = world.routes.find((candidate) => candidate.id === routeId);
+  const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
+  if (!route || !vehicle) return null;
+  const { graph } = routingFor(world, vehicle);
+  const speed = vehicle.speed * Math.max(0.05, route.speedEMA);
+  // One way along the path, a -> b, with the distance to each stop.
+  const start = vehicle.path.indexOf(route.a);
+  if (start === -1) return null;
+  const stops: Array<{ id: string; at: number }> = [{ id: route.a, at: 0 }];
+  let travelled = 0;
+  for (let k = 1; k <= vehicle.path.length; k += 1) {
+    const from = vehicle.path[(start + k - 1) % vehicle.path.length]!;
+    const to = vehicle.path[(start + k) % vehicle.path.length]!;
+    travelled += graph.get(from)?.find((edge) => edge.to === to)?.weight ?? 0;
+    stops.push({ id: to, at: travelled });
+    if (to === route.b) break;
+  }
+  const oneWay = travelled;
+  const perDay = (distance: number) => (distance > 0 ? SECONDS_PER_GAME_DAY / ((2 * distance) / speed) : 0);
+  const middle = stops.slice(1, -1).filter((stop) => world.towns.has(stop.id));
+  if (middle.length === 0) return { perDay: perDay(oneWay), shorter: null };
+  const halfway = middle.reduce((best, stop) => (Math.abs(stop.at - oneWay / 2) < Math.abs(best.at - oneWay / 2) ? stop : best));
+  const popA = world.towns.get(route.a)?.population ?? 0;
+  const popB = world.towns.get(route.b)?.population ?? 0;
+  const [end, distance] = popA >= popB ? [route.a, halfway.at] : [route.b, oneWay - halfway.at];
+  return { perDay: perDay(oneWay), shorter: { a: end, b: halfway.id, roundTripsPerDay: perDay(distance) } };
 }
 
 /** Of the road space in use on a route's roads right now, the share that's informal. */

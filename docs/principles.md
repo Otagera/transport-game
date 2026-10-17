@@ -485,6 +485,14 @@ for if eras return; they are not live in the slice.*
   and cheap (~1% extra per action being measured). Report after the action has *settled*:
   a new bus starts empty mid-route, and its first day read as a loss when it settled at a
   profit. (Lever audit + receipts, 2026-10-17.)
+- **Forecast before the action, not just a receipt after.** A playtester reached day 31 on a
+  long direct bus route and two new roads; the receipts said so, after the money had gone.
+  The same counterfactual that writes a receipt can run before the click (copy the world,
+  perform the action on the copy, run two days in a worker): forecast and receipt use one
+  machinery, so they agree to the last decimal if nothing else happens. It also beats rules
+  of thumb: "long routes lose" was wrong — a long route *through* towns (Ilase–Ado via
+  Owode) forecast better than a short one, because every stop feeds it; the playtester's
+  route lost because its straight road passed only small roadside towns.
 - **Burn rate in the status strip** — income, cost, net per day. Balance without rate is
   unreadable.
 

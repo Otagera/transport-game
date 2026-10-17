@@ -43,6 +43,8 @@ import { addLorry, checkLorry, diagnoseLorryRoute, goodsAlong, isLorryRoute, lor
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
+import type { ForecastLine } from "./render";
+import type { ActionSpec } from "@engine/slice/actions";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -120,6 +122,7 @@ const book = createReceiptBook();
 
 /** Does an action and starts measuring it. The result is the real world's. */
 function act<T extends { ok: boolean }>(spec: ReceiptSpec, run: (w: SliceWorld) => T): T {
+  actionVersion += 1; // every forecast was of the world before this
   let result: T | undefined;
   perform(world, book, (w) => {
     const r = run(w);
@@ -127,6 +130,76 @@ function act<T extends { ok: boolean }>(spec: ReceiptSpec, run: (w: SliceWorld) 
     return r.ok;
   }, spec);
   return result!;
+}
+
+// --- Forecasts: a receipt before the action (forecast.ts) ----------------
+// When a build is previewed, a worker runs the world two days on with and
+// without it; the preview's second line says what it would do. Cached per
+// action, game day and how many actions you've taken, so a forecast is
+// redone once the world it described has moved on.
+
+const forecaster = new Worker(new URL("./forecast.worker.ts", import.meta.url), { type: "module" });
+let actionVersion = 0;
+const forecasts = new Map<string, Receipt | null | "pending">();
+let inFlight = false;
+let queued: { key: string; action: ActionSpec; spec: ReceiptSpec } | null = null;
+
+function sendForecast(key: string, action: ActionSpec, spec: ReceiptSpec): void {
+  inFlight = true;
+  forecaster.postMessage({ key, world, action, spec });
+}
+
+forecaster.onmessage = (event: MessageEvent<{ key: string; receipt: Receipt | null }>) => {
+  forecasts.set(event.data.key, event.data.receipt);
+  inFlight = false;
+  if (queued) {
+    const next = queued;
+    queued = null;
+    sendForecast(next.key, next.action, next.spec);
+  }
+};
+
+function forecastLine(action: ActionSpec, spec: ReceiptSpec): ForecastLine {
+  const day = Math.floor(world.economy.elapsedSeconds / SECONDS_PER_GAME_DAY);
+  const key = `${actionVersion}|${day}|${JSON.stringify(action)}`;
+  if (!forecasts.has(key)) {
+    if (forecasts.size > 64) forecasts.clear();
+    forecasts.set(key, "pending");
+    // Only the latest preview matters: a queued one you've moved off is dropped.
+    if (inFlight) {
+      if (queued) forecasts.delete(queued.key);
+      queued = { key, action, spec };
+    } else sendForecast(key, action, spec);
+  }
+  const entry = forecasts.get(key);
+  if (entry === "pending") return { text: "Forecasting the next two days…", tone: "pending" };
+  if (!entry) return { text: "Forecast: it can't be done", tone: "bad" };
+  return describeForecast(entry);
+}
+
+/** One line: money first, then the share or town it moves most. */
+function describeForecast(r: Receipt): ForecastLine {
+  const level = Math.abs(r.moneyPerDay) < 5;
+  const parts: string[] = [];
+  parts.push(level ? "no change in money" : `${r.moneyPerDay > 0 ? "+" : "−"}₦${Math.abs(Math.round(r.moneyPerDay)).toLocaleString()}/day`);
+  if (r.capital > 0 && !level) parts.push(r.paybackDays !== null ? `pays back in ~${Math.ceil(r.paybackDays)} days` : "never pays back");
+  if (Math.abs(r.you) >= 0.5) parts.push(`your share ${pp(r.you)}`);
+  else {
+    const moves = r.towns.flatMap((t) => [
+      { text: `${townName(t.townId)}: you ${pp(t.you)}`, size: Math.abs(t.you) },
+      { text: `${townName(t.townId)}: informal ${pp(t.informal)}`, size: Math.abs(t.informal) },
+      { text: `${townName(t.townId)}: stayed home ${pp(t.home)}`, size: Math.abs(t.home) },
+    ]);
+    const biggest = moves.sort((p, q) => q.size - p.size)[0];
+    if (biggest && biggest.size >= 1) parts.push(biggest.text);
+  }
+  const tone = level ? "neutral" : r.moneyPerDay > 0 ? "good" : "bad";
+  return { text: `Forecast, two days on: ${parts.join(", ")}`, tone };
+}
+
+/** A preview with its forecast, when the action could be done. */
+function withForecast(ghost: Ghost, action: ActionSpec, spec: ReceiptSpec): Ghost {
+  return ghost.ok ? { ...ghost, forecast: forecastLine(action, spec) } : ghost;
 }
 
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
@@ -338,7 +411,7 @@ window.addEventListener("keydown", (event) => {
 
 // The fix tool's preview: the road under the cursor, how worn it is, and
 // what keeping it up would cost -- or what it's costing now.
-function roadHover(): { segmentId: string; at: { x: number; y: number }; label: string } | null {
+function roadHover(): { segmentId: string; at: { x: number; y: number }; label: string; forecast?: ForecastLine } | null {
   if (tool !== "fix" || !mouse) return null;
   const id = roadAt(mouse.x, mouse.y);
   if (!id) return null;
@@ -353,7 +426,10 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
   const label = world.maintained.has(id)
     ? `${roadName(id)} · maintained, ${upkeep}/day · click to stop`
     : `${roadName(id)} · ${state}${costing} · maintain for ~${upkeep}/day`;
-  return { segmentId: id, at: mouse, label };
+  const ends = chainOf(world, id);
+  const towns = ends ? [ends.a, ends.b] : [worst.fromNodeId, worst.toNodeId];
+  const forecast = forecastLine({ kind: "fix", segmentId: id, on: !world.maintained.has(id) }, { label: "maintaining", towns });
+  return { segmentId: id, at: mouse, label, forecast };
 }
 
 // The other alignment, when it's a different road: the choice made legible
@@ -395,7 +471,8 @@ function ghost(): Ghost | null {
       const check = checkHalt(world, selectedTown);
       const at = toScreen(view, world.towns.get(selectedTown)!.x, world.towns.get(selectedTown)!.y);
       const cost = naira(haltCost(world, site));
-      return { from: selectedTown, to: at, ok: check.ok, label: check.ok ? `Click again: a halt on the line ${site.distance.toFixed(0)} cells away, ${cost}` : refusedOr(check, "Halt", cost) };
+      const ghost = { from: selectedTown, to: at, ok: check.ok, label: check.ok ? `Click again: a halt on the line ${site.distance.toFixed(0)} cells away, ${cost}` : refusedOr(check, "Halt", cost) };
+      return withForecast(ghost, { kind: "halt", town: selectedTown }, { label: `a halt at ${townName(selectedTown)}`, towns: [selectedTown] });
     }
   }
   const to = hoverTown && hoverTown !== selectedTown ? hoverTown : null;
@@ -406,41 +483,50 @@ function ghost(): Ghost | null {
   if (tool === "road" && roadChain(world, selectedTown, to)) {
     const check = checkPave(world, selectedTown, to);
     const cost = naira(paveCost(world, selectedTown, to));
-    return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Pave ${cost} · carries ${paveGain()}× the traffic` : `${cost} · ${check.reason}` };
+    const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Pave ${cost} · carries ${paveGain()}× the traffic` : `${cost} · ${check.reason}` };
+    return withForecast(ghost, { kind: "pave", a: selectedTown, b: to }, { label: "paving", towns: [selectedTown, to] });
   }
   if (tool === "road") {
     const check = checkRoad(world, selectedTown, to, alignment);
     const plan = planRoad(world, selectedTown, to, alignment);
     if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
     const other = planRoad(world, selectedTown, to, alignment === "direct" ? "cheapest" : "direct");
-    const label = `${alignment === "direct" ? "Direct road" : "Road"} ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders}`;
-    return { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
+    // Said up front: a road takes no fares. It pays in who it lets travel --
+    // and only in money once you run something on it (playtest, day 31:
+    // two roads drained the funds and earned nothing).
+    const label = `${alignment === "direct" ? "Direct road" : "Road"} ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders} · earns no fares itself: run a bus on it`;
+    const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
+    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment }, { label: "the road", towns: [selectedTown, to] });
   }
   if (tool === "track") {
     const check = checkTrack(world, selectedTown, to, alignment);
     if (trackAction(world, selectedTown, to) === "restore") {
       const label = `Restore the old line ${naira(restoreCost(world, selectedTown, to))} · built for export: it stops nowhere between`;
-      return { from: selectedTown, to: end, ok: check.ok, label: check.ok ? label : check.reason };
+      const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? label : check.reason };
+      return withForecast(ghost, { kind: "track", a: selectedTown, b: to, alignment }, { label: "restoring", towns: [selectedTown, to] });
     }
     const plan = planRail(world, selectedTown, to, alignment);
     if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
     const other = planRail(world, selectedTown, to, alignment === "direct" ? "cheapest" : "direct");
     const label = `${alignment === "direct" ? "Direct track" : "Track"} ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders}`;
-    return { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
+    const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
+    return withForecast(ghost, { kind: "track", a: selectedTown, b: to, alignment }, { label: "track", towns: [selectedTown, to] });
   }
   if (tool === "train") {
     const check = checkTrain(world, selectedTown, to);
     const path = railPath(world, selectedTown, to)?.nodeIds;
     const along = path ? `${Math.round(demandAlong(world, selectedTown, to, path) * SECONDS_PER_GAME_DAY)} riders/day want trips along it` : "";
     const label = `Train ${naira(world.tuning.trainPurchaseCost)} · ${along}`;
-    return { from: selectedTown, to: end, ok: check.ok, path: shownPath(check, path), rail: true, label: refusedOr(check, label, `Train ${naira(world.tuning.trainPurchaseCost)}`) };
+    const ghost = { from: selectedTown, to: end, ok: check.ok, path: shownPath(check, path), rail: true, label: refusedOr(check, label, `Train ${naira(world.tuning.trainPurchaseCost)}`) };
+    return withForecast(ghost, { kind: "train", a: selectedTown, b: to }, { label: "a train", towns: [selectedTown, to] });
   }
   if (tool === "freight") {
     const check = checkFreight(world, selectedTown, to);
     const goods = goodsAlong(world, selectedTown, to, true);
     const label = `Freight train ${naira(world.tuning.freightPurchaseCost)} · goods along the track: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back`;
     const path = shownPath(check, railPath(world, selectedTown, to)?.nodeIds);
-    return { from: selectedTown, to: end, ok: check.ok, path, rail: true, label: refusedOr(check, label, `Freight train ${naira(world.tuning.freightPurchaseCost)}`) };
+    const ghost = { from: selectedTown, to: end, ok: check.ok, path, rail: true, label: refusedOr(check, label, `Freight train ${naira(world.tuning.freightPurchaseCost)}`) };
+    return withForecast(ghost, { kind: "freight", a: selectedTown, b: to }, { label: "a freight train", towns: [selectedTown, to] });
   }
   if (tool === "lorry") {
     const check = checkLorry(world, selectedTown, to);
@@ -448,7 +534,8 @@ function ghost(): Ghost | null {
     const goods = goodsAlong(world, selectedTown, to);
     const label = `Lorry ${naira(world.tuning.lorryPurchaseCost)} · goods along it: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back`;
     const path = shownPath(check, roadPath(world, selectedTown, to)?.nodeIds);
-    return { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, label, `Lorry ${naira(world.tuning.lorryPurchaseCost)}`) };
+    const ghost = { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, label, `Lorry ${naira(world.tuning.lorryPurchaseCost)}`) };
+    return withForecast(ghost, { kind: "lorry", a: selectedTown, b: to }, { label: "a lorry", towns: [selectedTown, to] });
   }
   const check = checkBus(world, selectedTown, to);
   const price = naira(world.tuning.busPurchaseCost);
@@ -458,7 +545,8 @@ function ghost(): Ghost | null {
   // Drawn along the road it would take, not straight across: a bus to Ikole
   // from Ilase goes through Kuto.
   const path = shownPath(check, roadPath(world, selectedTown, to)?.nodeIds);
-  return { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, `Bus ${price} · ${along}`, `Bus ${price}`) };
+  const ghost = { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, `Bus ${price} · ${along}`, `Bus ${price}`) };
+  return withForecast(ghost, { kind: "bus", a: selectedTown, b: to }, { label: "a bus", towns: [selectedTown, to] });
 }
 
 // A refusal never hides the price (playtest: "I can't see the price for
@@ -700,6 +788,13 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
       // The decision in two numbers: what the wear costs you, what keeping it up would.
       const verdict = rough > upkeep ? "worth it" : "more than the wear costs you";
       return `Worn roads${roads ? ` (${roads})` : ""} cost your buses ${naira(rough)}/day extra to run and hold them to ${pct(d.wornSpeed)} speed. Maintaining them (Fix tool, F) costs about ${naira(upkeep)}/day: ${verdict}. Paved roads wear a third as fast.`;
+    }
+    case "long": {
+      // Full, yet a full bus loses: another would too. Say why, and what to do instead.
+      const shorter = d.shorter
+        ? ` End it at ${townName(d.shorter.b)} instead (${townName(d.shorter.a)} ↔ ${townName(d.shorter.b)}): about ${d.shorter.roundTripsPerDay.toFixed(1)} round trips a day.`
+        : " Sell it and put the bus on a shorter route.";
+      return `Too long for flat fares: even full, a bus here takes ${naira(d.incomePerVehicle)}/day against ${naira(d.costPerVehicle)} to run, because it makes only ${d.roundTripsPerDay.toFixed(1)} round trips a day. Another bus would lose money too.${shorter}`;
     }
     case "full":
       return `Buses leave ${pct(d.loadFactor)} full: more riders than seats. Another bus would carry the ones left behind.`;

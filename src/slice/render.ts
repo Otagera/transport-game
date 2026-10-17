@@ -33,6 +33,7 @@ export const COLORS = {
   danfo: "#f2c200",
   danfoStripe: "#1d1b18",
   keke: "#2b8a3e",
+  forecastGood: "#2b8a3e",
   slow: "#f08c00",
   jam: "#d9480f",
   home: "#a59d90",
@@ -73,11 +74,18 @@ export function routeColor(index: number): string {
   return ROUTE_COLORS[index % ROUTE_COLORS.length]!;
 }
 
+/** A second line under a preview: what the action is forecast to do (forecast.ts). */
+export interface ForecastLine {
+  text: string;
+  tone: "good" | "bad" | "neutral" | "pending";
+}
+
 export interface Ghost {
   from: string;
   to: { x: number; y: number };
   ok: boolean;
   label: string;
+  forecast?: ForecastLine;
   /** The planned road, map cells -- drawn instead of a straight line when there is one. */
   line?: Point[];
   /** Or the towns a bus would run through, drawn along their roads. */
@@ -93,7 +101,7 @@ export interface DrawState {
   focusTown: string | null;
   ghost: Ghost | null;
   /** The fix tool's hovered road, and what to say about it. */
-  road?: { segmentId: string; at: { x: number; y: number }; label: string } | null;
+  road?: { segmentId: string; at: { x: number; y: number }; label: string; forecast?: ForecastLine } | null;
 }
 
 export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, state: DrawState): void {
@@ -113,8 +121,8 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   for (const town of world.towns.values()) drawTown(ctx, world, view, town, state);
   // Last, so nothing on the map draws through the price.
-  if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok);
-  if (state.road) drawLabel(ctx, state.road.at, state.road.label, true);
+  if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok, state.ghost.forecast);
+  if (state.road) drawLabel(ctx, state.road.at, state.road.label, true, state.road.forecast);
 
   ctx.restore();
 }
@@ -475,25 +483,33 @@ function drawGhostLine(ctx: CanvasRenderingContext2D, world: SliceWorld, view: V
   ctx.setLineDash([]);
 }
 
-function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, label: string, ok: boolean): void {
+function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, label: string, ok: boolean, forecast?: ForecastLine): void {
   const ghost = { to, label, ok };
   if (ghost.label) {
+    ctx.font = "12px system-ui, sans-serif";
+    const subWidth = forecast ? ctx.measureText(forecast.text).width : 0;
     ctx.font = "600 13px system-ui, sans-serif";
-    const w = ctx.measureText(ghost.label).width + 12;
+    const w = Math.max(ctx.measureText(ghost.label).width, subWidth) + 12;
+    const h = forecast ? 40 : 22;
     // Flip left of the cursor rather than run under the side panel (main.ts
     // fitView leaves it 300px when the window is wide enough to have one).
     const right = window.innerWidth > 900 ? window.innerWidth - 300 : window.innerWidth;
     const x = ghost.to.x + 12 + w > right - 8 ? Math.max(8, ghost.to.x - 12 - w) : ghost.to.x + 12;
-    const y = ghost.to.y - 26;
+    const y = ghost.to.y - 26 - (h - 22);
     ctx.fillStyle = "rgba(255,253,248,0.95)";
     ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(x, y, w, 22, 5);
+    ctx.roundRect(x, y, w, h, 5);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = ghost.ok ? COLORS.label : COLORS.ghostBad;
     ctx.fillText(ghost.label, x + 6, y + 15);
+    if (forecast) {
+      ctx.font = forecast.tone === "pending" ? "italic 12px system-ui, sans-serif" : "600 12px system-ui, sans-serif";
+      ctx.fillStyle = forecast.tone === "good" ? COLORS.forecastGood : forecast.tone === "bad" ? COLORS.ghostBad : COLORS.labelMuted;
+      ctx.fillText(forecast.text, x + 6, y + 33);
+    }
   }
 }
 

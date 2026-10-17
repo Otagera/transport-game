@@ -313,3 +313,8 @@ no-cached-view discipline as §2).
 - **Halts** — with the Track tool, clicking a town twice builds a halt where a line passes
   it; back over the selected town, the preview offers it with distance and price. The town
   panel names the passing line and how to build the halt.
+- **Forecasts** — `src/slice/forecast.worker.ts` runs `forecast` off the frame. Every build
+  preview and the Fix hover asks for one; the label grows a second line ("Forecasting the
+  next two days…", then the money, payback and biggest share move, green/red/grey). Cached by
+  action, game day and an action counter that every `act()` bumps; only the latest request
+  waits in the queue.

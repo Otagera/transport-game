@@ -125,6 +125,16 @@ audit's original verdict tested it in its worst setting. Lorries on dirt now los
 days (they wear roads hardest) and pay in ~7 paved; their route reason gained a "worn"
 verdict naming the roads to pave.
 
+**Playtest, day 31: "what am I doing wrong?"** — ₦326, one bus on a long direct road to Ado
+(full, yet −₦47/day), two new roads that earned nothing, buses sold under debt pressure. The
+panel had told them to add a bus. Fixed, all three:
+- a **"long" verdict**: full, yet a full bus takes less than it costs to run — says the
+  route is too long for flat fares, how many round trips a bus makes, and the stop to end it
+  at instead (never "add a bus" when another would lose too);
+- the **road preview** says a road earns no fares itself;
+- a **forecast** on every build preview (and the Fix hover): the receipt the action would get,
+  computed before the click in a worker — "+₦47/day, pays back in ~11 days, your share +4pp".
+
 **Lever table after track 2** (audit, 20 days on, mid-game network): bus on the busy route
 ~14 days; thin new route ~24; maintain a road 3 of your buses use ~9, pave it ~15; maintain
 a danfo-only road, never; lorry paved ~7, on dirt never; old line to Owode via a halt + train
