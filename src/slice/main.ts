@@ -809,7 +809,7 @@ function lorryRows(afterBuses: boolean): string {
           <i style="width:${pct(d.delivered)};background:var(--goods)"></i>
           <i style="width:${pct(d.spoiled)};background:var(--home)"></i>
         </div>
-        <div class="why why-${d.verdict === "healthy" ? "healthy" : d.verdict === "full" ? "full" : "thin"}">${forGoodsVehicle(lorryReason(d, s.costPerDay / s.lorries), s.id)}</div>
+        <div class="why why-${d.verdict === "healthy" ? "healthy" : d.verdict === "full" ? "full" : d.verdict === "worn" ? "worn" : "thin"}">${forGoodsVehicle(lorryReason(d, s.costPerDay / s.lorries), s.id)}</div>
         <small>${forGoodsVehicle(`goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full`, s.id)}</small>`
       : "";
     return `
@@ -836,6 +836,11 @@ function lorryReason(d: LorryDiagnosis, onePerDay: number): string {
   switch (d.verdict) {
     case "thin":
       return `Thin: only ${Math.round(d.outbound + d.inbound)} t/day of goods go along it, not enough to pay one lorry's running cost (${naira(onePerDay)}/day).`;
+    case "worn": {
+      const dirt = dirtRoadsOn(world, d.routeId);
+      const pave = dirt.length > 0 ? ` Pave ${dirt.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ")} (Road tool, click both towns): paved roads wear a third as fast.` : "";
+      return `Worn roads cost your lorries ${naira(d.roughPerDay)}/day extra to run. Lorries wear roads hardest and pay most on worn ones; maintain them (Fix tool, F).${pave}`;
+    }
     case "one-way":
       return `One-way: ${Math.round(Math.max(d.outbound, d.inbound))} t/day go one way and ${Math.round(Math.min(d.outbound, d.inbound))} the other, so lorries come back near empty. A route with goods both ways (produce in, supplies out) runs full both legs.`;
     case "full":

@@ -258,6 +258,40 @@ const levers: Lever[] = [
     },
   },
   {
+    name: "freight on the whole old line via the Owode halt (Ilase–Ipaja)",
+    pull: (w) => {
+      buildHalt(w, "owode");
+      buildTrack(w, "ilase", "owode");
+      buildTrack(w, "owode", "ipaja");
+      addFreightTrain(w, "ilase", "ipaja");
+      const id = w.lorryRoutes[w.lorryRoutes.length - 1]?.id ?? "";
+      return [money("freight route net/day", lorryNet(id))];
+    },
+  },
+  {
+    name: "freight on new track through the towns (Ilase–Owode–Ado)",
+    pull: (w) => {
+      buildTrack(w, "ilase", "owode");
+      buildTrack(w, "owode", "ado");
+      addFreightTrain(w, "ilase", "ado");
+      const id = w.lorryRoutes[w.lorryRoutes.length - 1]?.id ?? "";
+      return [money("freight route net/day", lorryNet(id))];
+    },
+  },
+  {
+    name: "add freight to track your passenger trains already use (Ilase–Owode–Ado)",
+    setup: (w) => {
+      buildTrack(w, "ilase", "owode");
+      buildTrack(w, "owode", "ado");
+      addTrain(w, "ilase", "ado");
+    },
+    pull: (w) => {
+      addFreightTrain(w, "ilase", "ado");
+      const id = w.lorryRoutes[w.lorryRoutes.length - 1]?.id ?? "";
+      return [money("freight route net/day", lorryNet(id))];
+    },
+  },
+  {
     name: "restore the old line + a freight train (Ilase–Ipaja)",
     pull: (w) => {
       buildTrack(w, "ilase", "ipaja");

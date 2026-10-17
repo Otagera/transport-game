@@ -337,7 +337,9 @@ export interface LorryDiagnosis {
   delivered: number;
   spoiled: number;
   loadFactor: number;
-  verdict: "thin" | "one-way" | "full" | "spoiling" | "healthy";
+  /** What worn roads add to its lorries' running cost a day (wear.ts rough roads). */
+  roughPerDay: number;
+  verdict: "thin" | "worn" | "one-way" | "full" | "spoiling" | "healthy";
 }
 
 // A route whose weaker direction carries under this share of its stronger
@@ -345,6 +347,10 @@ export interface LorryDiagnosis {
 const ONE_WAY_SHARE = 0.3;
 const FULL_LOAD = 0.85;
 const SPOILING_SHARE = 0.3;
+// Worn roads adding over this share to its lorries' own running cost is
+// the story: lorries wear roads hardest and pay most on worn ones (lever
+// audit: a lorry on dirt Ilase-Kuto never paid over 20 days; paved, ~7).
+const WORN_COST_SHARE = 0.2;
 
 export function diagnoseLorryRoute(world: SliceWorld, routeId: string): LorryDiagnosis | null {
   const route = world.lorryRoutes.find((candidate) => candidate.id === routeId);
@@ -374,6 +380,7 @@ export function diagnoseLorryRoute(world: SliceWorld, routeId: string): LorryDia
     delivered: total > 0 ? delivered / total : 0,
     spoiled: total > 0 ? spoiled / total : 0,
     loadFactor: route.loadFactorEMA,
+    roughPerDay: routeExtraCostLastDay(world.ledger, routeId, world.economy.elapsedSeconds - route.openedAtSeconds),
     verdict: "healthy",
   };
   const { tuning } = world;
@@ -382,6 +389,7 @@ export function diagnoseLorryRoute(world: SliceWorld, routeId: string): LorryDia
   const weaker = Math.min(diagnosis.outbound, diagnosis.inbound);
   const stronger = Math.max(diagnosis.outbound, diagnosis.inbound);
   if ((diagnosis.outbound + diagnosis.inbound) * fare < oneLorryPerDay) diagnosis.verdict = "thin";
+  else if (diagnosis.roughPerDay > WORN_COST_SHARE * oneLorryPerDay * route.vehicleIds.length) diagnosis.verdict = "worn";
   else if (route.loadFactorEMA >= FULL_LOAD) diagnosis.verdict = "full";
   else if (weaker < stronger * ONE_WAY_SHARE) diagnosis.verdict = "one-way";
   else if (diagnosis.spoiled >= SPOILING_SHARE) diagnosis.verdict = "spoiling";

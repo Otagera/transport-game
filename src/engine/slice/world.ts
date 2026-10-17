@@ -583,7 +583,8 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
 /** Of the road space in use on a route's roads right now, the share that's informal. */
 /** The road segments a route's buses run over. */
 function routeSegments(world: SliceWorld, routeId: string): Set<string> {
-  const route = world.routes.find((candidate) => candidate.id === routeId);
+  // Passenger and goods routes alike: a lorry's dirt roads are what paving it means too.
+  const route = [...world.routes, ...world.lorryRoutes].find((candidate) => candidate.id === routeId);
   const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
   const segments = new Set<string>();
   if (!vehicle) return segments;

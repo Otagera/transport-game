@@ -118,7 +118,19 @@ on dirt, ~5 paved. The Fix hover and the worn-route reason put both numbers side
 user's pick — it gained **halts** (Track tool, click a town the line passes twice: a short
 spur in, ₦300 + the spur) and a **narrow-gauge speed limit** (55% of new track). Now: old line
 to Owode via a halt +₦249/day (~12 days), new track +₦312 (~10), whole old line to Ipaja
-+₦145 (~22). Freight on the old line still loses (−₦113): not yet looked at.
++₦145 (~22). **Freight isn't dead, it's a trunk business:** added to track your passenger
+trains already use (Ilase–Owode–Ado) it pays back in ~16 days (+₦155/day); on the old line
+via the halt it breaks even; on the old line alone it loses. No economic change needed — the
+audit's original verdict tested it in its worst setting. Lorries on dirt now lose over 20
+days (they wear roads hardest) and pay in ~7 paved; their route reason gained a "worn"
+verdict naming the roads to pave.
+
+**Lever table after track 2** (audit, 20 days on, mid-game network): bus on the busy route
+~14 days; thin new route ~24; maintain a road 3 of your buses use ~9, pave it ~15; maintain
+a danfo-only road, never; lorry paved ~7, on dirt never; old line to Owode via a halt + train
+~12, new track + train ~10; freight on existing track ~16. Still poor on money by design or
+open question: roads to cut-off towns (~140 days alone, ~64 with a bus) — they pay in share
+and informal service, not fares.
 
 Plan: **track 1, legibility** (a steady net/day, a receipt a day after each action, pave and
 fix a whole road through roadside towns), then **track 2, economics** of the dead levers

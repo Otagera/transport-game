@@ -1490,3 +1490,16 @@ describe("slice: halts on the old line (track 2)", () => {
     expect(w.segmentSpeed.get(fresh.id)).toBe(1);
   });
 });
+
+describe("slice: a lorry on worn roads says so (track 2)", () => {
+  test("worn dirt roads read as the lorry route's reason, naming the roads to pave", () => {
+    // Big is the port: supplies out to Far, Far's produce in to market Mid -- goods both ways along it.
+    const w = createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, inheritedRoadCondition: 0.35 });
+    addLorry(w, "big", "far");
+    run(w, 120);
+    const d = diagnoseLorryRoute(w, w.lorryRoutes[0]!.id)!;
+    expect(d.roughPerDay).toBeGreaterThan(0);
+    expect(d.verdict).toBe("worn");
+    expect(dirtRoadsOn(w, w.lorryRoutes[0]!.id).length).toBeGreaterThan(0);
+  });
+});
