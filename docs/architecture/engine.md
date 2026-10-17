@@ -615,3 +615,10 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
 - **`diagnoseRoute`** adds `incomePerVehicle`, `costPerVehicle`, `roundTripsPerDay`, and the
   `long` verdict (full, yet a full vehicle's fares are under its running cost on sound roads),
   with `shorter`: the route ending at the stop nearest halfway, from the bigger end.
+
+### The minibus
+
+`world.ts` — `addBus(world, a, b, kind)` takes `"bus" | "minibus"`; the minibus is its own
+route type (`mini:a~b`, `minibusRouteId`, `isMinibusRoute`), like trains are, so trip plans,
+transfers, diagnosis, debt advice, receipts and forecasts treat it as any passenger route.
+`vehicleCostPerDay` knows its running cost; `actions.ts` has a `minibus` action.

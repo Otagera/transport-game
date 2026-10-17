@@ -119,6 +119,12 @@ export interface SliceTuning {
   busSpeed: number;
   busPurchaseCost: number;
   busOperatingCostPerSecond: number;
+  /** A minibus for thin routes (world.ts addMinibus): fewer seats, much cheaper to run. */
+  minibusCapacity: number;
+  minibusSpeed: number;
+  minibusPurchaseCost: number;
+  minibusOperatingCostPerSecond: number;
+  minibusRoadSpace: number;
   danfoCapacity: number;
   danfoSpeed: number;
   kekeCapacity: number;

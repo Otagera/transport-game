@@ -290,37 +290,62 @@ export function findRoute(world: SliceWorld, a: string, b: string): SliceRoute |
   return world.routes.find((route) => route.id === routeKey(a, b));
 }
 
-export function checkBus(world: SliceWorld, a: string, b: string): ActionResult {
+// Two road vehicles for passengers. The minibus is for thin routes: a
+// playtester put a bus on each existing road and was broke by day 11 --
+// forecast at the start, 14 of 21 first buses lost money, almost every
+// neighbour-to-neighbour route among them, because a 20-seat bus at ₦90 a
+// day needs more riders than most pairs of towns make. A 14-seat minibus at
+// half the running cost pays where a bus can't; on a busy route the bus's
+// seats win. Which to run is the decision.
+export type RoadVehicleKind = "bus" | "minibus";
+export const MINIBUS_DEF_ID = "slice-minibus";
+
+export function minibusRouteId(a: string, b: string): string {
+  return `mini:${routeKey(a, b)}`;
+}
+
+export function isMinibusRoute(routeId: string): boolean {
+  return routeId.startsWith("mini:");
+}
+
+function roadVehicleSpec(world: SliceWorld, kind: RoadVehicleKind) {
+  const t = world.tuning;
+  return kind === "minibus"
+    ? { capacity: t.minibusCapacity, speed: t.minibusSpeed, price: t.minibusPurchaseCost, perSecond: t.minibusOperatingCostPerSecond, roadSpace: t.minibusRoadSpace, defId: MINIBUS_DEF_ID }
+    : { capacity: t.busCapacity, speed: t.busSpeed, price: t.busPurchaseCost, perSecond: t.busOperatingCostPerSecond, roadSpace: t.busRoadSpace, defId: BUS_DEF_ID };
+}
+
+export function checkBus(world: SliceWorld, a: string, b: string, kind: RoadVehicleKind = "bus"): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!roadPath(world, a, b)) return { ok: false, reason: "no road between them" };
-  if (!canAfford(world.economy, world.tuning.busPurchaseCost)) return { ok: false, reason: "can't afford a bus" };
+  if (!canAfford(world.economy, roadVehicleSpec(world, kind).price)) return { ok: false, reason: `can't afford a ${kind}` };
   return { ok: true };
 }
 
-export function addBus(world: SliceWorld, a: string, b: string): ActionResult {
-  const check = checkBus(world, a, b);
+export function checkMinibus(world: SliceWorld, a: string, b: string): ActionResult {
+  return checkBus(world, a, b, "minibus");
+}
+
+export function addMinibus(world: SliceWorld, a: string, b: string): ActionResult {
+  return addBus(world, a, b, "minibus");
+}
+
+export function addBus(world: SliceWorld, a: string, b: string, kind: RoadVehicleKind = "bus"): ActionResult {
+  const check = checkBus(world, a, b, kind);
   if (!check.ok) return check;
 
-  let route = findRoute(world, a, b);
+  const routeId = kind === "minibus" ? minibusRouteId(a, b) : routeKey(a, b);
+  let route = world.routes.find((candidate) => candidate.id === routeId);
   if (!route) {
-    route = { id: routeKey(a, b), a, b, vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
+    route = { id: routeId, a, b, vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
     world.routes.push(route);
     forgetRoute(world.ledger, route.id);
     world.plans = null; // a new route changes how riders cross the network
   }
-  const { tuning } = world;
-  const id = `bus-${world.nextId++}`;
+  const spec = roadVehicleSpec(world, kind);
+  const id = `${kind}-${world.nextId++}`;
   // No queues: a bus placed mid-route must not teleport-load at route.a.
-  const vehicle = createVehicle(
-    id,
-    [route.a, route.b],
-    world.simulation.routing,
-    tuning.busSpeed,
-    tuning.busCapacity,
-    undefined,
-    "passengers",
-    tuning.busRoadSpace,
-  );
+  const vehicle = createVehicle(id, [route.a, route.b], world.simulation.routing, spec.speed, spec.capacity, undefined, "passengers", spec.roadSpace);
   // Headway, not bunching, is what another bus on a route is supposed to
   // buy. Starting every new bus at a terminus sends them out as a convoy
   // that serves the route exactly as often as one bus would -- measured:
@@ -331,7 +356,7 @@ export function addBus(world: SliceWorld, a: string, b: string): ActionResult {
     .filter((candidate): candidate is Vehicle => candidate !== undefined);
   placeAtCycleFraction(world, vehicle, largestGapMidpoint(others.map((other) => cycleFraction(world, other))));
   world.simulation.vehicles.push(vehicle);
-  registerPurchase(world.economy, id, tuning.busPurchaseCost, tuning.busOperatingCostPerSecond, BUS_DEF_ID);
+  registerPurchase(world.economy, id, spec.price, spec.perSecond, spec.defId);
   route.vehicleIds.push(id);
   return { ok: true };
 }
@@ -416,9 +441,18 @@ export interface DebtAdvice {
   daysLeft: number;
   /** Losing routes, worst first: selling all their buses returns `refund` and saves `savesPerDay`. */
   sell: Array<{ routeId: string; a: string; b: string; vehicles: number; refund: number; savesPerDay: number }>;
+  /**
+   * Losing routes whose worn roads cost more than upkeep would: mend them
+   * first. Maintaining them saves `savesPerDay` after upkeep; `repair` is
+   * the catch-up charged up front. What a route still loses after mending
+   * is what `sell` lists for it.
+   */
+  fix: Array<{ routeId: string; a: string; b: string; savesPerDay: number; repair: number }>;
 }
 
 const RUNWAY_WARNING_DAYS = 7;
+/** Mending is advised when it saves at least this much a day after upkeep. */
+const MEND_WORTH_PER_DAY = 10;
 
 export function debtAdvice(world: SliceWorld): DebtAdvice | null {
   const funds = world.economy.funds;
@@ -441,8 +475,31 @@ export function debtAdvice(world: SliceWorld): DebtAdvice | null {
     refund: lorryResale(world, route.id),
     savesPerDay: -route.netPerDay,
   }));
-  const sell = [...buses, ...lorries].filter((route) => route.savesPerDay > 0).sort((p, q) => q.savesPerDay - p.savesPerDay);
-  return { funds, netPerDay, daysLeft, sell };
+  // Mend before selling: playtest, day 25, the way out said to sell the
+  // Ilase-Ise bus while its own reason said its worn road cost ₦50/day
+  // against ₦21 to maintain. A losing route whose worn roads cost more than
+  // upkeep is mended first; only what it still loses after that is a reason
+  // to sell.
+  const fix: DebtAdvice["fix"] = [];
+  for (const route of buses) {
+    if (route.savesPerDay <= 0) continue;
+    const worn = wornRoadsOn(world, route.routeId).filter((r) => !r.maintained);
+    const saves = worn.reduce((sum, r) => sum + r.roughPerDay - r.upkeepPerDay, 0);
+    if (saves < MEND_WORTH_PER_DAY) continue;
+    const repair = [...routeSegments(world, route.routeId)]
+      .filter((id) => !world.maintained.has(id))
+      .reduce((sum, id) => {
+        const segment = world.simulation.map.segments.find((s) => s.id === id)!;
+        return sum + repairCost(world, segment, 1 - segment.condition);
+      }, 0);
+    fix.push({ routeId: route.routeId, a: route.a, b: route.b, savesPerDay: saves, repair });
+  }
+  const mendedBy = new Map(fix.map((f) => [f.routeId, f.savesPerDay]));
+  const sell = [...buses, ...lorries]
+    .map((route) => ({ ...route, savesPerDay: route.savesPerDay - (mendedBy.get(route.routeId) ?? 0) }))
+    .filter((route) => route.savesPerDay > 0)
+    .sort((p, q) => q.savesPerDay - p.savesPerDay);
+  return { funds, netPerDay, daysLeft, sell, fix };
 }
 
 export interface RouteSummary {

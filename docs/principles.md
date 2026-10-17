@@ -493,6 +493,20 @@ for if eras return; they are not live in the slice.*
   of thumb: "long routes lose" was wrong — a long route *through* towns (Ilase–Ado via
   Owode) forecast better than a short one, because every stop feeds it; the playtester's
   route lost because its straight road passed only small roadside towns.
+- **A forecast must sit in the way of the click, not beside it.** At 4× the playtester never
+  read it ("whatever the forecast says I don't really pay attention"). What works: the
+  preview line turns green or red as soon as the forecast lands, a move forecast to lose
+  money needs a second click, and a ranked list of best next moves (forecast in a worker
+  pool) answers "where's the best path?" before it's asked. The best paths weren't the
+  obvious ones — through-routes via the hub beat neighbour shuttles.
+- **Vehicle size is a decision, so the small one must cost more per seat *carried*.** With
+  only a 20-seat bus, 14 of 21 first routes lost money: most town pairs can't fill it. A
+  12-seat minibus fixes thin routes only if it's cheaper in total but dearer per seat-cell
+  (seats × speed) than the bus — otherwise it wins everywhere. Measure capacity as seats ×
+  speed: a minibus pricier per seat but faster was still cheaper per seat-cell, and beat the
+  bus on every route (playtest: "if I buy a normal bus it bleeds money"). Now ₦63/day for
+  12 seats at 3.5 against ₦72 for 20 at 3: minibus on thin routes, bus on top routes and as
+  a busy route's second vehicle.
 - **Burn rate in the status strip** — income, cost, net per day. Balance without rate is
   unreadable.
 

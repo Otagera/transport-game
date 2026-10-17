@@ -135,6 +135,21 @@ panel had told them to add a bus. Fixed, all three:
 - a **forecast** on every build preview (and the Fix hover): the receipt the action would get,
   computed before the click in a worker — "+₦47/day, pays back in ~11 days, your share +4pp".
 
+**Playtest, day 11: broke again** — a bus on every existing road, the forecast unread at 4×.
+Forecast at the start: only 7 of 21 first buses pay; the best are through-routes via Ilase.
+Built, the user's picks:
+- **Best next moves** in the panel: one more vehicle on each route, new buses and minibuses
+  on every road-connected pair, forecast in a pool of up to 3 workers, top four with Buy.
+- **Red/green preview line** by forecast, and a **second click** to confirm a move forecast
+  to lose money.
+- **The way out mends before it sells**: a losing route whose worn roads cost more than
+  upkeep is told to maintain them first; only what it still loses is a reason to sell (it
+  had told the day-25 player to sell a bus whose road just needed keeping up).
+- **Minibus** (M): 12 seats, danfo speed, ₦250, ₦63/day; the bus came down to ₦72/day so
+  it's the cheaper way to move many people. Minibus wins thin pairs, the bus wins top pairs
+  and a busy route's second vehicle. (First pass made the minibus best everywhere — it was
+  cheaper per seat-cell, being faster; the user caught it.)
+
 **Lever table after track 2** (audit, 20 days on, mid-game network): bus on the busy route
 ~14 days; thin new route ~24; maintain a road 3 of your buses use ~9, pave it ~15; maintain
 a danfo-only road, never; lorry paved ~7, on dirt never; old line to Owode via a halt + train

@@ -308,5 +308,7 @@ export function addTrain(world: SliceWorld, a: string, b: string): ActionResult 
 
 /** Running cost a day of one vehicle on a route: a train's or a bus's. */
 export function vehicleCostPerDay(world: SliceWorld, routeId: string, secondsPerDay: number): number {
-  return (isRailRoute(routeId) ? world.tuning.trainOperatingCostPerSecond : world.tuning.busOperatingCostPerSecond) * secondsPerDay;
+  const t = world.tuning;
+  const perSecond = isRailRoute(routeId) ? t.trainOperatingCostPerSecond : routeId.startsWith("mini:") ? t.minibusOperatingCostPerSecond : t.busOperatingCostPerSecond;
+  return perSecond * secondsPerDay;
 }

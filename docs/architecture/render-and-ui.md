@@ -318,3 +318,13 @@ no-cached-view discipline as §2).
   next two days…", then the money, payback and biggest share move, green/red/grey). Cached by
   action, game day and an action counter that every `act()` bumps; only the latest request
   waits in the queue.
+- **Best next moves** — the routes panel opens (after any debt note) with a ranked list:
+  candidates are one more vehicle on each bus/minibus route and new buses and minibuses on
+  every road-connected pair (most trips-along first), forecast by a pool of up to three
+  workers (separate from the hover worker), refreshed every three game days and after any
+  action. Top four by money per day, each with a Buy button that goes through `act()`.
+- **Forecast in the click** — the preview line is green or red once its forecast lands, and a
+  move forecast to lose over ₦5/day needs a second click on the same town (`actionFor` maps
+  the tool and towns to the same action the preview forecast).
+- **Minibus tool** (M) under On roads; minibuses draw smaller than buses; route rows,
+  reasons and receipts name them ("2 minibuses", "Another minibus on …").

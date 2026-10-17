@@ -463,7 +463,10 @@ function halfPath(path: string[], a: string, b: string): string[] {
 }
 
 function drawGhostLine(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, ghost: Ghost): void {
-  ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
+  // Green or red by what it's forecast to earn, once the forecast is in:
+  // the colour is readable at 4x, the label's second line isn't.
+  const tone = ghost.forecast?.tone;
+  ctx.strokeStyle = !ghost.ok || tone === "bad" ? COLORS.ghostBad : tone === "good" ? COLORS.forecastGood : COLORS.ghostOk;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 6]);
   const routing = ghost.rail ? world.railRouting : world.simulation.routing;
@@ -583,16 +586,18 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     } else {
       const color = routeColor(routeIndex.get(vehicle.id) ?? 0);
       const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
+      // A minibus is drawn smaller than a bus: the size is the seats.
+      const half = vehicle.id.startsWith("minibus-") ? 6.5 : 10;
       ctx.fillStyle = "#fffdf8";
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(-10, -5, 20, 10, 3);
+      ctx.roundRect(-half, -5, half * 2, 10, 3);
       ctx.fill();
       ctx.stroke();
       // How full it is, as a fill from the back.
       ctx.fillStyle = color;
-      ctx.fillRect(-9, -4, 18 * Math.min(1, load), 8);
+      ctx.fillRect(-half + 1, -4, (half * 2 - 2) * Math.min(1, load), 8);
     }
     ctx.restore();
   }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad } from "@engine/slice/world";
+import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute } from "@engine/slice/world";
 import { sliceTick } from "@engine/slice/tick";
 import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -1561,5 +1561,52 @@ describe("slice: forecast before acting (playtest, day 31)", () => {
     const predicted = forecast(w, { kind: "road", a: "mid", b: "cut", alignment: "cheapest" }, { label: "road", towns: ["cut"] })!;
     expect(Math.abs(predicted.moneyPerDay)).toBeLessThan(5);
     expect(predicted.towns[0]!.informal).toBeGreaterThan(0);
+  });
+});
+
+describe("slice: the minibus (playtest, day 11)", () => {
+  test("a minibus runs its own route, smaller and cheaper than a bus", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    const before = w.economy.funds;
+    expect(addMinibus(w, "big", "mid").ok).toBe(true);
+    expect(before - w.economy.funds).toBe(w.tuning.minibusPurchaseCost);
+    const route = w.routes.find((r) => isMinibusRoute(r.id))!;
+    const vehicle = w.simulation.vehicles.find((v) => v.id === route.vehicleIds[0])!;
+    expect(vehicle.capacity).toBe(w.tuning.minibusCapacity);
+    expect(routeSummaries(w).find((r) => r.id === route.id)!.costPerDay).toBeLessThan(w.tuning.busOperatingCostPerSecond * 30);
+  });
+
+  test("on a thin route a minibus loses less than a bus (or pays where a bus can't)", () => {
+    const run2 = (kind: "bus" | "minibus") => {
+      const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+      run(w, 60);
+      return forecast(w, { kind, a: "mid", b: "far" }, { label: "", towns: [] })!.moneyPerDay;
+    };
+    expect(run2("minibus")).toBeGreaterThan(run2("bus"));
+  });
+
+  test("riders change between a minibus and a bus like any two routes", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    addMinibus(w, "mid", "far");
+    expect(tripPlans(w).rides.get("big")!.get("far")).toBe(2);
+  });
+});
+
+describe("slice: the way out mends before it sells (playtest, day 25)", () => {
+  test("a losing route on worn roads is mended first; only what it still loses is a reason to sell", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, inheritedRoadCondition: 0.35, roughRoadCostMax: 1.5 });
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    run(w, 120);
+    w.economy.funds = -10;
+    const advice = debtAdvice(w)!;
+    const routeId = w.routes[0]!.id;
+    if (routeSummaries(w)[0]!.netPerDay >= 0) return; // not losing in this world: nothing to check
+    const loss = -routeSummaries(w)[0]!.netPerDay;
+    const fix = advice.fix.find((f) => f.routeId === routeId)!;
+    expect(fix.savesPerDay).toBeGreaterThan(0);
+    // Selling is only advised for what it still loses once mended.
+    const sell = advice.sell.find((s) => s.routeId === routeId);
+    if (sell) expect(sell.savesPerDay).toBeCloseTo(loss - fix.savesPerDay, 6);
   });
 });

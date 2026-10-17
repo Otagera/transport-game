@@ -1,5 +1,5 @@
 import type { SliceWorld } from "./types";
-import { addBus, buildRoad, paveRoad, removeBus } from "./world";
+import { addBus, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
 import { addTrain, buildHalt, buildTrack } from "./rail";
 import { setRoadMaintained } from "./wear";
@@ -10,7 +10,7 @@ import type { Alignment } from "./roads";
 // action on a copy of the world before the player commits to it.
 
 export type ActionSpec =
-  | { kind: "bus" | "lorry" | "train" | "freight"; a: string; b: string }
+  | { kind: "bus" | "minibus" | "lorry" | "train" | "freight"; a: string; b: string }
   | { kind: "road"; a: string; b: string; alignment: Alignment }
   | { kind: "pave"; a: string; b: string }
   | { kind: "track"; a: string; b: string; alignment: Alignment }
@@ -29,6 +29,8 @@ export function applyAction(world: SliceWorld, spec: ActionSpec): ActionOutcome 
   switch (spec.kind) {
     case "bus":
       return addBus(world, spec.a, spec.b);
+    case "minibus":
+      return addMinibus(world, spec.a, spec.b);
     case "lorry":
       return addLorry(world, spec.a, spec.b);
     case "train":

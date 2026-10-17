@@ -37,7 +37,27 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // extra to run (roughRoadCostMax). At 3.5 plus rough roads, a bus on the
   // busiest route took 100 days to pay back and the early game went
   // negative from two buses (lever audit + probe).
-  busOperatingCostPerSecond: 3,
+  // 3.0 -> 2.4 with the minibus: a big vehicle must be the cheaper way to
+  // move many people (₦1.20 per seat-cell against the minibus's ₦1.50), or
+  // the minibus wins everywhere -- it did at 3.0, being faster as well as
+  // cheaper (playtest: "if I buy a normal bus it bleeds money").
+  busOperatingCostPerSecond: 2.4,
+  // Small and nimble against big and roomy. Cheaper to run in total (₦63/day
+  // against the bus's ₦72), dearer per seat-cell carried (₦1.50 against
+  // ₦1.20): so the minibus is for routes too thin to fill a bus, and the bus
+  // is how a busy route grows. Forecasts at the start, against four targets:
+  //   - thin pairs: minibus +₦35 vs bus −₦8 (Ilase-Ise);
+  //   - top pairs: bus +₦113 vs minibus +₦61 (Owode-Ise), +₦55 vs +₦23 (Ilase-Ado);
+  //   - a busy route's second vehicle: bus +₦130 vs minibus +₦60 (Ilase-Owode);
+  //   - both show up among the best next moves.
+  // Getting here: at 14 seats / ₦42 the minibus beat the bus everywhere; at
+  // 12 seats / ₦54 it still did, because being faster made it cheaper per
+  // seat-cell too; at a bus's speed it rescued no thin route.
+  minibusCapacity: 12,
+  minibusSpeed: 3.5,
+  minibusPurchaseCost: 250,
+  minibusOperatingCostPerSecond: 2.1,
+  minibusRoadSpace: 1,
   // Informal modes, from the original game's catalog (public/content/
   // vehicles.json): capacity, speed, and congestion weight as road space.
   danfoCapacity: 14,

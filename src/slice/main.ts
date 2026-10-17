@@ -11,8 +11,12 @@ import {
   debtAdvice,
   demandAlong,
   diagnoseRoute,
+  addMinibus,
+  checkMinibus,
   chainOf,
   findRoute,
+  isMinibusRoute,
+  minibusRouteId,
   roadChain,
   routeKey,
   dirtRoadsOn,
@@ -44,7 +48,7 @@ import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
 import type { ForecastLine } from "./render";
-import type { ActionSpec } from "@engine/slice/actions";
+import { applyAction, type ActionSpec } from "@engine/slice/actions";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -59,7 +63,7 @@ import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View 
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "lorry" | "track" | "train" | "freight" | "fix";
+type Tool = "road" | "bus" | "minibus" | "lorry" | "track" | "train" | "freight" | "fix";
 
 const world = createSliceWorld(SLICE_MAP);
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
@@ -195,6 +199,152 @@ function describeForecast(r: Receipt): ForecastLine {
   }
   const tone = level ? "neutral" : r.moneyPerDay > 0 ? "good" : "bad";
   return { text: `Forecast, two days on: ${parts.join(", ")}`, tone };
+}
+
+/** The action a tool would take between two towns -- what the preview forecasts and a click does. */
+function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
+  switch (current) {
+    case "road":
+      return roadChain(world, a, b) ? { kind: "pave", a, b } : { kind: "road", a, b, alignment };
+    case "track":
+      return { kind: "track", a, b, alignment };
+    case "bus":
+    case "minibus":
+    case "lorry":
+    case "train":
+    case "freight":
+      return { kind: current, a, b };
+    case "fix":
+      return null;
+  }
+}
+
+/** The move waiting for a second click to confirm it despite its forecast. */
+let confirming: string | null = null;
+
+/** A finished forecast for an action, if there is one for the world as it is now. */
+function knownForecast(action: ActionSpec): Receipt | null | undefined {
+  const day = Math.floor(world.economy.elapsedSeconds / SECONDS_PER_GAME_DAY);
+  const entry = forecasts.get(`${actionVersion}|${day}|${JSON.stringify(action)}`);
+  return entry === "pending" ? undefined : entry;
+}
+
+// --- Best next moves ------------------------------------------------------
+// The playtester's aim was "put the bus on the best available path", and
+// the best ones weren't the obvious ones: a first bus on Owode <-> Ise (a
+// through-route via Ilase) forecast +₦93/day while most neighbour-to-
+// neighbour routes lost money. So the panel keeps a ranked list, forecast
+// in a small worker pool: one more vehicle on each route you run, and new
+// buses and minibuses on the pairs with the most trips along them.
+
+const POOL_SIZE = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
+const pool = Array.from({ length: POOL_SIZE }, () => new Worker(new URL("./forecast.worker.ts", import.meta.url), { type: "module" }));
+const idle: Worker[] = [...pool];
+
+interface Move {
+  action: ActionSpec;
+  spec: ReceiptSpec;
+  title: string;
+  price: number;
+  receipt?: Receipt | null;
+}
+
+let moves: { key: string; list: Move[]; next: number } = { key: "", list: [], next: 0 };
+
+/** Refreshed after any action and every three game days. */
+function movesKey(): string {
+  return `${actionVersion}|${Math.floor(world.economy.elapsedSeconds / (3 * SECONDS_PER_GAME_DAY))}`;
+}
+
+function candidateMoves(): Move[] {
+  const list: Move[] = [];
+  const t = world.tuning;
+  for (const route of world.routes) {
+    if (isRailRoute(route.id)) continue;
+    const mini = isMinibusRoute(route.id);
+    const kind = mini ? "minibus" : "bus";
+    const n = route.vehicleIds.length + 1;
+    list.push({
+      action: { kind, a: route.a, b: route.b },
+      spec: { label: addLabel(kind, n, route.a, route.b), towns: [route.a, route.b], routeId: route.id },
+      title: `Another ${kind} on ${pair(route.a, route.b)}`,
+      price: mini ? t.minibusPurchaseCost : t.busPurchaseCost,
+    });
+  }
+  // New routes on every road-connected pair, the ones with the most riders
+  // wanting trips along them first so likely winners arrive early. Every
+  // pair, not the top few: trips-along ranked long through-routes first and
+  // missed Owode <-> Kuto, the best first minibus on the map (browser check).
+  const towns = [...world.towns.keys()];
+  const pairs: Array<{ a: string; b: string; along: number }> = [];
+  for (let i = 0; i < towns.length; i += 1) {
+    for (let j = i + 1; j < towns.length; j += 1) {
+      const a = towns[i]!;
+      const b = towns[j]!;
+      if (!roadPath(world, a, b)) continue;
+      pairs.push({ a, b, along: demandAlong(world, a, b) });
+    }
+  }
+  for (const { a, b } of pairs.sort((p, q) => q.along - p.along)) {
+    for (const kind of ["minibus", "bus"] as const) {
+      const routeId = kind === "minibus" ? minibusRouteId(a, b) : routeKey(a, b);
+      if (world.routes.some((r) => r.id === routeId)) continue;
+      list.push({
+        action: { kind, a, b },
+        spec: { label: addLabel(kind, 1, a, b), towns: [a, b], routeId },
+        title: `New ${kind} route ${pair(a, b)}`,
+        price: kind === "minibus" ? t.minibusPurchaseCost : t.busPurchaseCost,
+      });
+    }
+  }
+  return list;
+}
+
+function refreshMoves(): void {
+  const key = movesKey();
+  if (moves.key === key) return;
+  moves = { key, list: candidateMoves(), next: 0 };
+  while (idle.length > 0 && dispatchMove()) {}
+}
+
+function dispatchMove(): boolean {
+  if (moves.next >= moves.list.length) return false;
+  const worker = idle.pop()!;
+  const index = moves.next++;
+  const move = moves.list[index]!;
+  worker.postMessage({ key: `${moves.key}#${index}`, world, action: move.action, spec: move.spec });
+  return true;
+}
+
+for (const worker of pool) {
+  worker.onmessage = (event: MessageEvent<{ key: string; receipt: Receipt | null }>) => {
+    const [key, index] = event.data.key.split("#") as [string, string];
+    if (key === moves.key) moves.list[Number(index)]!.receipt = event.data.receipt;
+    idle.push(worker);
+    dispatchMove();
+  };
+}
+
+function bestMovesHtml(): string {
+  refreshMoves();
+  const done = moves.list.filter((m) => m.receipt);
+  const waiting = moves.list.length - moves.list.filter((m) => m.receipt !== undefined).length;
+  const best = done.sort((p, q) => q.receipt!.moneyPerDay - p.receipt!.moneyPerDay).slice(0, 4);
+  const rows = best
+    .map((move) => {
+      const r = move.receipt!;
+      const index = moves.list.indexOf(move);
+      const money = `${r.moneyPerDay >= 0 ? "+" : "−"}₦${Math.abs(Math.round(r.moneyPerDay))}/day`;
+      const back = r.paybackDays !== null ? `, pays back in ~${Math.ceil(r.paybackDays)} days` : r.moneyPerDay > 0 ? "" : ", loses money";
+      const afford = world.economy.funds >= move.price;
+      return `<li class="${r.moneyPerDay > 5 ? "good" : r.moneyPerDay < -5 ? "bad" : ""}">
+        <span>${move.title} · ${naira(move.price)}<small>${money}${back}${Math.abs(r.you) >= 0.5 ? ` · your share ${pp(r.you)}` : ""}</small></span>
+        <button data-move="${index}" ${afford ? "" : "disabled title=\"Can't afford it yet\""}>Buy</button></li>`;
+    })
+    .join("");
+  const status = waiting > 0 ? `<p class="hint">Checking ${waiting} more…</p>` : "";
+  const none = done.length > 0 && best[0]!.receipt!.moneyPerDay <= 0 ? `<p class="hint">Nothing on the roads pays right now. Look at fixing or paving, or wait for towns to grow.</p>` : "";
+  return `<h2>Best next moves</h2><p class="hint">Forecast two days on, against the same world without them. Checked again every three days and after anything you do.</p><ul class="moves">${rows}</ul>${none}${status}`;
 }
 
 /** A preview with its forecast, when the action could be done. */
@@ -339,6 +489,18 @@ canvas.addEventListener("click", (event) => {
     return;
   }
   const from = selectedTown;
+  // A move forecast to lose money takes a second click: a red line is easy
+  // to miss at 4x (playtest: "whatever the forecast says I don't really pay
+  // attention"); a refusal you have to click past isn't.
+  const intended = actionFor(tool, from, town);
+  const known = intended ? knownForecast(intended) : undefined;
+  const confirmAs = intended ? JSON.stringify(intended) : null;
+  if (known && known.moneyPerDay < -5 && confirming !== confirmAs) {
+    confirming = confirmAs;
+    say(`Forecast: this loses ${naira(-known.moneyPerDay)}/day. Click ${townName(town)} again to do it anyway.`, true, 5);
+    return;
+  }
+  confirming = null;
   const towns = [from, town];
   const later = " Result in two days.";
   if (tool === "road" && roadChain(world, from, town)) {
@@ -373,6 +535,12 @@ canvas.addEventListener("click", (event) => {
     const result = act({ label: addLabel("lorry", (route?.vehicleIds.length ?? 0) + 1, from, town), towns, routeId: route?.id ?? lorryRouteId(from, town) }, (w) => addLorry(w, from, town));
     if (result.ok) say(`Lorry added: ${pair(from, town)}.${later}`);
     else say(`Can't add lorry (${naira(world.tuning.lorryPurchaseCost)}): ${result.reason}`, true);
+  } else if (tool === "minibus") {
+    const routeId = minibusRouteId(from, town);
+    const count = (world.routes.find((r) => r.id === routeId)?.vehicleIds.length ?? 0) + 1;
+    const result = act({ label: addLabel("minibus", count, from, town), towns, routeId }, (w) => addMinibus(w, from, town));
+    if (result.ok) say(`Minibus added: ${pair(from, town)}.${later}`);
+    else say(`Can't add minibus (${naira(world.tuning.minibusPurchaseCost)}): ${result.reason}`, true);
   } else {
     const count = (findRoute(world, from, town)?.vehicleIds.length ?? 0) + 1;
     const result = act({ label: addLabel("bus", count, from, town), towns, routeId: routeKey(from, town) }, (w) => addBus(w, from, town));
@@ -388,6 +556,7 @@ canvas.addEventListener("click", (event) => {
 window.addEventListener("keydown", (event) => {
   if (event.key === "r" || event.key === "R") setTool("road");
   else if (event.key === "b" || event.key === "B") setTool("bus");
+  else if (event.key === "m" || event.key === "M") setTool("minibus");
   else if (event.key === "f" || event.key === "F") setTool("fix");
   else if (event.key === "l" || event.key === "L") setTool("lorry");
   else if (event.key === "k" || event.key === "K") setTool("track");
@@ -537,16 +706,19 @@ function ghost(): Ghost | null {
     const ghost = { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, label, `Lorry ${naira(world.tuning.lorryPurchaseCost)}`) };
     return withForecast(ghost, { kind: "lorry", a: selectedTown, b: to }, { label: "a lorry", towns: [selectedTown, to] });
   }
-  const check = checkBus(world, selectedTown, to);
-  const price = naira(world.tuning.busPurchaseCost);
+  // A bus or a minibus: the same preview, the vehicle named and priced.
+  const mini = tool === "minibus";
+  const vehicle = mini ? "Minibus" : "Bus";
+  const check = mini ? checkMinibus(world, selectedTown, to) : checkBus(world, selectedTown, to);
+  const price = naira(mini ? world.tuning.minibusPurchaseCost : world.tuning.busPurchaseCost);
   // Every trip along its road, not just the two towns clicked: a bus from
   // Ilase to Ikole carries Ilase-Kuto and Kuto-Ikole riders too.
   const along = `${Math.round(demandAlong(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want trips along it`;
   // Drawn along the road it would take, not straight across: a bus to Ikole
   // from Ilase goes through Kuto.
   const path = shownPath(check, roadPath(world, selectedTown, to)?.nodeIds);
-  const ghost = { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, `Bus ${price} · ${along}`, `Bus ${price}`) };
-  return withForecast(ghost, { kind: "bus", a: selectedTown, b: to }, { label: "a bus", towns: [selectedTown, to] });
+  const ghost = { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, `${vehicle} ${price} · ${along}`, `${vehicle} ${price}`) };
+  return withForecast(ghost, { kind: mini ? "minibus" : "bus", a: selectedTown, b: to }, { label: mini ? "a minibus" : "a bus", towns: [selectedTown, to] });
 }
 
 // A refusal never hides the price (playtest: "I can't see the price for
@@ -606,7 +778,13 @@ function renderToolbar(): void {
   }
   lineSwitch.append(Object.assign(document.createElement("kbd"), { textContent: "A" }));
   toolbar.replaceChildren(
-    group("On roads", "road", button("Bus", "B", tool === "bus", () => setTool("bus")), button("Lorry", "L", tool === "lorry", () => setTool("lorry"))),
+    group(
+      "On roads",
+      "road",
+      button("Bus", "B", tool === "bus", () => setTool("bus")),
+      button("Minibus", "M", tool === "minibus", () => setTool("minibus")),
+      button("Lorry", "L", tool === "lorry", () => setTool("lorry")),
+    ),
     group("On rail", "rail", button("Train", "T", tool === "train", () => setTool("train")), button("Freight", "G", tool === "freight", () => setTool("freight"))),
     group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), button("Track", "K", tool === "track", () => setTool("track"))),
     group("Line (road, track)", "setting", lineSwitch),
@@ -751,8 +929,19 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 // A train route's reasons are a bus route's with the vehicle renamed: the
 // diagnosis is the same passenger model (rail.ts), only the vehicle differs.
 function forVehicle(text: string, routeId: string): string {
-  if (!isRailRoute(routeId)) return text;
-  return text.replace(/\bBuses\b/g, "Trains").replace(/\bbuses\b/g, "trains").replace(/\bbus\b/g, "train");
+  const [one, many] = isRailRoute(routeId) ? ["train", "trains"] : isMinibusRoute(routeId) ? ["minibus", "minibuses"] : [null, null];
+  if (!one || !many) return text;
+  return text
+    .replace(/\bBuses\b/g, many.charAt(0).toUpperCase() + many.slice(1))
+    .replace(/\bbuses\b/g, many)
+    .replace(/\bbus\b/g, one);
+}
+
+/** "2 buses", "1 minibus", "3 trains". */
+function vehicleCount(routeId: string, n: number): string {
+  if (isRailRoute(routeId)) return `${n} train${n === 1 ? "" : "s"}`;
+  if (isMinibusRoute(routeId)) return `${n} minibus${n === 1 ? "" : "es"}`;
+  return `${n} bus${n === 1 ? "" : "es"}`;
 }
 
 // One sentence: the biggest reason this route earns what it does, and the
@@ -816,7 +1005,7 @@ function renderRoutes(): void {
   const summaries = routeSummaries(world);
   const header = `<h2>Your routes</h2><p class="hint">Worst first. Net is fares minus running cost. Bar: who carried this route's riders.</p>`;
   if (summaries.length === 0 && world.lorryRoutes.length === 0) {
-    routesEl.innerHTML = `${resultsHtml()}${header}<p class="empty">No buses yet. Hover a town to see where its people want to go. Then pick the <b>Bus</b> tool, click a town, then another town joined to it by road.</p>`;
+    routesEl.innerHTML = `${bestMovesHtml()}${resultsHtml()}${header}<p class="empty">No buses yet. Hover a town to see where its people want to go. Then pick the <b>Bus</b> tool, click a town, then another town joined to it by road.</p>`;
     return;
   }
   const rows = summaries.map((s) => {
@@ -836,14 +1025,14 @@ function renderRoutes(): void {
     return `
       <div class="route">
         <span class="swatch" style="background:${routeColor(index)}"></span>
-        <div class="name">${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}<small>${s.buses} ${isRailRoute(s.id) ? `train${s.buses === 1 ? "" : "s"}` : `bus${s.buses === 1 ? "" : "es"}`} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
+        <div class="name">${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}<small>${vehicleCount(s.id, s.buses)} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
         <span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${naira(s.netPerDay)}</span>
-        <button data-add="${s.id}" title="Add a bus">+</button>
-        <button data-remove="${s.id}" title="Sell a bus">−</button>
+        <button data-add="${s.id}" title="Add one">+</button>
+        <button data-remove="${s.id}" title="Sell one">−</button>
         <div class="detail">${detail}</div>
       </div>`;
   });
-  routesEl.innerHTML = moneyNote() + resultsHtml() + (rows.length > 0 ? header + rows.join("") : "") + lorryRows(rows.length > 0);
+  routesEl.innerHTML = moneyNote() + bestMovesHtml() + resultsHtml() + (rows.length > 0 ? header + rows.join("") : "") + lorryRows(rows.length > 0);
 }
 
 // --- Results: what each action did --------------------------------------
@@ -973,6 +1162,10 @@ function moneyNote(): string {
     ? `<b>In debt (${naira(advice.funds)}).</b> Buying and repairs are blocked until funds are back above zero; running costs still bill${advice.netPerDay < 0 ? `, ${naira(-advice.netPerDay)}/day more than you earn` : ""}.`
     : `<b>Money runs out in ~${Math.max(1, Math.round(advice.daysLeft))} days</b> at ${naira(advice.netPerDay)}/day.`;
   const upkeep = [...world.upkeepRateEMA.entries()].filter(([id]) => world.maintained.has(id)).reduce((sum, [, rate]) => sum + rate, 0) * SECONDS_PER_GAME_DAY;
+  // Mending first: a route that pays once its roads are kept up is worth keeping.
+  const mend = advice.fix.length > 0
+    ? ` First, mend before you sell: maintain the worn roads of ${advice.fix.map((f) => `${townName(f.a)} ↔ ${townName(f.b)}`).join(", ")} (Fix tool, F) — ${naira(advice.fix.reduce((sum, f) => sum + f.savesPerDay, 0))}/day better after upkeep, ${naira(advice.fix.reduce((sum, f) => sum + f.repair, 0))} to repair first.`
+    : "";
   let exit: string;
   if (advice.sell.length > 0) {
     const list = advice.sell
@@ -991,11 +1184,21 @@ function moneyNote(): string {
   } else {
     exit = advice.netPerDay > 0 ? `You're earning ${naira(advice.netPerDay)}/day: the debt clears on its own in ~${Math.ceil(-advice.funds / advice.netPerDay)} days.` : "Every route pays its way; the loss is the network's start-up. Give it a few days.";
   }
-  return `<p class="callout">${situation} ${exit}</p>`;
+  return `<p class="callout">${situation}${mend} ${exit}</p>`;
 }
 
 routesEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
+  const moveIndex = target.dataset.move;
+  if (moveIndex !== undefined) {
+    const move = moves.list[Number(moveIndex)];
+    if (!move) return;
+    const result = act(move.spec, (w) => applyAction(w, move.action));
+    if (result.ok) say(`${move.title}: bought for ${naira(move.price)}. Result in two days.`);
+    else say(`Can't: ${result.reason}`, true);
+    renderPanel();
+    return;
+  }
   const addId = target.dataset.add;
   const removeId = target.dataset.remove;
   const later = " Result in two days.";
@@ -1021,14 +1224,16 @@ routesEl.addEventListener("click", (event) => {
     const route = world.routes.find((candidate) => candidate.id === addId);
     if (!route) return;
     const train = isRailRoute(addId);
-    const spec = { label: addLabel(train ? "train" : "bus", route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
-    const result = act(spec, (w) => (train ? addTrain(w, route.a, route.b) : addBus(w, route.a, route.b)));
-    const price = train ? world.tuning.trainPurchaseCost : world.tuning.busPurchaseCost;
-    if (!result.ok) say(`Can't add ${train ? "train" : "bus"} (${naira(price)}): ${result.reason}`, true);
+    const mini = isMinibusRoute(addId);
+    const vehicle = train ? "train" : mini ? "minibus" : "bus";
+    const spec = { label: addLabel(vehicle, route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
+    const result = act(spec, (w) => (train ? addTrain(w, route.a, route.b) : mini ? addMinibus(w, route.a, route.b) : addBus(w, route.a, route.b)));
+    const price = train ? world.tuning.trainPurchaseCost : mini ? world.tuning.minibusPurchaseCost : world.tuning.busPurchaseCost;
+    if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {
     sell(removeId, isFreightRoute(removeId) ? "freight train" : "lorry", (w) => removeLorry(w, removeId));
   } else if (removeId) {
-    sell(removeId, isRailRoute(removeId) ? "train" : "bus", (w) => removeBus(w, removeId));
+    sell(removeId, isRailRoute(removeId) ? "train" : isMinibusRoute(removeId) ? "minibus" : "bus", (w) => removeBus(w, removeId));
   }
   renderRoutes();
 });
