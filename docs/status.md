@@ -27,7 +27,26 @@ right after this file. Progress on that build order:
 | 5b, part 2 | The shared informal budget by surface: dirt 9, paved 15 | Done: results below |
 | — | Bots baseline after 5b, with paving as a move | Done: results below |
 | 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep, fares by distance | Done, **M10 failing**: results below |
-| 5b | M1 with forecast-driven openings; M10's fix proposed (treasury remittance) | Next |
+| 5b | M1 with openings of equal skill; M10's fix proposed (treasury remittance) | Done: M1 fails, results below |
+| 6 | Price response with tolls, levies, the allocation; the remittance (if agreed) | Next |
+
+**M1 with openings of equal skill, 2026-10-18** (~24 min). Four openings spend the whole
+first ₦2,500 on one kind of move -- the best each time (vehicles by forecast ₦/day, roads
+and paving by trips per naira) -- then all play greedy, to day 20:
+
+| Opening | Net a day, days 16-20 | Trips made, day 20 | Funds, day 20 |
+|---|---|---|---|
+| minibus first | ₦1,552 | 901 | ₦13,224 |
+| bus first | ₦1,455 | 853 | ₦9,516 |
+| pave first | ₦412 | 585 | ₦793 |
+| road first | ₦140 | 549 | ₦231 |
+
+**M1 fails** (two within 25% of the best). With skill equal, the gap is real, not the bots':
+the first ₦2,500 spent on vehicles is ~₦1,000 a day ahead by day 20 of the same money spent
+on roads or paving, and ahead on trips made too. Roads and paving earn no money of their own
+and cost upkeep, so an infrastructure opening waits on fares it doesn't collect -- the
+brief's spine ("building pays back") isn't true yet. That's what step 6's tolls and the
+growth allocation are for; M1 is likely to pass only with them.
 | 6 | Riders respond to price, with tolls, levies and the allocation | Next |
 
 **Step 5, money, 2026-10-17** (`BOTS_WORKERS=6`, ~15 min). Built roads are born dirt

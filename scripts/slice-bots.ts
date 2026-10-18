@@ -211,8 +211,10 @@ interface Persona {
    * it wanted a move it couldn't afford (M10).
    */
   decide: (world: SliceWorld, day: number) => Promise<void | "blocked"> | void | "blocked";
-  /** Days it plays; DAYS unless a check needs longer. */
+  /** Days it plays; DAYS unless a check needs longer (or, for an opening, shorter). */
   days?: number;
+  /** One of M1's openings: compared only with each other. */
+  opening?: boolean;
 }
 
 /** The two biggest towns a road joins directly (a road chain through roadside towns counts). */
@@ -289,22 +291,21 @@ const personas: Persona[] = [
     // what the page's best-moves list would put first -- if it pays at all.
     name: "greedy",
     verbs: ["bus", "minibus", "road", "pave"],
-    decide: async (world) => {
-      const affordable = (m: { price: number }) => m.price <= world.economy.funds;
-      const actions: ActionSpec[] = [
-        ...shortlistVehicles(world).filter(affordable).map((m) => m.action),
-        // Roads: each cut-off town's best by trips per naira, not all of them:
-        // forecasting every candidate road every day took 15 minutes.
-        ...bestRoadPerTown(await rankedRoads(world)).filter(affordable).map((m) => m.action),
-        ...(await rankedPaves(world)).filter(affordable).map((m) => m.action),
-      ];
-      if (actions.length === 0) return;
-      const money = await forecastAll(world, actions);
-      let best = -1;
-      for (const [i, value] of money.entries()) if (value !== null && value > 0 && (best < 0 || value > money[best]!)) best = i;
-      if (best >= 0) applyAction(world, actions[best]!);
-    },
+    decide: greedyMove,
   },
+  // M1's openings: plans of equal skill that differ in how they spend the
+  // first ₦2,500 -- all of it on one kind of move, the best each time --
+  // then all play greedy. The naive openings measured the bots' skill gap,
+  // not the game: greedy, the only one that forecast, earned about twice the
+  // next at every fare level. (Differing only in the day-1 move, they would
+  // converge.)
+  ...(["bus", "minibus", "road", "pave"] as const).map((kind) => ({
+    name: `${kind} first`,
+    verbs: ["bus", "minibus", "road", "pave"],
+    days: 20,
+    opening: true,
+    decide: async (world: SliceWorld, d: number) => (d === 0 ? spendOpening(world, kind) : greedyMove(world)),
+  })),
   {
     // Each day, the move that adds the most trips made per naira -- vehicles
     // measured against a twin, roads from the ranking -- among those that
@@ -367,6 +368,49 @@ const personas: Persona[] = [
     })(),
   },
 ];
+
+/** Greedy's move: the best forecast ₦/day it can afford, if it pays at all. */
+async function greedyMove(world: SliceWorld): Promise<void> {
+  const affordable = (m: { price: number }) => m.price <= world.economy.funds;
+  const actions: ActionSpec[] = [
+    ...shortlistVehicles(world).filter(affordable).map((m) => m.action),
+    // Roads: each cut-off town's best by trips per naira, not all of them:
+    // forecasting every candidate road every day took 15 minutes.
+    ...bestRoadPerTown(await rankedRoads(world)).filter(affordable).map((m) => m.action),
+    ...(await rankedPaves(world)).filter(affordable).map((m) => m.action),
+  ];
+  if (actions.length === 0) return;
+  const money = await forecastAll(world, actions);
+  let best = -1;
+  for (const [i, value] of money.entries()) if (value !== null && value > 0 && (best < 0 || value > money[best]!)) best = i;
+  if (best >= 0) applyAction(world, actions[best]!);
+}
+
+/**
+ * An opening: spend the starting money on one kind of move, the best each
+ * time, until none of that kind is affordable. Vehicles by forecast ₦/day
+ * (what the best-moves list would put first), bought even when it's
+ * negative: the opening is the plan, not a judgement on it. Roads and
+ * paving by trips added per naira (they forecast no fares of their own).
+ */
+async function spendOpening(world: SliceWorld, kind: "bus" | "minibus" | "road" | "pave"): Promise<void> {
+  for (let guard = 0; guard < 20; guard += 1) {
+    if (kind === "road" || kind === "pave") {
+      const ranked = kind === "road" ? bestRoadPerTown(await rankedRoads(world)) : await rankedPaves(world);
+      const best = ranked.filter((m) => m.perNaira > 0).find((m) => m.price <= world.economy.funds);
+      if (!best || !applyAction(world, best.action).ok) return;
+      continue;
+    }
+    const actions = shortlistVehicles(world)
+      .filter((m) => m.action.kind === kind && m.price <= world.economy.funds)
+      .map((m) => m.action);
+    if (actions.length === 0) return;
+    const money = await forecastAll(world, actions);
+    let best = -1;
+    for (const [i, value] of money.entries()) if (value !== null && (best < 0 || value > money[best]!)) best = i;
+    if (best < 0 || !applyAction(world, actions[best]!).ok) return;
+  }
+}
 
 function pairOf(pair: [string, string] | null): { a: string; b: string } {
   return pair ? { a: pair[0], b: pair[1] } : { a: "", b: "" };
@@ -455,6 +499,7 @@ console.log(`\nHeadline per game day, 5-day average (trips made / no road / no s
 console.log(`${"persona".padEnd(12)} ${[10, 20, 40].map((d) => `day ${d}`.padEnd(42)).join("")}`);
 for (const run of runs) {
   const cells = [10, 20, 40].map((d) => {
+    if (run.samples.length < d) return "".padEnd(42);
     const s = at(run, d);
     const h = avgHeadline(run, d);
     return `${n(h.tripsPerDay)}${n(h.noRoadPerDay)}${n(h.noSeatPerDay)}${n(h.yourRidersPerDay)}${money(s.funds)}${money(meanNet(run, d - 4, d))}`.padEnd(42);
@@ -470,6 +515,7 @@ console.log(`\nPaved by day 40 (the strongest strategy should still pave its tru
 for (const run of runs) if (run.paved) console.log(`${run.persona.name.padEnd(12)} ${run.paved.join(", ") || "nothing"}`);
 console.log(`\nRoutine upkeep, day 40: per day, and its share of running costs (target: a fifth to a third)`);
 for (const run of runs) {
+  if (run.samples.length < 40) continue;
   const s = at(run, 40);
   if (s.cost > 0) console.log(`${run.persona.name.padEnd(12)} ${money(s.upkeep)}  ${String(Math.round((s.upkeep / s.cost) * 100)).padStart(3)}% of ${money(s.cost).trim()}`);
 }
@@ -482,15 +528,20 @@ for (const worker of workers) worker.terminate();
 async function checks(): Promise<void> {
   const results: Array<[string, boolean | null, string]> = [];
   const byName = new Map(runs.map((run) => [run.persona.name, run]));
-  const players = runs.filter((run) => run.persona.verbs.length > 0);
+  const players = runs.filter((run) => run.persona.verbs.length > 0 && !run.persona.opening);
+  const openings = runs.filter((run) => run.persona.opening);
   const idle = byName.get("idle");
 
-  // M1: at least 3 plans end day 20 within 25% of the best plan's net (days 16-20).
-  if (players.length >= 3) {
-    const nets = players.map((run) => ({ name: run.persona.name, net: meanNet(run, 16, 20) })).sort((x, y) => y.net - x.net);
+  // M1: at least 3 plans end day 20 within 25% of the best plan's net (days
+  // 16-20). The plans: the four openings, equal in skill, differing only in
+  // their first move.
+  if (openings.length >= 3) {
+    const nets = openings
+      .map((run) => ({ name: run.persona.name, net: meanNet(run, 16, 20), trips: avgHeadline(run, 20).tripsPerDay }))
+      .sort((x, y) => y.net - x.net);
     const best = nets[0]!.net;
     const close = nets.filter((x) => best > 0 && x.net >= best * 0.75);
-    results.push(["M1 opening variety", close.length >= 3, nets.map((x) => `${x.name} ${money(x.net).trim()}`).join(", ")]);
+    results.push(["M1 opening variety", close.length >= 3, nets.map((x) => `${x.name} ${money(x.net).trim()}/day, ${Math.round(x.trips)} trips`).join("; ")]);
   }
 
   // M2: a road to a cut-off town plus one vehicle pays back within 60 days.
@@ -624,7 +675,7 @@ async function checks(): Promise<void> {
   // M9: no strategy that grows towns shows a falling headline while it does.
   {
     const fallers: string[] = [];
-    for (const run of runs) {
+    for (const run of runs.filter((r) => r.samples.length >= 40)) {
       const marks = [10, 20, 40];
       const grew = at(run, 40).population > at(run, 10).population;
       // A fall counts only above the noise: over 50 trips a day, or 10%.
