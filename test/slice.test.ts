@@ -6,6 +6,7 @@ import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "@engine/slice/ledger";
 import { forecast } from "@engine/slice/forecast";
+import { legFare, stageFare } from "@engine/slice/fares";
 import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upkeep";
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
@@ -707,6 +708,41 @@ describe("slice: paving a dirt road", () => {
   });
 });
 
+describe("slice: fares by distance (step 5)", () => {
+  test("a boarding fare plus a price per stage, rounded up to the next stage", () => {
+    const t = { ...DEFAULT_SLICE_TUNING, fareBoarding: 1, farePerStage: 1, fareStageCells: 10 };
+    expect(stageFare(t, 3)).toBe(2);
+    expect(stageFare(t, 10)).toBe(2);
+    expect(stageFare(t, 10.5)).toBe(3);
+    expect(stageFare(t, 25)).toBe(4);
+  });
+
+  test("a longer leg pays more, and changing buses costs one more boarding fare, not a whole fare", () => {
+    const w = world();
+    const near = legFare(w, "big", "mid");
+    const far = legFare(w, "big", "far");
+    expect(far).toBeGreaterThan(near);
+    // Big -> mid -> far in two legs pays at most one boarding fare (plus rounding) over one leg.
+    const twoLegs = legFare(w, "big", "mid") + legFare(w, "mid", "far");
+    expect(twoLegs - far).toBeLessThanOrEqual(w.tuning.fareBoarding + w.tuning.farePerStage);
+  });
+
+  test("your fares on unload are each leg's fare", () => {
+    // Riders don't respond to price (yet), so the same run at another fare
+    // carries the same riders: income scales exactly with this leg's fare.
+    const income = (farePerStage: number) => {
+      const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, farePerStage });
+      addBus(w, "big", "mid");
+      run(w, 120);
+      return { income: lastDay(w.ledger).income, fare: legFare(w, "big", "mid") };
+    };
+    const one = income(1);
+    const two = income(2);
+    expect(one.income).toBeGreaterThan(0);
+    expect(two.income / one.income).toBeCloseTo(two.fare / one.fare, 6);
+  });
+});
+
 describe("slice: routine upkeep on the roads you keep (step 5)", () => {
   test("inherited dirt roads are free; a road you build costs its dirt rate per cell; paved costs more", () => {
     const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
@@ -1110,7 +1146,7 @@ describe("slice: the way out of debt (playtest, day 14)", () => {
 
   test("a full route on worn roads asks for a bus, not a repair", () => {
     // Small buses so it runs full, a fare high enough that a full one pays its way.
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 8, fare: 30 });
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 8, farePerStage: 30 });
     addBus(w, "big", "mid");
     run(w, 1200);
     const d = diagnoseRoute(w, w.routes[0]!.id)!;

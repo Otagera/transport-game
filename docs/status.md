@@ -26,7 +26,8 @@ right after this file. Progress on that build order:
 | 5b, part 1 | Danfo road space released per segment; your vehicles' road space counts against the same budget | Done: results below |
 | 5b, part 2 | The shared informal budget by surface: dirt 9, paved 15 | Done: results below |
 | — | Bots baseline after 5b, with paving as a move | Done: results below |
-| 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep (M10 the gate) | In progress: costs in; fares by distance next |
+| 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep, fares by distance | Done, **M10 failing**: results below |
+| 5b | M1 with forecast-driven openings; M10's fix proposed (treasury remittance) | Next |
 | 6 | Riders respond to price, with tolls, levies and the allocation | Next |
 
 **Step 5, money, 2026-10-17** (`BOTS_WORKERS=6`, ~15 min). Built roads are born dirt
@@ -69,6 +70,24 @@ action moves; M9 above noise.
 - Earlier passes: the full reversal (bus 2.8) put trips-greedy in debt from day 10; raising
   paved upkeep to hit "a fifth to a third of greedy's running costs" made greedy stop
   paving (at 35 a cell its upkeep fell to 3%) -- that target was dropped as a proxy.
+
+**Step 5, fares by distance, 2026-10-18.** Every leg pays ₦1 boarding plus a price per
+10-cell stage, rounded up (`fares.ts`), you and the danfos alike; a transfer costs one more
+boarding fare, not a whole fare. The route ceiling and `throughRoute` use real fares; road
+and pave previews say what keeping them costs. Three stage prices, bus at 2.6:
+
+| ₦ a stage | trips-greedy waited on money | trips-greedy, day 60 | greedy / next best, days 16-20 | builder's minibuses, day 20 | greedy paves its trunk |
+|---|---|---|---|---|---|
+| 0.6 | 42 of 46 days | ₦33, +₦12/day | ₦221 / ₦95 | −₦47, −₦12 | no |
+| 0.8 | 2 of 46 | ₦20,395, +₦1,065/day | ₦680 / ₦315 | −₦42, +₦1 | yes |
+| **1.0 (chosen)** | 0 of 46 | ₦52,330, +₦2,036/day | ₦1,247 / ₦608 | +₦65, +₦71 | yes |
+
+Set at **₦1.0 a stage, for the opening**: it is the level at which a builder's minibuses to
+the towns it connects pay. **M10 fails** there, and is recorded failing: the fare level is a
+knife edge for a budget-balancing trips-maximiser (it never gets going or it snowballs), and
+the best opening earns about twice the next at every level, so the fare can fix neither.
+M10's fix is proposed separately (brief, Decisions log: a treasury remittance); M1 gets
+openings of equal skill (step 5b). Checks at 1.0: M4, M6-M9 pass; M1, M2, M3, M5, M10 fail.
 
 **Step 5b part 2, 2026-10-17.** Each road's informal budget (your road space included) now
 depends on its surface: `informalRoadSpaceDirt` 9, `informalRoadSpace` (paved) 15, via

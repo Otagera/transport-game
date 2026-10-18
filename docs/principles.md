@@ -316,6 +316,16 @@ blow-by-blow; this section is the distilled rule.
   neglect on a 4-bus chain); keeping the bridged Owode–Ado road up as well *loses* (₦129/day
   upkeep for ₦72 back). A bridge wears 2× and costs 4× a cell to repair (the build ratio).
 
+- **The fare level scales everyone together; it can't fix a snowball or a skill gap**
+  (slice zero step 5, fares by distance). Measured at ₦1 boarding plus ₦0.6, 0.8 and 1.0
+  per 10-cell stage: a budget-balancing trips-maximiser either never gets going (₦0.6:
+  +₦12 a day, waits on money 42 of 46 days) or snowballs once its early network pays
+  (₦0.8: +₦1,065; ₦1.0: +₦2,036, never waits) -- a knife edge, not a dial. And the best
+  opening earned about twice the next at every level (₦221 against ₦95; ₦680 against ₦315;
+  ₦1,247 against ₦608): cutting fares shrinks every plan alike. Set the fare for the
+  opening (a minibus to a newly connected town should pay); cap compounding with
+  something that bites only on surplus, and test opening variety with plans of equal skill.
+
 ### Balance numbers (from the first attempt — starting points, not gospel)
 
 - Fleet optimum was ~15 vehicles under static demand; revenue plateaued around the

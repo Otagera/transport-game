@@ -6,6 +6,7 @@ import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
+import { passengerFares } from "./fares";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
 import { isDirt, updateRoadSpeeds } from "./congestion";
@@ -16,6 +17,15 @@ import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes
 // How much longer people wait at a motor park for a danfo to fill than
 // they wait for your bus before giving up.
 const PARK_PATIENCE_MULTIPLIER = 3;
+
+/** Money in from fares: to the funds and the vehicle's own ledger, as recordDeliveryRevenue does. */
+function recordFares(world: SliceWorld, vehicleId: string, revenue: number): number {
+  if (revenue === 0) return 0;
+  world.economy.funds += revenue;
+  const entry = world.economy.ledger.get(vehicleId);
+  if (entry) entry.revenue += revenue;
+  return revenue;
+}
 
 function emaAlpha(dt: number, tau: number): number {
   return 1 - Math.exp(-dt / tau);
@@ -174,12 +184,14 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     if (deliveries.length === 0) continue;
     if (isDanfo) {
       // Informal fares are the informal sector's, never the player's.
-      for (const delivery of deliveries) informal.earnings += delivery.amount * tuning.fare;
+      informal.earnings += passengerFares(world, deliveries);
       continue;
     }
     // Each leg pays a fare, on getting off (revenue on unload) -- per
     // rider, or per tonne for a lorry.
-    const revenue = recordDeliveryRevenue(economy, vehicle.id, deliveries);
+    // Passengers pay by distance (fares.ts); goods by the tonne.
+    const revenue =
+      vehicle.carries === "goods" ? recordDeliveryRevenue(economy, vehicle.id, deliveries) : recordFares(world, vehicle.id, passengerFares(world, deliveries, world.railVehicles.has(vehicle.id)));
     revenueThisTick += revenue;
     bump(routeRevenue, routeOf.get(vehicle.id) ?? "", revenue);
     if (vehicle.carries === "goods") {

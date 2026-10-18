@@ -42,7 +42,14 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   straightAlignmentEnabled: false,
   patienceSeconds: 12,
   demandK: 0.008,
+  // Fares by distance (fares.ts): boarding fare plus a price per 10-cell
+  // stage, rounded up. Started so a typical leg pays the old flat ₦4: the
+  // trunk (~25 cells) ₦4, a short hop ₦3, Ilase to Ado ~₦7. `fare` is the
+  // goods-era flat fare the original economy's fare table still carries.
   fare: 4,
+  fareBoarding: 1,
+  farePerStage: 1,
+  fareStageCells: 10,
   // A dirt road you build, per flat cell (step 5: roads are born dirt and
   // paving is the dear upgrade, pathing/cost.ts PAVE_COST_PER_CELL). Was 15
   // when a built road came paved.

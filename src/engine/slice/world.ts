@@ -6,6 +6,7 @@ import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
 import { canAfford, createEconomyState, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
 import { createDayHistory } from "./history";
+import { faresAlong, legFare } from "./fares";
 import { createDayLedger, forgetRoute, lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { OutcomeRates, SliceMapDef, SliceRoute, SliceTown, SliceTuning, SliceWorld } from "./types";
@@ -615,16 +616,18 @@ export function diagnoseRoute(world: SliceWorld, routeId: string): RouteDiagnosi
   // parallel route.
   const carried = new Set<string>();
   let demand = 0;
+  let fares = 0;
   for (const pair of world.simulation.demand) {
     if (!routesOnTrip(world, pair.from, pair.to).has(routeId)) continue;
     carried.add(pairKey(pair.from, pair.to));
     demand += pair.rate;
+    fares += pair.rate * legFare(world, pair.from, pair.to, isRailRoute(routeId));
   }
   const outcomes = sumOutcomes(world, (from, to) => carried.has(pairKey(from, to)));
   const total = outcomes.player + outcomes.poached + outcomes.gaveUp + outcomes.lost;
   const of = (n: number) => (total > 0 ? n / total : 0);
 
-  const ceilingPerDay = demand * world.tuning.fare * SECONDS_PER_GAME_DAY;
+  const ceilingPerDay = fares * SECONDS_PER_GAME_DAY;
   // Thin means the trips can't pay for even one bus, at what one bus can
   // realistically catch (ONE_BUS_REACH). Comparing against the
   // whole fleet's cost instead would call an over-bused strong route
@@ -988,9 +991,9 @@ export function throughRoute(world: SliceWorld, routeId: string): ThroughRoute |
   const route = world.routes.find((candidate) => candidate.id === routeId);
   // Roads only for now: running a train on is a track decision, not a bus one.
   if (!route || isRailRoute(routeId)) return null;
-  const perDay = (rate: number) => rate * world.tuning.fare * SECONDS_PER_GAME_DAY;
+  const perDay = (from: string, to: string) => faresAlong(world, from, to) * SECONDS_PER_GAME_DAY;
   const lengthOf = (from: string, to: string) => roadPath(world, from, to)?.distance ?? Infinity;
-  const current = perDay(demandAlong(world, route.a, route.b));
+  const current = perDay(route.a, route.b);
   const currentDensity = current / lengthOf(route.a, route.b);
   const oneBus = world.tuning.busOperatingCostPerSecond * SECONDS_PER_GAME_DAY;
   let best: ThroughRoute | null = null;
@@ -1004,7 +1007,7 @@ export function throughRoute(world: SliceWorld, routeId: string): ThroughRoute |
       const [from, to] = end === route.a ? [t, route.b] : [route.a, t];
       const path = roadPath(world, from, to);
       if (!path || !path.nodeIds.includes(end)) continue;
-      const reach = perDay(demandAlong(world, from, to));
+      const reach = perDay(from, to);
       if (reach / path.distance < currentDensity) continue;
       if (best && reach <= best.reachPerDay) continue;
       best = { a: from, b: to, via: path.nodeIds.slice(1, -1), reachPerDay: reach, currentReachPerDay: current };

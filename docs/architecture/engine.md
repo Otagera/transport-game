@@ -662,6 +662,15 @@ cell, no terrain terms: the earthworks are there) plus any repair first.
 times `routineUpkeepBridgeMultiplier`. Inherited dirt roads cost nothing. Charged each tick
 with wear upkeep into `applyOperatingCosts`, so the ledger counts it as running cost.
 
+### Fares by distance (step 5)
+
+`fares.ts` — `stageFare(tuning, cells)`: `fareBoarding` plus `farePerStage` per
+`fareStageCells` (10) stage, rounded up; `legFare(world, from, to, rail?)` prices one leg by
+its path's travel length (`roadPath`/`railPath` `distance`); `passengerFares` sums a
+vehicle's deliveries, so `tick.ts` charges each leg on unload, yours into the funds and the
+danfos' into `informal.earnings`, by the same schedule. `faresAlong` is `demandAlong` in
+money (route ceilings, `throughRoute`). Goods keep the economy's per-tonne fare table.
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

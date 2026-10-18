@@ -113,6 +113,10 @@ export interface InformalState {
 }
 
 export interface SliceTuning {
+  /** Fares by distance (fares.ts): boarding fare, price per stage, and a stage's length in cells. */
+  fareBoarding: number;
+  farePerStage: number;
+  fareStageCells: number;
   /** Routine upkeep per cell per game day, on roads you built or paved (upkeep.ts). */
   routineUpkeepDirtPerCell: number;
   routineUpkeepPavedPerCell: number;

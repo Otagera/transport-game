@@ -980,7 +980,7 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
       const shorter = d.shorter
         ? ` End it at ${townName(d.shorter.b)} instead (${townName(d.shorter.a)} ↔ ${townName(d.shorter.b)}): about ${d.shorter.roundTripsPerDay.toFixed(1)} round trips a day.`
         : " Sell it and put the bus on a shorter route.";
-      return `Too long for flat fares: even full, a bus here takes ${naira(d.incomePerVehicle)}/day against ${naira(d.costPerVehicle)} to run, because it makes only ${d.roundTripsPerDay.toFixed(1)} round trips a day. Another bus would lose money too.${shorter}`;
+      return `Too long for its fares: even full, a bus here takes ${naira(d.incomePerVehicle)}/day against ${naira(d.costPerVehicle)} to run, because it makes only ${d.roundTripsPerDay.toFixed(1)} round trips a day. Another bus would lose money too.${shorter}`;
     }
     case "full":
       return `Buses leave ${pct(d.loadFactor)} full: more riders than seats. Another bus would carry the ones left behind.`;

@@ -421,10 +421,12 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Fourteen decisions were drafted on 2026-10-17, three of them from a review of this brief; five are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Sixteen decisions were drafted on 2026-10-17 and 18, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-18 | Treasury remittance: every 10 game days the state takes a share of the period's net surplus (about 80%); a deficit pays nothing, so openings are untouched and compounding is capped. True to Nigeria's Fiscal Responsibility Act 2007 s.22: a corporation keeps one-fifth of its operating surplus as a general reserve and pays the balance into the Consolidated Revenue Fund (figure from reports quoting the Act; check the statute before relying on it). Proposed for M10, instead of a per-vehicle depot charge | Proposed |
+| 2026-10-18 | Fares by distance: ₦1 boarding plus ₦1.0 per 10-cell stage, set for the opening (a builder's minibus to a newly connected town pays at 1.0, loses ₦42 a day at 0.8); the snowball is fixed separately (M10 fails) | Agreed |
 | 2026-10-17 | Roads you build start as dirt; paving is the dear upgrade, the trunk costing about 3–4 buses, priced through the cost function (step 5) | Agreed |
 | 2026-10-17 | Routine upkeep per cell on roads you built or paved (dirt 1, paved 3, bridges ×3), independent of wear: a quiet road costs more than it returns; the strongest strategy still paves its trunk (step 5). Use-based upkeep returns with wear, after slice zero | Agreed |
 | 2026-10-17 | Order: money (step 5) before price response, which is built with tolls (step 6) | Agreed |
@@ -444,7 +446,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Open questions
 
-**Eight questions are open; each names what would answer it.**
+**Nine questions are open; each names what would answer it.**
 
 1. **What does a great hour feel like?** You said "connect towns, add buses" feels simplistic. Candidates: bring order to a chaotic corridor; open up the hinterland; out-hustle the danfos without losing the parks. *Answered by:* writing the one sentence you'd want to say after an hour, then holding P6 to it.
 2. **Which form of pushback?** A settlement cost, slower boarding at their parks, or strike days. *Answered by:* building the cheapest (a settlement cost) and playing it once.
@@ -454,6 +456,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 6. **Hints and "no onboarding".** principles.md §2 rules out onboarding; you want hints at the start. *Answered by:* your call on amending §2 to "up to six state-triggered hints, no tutorial".
 7. **Do levies soften the antagonist?** If danfos become too valuable to you, the hook goes slack. *Answered by:* M5, and the levy target (20–40% of what you gain by taking a corridor).
 8. **The full game: what carries over first?** The 3D map, eras and studio wait. *Answered by:* a separate plan for moving over, written after slice zero passes.
+9. **Who pays for what: one budget, or capital and operations apart?** Truer to a state transport agency: capital (roads, paving, track, vehicles) comes from the state budget, and fares cover operations. Today one pot pays for both, so a profitable fleet funds its own expansion (the snowball M10 measures). Splitting them would make the allocation the capital budget and fares the operating account. *Answered by:* whether the treasury remittance (Decisions log) fixes M10 without it; if it doesn't, or the split reads truer in play, build it.
 
 ## Glossary
 
