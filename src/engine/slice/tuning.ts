@@ -54,13 +54,14 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // builder's minibuses pay, but the allocation's share fell to ~20% for a
   // well-connected network (the brief wants a quarter to a third) and M2
   // slipped: ₦10. The levy: doing nothing collects ~₦80 a day, the agberos
-  // the same.
+  // the same. With the remittance on, ₦10 left M2 failing (no road to a
+  // cut-off town plus a vehicle paid back in 60 days): ₦15.
   tollPerRoad: 4,
   priceElasticity: 1,
   levyPerSeat: 0.6,
   agberoCut: 0.5,
   allocationBase: 50,
-  allocationPerThousand: 10,
+  allocationPerThousand: 15,
   // Treasury remittance (step 6 pass 2, budget.ts): every 10 game days, 80%
   // of funds above a ₦3,000 reserve, never more than the period's surplus.
   // The reserve rises when rail returns (bigger projects to save for).

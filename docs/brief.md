@@ -343,7 +343,7 @@ Measured, by the probe (40 days unless stated):
 | M7 | Warm start | On day 1 the informal share is within 5 points of its day-10 value |
 | M8 | Signal over noise | A good action moves the number it acts on, as shown (the 5-day average), by at least twice that number's own jitter: a vehicle moves your riders; a road or paving moves trips made |
 | M9 | Success reads as success | No strategy that grows towns shows a headline falling by more than the noise (over 50 trips a day or 10%) while it does |
-| M10 | Money limits the score | Trips-greedy (below) can't afford its next best move on most days, 15–60: money is the constraint on doing well, not an afterthought |
+| M10 | Money limits the score | Trips-greedy (budget-balancing, below) makes at least ~15% fewer trips by day 20 than the same policy with unlimited money, above the noise: money sets the pace of the build-out. (Day 20: by day 40 both fill the map and the comparison measures the map, not money.) |
 
 Played, in your sessions (write down what you felt before changing anything):
 
@@ -375,7 +375,8 @@ AI harness:
    - *Overbuilder:* spends everything on day 1.
    - *Idle:* does nothing.
    - *Roads only:* builds roads to cut-off towns, nothing else (a one-verb player, for M6).
-   - *Trips-greedy:* each move is the best trips made per naira available, losses allowed; if it can't afford that move it saves for it. Plays 60 days, for M10.
+   - *Trips-greedy:* each day it buys down its list of moves by trips made per naira, for as long as it can afford the next and its budget balances (net a day plus the moves' forecasts at or above zero). Plays 60 days. *Trips-greedy unlimited* plays the same policy with its funds topped up and no remittance: M10's comparison.
+   - *Openings* (M1): four of equal skill, spending the whole first ₦2,500 on buses, minibuses, roads or paving, then playing greedy to day 60.
    - Roads are chosen by trips unlocked per naira, measured against a twin, never by price alone. Paving is a move like any other (`moves.ts` `paveMoves`), ranked the same way: Greedy and trips-greedy consider it.
 2. **AI playtester: OpenCode's free model, before each of your sessions.** A text harness, `scripts/slice-play.ts`:
    - It keeps an action log (JSON) and replays it from day 1 each turn. The sim replays identically, so it needs no save files, and it doesn't touch Module 10's save/load.

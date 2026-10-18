@@ -28,7 +28,7 @@ right after this file. Progress on that build order:
 | — | Bots baseline after 5b, with paving as a move | Done: results below |
 | 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep, fares by distance | Done, **M10 failing**: results below |
 | 5b | M1 with openings of equal skill; M10's fix proposed (treasury remittance) | Done: M1 fails, results below |
-| 6 | Price response with tolls, levies, the allocation; the remittance | Both passes measured: below; M10 and M2 need a reading under the remittance |
+| 6 | Price response with tolls, levies, the allocation; the remittance | Both passes measured; at allocation ₦15, M5 passes, M2 and M10 fail (pull against each other): below |
 
 **Step 6, pass 1, 2026-10-18** (`BOTS_WORKERS=6`, ~48 min). First-guess values: toll ₦10 a
 road per danfo-equivalent, levy ₦0.6 a seat (agberos half), allocation ₦50 a day + ₦20 per
@@ -128,6 +128,29 @@ never short of money, and unlimited money bought exactly the same trips (1,593 a
 - **M2 fails on net before the remittance too**: neither road to a cut-off town plus a
   vehicle pays back in 60 days at ₦10 per thousand grown (it did at ₦20).
 - M5: trips-greedy carries the most and earns the most in this set; re-read on a full run.
+
+**Full set at allocation ₦15 per thousand, M10 read at day 20, 2026-10-18** (~65 min, 6
+workers; toll ₦4, remittance as pass 2).
+
+| Check | Result | Measured |
+|---|---|---|
+| M1 (day 20) | PASS | minibus first ₦3,670/978 trips, bus first ₦3,460/970, pave first ₦2,914/848, road first ₦2,514/757 |
+| M1 (proposed, day 60) | FAIL | road first within 25% on net (₦5,806 against ₦6,478) but 74 trips short of minibus first (1,561 against 1,635), outside the noise |
+| M2 | FAIL | road to Ilaro (+28 trips/day) or Ikole (+36) plus a bus or minibus: no payback in 60 days on net before remittance |
+| M3 | PASS | trunk paving pays back in 29 days; a quiet road not in 60 |
+| M4, M6-M9 | PASS | |
+| M5 | **PASS** | trips-greedy carries the most; greedy earns the most (₦4,933 a day) |
+| M10 | FAIL | trips made at day 20: unlimited 1,152 against 1,123 (+3%); trips-greedy waited on money 0 of 46 days |
+
+- **The allocation's share** of a strong network's income is 30-35% (days 31-40), the top of
+  the brief's quarter to a third; weak networks (naive, overbuilder) live half on it.
+- **M10 and M2 pull against each other.** The extra ₦5 per thousand bought trips-greedy
+  the build-out speed unlimited money had: 1,005 → 1,123 trips at day 20 against the same
+  1,152. So the gap M10 measured at ₦10 (+15%) closes, while M2 still doesn't pay back. A
+  single allocation rate can't pass both; M2 needs a road's return that isn't the
+  allocation (or a shorter road), M10 needs money to bind earlier.
+- Routine upkeep is 12-18% of running costs for the strong networks (target a fifth to a
+  third); trips-greedy and greedy still pave the trunk.
 
 **M1 with openings of equal skill, 2026-10-18** (~24 min). Four openings spend the whole
 first ₦2,500 on one kind of move -- the best each time (vehicles by forecast ₦/day, roads
