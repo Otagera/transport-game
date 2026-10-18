@@ -525,13 +525,13 @@ if (builderRun?.routesDay20) {
   const minis = builderRun.routesDay20.filter((r) => r.id.startsWith("mini:"));
   console.log(`\nBuilder's minibuses to the towns it connected, net a day at day 20 (guard: at least break even): ${minis.map((r) => `${r.id.slice(5)} ${money(r.net).trim()}`).join(", ") || "none bought"}`);
 }
-console.log(`\nIncome a day by line, days 31-40: fares / tolls / levies (agberos kept) / allocation, and the allocation's share`);
+console.log(`\nIncome a day by line, days 31-40: fares / tolls / levies (agberos kept) / allocation, the allocation's share, and remitted to the treasury`);
 for (const run of runs) {
   if (run.samples.length < 40) continue;
   const a = at(run, 30).budget, b = at(run, 40).budget;
   const per = (k: keyof BudgetTally) => (b[k] - a[k]) / 10;
   const income = per("fares") + per("tolls") + per("levies") + per("allocation");
-  console.log(`${run.persona.name.padEnd(12)} ${money(per("fares"))} ${money(per("tolls"))} ${money(per("levies"))} (${money(per("agberos")).trim()}) ${money(per("allocation"))}   ${income > 0 ? Math.round((per("allocation") / income) * 100) : 0}%`);
+  console.log(`${run.persona.name.padEnd(12)} ${money(per("fares"))} ${money(per("tolls"))} ${money(per("levies"))} (${money(per("agberos")).trim()}) ${money(per("allocation"))}   ${String(income > 0 ? Math.round((per("allocation") / income) * 100) : 0).padStart(3)}%  ${money(per("remitted"))}`);
 }
 console.log(`\nPaved by day 40 (the strongest strategy should still pave its trunk, Ilase-Owode):`);
 for (const run of runs) if (run.paved) console.log(`${run.persona.name.padEnd(12)} ${run.paved.join(", ") || "nothing"}`);

@@ -1,5 +1,6 @@
 import type { SliceWorld } from "./types";
 import { isYourRoad } from "./upkeep";
+import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 // The budget's other income lines (docs/brief.md, Money: a budget, not a
 // score). Fares are fares.ts. Here:
@@ -28,10 +29,47 @@ export interface BudgetTally {
   levies: number;
   agberos: number;
   allocation: number;
+  /** Paid to the treasury (remittance): money out, not in. */
+  remitted: number;
 }
 
 export function createBudgetTally(): BudgetTally {
-  return { fares: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0 };
+  return { fares: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, remitted: 0 };
+}
+
+/** The current remittance period: when it ends, and its net so far (income minus running costs). */
+export interface RemittancePeriod {
+  endsAtSeconds: number;
+  net: number;
+}
+
+export function createRemittancePeriod(nowSeconds: number, tuning: { remittancePeriodDays: number }): RemittancePeriod {
+  return { endsAtSeconds: nowSeconds + tuning.remittancePeriodDays * SECONDS_PER_GAME_DAY, net: 0 };
+}
+
+/**
+ * The treasury remittance (brief, Decisions log; as reported, Nigeria's
+ * Fiscal Responsibility Act 2007: a corporation remits 80% of its operating
+ * surplus and keeps 20%). Every period the state takes a share of your
+ * funds above a reserve, never more than the period's net surplus; a
+ * deficit pays nothing. So an opening is never touched, saving for a
+ * project bigger than one period's surplus stays possible (it's the funds
+ * above the reserve that are taxed, not each period's whole surplus), and
+ * a fleet that pays for itself can't compound without limit -- the
+ * snowball M10 measured. Returns what was taken this tick.
+ */
+export function remit(world: SliceWorld, netThisTick: number): number {
+  const { tuning } = world;
+  if (!tuning.remittanceEnabled) return 0;
+  const period = world.remittance;
+  period.net += netThisTick;
+  if (world.economy.elapsedSeconds < period.endsAtSeconds - 1e-6) return 0;
+  const above = world.economy.funds - tuning.remittanceReserve;
+  const taken = Math.max(0, tuning.remittanceShare * Math.min(above, period.net));
+  world.economy.funds -= taken;
+  world.budget.remitted += taken;
+  world.remittance = createRemittancePeriod(period.endsAtSeconds, tuning);
+  return taken;
 }
 
 /** The toll an informal vehicle of road space `weight` pays for a path: each road of yours on it. */

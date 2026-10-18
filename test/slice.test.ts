@@ -53,7 +53,7 @@ function run(world: SliceWorld, seconds: number): void {
 }
 
 /** No tolls, levies or allocation: for tests about fares or costs alone. */
-const noBudget: Partial<SliceTuning> = { tollPerRoad: 0, levyPerSeat: 0, allocationBase: 0, allocationPerThousand: 0 };
+const noBudget: Partial<SliceTuning> = { tollPerRoad: 0, levyPerSeat: 0, allocationBase: 0, allocationPerThousand: 0, remittanceEnabled: false };
 
 function world(overrides: Partial<SliceTuning> = {}): SliceWorld {
   return createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, ...overrides });
@@ -790,6 +790,40 @@ describe("slice: tolls, levies and the allocation (step 6)", () => {
     expect(w.economy.funds).toBe(DEFAULT_SLICE_TUNING.startingFunds);
     expect(w.budget.levies).toBe(0);
     expect(w.budget.allocation).toBe(0);
+  });
+});
+
+describe("slice: the treasury remittance (step 6, pass 2)", () => {
+  const period = DEFAULT_SLICE_TUNING.remittancePeriodDays * SECONDS_PER_GAME_DAY;
+  // Income only from the allocation, so a period's net is exactly what it paid.
+  const remitting = (startingFunds: number, allocationBase: number) =>
+    world({ startingFunds, maxEmergentTowns: 0, townGrowthCap: 0, ...noBudget, allocationBase, remittanceEnabled: true, remittanceShare: 0.8, remittanceReserve: 3000 });
+
+  test("it takes the share of the period's surplus when the funds are well above the reserve", () => {
+    const w = remitting(100_000, 100);
+    run(w, period + SIM_DT);
+    const surplus = 100 * DEFAULT_SLICE_TUNING.remittancePeriodDays;
+    expect(w.budget.remitted).toBeCloseTo(0.8 * surplus, 0);
+  });
+
+  test("it takes the share of the funds above the reserve, never more, so saving stays possible", () => {
+    const w = remitting(3_200, 100);
+    run(w, period + SIM_DT);
+    // ₦3,200 + ~₦1,000 surplus: ~₦1,200 above the reserve, but the surplus (~₦1,000) is the cap.
+    const above = 3_200 + 100 * DEFAULT_SLICE_TUNING.remittancePeriodDays - 3000;
+    expect(w.budget.remitted).toBeCloseTo(0.8 * Math.min(above, 100 * DEFAULT_SLICE_TUNING.remittancePeriodDays), 0);
+    const low = remitting(1_000, 100);
+    run(low, period + SIM_DT);
+    expect(low.budget.remitted).toBe(0); // under the reserve: nothing
+  });
+
+  test("a period in deficit pays nothing", () => {
+    const w = remitting(100_000, 0);
+    w.tuning.fareBoarding = 0;
+    w.tuning.farePerStage = 0;
+    addBus(w, "big", "far"); // no fares: it only costs
+    run(w, period + SIM_DT);
+    expect(w.budget.remitted).toBe(0);
   });
 });
 

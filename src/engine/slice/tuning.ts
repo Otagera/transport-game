@@ -47,16 +47,27 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // trunk (~25 cells) ₦4, a short hop ₦3, Ilase to Ado ~₦7. `fare` is the
   // goods-era flat fare the original economy's fare table still carries.
   fare: 4,
-  // Step 6 (budget.ts), first guesses for the measured pass: a toll that
-  // would pay the trunk's paving back in ~20 days; a levy near ₦0.3 a
-  // rider to you, the agberos keeping half; an allocation that leaves
-  // doing nothing a little ahead, and pays well for towns you grow.
-  tollPerRoad: 10,
+  // Step 6 (budget.ts). Measured (status.md): at a ₦10 toll and ₦20 per
+  // thousand grown, the trunk's paving paid back in 7 days (M3 wants 10-30)
+  // and the allocation was 59% of naive's income. At ₦4 and ₦7, paving
+  // the trunk pays back in 29 days and a quiet road's never (M3 passes),
+  // builder's minibuses pay, but the allocation's share fell to ~20% for a
+  // well-connected network (the brief wants a quarter to a third) and M2
+  // slipped: ₦10. The levy: doing nothing collects ~₦80 a day, the agberos
+  // the same.
+  tollPerRoad: 4,
   priceElasticity: 1,
   levyPerSeat: 0.6,
   agberoCut: 0.5,
   allocationBase: 50,
-  allocationPerThousand: 20,
+  allocationPerThousand: 10,
+  // Treasury remittance (step 6 pass 2, budget.ts): every 10 game days, 80%
+  // of funds above a ₦3,000 reserve, never more than the period's surplus.
+  // The reserve rises when rail returns (bigger projects to save for).
+  remittanceEnabled: true,
+  remittanceShare: 0.8,
+  remittanceReserve: 3000,
+  remittancePeriodDays: 10,
   fareBoarding: 1,
   farePerStage: 1,
   fareStageCells: 10,

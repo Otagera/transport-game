@@ -1,6 +1,6 @@
 import type { SliceMapDef, SliceTuning, SliceWorld } from "./types";
 import { createSliceWorld } from "./world";
-import { createBudgetTally } from "./budget";
+import { createBudgetTally, createRemittancePeriod } from "./budget";
 import { createDayLedger } from "./ledger";
 import { sliceTick } from "./tick";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
@@ -26,6 +26,7 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   // Levies and the allocation flow during the warm-up too; none of it is yours.
   world.economy.funds = tuning.startingFunds;
   world.ledger = createDayLedger();
+  world.remittance = createRemittancePeriod(world.economy.elapsedSeconds, tuning);
   world.startPopulation = new Map([...world.towns.values()].map((town) => [town.id, town.population]));
   return world;
 }

@@ -7,7 +7,7 @@ import { updateSettlements, type SliceEvent } from "./settlement";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
 import { legFare, passengerFares } from "./fares";
-import { allocationPerDay, tollFor, type Takings } from "./budget";
+import { allocationPerDay, remit, tollFor, type Takings } from "./budget";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
@@ -244,7 +244,11 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // so the ledger never has to know every way money is spent.
   applyOperatingCosts(economy, dt, 1, upkeep);
   updateIncomeRateEMA(economy, revenueThisTick, dt);
-  recordMoney(world.ledger, revenueThisTick, revenueThisTick - (economy.funds - fundsAtStart), routeRevenue, dt, rough.byRoute);
+  const runningCost = revenueThisTick - (economy.funds - fundsAtStart);
+  recordMoney(world.ledger, revenueThisTick, runningCost, routeRevenue, dt, rough.byRoute);
+  // The treasury's share of a surplus, once a period (budget.ts). After the
+  // ledger: a remittance is neither income nor running cost.
+  remit(world, revenueThisTick - runningCost);
 
   // Rolling rates, each updated exactly once per tick (architecture hard
   // rule 7).

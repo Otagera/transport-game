@@ -686,6 +686,13 @@ ledger. `world.startPopulation` is set at day 1 (`start.ts`), which also resets 
 ledger: levies and allocation flow during the warm-up and aren't yours. Not yet built: riders
 waiting for your cheaper vehicle waiting longer before giving up.
 
+The **treasury remittance** (`budget.ts` `remit`, step 6 pass 2): `world.remittance` is the
+current period (`remittancePeriodDays`, 10) and its net -- income minus running costs, so
+purchases are never a deficit. At the period's end the state takes `remittanceShare` (0.8)
+of the funds above `remittanceReserve` (₦3,000), never more than the period's net; a
+deficit pays nothing. Called last in `sliceTick`, after the ledger: a remittance is neither
+income nor running cost; `world.budget.remitted` keeps it. Day 1 starts a fresh period.
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

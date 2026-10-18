@@ -6,7 +6,7 @@ import type { TripPlans } from "./transfers";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
-import type { BudgetTally } from "./budget";
+import type { BudgetTally, RemittancePeriod } from "./budget";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
 // towns, straight roads, one bus type, passengers who give up, and the
@@ -124,6 +124,11 @@ export interface SliceTuning {
   /** The state's allocation a game day: a base, plus this per thousand people grown since day 1. */
   allocationBase: number;
   allocationPerThousand: number;
+  /** The treasury remittance (budget.ts): on, the share taken, the reserve kept, and the period. */
+  remittanceEnabled: boolean;
+  remittanceShare: number;
+  remittanceReserve: number;
+  remittancePeriodDays: number;
   /** Fares by distance (fares.ts): boarding fare, price per stage, and a stage's length in cells. */
   fareBoarding: number;
   farePerStage: number;
@@ -300,6 +305,8 @@ export interface SliceWorld {
   history: DayHistory;
   /** Money in since day 1, by line (budget.ts). */
   budget: BudgetTally;
+  /** The treasury remittance's current period (budget.ts). */
+  remittance: RemittancePeriod;
   /** Each town's population (thousands) on day 1: the allocation pays on growth since. */
   startPopulation: Map<string, number>;
   width: number;

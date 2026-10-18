@@ -28,7 +28,7 @@ right after this file. Progress on that build order:
 | — | Bots baseline after 5b, with paving as a move | Done: results below |
 | 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep, fares by distance | Done, **M10 failing**: results below |
 | 5b | M1 with openings of equal skill; M10's fix proposed (treasury remittance) | Done: M1 fails, results below |
-| 6 | Price response with tolls, levies, the allocation; the remittance (if agreed) | Pass 1 measured (first-guess values, too generous): below |
+| 6 | Price response with tolls, levies, the allocation; the remittance | Both passes measured: below; M10 and M2 need a reading under the remittance |
 
 **Step 6, pass 1, 2026-10-18** (`BOTS_WORKERS=6`, ~48 min). First-guess values: toll ₦10 a
 road per danfo-equivalent, levy ₦0.6 a seat (agberos half), allocation ₦50 a day + ₦20 per
@@ -58,7 +58,54 @@ thousand grown since day 1, price elasticity 1.
   ₦126,130 by day 40. Tolls at ₦10 a road pay greedy ₦1,592 a day and pay the trunk's paving
   back in 7 days. Levies look right: doing nothing collects ₦81 a day (the agberos the same).
 - Builder's minibus to Ikole loses ₦39 a day at day 20 (the other makes ₦53).
-- Next: allocation ~₦7 per thousand and toll ~₦4 a road, then pass 2 (the remittance) for M10.
+
+**Pass 1 tuned, 2026-10-18** (~63 min): toll ₦4 a road, allocation ₦7 per thousand grown.
+
+| Check | ₦10 toll, ₦20 allocation | ₦4 toll, ₦7 allocation |
+|---|---|---|
+| M3 | FAIL (trunk paving pays back in 7 days) | **PASS** (29 days; a quiet road not in 60) |
+| builder's minibuses, day 20 | −₦39, +₦53 | +₦91, +₦165 |
+| allocation's share, strong networks | 32-36% | 19-22% (target 25-33%) |
+| M1 (day 20) | PASS | PASS |
+| M1 (proposed, day 60) | FAIL, narrowly | FAIL: road first within 25% on net (₦4,279 against ₦4,744), 151 fewer trips than bus first |
+| M2 | PASS | FAIL |
+| M10 | FAIL | FAIL (trips-greedy ₦131,589 at day 60) |
+
+Set: toll ₦4, allocation ₦10 per thousand (between the two, for M2 and the allocation's
+share), measured with pass 2.
+
+**Step 6, pass 2: the treasury remittance, 2026-10-18** (~62 min; toll ₦4, allocation ₦10 per
+thousand, remittance 80% of funds above ₦3,000 every 10 days, never more than the period's
+surplus).
+
+| Opening | Net a day, day 20 → 60 | Trips made a day, day 20 → 60 |
+|---|---|---|
+| bus first | ₦2,865 → ₦4,873 | 970 → 1,545 |
+| minibus first | ₦2,673 → ₦5,098 | 931 → 1,603 |
+| road first | ₦2,186 → **₦5,311** | 766 → 1,568 |
+| pave first | ₦1,918 → ₦4,409 | 720 → 1,428 |
+
+| Check | Result | Measured |
+|---|---|---|
+| M1 (day 20) | PASS | |
+| M1 (proposed, day 60) | FAIL, inside the noise | road first has the best net and passes bus first on trips; minibus first has 35 more trips (±50 is noise) |
+| M2 | FAIL | see below |
+| M3 | PASS | trunk paving pays back in 17 days; a quiet road not in 60 |
+| M4, M6-M9 | PASS | |
+| M5 | FAIL | greedy carries the most and earns the most |
+| M10 | FAIL | trips-greedy never waits on money; funds ₦24,930 at day 60 (₦131,589 without the remittance), net ₦4,507 a day |
+
+The allocation is now 25-28% of a strong network's income (the brief's quarter to a third);
+greedy's funds at day 40 fall from ₦79,411 to ₦12,443; builder's minibuses pay; greedy still
+paves its trunk. Two readings the remittance changes, for a decision:
+
+- **M10 can't pass as defined.** The remittance caps what piles up, not what can be bought
+  each day: trips-greedy keeps the ₦3,000 reserve plus 20% of each period's surplus (~₦900 a
+  day at ₦4,500 net), and its best move costs ₦250-1,700. Only a much lower reserve -- which
+  defeats saving for a project -- would make it wait. M10 could instead measure the cap.
+- **M2 fails because payback is measured in funds.** The treasury takes 80% of the extra
+  surplus a road and bus make, so funds pay back about five times slower; the road still
+  adds trips (+28, +36 a day). Payback could be measured on net before remittance.
 
 **M1 with openings of equal skill, 2026-10-18** (~24 min). Four openings spend the whole
 first ₦2,500 on one kind of move -- the best each time (vehicles by forecast ₦/day, roads
