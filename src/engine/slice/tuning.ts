@@ -47,6 +47,16 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // trunk (~25 cells) ₦4, a short hop ₦3, Ilase to Ado ~₦7. `fare` is the
   // goods-era flat fare the original economy's fare table still carries.
   fare: 4,
+  // Step 6 (budget.ts), first guesses for the measured pass: a toll that
+  // would pay the trunk's paving back in ~20 days; a levy near ₦0.3 a
+  // rider to you, the agberos keeping half; an allocation that leaves
+  // doing nothing a little ahead, and pays well for towns you grow.
+  tollPerRoad: 10,
+  priceElasticity: 1,
+  levyPerSeat: 0.6,
+  agberoCut: 0.5,
+  allocationBase: 50,
+  allocationPerThousand: 20,
   fareBoarding: 1,
   farePerStage: 1,
   fareStageCells: 10,

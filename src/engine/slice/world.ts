@@ -6,6 +6,7 @@ import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
 import { canAfford, createEconomyState, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
 import { createDayHistory } from "./history";
+import { createBudgetTally } from "./budget";
 import { faresAlong, legFare } from "./fares";
 import { createDayLedger, forgetRoute, lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
@@ -110,6 +111,8 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     ledger: createDayLedger(),
     startSeconds: 0,
     history: createDayHistory(),
+    budget: createBudgetTally(),
+    startPopulation: new Map(def.towns.map((town) => [town.id, town.population])),
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),

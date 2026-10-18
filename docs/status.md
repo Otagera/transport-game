@@ -28,7 +28,37 @@ right after this file. Progress on that build order:
 | — | Bots baseline after 5b, with paving as a move | Done: results below |
 | 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep, fares by distance | Done, **M10 failing**: results below |
 | 5b | M1 with openings of equal skill; M10's fix proposed (treasury remittance) | Done: M1 fails, results below |
-| 6 | Price response with tolls, levies, the allocation; the remittance (if agreed) | Next |
+| 6 | Price response with tolls, levies, the allocation; the remittance (if agreed) | Pass 1 measured (first-guess values, too generous): below |
+
+**Step 6, pass 1, 2026-10-18** (`BOTS_WORKERS=6`, ~48 min). First-guess values: toll ₦10 a
+road per danfo-equivalent, levy ₦0.6 a seat (agberos half), allocation ₦50 a day + ₦20 per
+thousand grown since day 1, price elasticity 1.
+
+| Opening | Net a day, day 20 → 60 | Trips made a day, day 20 → 60 |
+|---|---|---|
+| bus first | ₦4,244 → ₦7,555 | 782 → 1,499 |
+| minibus first | ₦4,392 → ₦7,279 | 794 → 1,458 |
+| road first | ₦3,680 → ₦7,181 | 643 → 1,336 |
+| pave first | ₦3,555 → **₦7,590** | 613 → 1,404 |
+
+| Check | Result | Measured |
+|---|---|---|
+| M1 (day 20) | **PASS** | all four openings within 25% |
+| M1 (proposed, day 60) | FAIL, narrowly | pave first has the best net, but 95 fewer trips a day than bus first |
+| M2 | **PASS** | road Ikole-Kuto + minibus pays back in 18 days, + bus in 34 |
+| M3 | FAIL | paving the trunk pays back in 7 days (target 10-30): tolls too high |
+| M5 | FAIL | greedy carries the most and earns the most |
+| M10 | FAIL, far worse | trips-greedy ₦198,280 at day 60 |
+| M4, M6-M9 | PASS | |
+
+- **The catch-up works**: with tolls and the growth allocation, infrastructure-first openings
+  converge on vehicles-first by day 60, and paving first ends with the best net.
+- **Too generous**: the allocation at ₦20 per thousand grown pays naive ₦1,615 a day (59% of
+  its income; greedy's 33% is inside the brief's quarter-to-a-third) and leaves greedy at
+  ₦126,130 by day 40. Tolls at ₦10 a road pay greedy ₦1,592 a day and pay the trunk's paving
+  back in 7 days. Levies look right: doing nothing collects ₦81 a day (the agberos the same).
+- Builder's minibus to Ikole loses ₦39 a day at day 20 (the other makes ₦53).
+- Next: allocation ~₦7 per thousand and toll ~₦4 a road, then pass 2 (the remittance) for M10.
 
 **M1 with openings of equal skill, 2026-10-18** (~24 min). Four openings spend the whole
 first ₦2,500 on one kind of move -- the best each time (vehicles by forecast ₦/day, roads

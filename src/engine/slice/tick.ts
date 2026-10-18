@@ -6,7 +6,9 @@ import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
-import { passengerFares } from "./fares";
+import { legFare, passengerFares } from "./fares";
+import { allocationPerDay, tollFor, type Takings } from "./budget";
+import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
 import { isDirt, updateRoadSpeeds } from "./congestion";
@@ -26,6 +28,9 @@ function recordFares(world: SliceWorld, vehicleId: string, revenue: number): num
   if (entry) entry.revenue += revenue;
   return revenue;
 }
+
+/** At most this share of a danfo's riders priced out by a toll: some always pay. */
+const MAX_PRICED_OUT = 0.9;
 
 function emaAlpha(dt: number, tau: number): number {
   return 1 - Math.exp(-dt / tau);
@@ -193,6 +198,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     const revenue =
       vehicle.carries === "goods" ? recordDeliveryRevenue(economy, vehicle.id, deliveries) : recordFares(world, vehicle.id, passengerFares(world, deliveries, world.railVehicles.has(vehicle.id)));
     revenueThisTick += revenue;
+    if (vehicle.carries === "passengers") world.budget.fares += revenue;
     bump(routeRevenue, routeOf.get(vehicle.id) ?? "", revenue);
     if (vehicle.carries === "goods") {
       recordGoodsDelivered(deliveries, goodsDelivered);
@@ -213,7 +219,17 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   updateGoodsOutcomes(world, goodsDelivered, dt);
 
   // 4. The informal sector: danfos, then kekes and okadas.
-  dispatchInformal(world, dt, lost, gaveUp);
+  const takings: Takings = { tolls: 0, levies: 0, agberos: 0 };
+  dispatchInformal(world, dt, lost, gaveUp, takings);
+  // The state's allocation: a base, plus a share of the growth you caused (budget.ts).
+  const allocation = (allocationPerDay(world) * dt) / SECONDS_PER_GAME_DAY;
+  const otherIncome = takings.tolls + takings.levies + allocation;
+  economy.funds += otherIncome;
+  revenueThisTick += otherIncome;
+  world.budget.tolls += takings.tolls;
+  world.budget.levies += takings.levies;
+  world.budget.agberos += takings.agberos;
+  world.budget.allocation += allocation;
   reapInformal(world);
 
   // Roads wear with the traffic that just ran on them; maintained ones are
@@ -366,6 +382,8 @@ function sendInformal(
   pool: Map<string, number>,
   gaveUp: Map<string, number>,
   yours: ReadonlyMap<string, number>,
+  lost: Map<string, number>,
+  takings: Takings,
 ): boolean {
   const { simulation, tuning, informal } = world;
   const spec = informalSpec(tuning, mode);
@@ -386,12 +404,27 @@ function sendInformal(
   if (!vehicle) return false;
 
   const share = Math.min(1, spec.capacity / load);
+  // Tolls on the roads you built or paved, passed on to the riders
+  // (brief, Money: riders must respond to price, or tolls are free money):
+  // a share of those who'd board stay home instead, growing with the toll's
+  // share of their fare. You're paid the toll as it sets off.
+  const toll = tollFor(world, run.path.segmentIds, spec.weight);
+  const riders = aboard.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0) * share, 0);
+  const meanFare = riders > 0 ? aboard.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0) * share * legFare(world, group.at, rider.destination), 0) / riders : 1;
+  const stayHome = riders > 0 && toll > 0 ? Math.min(MAX_PRICED_OUT, tuning.priceElasticity * (toll / riders / meanFare)) : 0;
   vehicle.cargo = aboard.map((rider) => {
     const pooled = pool.get(rider.key) ?? 0;
     pool.set(rider.key, pooled * (1 - share));
-    bump(gaveUp, pairKey(rider.origin, rider.destination), pooled * share);
-    return { from: group.at, to: rider.destination, kind: "passengers" as const, amount: pooled * share, trip: { origin: rider.origin, destination: rider.destination } };
+    const leaving = pooled * share;
+    bump(gaveUp, pairKey(rider.origin, rider.destination), leaving * (1 - stayHome));
+    bump(lost, pairKey(rider.origin, rider.destination), leaving * stayHome);
+    return { from: group.at, to: rider.destination, kind: "passengers" as const, amount: leaving * (1 - stayHome), trip: { origin: rider.origin, destination: rider.destination } };
   });
+  takings.tolls += toll;
+  // The park levy, on every informal departure: the agberos keep their cut.
+  const levy = tuning.levyPerSeat * spec.capacity;
+  takings.levies += levy * (1 - tuning.agberoCut);
+  takings.agberos += levy * tuning.agberoCut;
   simulation.vehicles.push(vehicle);
   informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode, released: 0 });
   for (const segmentId of run.path.segmentIds) bump(informal.segmentSpace, segmentId, spec.weight);
@@ -437,7 +470,7 @@ export function informalSpec(tuning: SliceTuning, mode: InformalMode): { capacit
 //
 // Only people with no road, or who out-wait even the okadas (the road is
 // out of space), stay home.
-function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, number>, gaveUp: Map<string, number>): void {
+function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, number>, gaveUp: Map<string, number>, takings: Takings): void {
   const { tuning, informal } = world;
   const drift = emaAlpha(dt, tuning.patienceSeconds * PARK_PATIENCE_MULTIPLIER);
   // Road space your vehicles are using now, per segment.
@@ -451,7 +484,7 @@ function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, numbe
   const danfoGroups = groupPool(world, informal.pool, drift, lost, (key, _trip, amount) => bump(informal.smallPool, key, amount));
   for (const group of danfoGroups) {
     const best = bestRun(group, informal.pool);
-    if (best && best.load >= tuning.danfoCapacity) sendInformal(world, "danfo", group, best.run, best.aboard, best.load, informal.pool, gaveUp, yours);
+    if (best && best.load >= tuning.danfoCapacity) sendInformal(world, "danfo", group, best.run, best.aboard, best.load, informal.pool, gaveUp, yours, lost, takings);
   }
 
   const smallGroups = groupPool(world, informal.smallPool, drift, lost, (_key, trip, amount) => bump(lost, trip, amount));
@@ -459,7 +492,7 @@ function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, numbe
     const best = bestRun(group, informal.smallPool);
     if (!best) continue;
     if (best.load >= tuning.kekeCapacity) {
-      if (sendInformal(world, "keke", group, best.run, best.aboard, best.load, informal.smallPool, gaveUp, yours)) continue;
+      if (sendInformal(world, "keke", group, best.run, best.aboard, best.load, informal.smallPool, gaveUp, yours, lost, takings)) continue;
     }
     // An okada takes one rider, from whoever has waited in the biggest crowd.
     const single = group.riders.reduce<PooledRider | null>(
@@ -467,7 +500,7 @@ function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, numbe
       null,
     );
     const waiting = single ? informal.smallPool.get(single.key) ?? 0 : 0;
-    if (single && waiting >= tuning.okadaCapacity) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp, yours);
+    if (single && waiting >= tuning.okadaCapacity) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp, yours, lost, takings);
   }
 }
 

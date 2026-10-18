@@ -1,5 +1,7 @@
 import type { SliceMapDef, SliceTuning, SliceWorld } from "./types";
 import { createSliceWorld } from "./world";
+import { createBudgetTally } from "./budget";
+import { createDayLedger } from "./ledger";
 import { sliceTick } from "./tick";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
 import { SIM_DT } from "../loop";
@@ -17,7 +19,13 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) sliceTick(world, SIM_DT);
   world.startSeconds = world.economy.elapsedSeconds;
-  // The strip's "informal sector earned" counts from when you arrived.
+  // The strip's "informal sector earned" counts from when you arrived, and
+  // so does your budget; the allocation pays on growth from day 1.
   world.informal.earnings = 0;
+  world.budget = createBudgetTally();
+  // Levies and the allocation flow during the warm-up too; none of it is yours.
+  world.economy.funds = tuning.startingFunds;
+  world.ledger = createDayLedger();
+  world.startPopulation = new Map([...world.towns.values()].map((town) => [town.id, town.population]));
   return world;
 }

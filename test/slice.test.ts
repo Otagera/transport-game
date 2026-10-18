@@ -6,6 +6,7 @@ import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "@engine/slice/ledger";
 import { forecast } from "@engine/slice/forecast";
+import { allocationPerDay } from "@engine/slice/budget";
 import { legFare, stageFare } from "@engine/slice/fares";
 import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upkeep";
 import { paveStepCost } from "@engine/pathing/cost";
@@ -51,6 +52,9 @@ function run(world: SliceWorld, seconds: number): void {
   for (let t = 0; t < seconds; t += SIM_DT) sliceTick(world, SIM_DT);
 }
 
+/** No tolls, levies or allocation: for tests about fares or costs alone. */
+const noBudget: Partial<SliceTuning> = { tollPerRoad: 0, levyPerSeat: 0, allocationBase: 0, allocationPerThousand: 0 };
+
 function world(overrides: Partial<SliceTuning> = {}): SliceWorld {
   return createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, ...overrides });
 }
@@ -86,7 +90,7 @@ describe("slice: danfos", () => {
   });
 
   test("danfo fares never reach the player's funds", () => {
-    const w = world();
+    const w = world(noBudget);
     const before = w.economy.funds;
     run(w, 120);
     expect(w.economy.funds).toBe(before);
@@ -731,7 +735,7 @@ describe("slice: fares by distance (step 5)", () => {
     // Riders don't respond to price (yet), so the same run at another fare
     // carries the same riders: income scales exactly with this leg's fare.
     const income = (farePerStage: number) => {
-      const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, farePerStage });
+      const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, farePerStage, ...noBudget });
       addBus(w, "big", "mid");
       run(w, 120);
       return { income: lastDay(w.ledger).income, fare: legFare(w, "big", "mid") };
@@ -740,6 +744,52 @@ describe("slice: fares by distance (step 5)", () => {
     const two = income(2);
     expect(one.income).toBeGreaterThan(0);
     expect(two.income / one.income).toBeCloseTo(two.fare / one.fare, 6);
+  });
+});
+
+describe("slice: tolls, levies and the allocation (step 6)", () => {
+  test("danfos pay a toll on roads you built or paved, pass it on, and some riders stay home", () => {
+    const run2 = (tollPerRoad: number) => {
+      const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, ...noBudget, tollPerRoad });
+      paveRoad(w, "big", "mid");
+      run(w, 300);
+      return w;
+    };
+    const free = run2(0);
+    const tolled = run2(10);
+    expect(free.budget.tolls).toBe(0);
+    expect(tolled.budget.tolls).toBeGreaterThan(0);
+    // Priced out: more stay home from the towns the paved road serves.
+    expect(townOutcomes(tolled, "big").lost).toBeGreaterThan(townOutcomes(free, "big").lost);
+  });
+
+  test("inherited roads you haven't paved charge no toll", () => {
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, ...noBudget, tollPerRoad: 10 });
+    run(w, 300);
+    expect(w.budget.tolls).toBe(0);
+  });
+
+  test("every informal departure pays the park levy; the agberos keep their cut", () => {
+    const w = world({ maxEmergentTowns: 0, ...noBudget, levyPerSeat: 1, agberoCut: 0.5 });
+    const before = w.economy.funds;
+    run(w, 300);
+    expect(w.budget.levies).toBeGreaterThan(0);
+    expect(w.budget.agberos).toBeCloseTo(w.budget.levies);
+    expect(w.economy.funds - before).toBeCloseTo(w.budget.levies, 6);
+  });
+
+  test("the allocation pays a base a day, and more for the growth since day 1", () => {
+    const w = world({ maxEmergentTowns: 0, townGrowthCap: 0, ...noBudget, allocationBase: 30, allocationPerThousand: 10 });
+    expect(allocationPerDay(w)).toBe(30);
+    w.towns.get("mid")!.population += 5;
+    expect(allocationPerDay(w)).toBeCloseTo(80);
+  });
+
+  test("on day 1 your funds are the starting funds: warm-up levies and allocation aren't yours", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    expect(w.economy.funds).toBe(DEFAULT_SLICE_TUNING.startingFunds);
+    expect(w.budget.levies).toBe(0);
+    expect(w.budget.allocation).toBe(0);
   });
 });
 
@@ -760,7 +810,7 @@ describe("slice: routine upkeep on the roads you keep (step 5)", () => {
   });
 
   test("it leaves the funds a day at a time, with nothing else running", () => {
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, ...noBudget });
     buildRoad(w, "mid", "cut");
     const perDay = totalRoutineUpkeepPerDay(w);
     const before = w.economy.funds;
@@ -1790,7 +1840,7 @@ describe("slice: forecast before acting (playtest, day 31)", () => {
   });
 
   test("a road alone forecasts no fares, only its upkeep and who it lets travel", () => {
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, ...noBudget });
     run(w, 60);
     const predicted = forecast(w, { kind: "road", a: "mid", b: "cut", alignment: "cheapest" }, { label: "road", towns: ["cut"] })!;
     const built = structuredClone(w);

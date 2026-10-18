@@ -671,6 +671,21 @@ vehicle's deliveries, so `tick.ts` charges each leg on unload, yours into the fu
 danfos' into `informal.earnings`, by the same schedule. `faresAlong` is `demandAlong` in
 money (route ceilings, `throughRoute`). Goods keep the economy's per-tonne fare table.
 
+### Tolls, levies and the allocation (step 6, pass 1)
+
+`budget.ts` — the income lines besides fares, and `world.budget` (a `BudgetTally`: money in
+since day 1 by line, plus the agberos' cut, which isn't yours). In `tick.ts` `sendInformal`,
+each informal departure: pays a **toll** (`tollFor`: `tollPerRoad` × its road space × the
+roads you built or paved on its path, `upkeep.ts` `isYourRoad`), passed on to its riders --
+a share stays home (`lost`), `priceElasticity` × the toll per rider ÷ their mean fare, at
+most 90%; pays the park **levy** (`levyPerSeat` × seats, `agberoCut` kept by the agberos).
+Your own vehicles pay nothing. The **allocation** (`allocationPerDay`: `allocationBase` +
+`allocationPerThousand` × thousands of people grown since day 1, a town founded since
+counting whole) accrues each tick. All three go to the funds and count as income in the
+ledger. `world.startPopulation` is set at day 1 (`start.ts`), which also resets the funds and
+ledger: levies and allocation flow during the warm-up and aren't yours. Not yet built: riders
+waiting for your cheaper vehicle waiting longer before giving up.
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

@@ -6,6 +6,7 @@ import type { TripPlans } from "./transfers";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
+import type { BudgetTally } from "./budget";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
 // towns, straight roads, one bus type, passengers who give up, and the
@@ -113,6 +114,16 @@ export interface InformalState {
 }
 
 export interface SliceTuning {
+  /** Tolls (budget.ts): per road of yours on a path, per danfo-equivalent of road space. */
+  tollPerRoad: number;
+  /** Riders priced out of a danfo: this times the toll's share of their fare. */
+  priceElasticity: number;
+  /** Park levy per seat of each informal departure, and the agberos' share of it. */
+  levyPerSeat: number;
+  agberoCut: number;
+  /** The state's allocation a game day: a base, plus this per thousand people grown since day 1. */
+  allocationBase: number;
+  allocationPerThousand: number;
   /** Fares by distance (fares.ts): boarding fare, price per stage, and a stage's length in cells. */
   fareBoarding: number;
   farePerStage: number;
@@ -287,6 +298,10 @@ export interface SliceWorld {
   startSeconds: number;
   /** A sample of the headline and net at the end of each game day, for the 5-day averages (history.ts). */
   history: DayHistory;
+  /** Money in since day 1, by line (budget.ts). */
+  budget: BudgetTally;
+  /** Each town's population (thousands) on day 1: the allocation pays on growth since. */
+  startPopulation: Map<string, number>;
   width: number;
   height: number;
   towns: Map<string, SliceTown>;
