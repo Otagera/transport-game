@@ -335,7 +335,7 @@ Measured, by the probe (40 days unless stated):
 | # | Check | Passes when |
 | --- | --- | --- |
 | M1 | Opening variety | At least 3 different plans for the first ₦2,500 end day 20 within 25% of the best plan's net. *Proposed (2026-10-18):* the plans are four openings of equal skill (all the first ₦2,500 on buses, minibuses, roads or paving, then the same greedy policy); vehicles-first may lead at day 20, but infrastructure-first catches up or overtakes on trips made by about day 60 and is within 25% on net by then |
-| M2 | Building pays | A road to a cut-off town plus one vehicle pays back within 60 days, counting tolls, levies and allocation. The road: that town's best by trips unlocked per naira |
+| M2 | Building pays | A road to a cut-off town plus one vehicle pays back within 60 days, counting tolls, levies and allocation. The road: that town's best by trips unlocked per naira. *Proposed (2026-10-18):* busy roads pay in money (M3); lifeline roads pay in trips. The road plus one vehicle passes if its added trips cost about what other good moves' do (naira per added trip a day within 1.5× the mean of the best vehicle's and the best paving's, all bought on day 1 and measured over 60 days) and its running loss is affordable on a balanced budget (at most a fifth of trips-greedy's net a day, days 16–20) |
 | M3 | Paving isn't a no-brainer | Paving the busiest road pays back in 10–30 days; paving a quiet road doesn't within 60 |
 | M4 | The headline moves | The best strategy halves "no road" and lifts trips made a day 25% above doing nothing, by day 40 |
 | M5 | The tension is real | The strategy carrying the most riders is not the one making the most money; they differ on at least one corridor |
@@ -422,10 +422,11 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Seventeen decisions were drafted on 2026-10-17 and 18, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Eighteen decisions were drafted on 2026-10-17 and 18, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-18 | M2 is read in trips: a lifeline road (to a cut-off town) plus one vehicle passes if its added trips cost about what other good moves' do and its running loss is affordable on a balanced budget. Busy roads pay in money (M3); lifeline roads pay in trips. The allocation goes back to ₦10 per thousand: at ₦15 trips-greedy built out as if money were unlimited (M10) | Proposed |
 | 2026-10-18 | M1 is read on four openings of equal skill: vehicles-first may lead at day 20; infrastructure-first catches up or overtakes on trips made by about day 60, within 25% on net | Proposed |
 | 2026-10-18 | Treasury remittance: every 10 game days the state takes 80% of your funds above a reserve limit (about ₦3,000 in slice zero; raised when rail returns), never more than that period's net surplus; a deficit pays nothing. So openings are untouched, compounding is capped, and saving for a project stays possible -- 80% of each period's whole surplus would cap saving at 20% a period, putting any project bigger than one period's surplus out of reach (₦5,000 at ₦2,000 a period: ~125 days). As reported, 2007 Act: Nigeria's Fiscal Responsibility Act 2007 has corporations remit 80% of operating surplus to the Consolidated Revenue Fund and keep 20% (consistent across reports; the statute text unchecked; a 2024 re-enactment bill passed second reading, enactment unconfirmed). Proposed for M10, instead of a per-vehicle depot charge | Proposed |
 | 2026-10-18 | Fares by distance: ₦1 boarding plus ₦1.0 per 10-cell stage, set for the opening (a builder's minibus to a newly connected town pays at 1.0, loses ₦42 a day at 0.8); the snowball is fixed separately (M10 fails) | Agreed |

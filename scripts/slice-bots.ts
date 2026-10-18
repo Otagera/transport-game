@@ -559,7 +559,7 @@ for (const run of runs) {
 }
 console.log(`\nPaved by day 40 (the strongest strategy should still pave its trunk, Ilase-Owode):`);
 for (const run of runs) if (run.paved) console.log(`${run.persona.name.padEnd(12)} ${run.paved.join(", ") || "nothing"}`);
-console.log(`\nRoutine upkeep, day 40: per day, and its share of running costs (target: a fifth to a third)`);
+console.log(`\nRoutine upkeep, day 40: per day, and its share of running costs (no share target: a quiet road costs more than it returns -- M3 -- and the strongest strategy still paves its trunk, above)`);
 for (const run of runs) {
   if (run.samples.length < 40) continue;
   const s = at(run, 40);
@@ -609,44 +609,86 @@ async function checks(): Promise<void> {
     ]);
   }
 
-  // M2: a road to a cut-off town plus one vehicle pays back within 60 days.
-  // The road: each cut-off town's best by trips unlocked per naira, the one
-  // a player reading the desire lines would build.
+  // M2 (proposed, 2026-10-18): a road to a cut-off town plus one vehicle
+  // pays in trips. It passes if its added trips cost about what other good
+  // moves' do (naira per added trip a day, within 1.5x the mean of the best
+  // vehicle's and the best paving's) and its running loss is affordable on
+  // a balanced budget (at most a fifth of trips-greedy's net a day, days
+  // 16-20). Busy roads pay in money (M3); lifeline roads pay in trips. The
+  // road: each cut-off town's best by trips unlocked per naira, the one a
+  // player reading the desire lines would build.
   // M3: paving the busiest road pays back in 10-30 days; a quiet one not within 60.
-  // Both against the same do-nothing twin, sampled daily for 60 days.
+  // All against the same do-nothing twin, sampled daily for 60 days.
   log("M2/M3: twins over 60 days");
   const base = newWorld();
-  const twins: Array<{ label: string; world: SliceWorld; check: "M2" | "M3busy" | "M3quiet" }> = [];
+  type TwinCheck = "M2" | "M2good" | "M3busy" | "M3quiet";
+  const twins: Array<{ label: string; world: SliceWorld; check: TwinCheck; price: number }> = [];
+  const spent = (world: SliceWorld) => base.economy.funds - world.economy.funds;
   for (const road of bestRoadPerTown(await rankedRoads(base))) {
     for (const kind of ["bus", "minibus"] as const) {
       const world = newWorld();
       if (buildRoad(world, road.action.a, road.action.b).ok && applyAction(world, { kind, a: road.action.a, b: road.action.b }).ok) {
-        twins.push({ label: `road ${road.action.a}-${road.action.b} (+${Math.round(road.tripsAdded)} trips/day) + ${kind}`, world, check: "M2" });
+        twins.push({ label: `road ${road.action.a}-${road.action.b} + ${kind}`, world, check: "M2", price: spent(world) });
       }
+    }
+  }
+  // The good moves M2 is priced against: the best vehicle by forecast, the
+  // best paving by trips per naira, both bought on day 1 like the lifeline.
+  {
+    const vehicles = vehicleMoves(base).map((m) => m.action);
+    const forecasts = await forecastAll(base, vehicles);
+    const bestVehicle = forecasts.reduce<number>((best, v, i) => (v !== null && (best < 0 || v > forecasts[best]!) ? i : best), -1);
+    const bestPave = (await rankedPaves(base))[0];
+    for (const action of [bestVehicle >= 0 ? vehicles[bestVehicle]! : null, bestPave?.action ?? null]) {
+      if (!action) continue;
+      const world = newWorld();
+      if (applyAction(world, action).ok) twins.push({ label: `${action.kind} ${"a" in action ? `${action.a}-${action.b}` : ""}`, world, check: "M2good", price: spent(world) });
     }
   }
   const flows = probeRoadFlows();
   for (const [check, segmentId] of [["M3busy", flows.busiest], ["M3quiet", flows.quietest]] as const) {
     const chain = chainOf(base, segmentId);
     const world = newWorld();
-    if (chain && paveRoad(world, chain.a, chain.b).ok) twins.push({ label: `pave ${chain.a}-${chain.b}`, world, check });
+    if (chain && paveRoad(world, chain.a, chain.b).ok) twins.push({ label: `pave ${chain.a}-${chain.b}`, world, check, price: spent(world) });
   }
   const payback = new Map<string, number | null>(twins.map((t) => [t.label, null]));
+  // Trips made a day added over the twin, summed over the 60 days.
+  const addedTrips = new Map<string, number>(twins.map((t) => [t.label, 0]));
+  // Payback on net before the remittance (funds plus what was remitted):
+  // the treasury takes most of a surplus, so funds alone pay back ~5x
+  // slower. Below the reserve the two agree.
+  const before = (w: SliceWorld) => w.economy.funds + w.budget.remitted;
   for (let d = 1; d <= 60; d += 1) {
     runDays(base, 1);
+    const baseTrips = headline(base).tripsPerDay;
     for (const twin of twins) {
       runDays(twin.world, 1);
-      // Payback on net before the remittance (funds plus what was remitted):
-      // the treasury takes most of a surplus, so funds alone pay back ~5x
-      // slower. Below the reserve the two agree.
-      const before = (w: SliceWorld) => w.economy.funds + w.budget.remitted;
+      addedTrips.set(twin.label, addedTrips.get(twin.label)! + headline(twin.world).tripsPerDay - baseTrips);
       if (payback.get(twin.label) === null && before(twin.world) >= before(base)) payback.set(twin.label, d);
     }
   }
   const days = (label: string) => payback.get(label) ?? Infinity;
   const show = (t: { label: string }) => `${t.label}: ${Number.isFinite(days(t.label)) ? `${days(t.label)} days` : "not in 60"}`;
+  // Naira per added trip a day (the price over the 60-day mean added), and
+  // the running net a day once bought (before the remittance).
+  const perTrip = (t: (typeof twins)[number]) => t.price / Math.max(1e-9, addedTrips.get(t.label)! / 60);
+  const runningNet = (t: (typeof twins)[number]) => (before(t.world) - before(base) + t.price) / 60;
+  // A "good move" that added no trips over the 60 days isn't one: the best
+  // paving by trips per naira on days 6-10 (Ado-Ogbe) lost 39 trips a day
+  // over 60, and its per-trip price swamped the mean.
+  const good = twins.filter((t) => t.check === "M2good" && addedTrips.get(t.label)! > 0);
+  const goodPerTrip = good.reduce((sum, t) => sum + perTrip(t), 0) / Math.max(1, good.length);
+  const tripsGreedyForM2 = byName.get("trips-greedy");
+  const affordable = tripsGreedyForM2 && tripsGreedyForM2.samples.length >= 20 ? 0.2 * meanNet(tripsGreedyForM2, 16, 20) : null;
   const m2 = twins.filter((t) => t.check === "M2");
-  results.push(["M2 building pays", m2.some((t) => days(t.label) <= 60), m2.map(show).join("; ")]);
+  const m2Pass = (t: (typeof twins)[number]) => perTrip(t) <= 1.5 * goodPerTrip && affordable !== null && -runningNet(t) <= affordable;
+  const describe = (t: (typeof twins)[number]) =>
+    `${t.label}: +${Math.round(addedTrips.get(t.label)! / 60)} trips/day at ${money(perTrip(t)).trim()}/trip, net ${money(runningNet(t)).trim()}/day`;
+  results.push([
+    "M2 lifelines pay in trips",
+    good.length === 0 || affordable === null ? null : m2.some(m2Pass),
+    `${m2.map(describe).join("; ")}. Good moves ${money(goodPerTrip).trim()}/trip (${twins.filter((t) => t.check === "M2good").map(describe).join("; ")}); affordable loss ${affordable === null ? "n/a (no trips-greedy run)" : `${money(affordable).trim()}/day`}`,
+  ]);
   const busy = twins.find((t) => t.check === "M3busy");
   const quiet = twins.find((t) => t.check === "M3quiet");
   if (busy && quiet) {

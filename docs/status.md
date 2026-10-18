@@ -28,7 +28,7 @@ right after this file. Progress on that build order:
 | — | Bots baseline after 5b, with paving as a move | Done: results below |
 | 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep, fares by distance | Done, **M10 failing**: results below |
 | 5b | M1 with openings of equal skill; M10's fix proposed (treasury remittance) | Done: M1 fails, results below |
-| 6 | Price response with tolls, levies, the allocation; the remittance | Both passes measured; at allocation ₦15, M5 passes, M2 and M10 fail (pull against each other): below |
+| 6 | Price response with tolls, levies, the allocation; the remittance | Both passes measured; back at ₦10, M2 (in trips), M5, M10 (+14.6%) and day-60 M1 fail: below |
 
 **Step 6, pass 1, 2026-10-18** (`BOTS_WORKERS=6`, ~48 min). First-guess values: toll ₦10 a
 road per danfo-equivalent, levy ₦0.6 a seat (agberos half), allocation ₦50 a day + ₦20 per
@@ -149,8 +149,35 @@ workers; toll ₦4, remittance as pass 2).
   1,152. So the gap M10 measured at ₦10 (+15%) closes, while M2 still doesn't pay back. A
   single allocation rate can't pass both; M2 needs a road's return that isn't the
   allocation (or a shorter road), M10 needs money to bind earlier.
-- Routine upkeep is 12-18% of running costs for the strong networks (target a fifth to a
-  third); trips-greedy and greedy still pave the trunk.
+- Routine upkeep's target is per road (brief): a quiet road costs more than it returns (M3
+  passes) and the strongest strategy still paves its trunk (trips-greedy and greedy do). Its
+  share of running costs, 12-18%, is printed but no longer a target.
+
+**Back to ₦10 per thousand; M2 read in trips, 2026-10-18** (~61 min, 6 workers). The
+openings and greedy match pass 2 exactly (same tuning, deterministic).
+
+| Check | Result | Measured |
+|---|---|---|
+| M1 (day 20) | PASS | |
+| M1 (proposed, day 60) | FAIL, not relaxed | road first has the best net (₦5,311) but 35 trips fewer than minibus first (1,568 against 1,603) |
+| M2 (proposed, in trips) | FAIL (printed PASS: a bug, fixed) | lifelines add 28-44 trips a day at ₦17-31 a trip and lose ₦18-64 a day (affordable: up to ₦518); the best bus adds 74 at ₦7 a trip |
+| M3 | PASS | 29 days; a quiet road not in 60 |
+| M4, M6-M9 | PASS | |
+| M5 | **FAIL** | trips-greedy carries the most and earns the most (₦3,917 a day) |
+| M10 | FAIL by a hair | unlimited 1,152 against 1,005 at day 20: +14.6%, 147 trips (threshold 15%) |
+
+- **The M2 printout passed on a bug.** The best paving by trips per naira on days 6-10,
+  Ado-Ogbe, *lost* 39 trips a day over 60 days, so its naira per trip was astronomical and
+  the "good moves" mean let everything through. Good moves that add no trips are now
+  excluded. Against the bus alone (₦7 a trip, 1.5× = ₦10.5) every lifeline fails on cost
+  per trip; all four pass on affordability. The comparison may want the trunk paving (M3's
+  busy road) as the paving reference instead of the day-1 ranking's first -- for a decision.
+- **A ranking on days 6-10 can mislead over 60.** Ado-Ogbe paving ranks first per naira on
+  a 5-day twin and costs trips over 60; the bots' paving choices use the 5-day ranking.
+- **M5 depends on the allocation.** At ₦15 greedy earned the most; at ₦10 trips-greedy
+  does. The tension sits on the edge.
+- The allocation is 22-27% of a strong network's income (the brief's quarter to a third, at
+  its floor).
 
 **M1 with openings of equal skill, 2026-10-18** (~24 min). Four openings spend the whole
 first ₦2,500 on one kind of move -- the best each time (vehicles by forecast ₦/day, roads
