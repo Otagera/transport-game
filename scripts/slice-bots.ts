@@ -327,49 +327,73 @@ const personas: Persona[] = [
     name: "trips-greedy",
     verbs: ["bus", "minibus", "road", "pave"],
     days: 60,
-    decide: (() => {
-      type Option = { action: ActionSpec; price: number; perNaira: number; money?: number | null };
-      let ranked: { key: string; list: Option[] } = { key: "", list: [] };
-      return async (world: SliceWorld): Promise<void | "blocked"> => {
-        const key = `${Math.floor(world.economy.elapsedSeconds / (3 * SECONDS_PER_GAME_DAY))}`;
-        if (ranked.key !== key) {
-          const t0 = performance.now();
-          const vehicles = shortlistVehicles(world);
-          const measuring = structuredClone(world);
-          measuring.economy.funds = 1e9;
-          const screen = await tripsAddedOver(measuring, vehicles.map((m) => m.action), 3, 2);
-          const shortlist = vehicles
-            .map((m, i) => ({ action: m.action as ActionSpec, price: m.price, perNaira: (screen[i] ?? 0) / m.price }))
-            .sort((x, y) => y.perNaira - x.perNaira)
-            .slice(0, 6);
-          const measured = await tripsAddedOver(measuring, shortlist.map((o) => o.action), 5, 2);
-          const options: Option[] = [
-            ...shortlist.map((o, i) => ({ ...o, perNaira: (measured[i] ?? 0) / o.price })),
-            ...bestRoadPerTown(await rankedRoads(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
-            ...(await rankedPaves(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
-          ].filter((o) => o.perNaira > 0);
-          options.sort((x, y) => y.perNaira - x.perNaira);
-          // Its money forecast too (2 days, as the player sees it): it buys
-          // only moves that keep its net a day at or above zero.
-          const top = options.slice(0, 8);
-          const money = await forecastAll(measuring, top.map((o) => o.action));
-          top.forEach((o, i) => (o.money = money[i] ?? null));
-          ranked = { key, list: top };
-          if (process.env.BOTS_VERBOSE) log(`trips-greedy day ${Math.round((world.economy.elapsedSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1}: ${vehicles.length} candidates, ${world.simulation.vehicles.length} vehicles on the map, ranked in ${((performance.now() - t0) / 1000).toFixed(1)} s, funds ₦${Math.round(world.economy.funds)}`);
-        }
-        // Its next best move: the best trips per naira that keeps the budget
-        // balanced -- today's net (5-day average) plus the move's forecast.
-        const net = averageNet(world);
-        const index = ranked.list.findIndex((o) => o.money !== null && o.money !== undefined && net + o.money >= 0);
-        if (index < 0) return;
-        const best = ranked.list[index]!;
-        if (best.price > world.economy.funds) return "blocked";
-        if (!applyAction(world, best.action).ok) return "blocked";
-        ranked.list.splice(index, 1);
-      };
-    })(),
+    decide: tripsGreedy(false),
+  },
+  {
+    // M10's comparison: trips-greedy with money no object.
+    name: "trips-greedy unlimited",
+    verbs: ["bus", "minibus", "road", "pave"],
+    days: 60,
+    decide: tripsGreedy(true),
   },
 ];
+
+/**
+ * Trips-greedy's policy (its persona above). `unlimited`: the same policy
+ * with its funds topped up every day and no remittance -- what M10 compares
+ * it against: if money limits the score, unlimited money buys more trips.
+ */
+function tripsGreedy(unlimited: boolean): (world: SliceWorld) => Promise<void | "blocked"> {
+  type Option = { action: ActionSpec; price: number; perNaira: number; money?: number | null };
+  let ranked: { key: string; list: Option[] } = { key: "", list: [] };
+  return async (world: SliceWorld): Promise<void | "blocked"> => {
+    if (unlimited) {
+      world.economy.funds = 1e9;
+      world.tuning.remittanceEnabled = false;
+    }
+    const key = `${Math.floor(world.economy.elapsedSeconds / (3 * SECONDS_PER_GAME_DAY))}`;
+    if (ranked.key !== key) {
+      const t0 = performance.now();
+      const vehicles = shortlistVehicles(world);
+      const measuring = structuredClone(world);
+      measuring.economy.funds = 1e9;
+      const screen = await tripsAddedOver(measuring, vehicles.map((m) => m.action), 3, 2);
+      const shortlist = vehicles
+        .map((m, i) => ({ action: m.action as ActionSpec, price: m.price, perNaira: (screen[i] ?? 0) / m.price }))
+        .sort((x, y) => y.perNaira - x.perNaira)
+        .slice(0, 6);
+      const measured = await tripsAddedOver(measuring, shortlist.map((o) => o.action), 5, 2);
+      const options: Option[] = [
+        ...shortlist.map((o, i) => ({ ...o, perNaira: (measured[i] ?? 0) / o.price })),
+        ...bestRoadPerTown(await rankedRoads(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
+        ...(await rankedPaves(world)).map((r) => ({ action: r.action as ActionSpec, price: r.price, perNaira: r.perNaira })),
+      ].filter((o) => o.perNaira > 0);
+      options.sort((x, y) => y.perNaira - x.perNaira);
+      // Its money forecast too (2 days, as the player sees it): it buys
+      // only moves that keep its net a day at or above zero.
+      const top = options.slice(0, 16);
+      const money = await forecastAll(measuring, top.map((o) => o.action));
+      top.forEach((o, i) => (o.money = money[i] ?? null));
+      ranked = { key, list: top };
+      if (process.env.BOTS_VERBOSE) log(`trips-greedy day ${Math.round((world.economy.elapsedSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1}: ${vehicles.length} candidates, ${world.simulation.vehicles.length} vehicles on the map, ranked in ${((performance.now() - t0) / 1000).toFixed(1)} s, funds ₦${Math.round(world.economy.funds)}`);
+    }
+    // It buys down its list -- the best trips per naira that keeps the
+    // budget balanced (today's net, 5-day average, plus the forecasts of
+    // what it buys today) -- for as long as it can afford the next move.
+    // One move a day hid the constraint M10 asks about: never short of
+    // money at that pace, unlimited money bought exactly the same trips.
+    let net = averageNet(world);
+    for (;;) {
+      const index = ranked.list.findIndex((o) => o.money !== null && o.money !== undefined && net + o.money >= 0);
+      if (index < 0) return;
+      const best = ranked.list[index]!;
+      if (best.price > world.economy.funds) return "blocked";
+      if (!applyAction(world, best.action).ok) return "blocked";
+      net += best.money!;
+      ranked.list.splice(index, 1);
+    }
+  };
+}
 
 /** Greedy's move: the best forecast ₦/day it can afford, if it pays at all. */
 async function greedyMove(world: SliceWorld): Promise<void> {
@@ -550,7 +574,8 @@ for (const worker of workers) worker.terminate();
 async function checks(): Promise<void> {
   const results: Array<[string, boolean | null, string]> = [];
   const byName = new Map(runs.map((run) => [run.persona.name, run]));
-  const players = runs.filter((run) => run.persona.verbs.length > 0 && !run.persona.opening);
+  // Players: the strategies, not M1's openings or M10's unlimited-money comparison.
+  const players = runs.filter((run) => run.persona.verbs.length > 0 && !run.persona.opening && run.persona.name !== "trips-greedy unlimited");
   const openings = runs.filter((run) => run.persona.opening);
   const idle = byName.get("idle");
 
@@ -611,7 +636,11 @@ async function checks(): Promise<void> {
     runDays(base, 1);
     for (const twin of twins) {
       runDays(twin.world, 1);
-      if (payback.get(twin.label) === null && twin.world.economy.funds >= base.economy.funds) payback.set(twin.label, d);
+      // Payback on net before the remittance (funds plus what was remitted):
+      // the treasury takes most of a surplus, so funds alone pay back ~5x
+      // slower. Below the reserve the two agree.
+      const before = (w: SliceWorld) => w.economy.funds + w.budget.remitted;
+      if (payback.get(twin.label) === null && before(twin.world) >= before(base)) payback.set(twin.label, d);
     }
   }
   const days = (label: string) => payback.get(label) ?? Infinity;
@@ -702,14 +731,22 @@ async function checks(): Promise<void> {
     ]);
   }
 
-  // M10: money limits the score -- trips-greedy, which buys whatever adds
-  // the most trips per naira and doesn't mind losing money, can't afford
-  // its next best move on most days, 15-60.
-  const tripsGreedy = byName.get("trips-greedy");
-  if (tripsGreedy) {
-    const window = Array.from({ length: 46 }, (_, i) => i + 15);
-    const waiting = window.filter((d) => tripsGreedy.blocked.has(d)).length;
-    results.push(["M10 money limits the score", waiting > window.length / 2, `budget-balancing trips-greedy waited on money ${waiting} of ${window.length} days (15-60); funds day 60 ${money(at(tripsGreedy, 60).funds).trim()}, net ${money(meanNet(tripsGreedy, 56, 60)).trim()}/day`]);
+  // M10: money limits the score. Trips-greedy (budget-balancing, the most
+  // trips per naira) against the same policy with unlimited funds: if money
+  // is the constraint, unlimited money makes ~15%+ more trips by day 60.
+  // Within the noise (±50 trips a day) is a fail.
+  const tripsGreedyRun = byName.get("trips-greedy");
+  const unlimitedRun = byName.get("trips-greedy unlimited");
+  if (tripsGreedyRun && unlimitedRun) {
+    const limited = avgHeadline(tripsGreedyRun, 60).tripsPerDay;
+    const free = avgHeadline(unlimitedRun, 60).tripsPerDay;
+    const gain = free / limited - 1;
+    const waiting = Array.from({ length: 46 }, (_, i) => i + 15).filter((d) => tripsGreedyRun.blocked.has(d)).length;
+    results.push([
+      "M10 money limits the score",
+      gain >= 0.15 && free - limited > 50,
+      `trips made day 60: unlimited ${Math.round(free)} against ${Math.round(limited)} (${gain >= 0 ? "+" : ""}${Math.round(gain * 100)}%); trips-greedy waited on money ${waiting} of 46 days, funds ${money(at(tripsGreedyRun, 60).funds).trim()}`,
+    ]);
   }
 
   // M9: no strategy that grows towns shows a falling headline while it does.

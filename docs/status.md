@@ -107,6 +107,28 @@ paves its trunk. Two readings the remittance changes, for a decision:
   surplus a road and bus make, so funds pay back about five times slower; the road still
   adds trips (+28, +36 a day). Payback could be measured on net before remittance.
 
+**M10 and M2 re-read, 2026-10-18** (short set: idle, naive, trips-greedy and the same policy
+with unlimited funds, ~18 min). M2 now measures payback on net before the remittance (funds
+plus what was remitted). M10 now compares trips made at day 60 with and without unlimited
+money (pass at +15% and above the noise). Trips-greedy now buys down its ranked list each
+day while it can afford the next move and its budget balances: at one move a day it was
+never short of money, and unlimited money bought exactly the same trips (1,593 against 1,593).
+
+| Trips made a day | day 10 | day 20 | day 40 | day 60 |
+|---|---|---|---|---|
+| trips-greedy | 679 | 1,005 | 1,417 | 1,611 |
+| unlimited money | 772 (+14%) | 1,152 (+15%) | 1,404 (−1%) | 1,580 (−2%) |
+
+- **M10 fails at day 60 because the map saturates, not because money is loose.** Unlimited
+  money builds the network ~15% faster through day 20; by day 40 both have filled the nine
+  towns' demand. Trips-greedy never waits on cash: what stops it each day is the
+  budget-balancing rule. Lowering the 20% retained share wouldn't bite, and the levies it
+  displaces are small (₦50-104 a day). M10 may belong in the build-out (day 20, or the area
+  between the curves) -- for a decision.
+- **M2 fails on net before the remittance too**: neither road to a cut-off town plus a
+  vehicle pays back in 60 days at ₦10 per thousand grown (it did at ₦20).
+- M5: trips-greedy carries the most and earns the most in this set; re-read on a full run.
+
 **M1 with openings of equal skill, 2026-10-18** (~24 min). Four openings spend the whole
 first ₦2,500 on one kind of move -- the best each time (vehicles by forecast ₦/day, roads
 and paving by trips per naira) -- then all play greedy, to day 20:
