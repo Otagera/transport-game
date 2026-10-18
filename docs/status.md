@@ -47,6 +47,13 @@ on roads or paving, and ahead on trips made too. Roads and paving earn no money 
 and cost upkeep, so an infrastructure opening waits on fares it doesn't collect -- the
 brief's spine ("building pays back") isn't true yet. That's what step 6's tolls and the
 growth allocation are for; M1 is likely to pass only with them.
+
+**Before tolls, 2026-10-18** (`.tmp-check`, not kept): informal riders a day whose trip uses
+a road you built or paved, from the warmed world with nothing else of yours. Roads to Ilaro
+(Ilase-Ilaro) and Ikole (Kuto-Ikole): ~98-110 a day, average fare ₦5.3-5.8, so ₦1,000 a
+day would be ₦9-10 a rider, 1.6-1.9 fares. The paved trunk: ~200 a day, average fare
+₦6.1-6.3, ₦5 a rider, 0.8 of a fare. Tolls can't close the openings' gap without pushing
+riders off; the catch-up must come from the growth allocation and the remittance.
 | 6 | Riders respond to price, with tolls, levies and the allocation | Next |
 
 **Step 5, money, 2026-10-17** (`BOTS_WORKERS=6`, ~15 min). Built roads are born dirt

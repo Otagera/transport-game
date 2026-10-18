@@ -302,7 +302,8 @@ const personas: Persona[] = [
   ...(["bus", "minibus", "road", "pave"] as const).map((kind) => ({
     name: `${kind} first`,
     verbs: ["bus", "minibus", "road", "pave"],
-    days: 20,
+    // To day 60: M1 as proposed asks whether infrastructure-first catches up by then.
+    days: Number(process.env.OPENING_DAYS ?? 60),
     opening: true,
     decide: async (world: SliceWorld, d: number) => (d === 0 ? spendOpening(world, kind) : greedyMove(world)),
   })),
@@ -506,6 +507,15 @@ for (const run of runs) {
   });
   console.log(`${run.persona.name.padEnd(12)} ${cells.join("")}`);
 }
+const openingRuns = runs.filter((r) => r.persona.opening);
+if (openingRuns.length > 0) {
+  const marks = [10, 20, 30, 40, 50, 60].filter((d) => openingRuns.every((r) => r.samples.length >= d));
+  console.log(`\nThe openings' curves: net a day (5-day mean) / trips made a day (5-day average)`);
+  console.log(`${"opening".padEnd(14)} ${marks.map((d) => `day ${d}`.padEnd(16)).join("")}`);
+  for (const run of openingRuns) {
+    console.log(`${run.persona.name.padEnd(14)} ${marks.map((d) => `${money(meanNet(run, d - 4, d)).trim()} / ${Math.round(avgHeadline(run, d).tripsPerDay)}`.padEnd(16)).join("")}`);
+  }
+}
 const builderRun = runs.find((r) => r.persona.name === "builder");
 if (builderRun?.routesDay20) {
   const minis = builderRun.routesDay20.filter((r) => r.id.startsWith("mini:"));
@@ -542,6 +552,24 @@ async function checks(): Promise<void> {
     const best = nets[0]!.net;
     const close = nets.filter((x) => best > 0 && x.net >= best * 0.75);
     results.push(["M1 opening variety", close.length >= 3, nets.map((x) => `${x.name} ${money(x.net).trim()}/day, ${Math.round(x.trips)} trips`).join("; ")]);
+  }
+
+  // M1, as proposed (brief, 2026-10-18): vehicles-first may lead at day 20,
+  // but infrastructure-first (road or pave first) catches up or overtakes on
+  // trips made by day 60 and is within 25% of the best net by then.
+  if (openings.length >= 4 && openings.every((run) => run.samples.length >= 60)) {
+    const at60 = openings.map((run) => ({ name: run.persona.name, net: meanNet(run, 56, 60), trips: avgHeadline(run, 60).tripsPerDay }));
+    const vehicles = at60.filter((x) => x.name === "bus first" || x.name === "minibus first");
+    const infra = at60.filter((x) => x.name === "road first" || x.name === "pave first");
+    const bestTrips = Math.max(...vehicles.map((x) => x.trips));
+    const bestNet = Math.max(...at60.map((x) => x.net));
+    const best = [...infra].sort((x, y) => y.trips - x.trips)[0]!;
+    const pass = best.trips >= bestTrips && best.net >= 0.75 * bestNet;
+    results.push([
+      "M1 (proposed, day 60)",
+      pass,
+      at60.map((x) => `${x.name} ${money(x.net).trim()}/day, ${Math.round(x.trips)} trips`).join("; "),
+    ]);
   }
 
   // M2: a road to a cut-off town plus one vehicle pays back within 60 days.

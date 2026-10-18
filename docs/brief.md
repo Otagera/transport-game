@@ -313,7 +313,7 @@ Off, each behind a switch that defaults to off for slice zero:
 **The order from here, reordered 2026-10-17:** money first (step 5, formerly 6), then price response with tolls (step 6, formerly 5 and 7).
 
 5. Fares by distance, then re-tune the vehicles' running costs, and bring routine upkeep on the roads you built or paved forward (it was step 7's). Money is loose (M10: trips-greedy waits on money 1 day in 46) mostly because wear's rough-road discount is still in the running costs: the bus went 3.5 → 3.0 a second when worn roads began costing your vehicles extra (track 2), then 3.0 → 2.4 for the minibus's balance. With wear off, reverse the discount and keep the bus/minibus per-seat-cell ratio: bus × 3.5/3.0 ≈ 2.8, minibus ≈ 2.45. **From step 5 on, M10 is a gate:** every later step must keep it passing. Watch M1 (opening variety) as costs rise. **Agreed:** roads you build start as dirt (cheaper than ₦15 a cell), and paving is the dear upgrade, priced so paving the trunk costs about 3–4 buses (₦1,500–2,000), through the cost function (`engine/pathing/cost.ts` via `roads.ts`: the cost function is the build price). Routine upkeep (Money, Costs) comes in here too. The surplus is large (trips-greedy ends day 60 with ₦30,915), so expect big moves. Today paving the trunk costs ~₦380–435 and adds ~158 trips a day with no buses (389 → 547) and ~230 with 2: about six times a bus per naira, the dominant opening (status.md, 5b part 2), and every road you build is born paved.
-6. Riders respond to price, built together with tolls: the price response is inert until a toll creates a fare gap. Then tolls (passed on to danfo riders), levies and the allocation, tuned until M2, M3, M5 and M6 pass while M10 still passes.
+6. Riders respond to price, built together with tolls: the price response is inert until a toll creates a fare gap. Then tolls (passed on to danfo riders), levies and the allocation, tuned until M2, M3, M5 and M6 pass while M10 still passes. In two measured passes. **(1)** Price response, tolls, levies, the allocation; then measure M2, M3, M5 and the four openings' curves (net and trips made a day, to day 60). **(2)** The treasury remittance (Decisions log); then measure M10 and the curves again. *Checked first (2026-10-18):* tolls alone can't close the openings' gap. Infrastructure-first trails vehicles-first by ~₦1,000 a day at day 20, and informal riders a day on the roads you built or paved are ~100 (roads to Ilaro and Ikole) or ~200 (the paved trunk): ₦1,000 a day would be ₦9–10 a rider (1.6–1.9 fares) or ₦5 (0.8 of a fare). The catch-up has to come from the growth allocation, and from the remittance damping the vehicle snowball; tolls are tuned for M3 and the tension (M5), not to carry the openings.
 7. The new headline and the panel's budget breakdown.
 8. The advice moves to `?dev=1`, and the six hints arrive.
 9. The AI harness (`scripts/slice-play.ts`), then the A checks and your session.
@@ -334,7 +334,7 @@ Measured, by the probe (40 days unless stated):
 
 | # | Check | Passes when |
 | --- | --- | --- |
-| M1 | Opening variety | At least 3 different plans for the first ₦2,500 end day 20 within 25% of the best plan's net |
+| M1 | Opening variety | At least 3 different plans for the first ₦2,500 end day 20 within 25% of the best plan's net. *Proposed (2026-10-18):* the plans are four openings of equal skill (all the first ₦2,500 on buses, minibuses, roads or paving, then the same greedy policy); vehicles-first may lead at day 20, but infrastructure-first catches up or overtakes on trips made by about day 60 and is within 25% on net by then |
 | M2 | Building pays | A road to a cut-off town plus one vehicle pays back within 60 days, counting tolls, levies and allocation. The road: that town's best by trips unlocked per naira |
 | M3 | Paving isn't a no-brainer | Paving the busiest road pays back in 10–30 days; paving a quiet road doesn't within 60 |
 | M4 | The headline moves | The best strategy halves "no road" and lifts trips made a day 25% above doing nothing, by day 40 |
@@ -421,10 +421,11 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Sixteen decisions were drafted on 2026-10-17 and 18, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Seventeen decisions were drafted on 2026-10-17 and 18, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-18 | M1 is read on four openings of equal skill: vehicles-first may lead at day 20; infrastructure-first catches up or overtakes on trips made by about day 60, within 25% on net | Proposed |
 | 2026-10-18 | Treasury remittance: every 10 game days the state takes 80% of your funds above a reserve limit (about ₦3,000 in slice zero; raised when rail returns), never more than that period's net surplus; a deficit pays nothing. So openings are untouched, compounding is capped, and saving for a project stays possible -- 80% of each period's whole surplus would cap saving at 20% a period, putting any project bigger than one period's surplus out of reach (₦5,000 at ₦2,000 a period: ~125 days). As reported, 2007 Act: Nigeria's Fiscal Responsibility Act 2007 has corporations remit 80% of operating surplus to the Consolidated Revenue Fund and keep 20% (consistent across reports; the statute text unchecked; a 2024 re-enactment bill passed second reading, enactment unconfirmed). Proposed for M10, instead of a per-vehicle depot charge | Proposed |
 | 2026-10-18 | Fares by distance: ₦1 boarding plus ₦1.0 per 10-cell stage, set for the opening (a builder's minibus to a newly connected town pays at 1.0, loses ₦42 a day at 0.8); the snowball is fixed separately (M10 fails) | Agreed |
 | 2026-10-17 | Roads you build start as dirt; paving is the dear upgrade, the trunk costing about 3–4 buses, priced through the cost function (step 5) | Agreed |
