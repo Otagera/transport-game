@@ -31,7 +31,8 @@ right after this file. Progress on that build order:
 | 6 | Price response with tolls, levies, the allocation; the remittance | Done, tuning stopped: allocation ₦10, M10 borderline pass, M2 and day-60 M1 fail (findings), M5 expected to fail until pushback: below |
 | 7 | The new headline (5-day averages, chips) and the panel's budget breakdown | Done 2026-10-19: below |
 | 8 | Best next moves, forecasts and receipts to `?dev=1`; the six hints | Done 2026-10-19: below |
-| — | **Next: your playtest** (brief P1-P6) | Slice zero goes to the user's sessions |
+| — | Your playtest (brief P1-P6) | Played 2026-10-19: fun for minutes; one map; no story; no struggle (principles.md §6) |
+| — | **Next: Revision 1, the corridor's story** (brief) | Drafted 2026-10-19, **Proposed**: awaiting your decision before anything is built |
 
 **Steps 7 and 8, 2026-10-19** (render-and-ui.md §7). Styled from the design lab's "The
 brief, step 8" preset: no exported picks were found, so the preset stands in until you

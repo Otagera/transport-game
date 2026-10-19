@@ -786,6 +786,29 @@ Steps, each played before the next:
      thousand or two over its start, settling back, reads as steady (`growthTrend`, one
      rule for the map's arrow and the panel's sentence).
 
+   **Played 2026-10-19, slice zero after steps 7-8 (to day 33 and day 57; brief P1-P6):**
+   *"The game is 'fun' for just a few minutes, I have played the same map over and over
+   again so no joy. Plus even if it changed not much to do. Ideally we might want to have
+   some story for the player to tell using the game like I wanted to connect this 2 places
+   but we start with one type of road then we change it then rail then something else I
+   guess. ... the money is not tight. which is good in one sense but no sense of struggle so
+   its just about pointing one place to another and adding busses."* On screen at day 33:
+   ₦25,644 in funds, +₦5,467 a day, no town without a road, 227 trips a day with no seat:
+   the map was solved by about day 30. Three findings, none fixed yet:
+   - **One map, played to exhaustion.** Nothing differs between games, so nothing is
+     discovered the second time.
+   - **No story.** The arc you wanted -- one corridor taken from dirt road to paved road to
+     rail and beyond as it outgrows each -- has nothing to push it: demand never outruns the
+     mode, and rail, wear and the straight line are switched off.
+   - **No struggle.** Money never makes you wait, so every decision is "point two towns,
+     add buses" (bots: M10 passes only at 14.6%).
+
+   This playtest prompted Revision 1 of the brief (proposed 2026-10-19, brief "Revision 1:
+   the corridor's story"): a corridor climbs dirt → paved → bus lane → rail as its towns
+   outgrow each rung, each rung buying about 20–40 days before the next jam; the bus lane
+   takes road space from the danfos and brings pushback; saving for the next rung is the
+   struggle; calendar eras stay paused; then a seeded variation of this map for replay.
+
 Rules for working this way:
 
 - **Every step is played before the next starts.** Every finding that mattered came from

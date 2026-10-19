@@ -281,6 +281,74 @@ Kept from what's built: desire lines, town rings, route verdicts ranked by cause
 
 Taken out of the player's view: Best next moves, forecast lines on previews, second-click confirmations, receipts as panel text. A receipt may come back as a brief mark on the map ("+₦40/day" over the route two days on): test it before keeping it.
 
+## Revision 1 (proposed, 2026-10-19): the corridor's story
+
+**Proposed. A corridor climbs a ladder (dirt → paved → bus lane → rail) because the towns it serves outgrow each rung; the climb is the story you tell, and saving for the next rung is the struggle.** Prompted by your playtest of slice zero after steps 7–8 (principles.md §6, Played 2026-10-19): *"fun for just a few minutes"*, the same map every time, *"not much to do"*, and *"no sense of struggle so its just about pointing one place to another and adding busses"*. By about day 30 every town had a road and money never made you wait. Nothing pushed back, so nothing had to happen next.
+
+What you should be able to say after an hour, revised: "Ilase–Owode started as dirt. I paved it on day 12, gave my buses a lane on day 40 and lost the agberos' goodwill doing it, and by day 90 the old line was carrying it. Owode doubled."
+
+### A corridor
+
+A **corridor** is a whole road between two towns, through any roadside towns on it (what the game already names "the Ilase – Owode road"). It is the unit of the story: the panel gives each corridor of yours a card with its rungs and the day each arrived, and the map draws what it has been.
+
+### The pressure: growth outruns the rung
+
+**A corridor jams because you served it well, not because you neglected it.** Towns along a corridor grow toward a size set by the service they get (built, principles.md §3 Growth); the revision ties that size to the corridor's capacity, so a better rung lets its towns grow, and their growth fills the rung again. **A town's largest size depends on the capacity of its corridors only, never on its current size** (principles.md §3 Growth: `D_max` bounded independently of `D`, or the cap chases the town and growth is exponential in a logistic's clothes). Unserved, a corridor never jams: the danfos carry what they can and the rest stays home.
+
+What a jam means on screen, all already drawn: traffic casings turning red, your buses' speed falling, "no seat" rising on that corridor, and the route verdict "jammed". The fix is the next rung, not another bus.
+
+### The ladder
+
+| Rung | What it changes | Price (target) | What it costs you besides money |
+| --- | --- | --- | --- |
+| Dirt road | Joins two towns; slow; danfos' road space 9 | About a bus (built) | Routine upkeep: a quiet road costs more than it returns |
+| Paved | Carries 1.7× the traffic; danfos' road space 15; your tolls start | About 3–4 buses (built) | Higher upkeep; tolls send some danfo riders home |
+| Bus lane | Your vehicles run in a lane congestion doesn't slow; the danfos lose road space on that corridor (back to dirt's, or less), so its tolls and levies fall | About paving again, 10–20 days of surplus | **Pushback arrives with it**: the union answers on that corridor (one form, chosen by playtest: Informal sector). The M5 tension: the corridor that carries most is the one that stops paying you |
+| Rail | Restore the old line or lay new track, halts, trains: takes the corridor's long trips off the road altogether | 20–40 days of surplus: the big project (Commit phase) | Rail's own upkeep; the road's danfos keep the short trips |
+
+The bus lane is a regulation verb (Open question 5), answered here as a rung: a stick with a price, in levies lost and pushback.
+
+### Guarding against a treadmill
+
+**Each rung must visibly change the corridor and buy about 20–40 days before the next jam.** A ladder you climb only to stay in place is a chore. So:
+
+- **Visible:** each rung draws differently (dirt dashed, paved solid, a coloured lane beside the road, track), the corridor's earlier rung stays faint on the map where the alignment changed, and its card lists the rungs and their days. That card is the story.
+- **Measured:** the bots measure days from a rung to that corridor's next jam (check C1). Under 20 is a treadmill; over 40 and the rung was the end of the story.
+- **Not every corridor climbs, but one does:** a corridor whose towns stop growing (small towns, the cap) stays on its rung. A map where every corridor is rail by day 100 fails, and so does one where no corridor reaches rail by day 100–150 in a good game.
+
+### Money: the struggle is saving for the next rung
+
+**Money binds when the rung you need costs more than you have.** Today it never does (M10 passes only at 14.6%; ₦25,644 in funds on day 33 of your playtest). With the ladder, the next rung is a project you save for while the corridor jams. Two things follow, both proposed:
+
+- **The treasury leaves a named project alone, for a while.** Name the rung you're saving for (a corridor and a rung), and what you set aside for it isn't remitted (Open question 9's "save for a named project"). If the rung isn't built within about 30 days, the set-aside lapses to the treasury: a named project is a commitment, not a place to hide money. Without set-asides, the 80% remittance above the ₦3,000 reserve makes rail unreachable. With them, saving is a visible choice: money set aside isn't buying buses.
+- **Rungs are priced against the surplus they arrive in:** a bus lane 10–20 days of a mid-game surplus, rail 20–40. The bots tune it (check C2).
+
+### Eras stay paused
+
+Calendar eras stay paused (principles.md §6). Each corridor climbs at its own pace, as its towns grow; the region is never in one era. A corridor at rail beside one still on dirt is the brownfield pillar played forward.
+
+### The order
+
+1. **Pressure and the ladder:** growth tied to corridor capacity; the bus lane rung, with pushback in one form on its corridor; the corridor card and the corridor's drawn history; the named project the treasury leaves alone. Measure C1–C3, M5 and M10 again.
+2. **Rail returns as the top rung** (switched on; restore the old line, new track, halts, trains), priced for C2.
+3. **A seeded variation of the hand-made map:** the same geography, with town sizes and the river's crossing points varied by a seed, so a second game differs (P8). Full map generation waits until the variation has been played.
+4. **Wear returns after rail** (Fix tool): keeping what you built against climbing further.
+
+The straight alignment and goods come back later, one per playtest, as before.
+
+### Checks for Revision 1
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C1 | A rung buys time | For the strongest strategy's corridors, each rung holds 20–40 days before that corridor jams again (bots) |
+| C2 | Money makes you wait | Trips-greedy waits on money for a rung on at least a quarter of days 20–60; a bus lane costs 10–20 days of its surplus, rail 20–40 |
+| C3 | The lane costs you the danfos | A bus lane lowers that corridor's tolls and levies, and pushback fires there within 10 days, shown on the map where it happens (never a dialog or meter) |
+| C4 | Some corridors climb, not all | By day 100, at most half the strongest strategy's corridors have passed paved; and a good game gets at least one corridor to rail by day 100–150 |
+| P7 | A story to tell | After a session you can tell one corridor's story in a sentence, with days in it |
+| P8 | The second game differs | A new seed changes at least your first three moves |
+
+The slice-zero checks that pass stay as regression checks. **Closing slice zero is a one-time, recorded exception** to "nothing moves on until every check passes": M5 is replaced by C3 (the tension it asked for comes from the bus lane and pushback); M2 stays a finding (principles.md §3: a lifeline road buys trips at a premium); day-60 M1 is re-measured under Revision 1. **For Revision 1, every check passes before moving on.**
+
 ## Slice zero: what's on, what's off, and the order things come back
 
 **Slice zero is the smallest game that tests this brief: roads, buses and danfos, with the new money and the new headline.** Everything else is already built and tested; it goes behind a switch in `tuning.ts`, not into the bin.
@@ -318,7 +386,7 @@ Off, each behind a switch that defaults to off for slice zero:
 8. The advice moves to `?dev=1`, and the six hints arrive. Done 2026-10-19.
 9. The AI harness (`scripts/slice-play.ts`), then the A checks and your session.
 
-The order things come back, one per playtest, each with its own check:
+The order things come back, one per playtest, each with its own check (*superseded if Revision 1 is agreed: pushback comes with the bus lane, rail returns as the top rung, then wear; see Revision 1, The order*):
 
 1. **Wear and the Fix tool.** It creates the late-game choice between keeping what you built and building more, and it meets tolls: a toll road you don't keep up loses traffic. *Check:* you keep some roads and drop others, and can say why.
 2. **Pushback, one form.** It completes the informal sector's third role. *Check:* at least once you hold back from a corridor because of it, and it feels fair.
@@ -422,10 +490,14 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Eighteen decisions were drafted on 2026-10-17 and 18, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Twenty-two decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-19 | Revision 1: the corridor's story. A corridor climbs dirt → paved → bus lane → rail as its towns outgrow each rung; each rung visibly changes it and buys about 20–40 days before the next jam; the bus lane takes road space from the danfos and brings pushback (M5); calendar eras stay paused. Order: pressure and the ladder, rail as the top rung, a seeded variation of the hand-made map, then wear. Prompted by your playtest (principles.md §6, 2026-10-19) | Proposed |
+| 2026-10-19 | Slice zero closes by a one-time recorded exception: M5 replaced by C3, M2 kept as a finding, day-60 M1 re-measured under Revision 1. "Every check passes before moving on" stays in force for Revision 1 | Proposed |
+| 2026-10-19 | The treasury leaves a named project alone: money set aside for a named rung isn't remitted, and lapses to the treasury if the rung isn't built within about 30 days (Open question 9) | Proposed |
+| 2026-10-19 | A town's largest size depends on its corridors' capacity only, never on its current size (principles.md §3 Growth) | Proposed |
 | 2026-10-18 | M2 is read in trips: a lifeline road (to a cut-off town) plus one vehicle passes if its added trips cost about what other good moves' do and its running loss is affordable on a balanced budget. Busy roads pay in money (M3); lifeline roads pay in trips. The allocation goes back to ₦10 per thousand: at ₦15 trips-greedy built out as if money were unlimited (M10) | Proposed |
 | 2026-10-18 | M1 is read on four openings of equal skill: vehicles-first may lead at day 20; infrastructure-first catches up or overtakes on trips made by about day 60, within 25% on net | Proposed |
 | 2026-10-18 | Treasury remittance: every 10 game days the state takes 80% of your funds above a reserve limit (about ₦3,000 in slice zero; raised when rail returns), never more than that period's net surplus; a deficit pays nothing. So openings are untouched, compounding is capped, and saving for a project stays possible -- 80% of each period's whole surplus would cap saving at 20% a period, putting any project bigger than one period's surplus out of reach (₦5,000 at ₦2,000 a period: ~125 days). As reported, 2007 Act: Nigeria's Fiscal Responsibility Act 2007 has corporations remit 80% of operating surplus to the Consolidated Revenue Fund and keep 20% (consistent across reports; the statute text unchecked; a 2024 re-enactment bill passed second reading, enactment unconfirmed). Proposed for M10, instead of a per-vehicle depot charge | Proposed |
@@ -455,11 +527,11 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 2. **Which form of pushback?** A settlement cost, slower boarding at their parks, or strike days. *Answered by:* building the cheapest (a settlement cost) and playing it once.
 3. **Tolls automatic, or a choice per road?** Automatic is simpler; a choice adds "toll it and push traffic elsewhere, or keep it free". *Answered by:* M3 and P3. If tolls never feel like a decision, make them one. Passing the toll on to danfo riders already gives automatic tolls a cost: the budget rises and the headline falls.
 4. **Does the allocation reward growth or service?** Mostly answered: growth already requires your service (a town grows only once you carry 10% of its trips; new towns need your riders), so the allocation rewards growth you served. *Answered by:* the probe, which only has to settle how big k is: big enough to pass M2, small enough that buses alone don't win (M6).
-5. **Regulation verbs:** ban okadas from a highway, reserve a bus lane. True (from memory, Lagos restricted okadas on major roads in 2020) and powerful, but principles.md §1 makes power framing, not a fantasy. *Answered by:* after pushback is played: does the game want a stick, or are tolls and levies enough?
+5. **Regulation verbs:** ban okadas from a highway, reserve a bus lane. *Revision 1 (proposed) answers the bus lane as a rung of the ladder.* True (from memory, Lagos restricted okadas on major roads in 2020) and powerful, but principles.md §1 makes power framing, not a fantasy. *Answered by:* after pushback is played: does the game want a stick, or are tolls and levies enough?
 6. **Hints and "no onboarding".** principles.md §2 rules out onboarding; you want hints at the start. *Answered by:* your call on amending §2 to "up to six state-triggered hints, no tutorial".
 7. **Do levies soften the antagonist?** If danfos become too valuable to you, the hook goes slack. *Answered by:* M5, and the levy target (20–40% of what you gain by taking a corridor).
 8. **The full game: what carries over first?** The 3D map, eras and studio wait. *Answered by:* a separate plan for moving over, written after slice zero passes.
-9. **Who pays for what: one budget, or capital and operations apart?** Truer to a state transport agency: capital (roads, paving, track, vehicles) comes from the state budget, and fares cover operations. Today one pot pays for both, so a profitable fleet funds its own expansion (the snowball M10 measures). Splitting them would make the allocation the capital budget and fares the operating account. The reported definition of the surplus a corporation remits -- revenue above approved spending -- also supports a later action: **save for a named project**, money set aside for an approved project that the remittance doesn't take. *Answered by:* whether the treasury remittance (Decisions log) fixes M10 without it; if it doesn't, or the split reads truer in play, build it.
+9. **Who pays for what: one budget, or capital and operations apart?** Truer to a state transport agency: capital (roads, paving, track, vehicles) comes from the state budget, and fares cover operations. Today one pot pays for both, so a profitable fleet funds its own expansion (the snowball M10 measures). Splitting them would make the allocation the capital budget and fares the operating account. The reported definition of the surplus a corporation remits -- revenue above approved spending -- also supports a later action: **save for a named project**, money set aside for an approved project that the remittance doesn't take. *Answered by:* whether the treasury remittance (Decisions log) fixes M10 without it; if it doesn't, or the split reads truer in play, build it. *Revision 1 (proposed) takes the named project: savings for a named rung aren't remitted, and lapse to the treasury after about 30 days unbuilt.*
 
 ## Glossary
 
@@ -470,12 +542,16 @@ The game's vocabulary, alphabetical. Add a word the session it first matters.
 | Agbero | A tout at a motor park or bus stop who collects levies from drivers for the union, keeping a cut |
 | Allocation | The state's daily money to you: a fixed base plus a share of the growth you caused |
 | Brownfield | The map is never empty: towns, roads, informal transport and a wrong railway exist on day 1 |
+| Bus lane | A rung of the ladder: a lane on a paved corridor that only your vehicles use; the danfos lose road space there (Revision 1) |
+| Corridor | A whole road between two towns, through any roadside towns on it: the unit that climbs the ladder (Revision 1) |
 | Danfo | A yellow minibus, about 14 seats, that leaves when full; the informal sector's workhorse |
 | Desire line | A line from a town to each town its people want to reach; thickness is trips a day |
 | Feeder | A route that brings riders to a trunk |
 | Halt | A short spur that brings the old line into a town it passes |
 | Interchange | A town where riders change between your routes |
+| Jam | A corridor whose traffic holds your vehicles well below free speed and whose "no seat" is rising: the signal for the next rung (Revision 1) |
 | Keke | A three-wheeled taxi, 3 seats |
+| Ladder, rung | The upgrades a corridor climbs, dirt → paved → bus lane → rail; each is a rung (Revision 1) |
 | Levy | What each informal vehicle pays to load at a park |
 | No road / no seat | The two kinds of stayed home: no road joins the towns; or one does, but nobody carried them |
 | Okada | A motorcycle taxi, 1 passenger |
