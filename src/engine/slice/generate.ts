@@ -63,11 +63,60 @@ const ROAD_CLEARANCE = 3;
 /** Draws before falling back to the seeded variation of the hand-made map (never seen in tests). */
 const MAX_DRAWS = 400;
 
-/** Names for generated towns: none of the hand-made map's, so a new map reads as new. */
+/** Names for generated towns: none of the hand-made map's, so a new map reads as new. The south-west's (Yoruba). */
 const NAMES = [
   "Iseyin", "Okeho", "Igboho", "Saki", "Iwo", "Ede", "Ejigbo", "Ikire", "Ilesa", "Owo", "Ikare", "Ota", "Ifo", "Epe",
   "Ijero", "Ido", "Ilobu", "Erin", "Igbeti", "Kisi", "Ipetu", "Ifon", "Ilero", "Agbara", "Itori", "Ilugun", "Oyan", "Ilora",
 ];
+
+/**
+ * Where in the country a map is: its towns are named from one region, so a
+ * map reads as one real place, never a Hausa town beside an Ijaw one (the
+ * pillar, true not teaching). Real towns of each region, middle-sized, plain
+ * spellings. Only the south-west and the south-south reach the coast.
+ */
+export type NameRegion = "southwest" | "north" | "northeast" | "middleBelt" | "southeast" | "southSouth";
+
+const REGION_NAMES: Record<Exclude<NameRegion, "southwest">, string[]> = {
+  north: [
+    "Zaria", "Funtua", "Gusau", "Malumfashi", "Daura", "Kazaure", "Hadejia", "Gumel", "Rano", "Wudil", "Kankia", "Dutsin-Ma",
+    "Bichi", "Gwarzo", "Dambatta", "Ringim", "Kiru", "Tsafe", "Zuru", "Bunza", "Argungu", "Jega", "Yauri", "Soba", "Ikara",
+    "Makarfi", "Kudan",
+  ],
+  northeast: [
+    "Biu", "Potiskum", "Nguru", "Gashua", "Geidam", "Damaturu", "Bama", "Gwoza", "Askira", "Uba", "Mubi", "Michika", "Hong",
+    "Ganye", "Numan", "Jalingo", "Kaltungo", "Dukku", "Azare", "Misau", "Gombe",
+  ],
+  middleBelt: [
+    "Gboko", "Katsina-Ala", "Otukpo", "Oju", "Wukari", "Bida", "Mokwa", "Lapai", "Agaie", "Kontagora", "Lafia", "Keffi",
+    "Akwanga", "Doma", "Idah", "Ankpa", "Dekina", "Ajaokuta", "Okene", "Lokoja", "Kabba", "Pankshin", "Shendam", "Bukuru",
+    "Vom", "Kafanchan",
+  ],
+  southeast: [
+    "Nnewi", "Ekwulobia", "Awka", "Agulu", "Oko", "Ihiala", "Okigwe", "Orlu", "Nkwerre", "Ohafia", "Arochukwu", "Abiriba",
+    "Bende", "Afikpo", "Nsukka", "Udi", "Agbani", "Awgu", "Adani", "Ogidi", "Ozubulu", "Uga", "Igbo-Ukwu", "Obollo-Afor",
+  ],
+  southSouth: [
+    "Warri", "Sapele", "Ughelli", "Abraka", "Kwale", "Oleh", "Ozoro", "Burutu", "Bomadi", "Patani", "Brass", "Nembe",
+    "Oloibiri", "Bonny", "Okrika", "Ahoada", "Omoku", "Eket", "Oron", "Abak", "Itu", "Opobo", "Degema", "Ikot-Ekpene",
+    "Auchi", "Ekpoma", "Uromi", "Irrua", "Igarra", "Agbor",
+  ],
+};
+
+/**
+ * A map's region, from a stream of its own so the geography's draws (and
+ * every map made before regions) stay exactly as they were. The south-west
+ * stays the most likely; a coast is only the south-west's or the south-south's.
+ */
+function nameRegion(seed: number, setting: CitySetting): NameRegion {
+  const roll = createRng(seed + 1_000_003)();
+  if (setting === "coast") return roll < 0.6 ? "southwest" : "southSouth";
+  const others: NameRegion[] = ["north", "northeast", "middleBelt", "southeast", "southSouth"];
+  return roll < 0.4 ? "southwest" : others[Math.min(others.length - 1, Math.floor(((roll - 0.4) / 0.6) * others.length))]!;
+}
+
+/** A town's id from its name: lower case, letters only ("Dutsin-Ma" -> "dutsinma"). */
+const townId = (name: string) => name.toLowerCase().replace(/[^a-z]/g, "");
 
 export type CitySetting = "coast" | "river" | "inland";
 
@@ -152,6 +201,8 @@ function isDryAround(water: SliceRiverDef[], p: Point, clearance: number): boole
 export interface GeneratedMapInfo {
   map: SliceMapDef;
   setting: CitySetting;
+  /** The part of the country its town names come from. */
+  region: NameRegion;
   /** The inherited trunk: dominant city, middle town, second city. */
   trunk: [string, string, string];
   /** How many draws the guards rejected before this one. */
@@ -164,21 +215,23 @@ export function generatedSliceMap(base: SliceMapDef, seed: number): SliceMapDef 
 }
 
 export function generatedMapInfo(base: SliceMapDef, seed: number): GeneratedMapInfo {
-  if (seed === 0) return { map: structuredClone(base), setting: "inland", trunk: ["ilase", "owode", "ado"], rejected: 0 };
+  if (seed === 0) return { map: structuredClone(base), setting: "inland", region: "southwest", trunk: ["ilase", "owode", "ado"], rejected: 0 };
   const rng = createRng(seed);
   // The setting is the seed's, drawn once: redrawn with every rejected draw,
   // the harder settings came up less (river 35 of 300 seeds).
   const setting: CitySetting = (["coast", "river", "inland"] as const)[Math.floor(rng() * 3)]!;
+  const region = nameRegion(seed, setting);
+  const regional = region === "southwest" ? null : shuffle(createRng(seed + 2_000_003), REGION_NAMES[region]);
   for (let draw = 0; draw < MAX_DRAWS; draw += 1) {
-    const result = drawMap(rng, setting);
-    if (result) return { ...result, rejected: draw };
+    const result = drawMap(rng, setting, regional);
+    if (result) return { ...result, region, rejected: draw };
   }
   // Never reached by any seed the tests try; kept so a seed always makes a game.
-  return { map: variedSliceMap(base, seed), setting: "inland", trunk: ["ilase", "owode", "ado"], rejected: MAX_DRAWS };
+  return { map: variedSliceMap(base, seed), setting: "inland", region: "southwest", trunk: ["ilase", "owode", "ado"], rejected: MAX_DRAWS };
 }
 
-/** One draw; null when a guard rejects it. */
-function drawMap(rng: Rng, setting: CitySetting): Omit<GeneratedMapInfo, "rejected"> | null {
+/** One draw; null when a guard rejects it. `regional`: another region's names, already shuffled (null: the south-west's). */
+function drawMap(rng: Rng, setting: CitySetting, regional: string[] | null): Omit<GeneratedMapInfo, "rejected" | "region"> | null {
   const river = drawRiver(rng, between(rng, 38, 62));
   // The dominant city's bank, and for the coast, a sea along that bank's edge.
   const cityBank: -1 | 1 = rng() < 0.5 ? -1 : 1;
@@ -232,11 +285,13 @@ function drawMap(rng: Rng, setting: CitySetting): Omit<GeneratedMapInfo, "reject
   const [middle, second] = trunks[Math.floor(rng() * trunks.length)]!;
 
   // Sizes: the hand-made map's, the three largest on the trunk, the rest shuffled.
-  const names = shuffle(rng, NAMES).slice(0, spots.length);
+  // The south-west's shuffle is always drawn, so the rest of the map draws the same whatever the region.
+  const southwest = shuffle(rng, NAMES);
+  const names = (regional ?? southwest).slice(0, spots.length);
   const order = [0, middle, second, ...shuffle(rng, spots.map((_, i) => i).filter((i) => i !== 0 && i !== middle && i !== second))];
   const sizes = new Map<number, number>([[0, SIZES[0]!], [second, SIZES[1]!], [middle, SIZES[2]!]]);
   order.slice(3).forEach((i, k) => sizes.set(i, SIZES[3 + k]!));
-  const towns: SliceTown[] = spots.map((p, i) => ({ id: names[i]!.toLowerCase(), name: names[i]!, x: p.x, y: p.y, population: sizes.get(i)! }));
+  const towns: SliceTown[] = spots.map((p, i) => ({ id: townId(names[i]!), name: names[i]!, x: p.x, y: p.y, population: sizes.get(i)! }));
   const id = (i: number) => towns[i]!.id;
 
   // The inherited roads: the trunk, then spurs. 2-3 towns off the trunk are left cut off.

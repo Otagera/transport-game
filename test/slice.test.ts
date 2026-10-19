@@ -2788,6 +2788,19 @@ describe("generated maps per seed, with guards (brief, After the ladder's playte
     expect([...settings].sort()).toEqual(["coast", "inland", "river"]);
   });
 
+  test("a map's towns are named from one region; only the south-west and south-south have a coast", () => {
+    const regions = new Set<string>();
+    for (let seed = 1; seed <= 60; seed += 1) {
+      const info = generatedMapInfo(SLICE_MAP, seed);
+      regions.add(info.region);
+      if (info.setting === "coast") expect(["southwest", "southSouth"]).toContain(info.region);
+      // Ids follow the names, letters only ("Dutsin-Ma" -> "dutsinma").
+      expect(info.map.towns.every((t) => t.id === t.name.toLowerCase().replace(/[^a-z]/g, ""))).toBe(true);
+    }
+    expect(regions.size).toBeGreaterThanOrEqual(4);
+    expect(regions.has("southwest")).toBe(true);
+  });
+
   test("a generated map plays: the world starts, and a bus on the trunk carries riders", () => {
     const info = generatedMapInfo(SLICE_MAP, 3);
     const w = startSliceGame(info.map, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
