@@ -6,6 +6,7 @@ import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
+import { dispatchTrucks, truckersPickUp } from "./truckers";
 import { updateIndustries } from "./industries";
 import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
@@ -125,9 +126,12 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   updateRoadSpeeds(world, dt);
   // Goods arrive at their yards, and some of what's waiting spoils (goods.ts).
   if (tuning.goodsEnabled) produceAndSpoil(world, dt);
+  // Truckers take some of what's waiting, short hauls fastest (truckers.ts).
+  if (tuning.goodsEnabled) truckersPickUp(world, dt);
   const routeOf = new Map<string, string>();
   for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
   const goodsDelivered = new Map<string, number>();
+  const goodsTrucked = new Map<string, number>();
   const boardings = new Map<string, number>();
   const routeRevenue = new Map<string, number>();
   const plans = tripPlans(world);
@@ -191,13 +195,18 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       dt,
       conditions,
       undefined,
-      vehicle.carries === "goods" ? lorryLoader : isDanfo ? danfoLoader : busLoader,
+      // A truck leaves loaded and stops for nothing on the way.
+      vehicle.carries === "goods" ? (isDanfo ? () => {} : lorryLoader) : isDanfo ? danfoLoader : busLoader,
       isDanfo ? world.segmentSpeed : yourSpeed,
     );
     if (deliveries.length === 0) continue;
     if (isDanfo) {
-      // Informal fares are the informal sector's, never the player's.
-      informal.earnings += passengerFares(world, deliveries);
+      // Informal fares are the informal sector's, never the player's: a
+      // trucker's at its undercut share of yours (truckers.ts).
+      if (vehicle.carries === "goods") {
+        informal.earnings += goodsFares(world, deliveries) * tuning.truckerFareShare;
+        recordGoodsDelivered(deliveries, goodsTrucked);
+      } else informal.earnings += passengerFares(world, deliveries);
       continue;
     }
     // Each leg pays a fare, on getting off (revenue on unload) -- per
@@ -225,19 +234,21 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     }
   }
 
-  updateGoodsOutcomes(world, goodsDelivered, dt);
+  updateGoodsOutcomes(world, goodsDelivered, dt, goodsTrucked);
 
   // 4. The informal sector: danfos, then kekes and okadas.
-  const takings: Takings = { tolls: 0, levies: 0, agberos: 0, leviesByCorridor: new Map() };
+  const takings: Takings = { tolls: 0, levies: 0, agberos: 0, leviesByCorridor: new Map(), loading: 0, touts: 0 };
   dispatchInformal(world, dt, lost, gaveUp, takings);
   // The state's allocation: a base, plus a share of the growth you caused (budget.ts).
   const allocation = (allocationPerDay(world) * dt) / SECONDS_PER_GAME_DAY;
-  const otherIncome = takings.tolls + takings.levies + allocation;
+  const otherIncome = takings.tolls + takings.levies + takings.loading + allocation;
   economy.funds += otherIncome;
   revenueThisTick += otherIncome;
   world.budget.tolls += takings.tolls;
   world.budget.levies += takings.levies;
   world.budget.agberos += takings.agberos;
+  world.budget.loading += takings.loading;
+  world.budget.touts += takings.touts;
   world.budget.allocation += allocation;
   reapInformal(world);
 
@@ -496,6 +507,8 @@ export function informalSpec(tuning: SliceTuning, mode: InformalMode): { capacit
       return { capacity: tuning.kekeCapacity, speed: tuning.kekeSpeed, weight: tuning.kekeRoadSpace };
     case "okada":
       return { capacity: tuning.okadaCapacity, speed: tuning.okadaSpeed, weight: tuning.okadaRoadSpace };
+    case "truck":
+      return { capacity: tuning.truckLoad, speed: tuning.truckSpeed, weight: tuning.lorryRoadSpace };
   }
 }
 
@@ -552,6 +565,13 @@ function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, numbe
     );
     const waiting = single ? informal.smallPool.get(single.key) ?? 0 : 0;
     if (single && waiting >= tuning.okadaCapacity) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp, yours, lost, takings);
+  }
+
+  // Truckers, on the same road budget (truckers.ts).
+  if (tuning.goodsEnabled) {
+    dispatchTrucks(world, takings, (segmentIds, weight) =>
+      segmentIds.every((id) => (informal.segmentSpace.get(id) ?? 0) + (yours.get(id) ?? 0) + weight <= informalBudget(world, id)),
+    );
   }
 }
 

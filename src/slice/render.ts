@@ -791,7 +791,7 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
 
 // The informal sector, at a glance: a danfo is a yellow minibus with a black
 // stripe, a keke a small yellow tricycle with a green band, an okada a dark
-// dot. Sizes follow road space, so a swarm of okadas reads as many small
+// dot, a trucker's lorry brown with a yellow cab. Sizes follow road space, so a swarm of okadas reads as many small
 // things, not as many danfos.
 function drawInformal(ctx: CanvasRenderingContext2D, mode: InformalMode): void {
   ctx.strokeStyle = COLORS.danfoStripe;
@@ -812,6 +812,16 @@ function drawInformal(ctx: CanvasRenderingContext2D, mode: InformalMode): void {
     ctx.stroke();
     ctx.fillStyle = COLORS.keke;
     ctx.fillRect(-3.5, -1, 7, 2);
+  } else if (mode === "truck") {
+    // A trucker's lorry: your lorry's brown, in the informal sector's
+    // outline and stripe -- freight, but not yours.
+    ctx.fillStyle = COLORS.goods;
+    ctx.beginPath();
+    ctx.roundRect(-9, -3.5, 18, 7, 1.5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = COLORS.danfo;
+    ctx.fillRect(6, -3.5, 3, 7); // cab
   } else {
     ctx.fillStyle = COLORS.danfoStripe;
     ctx.beginPath();

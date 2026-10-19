@@ -120,6 +120,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     milestones: new Map(),
     corridors: new Map(),
     industries: new Map(),
+    truckers: new Map(),
     // Seeded by the map, so the same map draws the same sites.
     industrySchedule: createIndustrySchedule(tuning, def.towns.reduce((sum, town) => sum * 31 + Math.round(town.x * 7 + town.y * 13 + town.population), 17)),
     segmentLoad: new Map(),

@@ -170,6 +170,13 @@ blow-by-blow; this section is the distilled rule.
   ₦4/t: Ilase–Kuto (produce in, supplies out) +₦66/day, Ilase–Ise +₦26; supplies-only
   Ilase–Owode +₦5, produce-only Ado–Ogbe −₦49, long one-way Ilase–Ado −₦72. At ₦3/t no lorry
   paid at all. That gap *is* the decision — keep it when retuning.
+- **With truckers, short hauls are theirs and long ones yours** (Revision 2, private
+  truckers; goods per tonne per cell). Truckers pick up what waits at a yard, keenest on the
+  shortest runs and not at all past 40 cells. Measured, one lorry, 20 days: Ilase–Kuto (29
+  cells, both ways) went from +₦41 a day to −₦20 -- undercut -- while long, one-way Ilase–Ado
+  rose from +₦8 to +₦41 (no trucker goes that far, and fewer trucks crowd it). The decision
+  moves from "pair the flows" to "take the long hauls, or rail": goods both ways still help,
+  but distance decides who carries them.
 - **Roll lumpy earnings over longer.** A lorry delivers 30 t at a time, a dozen seconds
   apart; on the 30 s rate a buses route uses, a route making +₦66/day showed +₦15. Lorry
   routes roll over 4× as long.

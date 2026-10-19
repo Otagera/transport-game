@@ -427,6 +427,19 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // slot, so a busy line is a choice (C7). Rail makes trips that weren't made
   // before -- between two stops of one passenger line, a third more -- and a
   // station town can grow past its rail rung. First guesses, to measure.
+  // Private truckers (brief, Revision 2, agreed): goods waiting at a yard
+  // are picked up at 1/15 a second on the shortest hauls, falling to none at
+  // 40 cells -- a long run is yours or rail's. Their trucks carry 20 t, a
+  // little slower than your lorry, and charge 80% of your fare (the
+  // undercut, kept as the informal sector's earnings). Loads lifted at a
+  // market or the port pay ₦0.4 a tonne; the touts keep half. First guesses.
+  truckersEnabled: true,
+  truckerPickupSeconds: 15,
+  truckerMaxHaulCells: 40,
+  truckLoad: 20,
+  truckSpeed: 2.2,
+  truckerFareShare: 0.8,
+  loadingLevyPerTonne: 0.4,
   trackSlots: 4,
   railInducedDemand: 0.3,
   stationCapShare: 0.3,

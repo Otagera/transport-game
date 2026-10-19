@@ -842,6 +842,17 @@ that to the cap's share (bounded by the town's start). Goods fares are per tonne
 (`fares.ts` `goodsFares`, `goodsFarePerTonneCell`), and `goodsLoader` loads every stop
 ahead in proportion to what waits for it.
 
+**Truckers** (Revision 2; `truckers.ts`): `truckersPickUp` (after `produceAndSpoil`) moves
+a share of each yard's waiting goods into `world.truckers` (`from|to|kind` -> tonnes held), at
+`1/truckerPickupSeconds` x `haulShare` (1 at 0 cells, 0 at `truckerMaxHaulCells` and past);
+`dispatchTrucks` (end of `dispatchInformal`, on the danfos' road budget with your road space
+counted) sends a one-shot `truck-` vehicle per full `truckLoad`, `carries: "goods"`, pre-loaded,
+registered in `informal.active` as mode `truck` (road space held ahead, released as it goes),
+paying `tollFor` and, loaded at a market or the port, `loadingLevyPerTonne` (the touts'
+`agberoCut` kept as `budget.touts`, yours as `budget.loading`). Their deliveries pay
+`goodsFares x truckerFareShare` into `informal.earnings` and roll as `outcome.trucked`;
+`stoneServed` counts them at half, an industry's deliveries in full.
+
 **Rail's own job** (Revision 2; `rail.ts`): `trainsBySegment` counts every passenger and
 freight route's trains on each piece of its track path; `lineSlots(a, b)` is the fullest
 piece's count against `trackSlots`, and `checkTrain` / `checkFreight` refuse a full line.

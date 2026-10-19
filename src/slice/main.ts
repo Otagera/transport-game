@@ -1108,9 +1108,10 @@ function renderIndustry(townId: string): void {
   const rows = flows
     .map((flow) => {
       const outcome = world.goods.outcomes.get(flowKey(flow));
-      const total = (outcome?.delivered ?? 0) + (outcome?.spoiled ?? 0);
+      const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
       const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
-      return `<div class="trip"><span class="name">${townName(flow.to)}${flow.to === world.port ? " <span class=\"muted\">· the port</span>" : ""}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i></div></div>`;
+      const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
+      return `<div class="trip"><span class="name">${townName(flow.to)}${flow.to === world.port ? " <span class=\"muted\">· the port</span>" : ""}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
     })
     .join("");
   const now = world.economy.elapsedSeconds;
@@ -1131,7 +1132,7 @@ function renderIndustry(townId: string): void {
       <div class="title">${site.name}</div>
       <ul>
         <li>${world.tuning.quarryOutputPerDay} t of stone a day. Stone feeds construction: a town that gets the stone it wants can grow more.</li>
-        <li>Nobody else carries it: what isn't moved is lost.</li>
+        <li>${world.tuning.truckersEnabled ? "Truckers take what you don't on short hauls (yellow on each bar); the rest is lost." : "Nobody else carries it: what isn't moved is lost."}</li>
       </ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}
       ${rows}
@@ -1412,6 +1413,7 @@ function budgetHtml(): string {
     ...(world.tuning.goodsEnabled ? [["Goods", b.goods] as [string, number]] : []),
     ["Tolls", b.tolls],
     [`Park levies <span class="muted">(agberos kept ${naira(b.agberos)})</span>`, b.levies],
+    ...(world.tuning.truckersEnabled && world.tuning.goodsEnabled ? [[`Loading levies <span class="muted">(touts kept ${naira(b.touts)})</span>`, b.loading] as [string, number]] : []),
     ["State allocation", b.allocation],
     ["Running costs", -b.running],
     ["Road upkeep", -b.upkeep],
@@ -1650,7 +1652,7 @@ function goodsText(townId: string): string {
     const delivered = inbound.reduce((sum, g) => sum + g.perDay * g.delivered, 0) / into;
     parts.push(`${Math.round(into)} t/day of goods coming in (${pct(delivered)} delivered)`);
   }
-  return `<p class="townshare"><b>Goods:</b> ${parts.slice(0, 3).join("; ")}. Nobody else carries freight: what lorries don't take, spoils.</p>`;
+  return `<p class="townshare"><b>Goods:</b> ${parts.slice(0, 3).join("; ")}. ${world.tuning.truckersEnabled ? "Truckers take what you don't on short hauls; the rest spoils." : "Nobody else carries freight: what lorries don't take, spoils."}</p>`;
 }
 
 // The way out of debt, said outright (playtest, day 14: "felt stuck,

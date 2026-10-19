@@ -17,6 +17,7 @@ import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed } from "@engine/slice/industries";
 import { lineSlots, stationTowns } from "@engine/slice/rail";
+import { haulShare } from "@engine/slice/truckers";
 import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, wornRoadAt } from "@engine/slice/problems";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
@@ -1302,8 +1303,9 @@ describe("slice: goods (step 4c)", () => {
   });
 
   test("goods nobody carries wait a while and spoil -- and never touch the passenger share", () => {
-    const w = goodsWorld();
-    const plain = goodsWorld({ producePerThousandPerDay: 0, suppliesPerThousandPerDay: 0 });
+    // Truckers off: this is the yard's own rule (with them on, they take the short hauls).
+    const w = goodsWorld({ truckersEnabled: false });
+    const plain = goodsWorld({ producePerThousandPerDay: 0, suppliesPerThousandPerDay: 0, truckersEnabled: false });
     run(w, 300);
     run(plain, 300);
     const yard = w.goods.yards.get("far")!;
@@ -1960,7 +1962,7 @@ describe("slice zero step 7: the budget breakdown", () => {
     expect(b.upkeep).toBeGreaterThan(0); // the road you built
     expect(b.levies).toBeGreaterThan(0);
     expect(b.allocation).toBeGreaterThan(0);
-    const net = b.fares + b.goods + b.tolls + b.levies + b.allocation - b.running - b.upkeep - b.enforcement;
+    const net = b.fares + b.goods + b.tolls + b.levies + b.loading + b.allocation - b.running - b.upkeep - b.enforcement;
     expect(net).toBeCloseTo(averageNet(w), 0);
   });
 
@@ -2661,6 +2663,34 @@ describe("Revision 2: rail gets a job of its own", () => {
     buildTrack(f, "big", "mid");
     addFreightTrain(f, "big", "mid");
     expect(stationTowns(f).size).toBe(0);
+  });
+});
+
+describe("Revision 2: private truckers, the informal freight rival", () => {
+  const truckWorld = (overrides: Partial<SliceTuning> = {}) =>
+    createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, industryFirstDay: 999, ...overrides });
+
+  test("short hauls are theirs, long ones never: keenness falls with the run and stops at the limit", () => {
+    const w = truckWorld();
+    expect(haulShare(w, 0)).toBe(1);
+    expect(haulShare(w, w.tuning.truckerMaxHaulCells / 2)).toBeCloseTo(0.5, 6);
+    expect(haulShare(w, w.tuning.truckerMaxHaulCells)).toBe(0);
+    expect(haulShare(w, 999)).toBe(0);
+  });
+
+  test("they carry goods you don't, on trucks on the road, paying tolls and loading levies; it's their money, not yours", () => {
+    const w = truckWorld();
+    run(w, 3 * SECONDS_PER_GAME_DAY);
+    const trucked = [...w.goods.outcomes.values()].reduce((sum, o) => sum + (o.trucked ?? 0), 0);
+    expect(trucked).toBeGreaterThan(0);
+    expect(w.budget.goods).toBe(0); // you carried nothing
+    expect(w.budget.loading).toBeGreaterThan(0); // supplies lifted at the port
+    expect(w.budget.touts).toBeCloseTo(w.budget.loading * w.tuning.agberoCut / (1 - w.tuning.agberoCut), 6);
+    // Fewer goods spoil than with nobody to take them.
+    const alone = truckWorld({ truckersEnabled: false });
+    run(alone, 3 * SECONDS_PER_GAME_DAY);
+    const spoiled = (x: SliceWorld) => [...x.goods.outcomes.values()].reduce((sum, o) => sum + o.spoiled, 0);
+    expect(spoiled(w)).toBeLessThan(spoiled(alone));
   });
 });
 

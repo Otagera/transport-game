@@ -40,8 +40,11 @@ export interface GoodsFlow {
 
 /** Where a flow's goods ended up, rolling tonnes per second. */
 export interface GoodsOutcome {
+  /** By you. */
   delivered: number;
   spoiled: number;
+  /** By truckers (truckers.ts): carried, not yours. */
+  trucked?: number;
 }
 
 export interface GoodsState {
@@ -170,13 +173,14 @@ export function recordGoodsDelivered(deliveries: DeliveryEvent[], delivered: Map
   }
 }
 
-/** Once per tick, after the lorries move: roll each flow's delivered rate. */
-export function updateGoodsOutcomes(world: SliceWorld, delivered: Map<string, number>, dt: number): void {
+/** Once per tick, after the lorries move: roll each flow's delivered rate, yours and the truckers'. */
+export function updateGoodsOutcomes(world: SliceWorld, delivered: Map<string, number>, dt: number, trucked: Map<string, number> = new Map()): void {
   const alpha = 1 - Math.exp(-dt / world.tuning.outcomeTauSeconds);
   for (const flow of goodsFlows(world)) {
     const key = flowKey(flow);
     const outcome = world.goods.outcomes.get(key) ?? { delivered: 0, spoiled: 0 };
     outcome.delivered += ((delivered.get(key) ?? 0) / dt - outcome.delivered) * alpha;
+    outcome.trucked = (outcome.trucked ?? 0) + ((trucked.get(key) ?? 0) / dt - (outcome.trucked ?? 0)) * alpha;
     world.goods.outcomes.set(key, outcome);
   }
 }

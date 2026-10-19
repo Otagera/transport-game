@@ -96,7 +96,9 @@ export function stoneServed(world: SliceWorld, townId: string): number {
   for (const flow of industryFlows(world)) {
     if (flow.to !== townId) continue;
     wanted += flow.rate;
-    delivered += world.goods.outcomes.get(flowKey(flow))?.delivered ?? 0;
+    // Yours in full; truckers' at half -- informal service sustains, yours develops (principles §3).
+    const outcome = world.goods.outcomes.get(flowKey(flow));
+    delivered += (outcome?.delivered ?? 0) + 0.5 * (outcome?.trucked ?? 0);
   }
   return wanted > 0 ? Math.min(1, delivered / wanted) : 0;
 }
@@ -110,7 +112,13 @@ export function updateIndustries(world: SliceWorld, dt: number): SliceEvent[] {
   const alpha = 1 - Math.exp(-dt / SECONDS_PER_GAME_DAY);
   const flows = industryFlows(world);
   for (const industry of [...world.industries.values()]) {
-    const delivered = flows.filter((flow) => flow.from === industry.id).reduce((sum, flow) => sum + (world.goods.outcomes.get(flowKey(flow))?.delivered ?? 0), 0);
+    // Moved by anyone keeps it open: an industry you ignore still ships, by trucker.
+    const delivered = flows
+      .filter((flow) => flow.from === industry.id)
+      .reduce((sum, flow) => {
+        const outcome = world.goods.outcomes.get(flowKey(flow));
+        return sum + (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+      }, 0);
     industry.deliveredEMA += (delivered - industry.deliveredEMA) * alpha;
     const age = now - industry.openedAtSeconds;
     const unserved = age >= tuning.industryGraceDays * SECONDS_PER_GAME_DAY && industry.deliveredEMA * SECONDS_PER_GAME_DAY < tuning.industryMinDeliveredPerDay;

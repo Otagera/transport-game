@@ -242,6 +242,10 @@ terrain isn't applied: the map still draws shaded hills.
   "Save for it: ₦X" when the next rung is out of reach (`saveButton`); a named project shows
   at the top of the budget ("Saving for ... safe until day N", a progress bar of what's set
   aside against the price, "Drop it").
+- **Truckers (Revision 2)** — a trucker's lorry draws brown with a yellow cab and the
+  informal outline (`drawInformal`, mode `truck`); the budget adds "Loading levies (touts kept
+  ₦X)"; a quarry's buyer bars show yours in brown and the truckers' in yellow; the goods line
+  says "Truckers take what you don't on short hauls; the rest spoils."
 - **Industries (Revision 2)** — a site draws as a brown square with a peak (`drawIndustry`),
   its name, "stone · 100 t/day" and "no road" while cut off; a closed one is a ruin "(closed)".
   Its card (`renderIndustry`): opened and works-out days, its buyers with tonnes a day and a

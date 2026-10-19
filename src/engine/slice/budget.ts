@@ -23,6 +23,9 @@ export interface Takings {
   agberos: number;
   /** The levies reaching you, by the corridors the departure runs along (corridors.ts). */
   leviesByCorridor: Map<string, number>;
+  /** Loading levies on truckers' loads at markets and the port (truckers.ts): yours, and the touts' cut. */
+  loading: number;
+  touts: number;
 }
 
 /**
@@ -52,10 +55,13 @@ export interface BudgetTally {
   struck: number;
   /** Paid to the treasury (remittance): money out, but not a running cost. */
   remitted: number;
+  /** Loading levies on truckers' loads (truckers.ts), and the touts' cut (never yours, kept to be shown). */
+  loading: number;
+  touts: number;
 }
 
 export function createBudgetTally(): BudgetTally {
-  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, upkeep: 0, enforcement: 0, settlements: 0, struck: 0, remitted: 0 };
+  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, upkeep: 0, enforcement: 0, settlements: 0, struck: 0, remitted: 0, loading: 0, touts: 0 };
 }
 
 /** The current remittance period: when it ends, and its net so far (income minus running costs). */

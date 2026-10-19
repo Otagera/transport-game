@@ -11,6 +11,7 @@ import type { DayHistory } from "./history";
 import type { MilestoneState } from "./score";
 import type { CorridorState } from "./corridors";
 import type { IndustryState } from "./industries";
+import type { TruckerHeld } from "./truckers";
 import type { BudgetTally, RemittancePeriod } from "./budget";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
@@ -107,7 +108,7 @@ export interface OutcomeRates {
   lost: number;
 }
 
-export type InformalMode = "danfo" | "keke" | "okada";
+export type InformalMode = "danfo" | "keke" | "okada" | "truck";
 
 export interface InformalState {
   /** Pool key (at>origin>destination) -> people who gave up on you, waiting for a danfo to fill. */
@@ -370,6 +371,14 @@ export interface SliceTuning {
   quarryExportShare: number;
   /** A town getting all the stone it wants can grow this share of townGrowthCap more (growth.ts). */
   stoneCapShare: number;
+  /** Private truckers (truckers.ts, brief Revision 2): on, how fast they take waiting goods, the longest haul they take, their trucks, their cut of the fare, the loading levy. */
+  truckersEnabled: boolean;
+  truckerPickupSeconds: number;
+  truckerMaxHaulCells: number;
+  truckLoad: number;
+  truckSpeed: number;
+  truckerFareShare: number;
+  loadingLevyPerTonne: number;
   /** Trains a piece of track carries, passenger and freight together (rail.ts lineSlots). */
   trackSlots: number;
   /** Trips between two stops of the same passenger line rise by this share (rail.ts applyRailDemand). */
@@ -400,6 +409,8 @@ export interface SliceWorld {
   /** Industrial sites open now, and the drawing of the next (industries.ts). */
   industries: Map<string, IndustryState>;
   industrySchedule: { nextAtSeconds: number; rngState: number; opened: number };
+  /** Goods truckers hold at yards, filling a truck (truckers.ts). */
+  truckers: TruckerHeld;
   width: number;
   height: number;
   towns: Map<string, SliceTown>;
