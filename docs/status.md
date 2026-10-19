@@ -79,6 +79,13 @@ until the user marks it Agreed. What it should cover:
   town is connected (e.g. day 150+); a rail line is a choice (passenger vs freight); upkeep
   takes a decision per corridor, not clicks per piece.
 
+**After the draft:** the user marks what they agree with; the two questions that matter most
+are whether the informal-sector answer for goods (truckers, market touts) feels like their
+game, and whether "show the problems first" really comes ahead of any goods. Then build
+**only that first step** and play it past day 150. That playtest sizes the rest of Revision 2:
+if the late game comes alive with problems made visible, goods may be smaller than drafted;
+if it still ends at "nothing more to build", the second economy has earned its place.
+
 
 ## How to run it
 
