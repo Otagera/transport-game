@@ -8,6 +8,7 @@ import type { TripPlans } from "./transfers";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
+import type { MilestoneState } from "./score";
 import type { BudgetTally, RemittancePeriod } from "./budget";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
@@ -355,6 +356,8 @@ export interface SliceWorld {
   project: NamedProject | null;
   /** Each town's population (thousands) on day 1: the allocation pays on growth since. */
   startPopulation: Map<string, number>;
+  /** Each town's growth milestones passed since day 1 (score.ts). */
+  milestones: Map<string, MilestoneState>;
   width: number;
   height: number;
   towns: Map<string, SliceTown>;

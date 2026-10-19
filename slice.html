@@ -41,7 +41,10 @@
       .chip b { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
       .chip .num { font-weight: 650; font-variant-numeric: tabular-nums; }
       .chip.hatch b { background: repeating-linear-gradient(45deg, var(--home) 0 2px, transparent 2px 4px); border: 1px solid var(--home); box-sizing: border-box; }
-      .stat .v { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+      .stat .v { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; white-space: nowrap; }
+      .stat .v .trend { font-size: 12px; margin-left: 6px; }
+      .stat .v .spark { margin-left: 8px; }
+      .spark polyline { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; opacity: 0.55; }
       .good { color: var(--good); }
       .bad { color: var(--bad); }
       .share { flex: 1; max-width: 460px; }

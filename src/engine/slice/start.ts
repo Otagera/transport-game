@@ -29,5 +29,6 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   world.ledger = createDayLedger();
   world.remittance = createRemittancePeriod(world.economy.elapsedSeconds, tuning);
   world.startPopulation = new Map([...world.towns.values()].map((town) => [town.id, town.population]));
+  world.milestones = new Map(); // growth during the warm-up isn't yours
   return world;
 }

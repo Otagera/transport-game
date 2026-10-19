@@ -31,10 +31,14 @@ export interface DayHistory {
   nextDayAtSeconds: number;
   /** The budget tally when the last day ended, to take the next day's lines from. */
   tallyAtLastDay: BudgetTally;
+  /** Trips made a day (5-day average) at each day's end, for the strip's trend (score.ts); the last TRIPS_KEPT days. */
+  trips: Array<{ atSeconds: number; trips: number }>;
 }
 
+const TRIPS_KEPT = 120;
+
 export function createDayHistory(): DayHistory {
-  return { days: [], nextDayAtSeconds: SECONDS_PER_GAME_DAY, tallyAtLastDay: createBudgetTally() };
+  return { days: [], nextDayAtSeconds: SECONDS_PER_GAME_DAY, tallyAtLastDay: createBudgetTally(), trips: [] };
 }
 
 function tallyDifference(now: BudgetTally, then: BudgetTally): BudgetTally {
@@ -51,6 +55,8 @@ export function recordDay(world: SliceWorld): void {
   history.tallyAtLastDay = { ...world.budget };
   history.days.push({ atSeconds: world.economy.elapsedSeconds, headline: headline(world), net: lastDay(world.ledger).net, budget });
   if (history.days.length > AVERAGE_DAYS) history.days.shift();
+  history.trips.push({ atSeconds: world.economy.elapsedSeconds, trips: averageHeadline(world).tripsPerDay });
+  if (history.trips.length > TRIPS_KEPT) history.trips.shift();
   history.nextDayAtSeconds += SECONDS_PER_GAME_DAY;
 }
 

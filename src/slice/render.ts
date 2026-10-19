@@ -4,6 +4,7 @@ import { routingFor } from "@engine/slice/rail";
 import { gameDay, isCutOff, roadChain, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/slice/growth";
+import { freshMilestone } from "@engine/slice/score";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
@@ -796,6 +797,20 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
     ctx.textAlign = "left";
     ctx.fillText(trend.trim(), p.x - 5 + w / 2 + 3, p.y + ringR + 29);
     ctx.textAlign = "center";
+  }
+  // A milestone just passed (score.ts): a green tag above the town for a few days.
+  const milestone = freshMilestone(world, town.id);
+  if (milestone) {
+    ctx.font = "700 11px system-ui, sans-serif";
+    const w = ctx.measureText(milestone).width + 10;
+    const y = p.y - ringR - 20;
+    ctx.fillStyle = COLORS.grow;
+    ctx.beginPath();
+    ctx.roundRect(p.x - w / 2, y - 8, w, 16, 8);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(milestone, p.x, y + 4);
+    ctx.font = "11px system-ui, sans-serif";
   }
   if (isCutOff(world, town.id)) {
     ctx.fillStyle = COLORS.ghostBad;

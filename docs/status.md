@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**521 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**525 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: slice zero
@@ -49,7 +49,7 @@ right after this file. Progress on that build order:
 | R1 3 | A seeded variation of the hand-made map: town sizes (cut-off towns wider), the river's course and its crossing widths (`variation.ts`); P8 | Done 2026-10-19: **P8 (a) passes** (5 of 5 seeds), **P8 (b) fails** (1 of 5 seeds: only where a cut-off town comes up big): below |
 | — | Your playtest of the whole ladder (dirt → paved → lane → rail), seed 0 | Played 2026-10-19: rail after 100+ days of idle waiting; played for money; the treasury unnoticed; rail's payoff temporary; strikes let pass (principles.md §6) |
 | R1 4 | The treasury visible in the budget breakdown (no new panel): a "Treasury took" line, the countdown "₦X over the reserve goes to the treasury in N days; spend it or set it aside", a set-aside progress bar, the 10-day remittance as a toast (brief, After the ladder's playtest, 1) | Built 2026-10-19, **not yet played** (built with R1 5 and 6 on request, without the playtest between) |
-| R1 5 | The score as visible as money: town-growth milestones, the trips-made trend (2) | After R1 4's playtest |
+| R1 5 | The score as visible as money: town-growth milestones, the trips-made trend (2) | Built 2026-10-19, **not yet played**: milestones (+25%, +50%, ×2, ×3) as a toast and a map tag; trips made with ▲/▼ over 10 days and a sparkline; "People, since day 1" in the strip |
 | R1 6 | Each corridor's informal share; "corridor taken" as a visible state, with its costs (3) | After R1 5's playtest |
 | — | Proposed, not built: rail reshapes the map (station towns grow, new desire lines) (4) | |
 

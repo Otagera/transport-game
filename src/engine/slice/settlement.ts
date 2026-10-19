@@ -31,7 +31,9 @@ export type SliceEvent =
   | { kind: "project-done"; a: string; b: string; rung: "lane" | "rail" }
   | { kind: "project-lapsed"; a: string; b: string; rung: "lane" | "rail"; taken: number }
   // The treasury's remittance (budget.ts): what a period's end took, 0 included.
-  | { kind: "remitted"; amount: number };
+  | { kind: "remitted"; amount: number }
+  // A town passing a quarter, a half, double or triple its day-1 size (score.ts).
+  | { kind: "milestone"; townId: string; name: string; index: number; from: number; to: number };
 
 export interface SettlementState {
   /** segmentId -> rolling riders per second passing a point on it. */

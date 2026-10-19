@@ -63,6 +63,7 @@ import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
 import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
 import { remittanceExpected } from "@engine/slice/budget";
+import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
@@ -438,6 +439,10 @@ function announce(event: SliceEvent): void {
     pauseForStrike();
   } else if (event.kind === "strike-over") {
     say(`The strike on ${corridor} is over.${event.cost !== null ? ` It cost you about ${naira(event.cost)}.` : ""}`, true, 8);
+  } else if (event.kind === "milestone") {
+    // The score as an event, like the treasury's (brief, After the ladder's playtest, 2).
+    const grown = ["has grown by a quarter", "has grown by half", "has doubled", "has tripled"][event.index] ?? "has grown";
+    say(`${event.name} ${grown} since day 1: ${Math.round(event.from)}k → ${Math.round(event.to)}k people.`, false, 6);
   } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
   } else {
@@ -966,17 +971,41 @@ function renderStrip(): void {
   const net = averageNet(world);
   const n = (x: number) => Math.round(x).toLocaleString();
   const signed = (x: number) => `${x < 0 ? "−" : "+"}₦${Math.abs(Math.round(x)).toLocaleString()}`;
+  // The score beside the money, marked like it (brief, After the ladder's
+  // playtest, 2): trips made with its trend over TREND_DAYS and a sparkline,
+  // and the people the region has gained since day 1.
+  const trend = tripsTrend(world);
+  const change = trend && Math.abs(trend.change) >= 1
+    ? `<span class="trend ${trend.change > 0 ? "good" : "bad"}" title="Change over the last ${TREND_DAYS} days (5-day averages)">${trend.change > 0 ? "▲" : "▼"} ${n(Math.abs(trend.change))}</span>`
+    : "";
+  const people = peopleSinceStart(world);
+  const k = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(Math.round(x)).toLocaleString()}k`;
   strip.innerHTML = `
     <div class="stat"><span class="k">Day</span><span class="v">${gameDay(world)}</span></div>
     <div class="stat"><span class="k">Budget</span><span class="v ${world.economy.funds < 0 ? "bad" : ""}">${naira(world.economy.funds)}</span></div>
     <div class="stat"><span class="k" title="Income less running costs and upkeep, a day, over the last 5 days">Net, 5-day average</span><span class="v ${net < 0 ? "bad" : "good"}">${signed(net)}</span></div>
-    <div class="stat"><span class="k" title="Trips between towns that happened, by anyone, a day: 5-day average">Trips made, a day</span><span class="v">${n(h.tripsPerDay)}</span></div>
+    <div class="stat"><span class="k" title="Trips between towns that happened, by anyone, a day: 5-day average">Trips made, a day</span><span class="v">${n(h.tripsPerDay)}${change}${trend ? sparkline(trend.series) : ""}</span></div>
+    <div class="stat"><span class="k" title="People the towns have gained since day 1, thousands: towns that shrank count against it, new towns count whole">People, since day 1</span><span class="v ${people <= -0.5 ? "bad" : people >= 0.5 ? "good" : ""}">${k(people)}</span></div>
     <div class="chips">
       <span class="chip" title="Trips your vehicles carried, a day"><b style="background:var(--player)"></b>Your riders <span class="num">${n(h.yourRidersPerDay)}</span></span>
       <span class="chip" title="Trips danfos, kekes and okadas carried, a day"><b style="background:var(--danfo)"></b>Informal <span class="num">${n(h.tripsPerDay - h.yourRidersPerDay)}</span></span>
       <span class="chip hatch" title="Stayed home: no road joins their towns. Falls when you build."><b></b>No road <span class="num">${n(h.noRoadPerDay)}</span></span>
       <span class="chip" title="Stayed home: a road joins their towns, but nobody carried them. Falls when you run vehicles."><b style="background:var(--home)"></b>No seat <span class="num">${n(h.noSeatPerDay)}</span></span>
     </div>`;
+}
+
+/** Trips made since day 1, as a line the width of a word: the shape, not the numbers. */
+function sparkline(series: number[]): string {
+  const width = 56;
+  const height = 18;
+  const shown = series.slice(-60);
+  const lo = Math.min(...shown);
+  const hi = Math.max(...shown);
+  const span = Math.max(hi - lo, hi * 0.05, 1); // a flat line stays flat, not stretched to fill
+  const points = shown
+    .map((value, i) => `${((i / Math.max(1, shown.length - 1)) * width).toFixed(1)},${(height - 2 - ((value - lo) / span) * (height - 4)).toFixed(1)}`)
+    .join(" ");
+  return `<svg class="spark" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true"><polyline points="${points}" /></svg>`;
 }
 
 // The panel shows the focused town's trips when there is one, otherwise

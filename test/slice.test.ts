@@ -15,6 +15,7 @@ import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upk
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
+import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
 import { buildSliceTerrain } from "@engine/slice/terrain";
 import { SLICE_MAP } from "../src/slice/map";
@@ -2015,6 +2016,57 @@ describe("slice zero step 7: the budget breakdown", () => {
     expect(due).toBeGreaterThan(0);
     w.project = { a: "big", b: "mid", rung: "lane", price: 1_000_000, namedAt: w.economy.elapsedSeconds };
     expect(remittanceDue(w)).toBe(0);
+  });
+});
+
+describe("R1 5: the score as visible as money", () => {
+  test("a town passing a quarter, a half, double and triple its day-1 size is an event, each once", () => {
+    const w = createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    const mid = w.towns.get("mid")!;
+    expect(updateMilestones(w)).toEqual([]);
+    mid.population = 64; // +28%
+    const first = updateMilestones(w);
+    expect(first.map((event) => event.kind === "milestone" && event.index)).toEqual([0]);
+    expect(updateMilestones(w)).toEqual([]); // not again while it stays there
+    expect(freshMilestone(w, "mid")).toBe("+25%");
+    // Shrinking and regrowing past it earns nothing; jumping two at once is one event naming the higher.
+    mid.population = 55;
+    expect(updateMilestones(w)).toEqual([]);
+    mid.population = 101;
+    const jump = updateMilestones(w);
+    expect(jump.length).toBe(1);
+    expect(jump[0]!.kind === "milestone" && jump[0]!.index).toBe(2);
+    expect(freshMilestone(w, "mid")).toBe("×2");
+    // The map's badge fades after a few days.
+    w.economy.elapsedSeconds += (MILESTONE_BADGE_DAYS + 0.1) * SECONDS_PER_GAME_DAY;
+    expect(freshMilestone(w, "mid")).toBeNull();
+    expect([0, 1, 2, 3].map(milestoneLabel)).toEqual(["+25%", "+50%", "×2", "×3"]);
+  });
+
+  test("growth during the warm-up isn't yours: milestones count from day 1", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    expect(w.milestones.size).toBe(0);
+    expect(peopleSinceStart(w)).toBeCloseTo(0, 6);
+  });
+
+  test("people since day 1 counts shrinking towns against growing ones", () => {
+    const w = createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    w.towns.get("big")!.population += 10;
+    w.towns.get("far")!.population -= 4;
+    expect(peopleSinceStart(w)).toBeCloseTo(6, 6);
+  });
+
+  test("the trips-made trend compares the 5-day average with itself TREND_DAYS ago", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    expect(tripsTrend(w)).toBeNull();
+    addBus(w, "big", "mid");
+    run(w, (TREND_DAYS + 2) * SECONDS_PER_GAME_DAY + 1);
+    const trend = tripsTrend(w)!;
+    expect(trend.series.length).toBe(TREND_DAYS + 3); // the world as you found it, then a sample a day
+    expect(trend.now).toBeCloseTo(averageHeadline(w).tripsPerDay, 6);
+    expect(trend.change).toBeCloseTo(trend.now - trend.series[trend.series.length - 1 - TREND_DAYS]!, 6);
+    // A bus on the best pair: more trips made than the warm-up's world.
+    expect(trend.now).toBeGreaterThan(trend.series[0]!);
   });
 });
 

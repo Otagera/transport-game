@@ -4,6 +4,7 @@ import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from 
 import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types";
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
+import { updateMilestones } from "./score";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
 import { legFare, passengerFares } from "./fares";
@@ -299,7 +300,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
 
-  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents];
+  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world)];
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
   recordDay(world);
   return events;

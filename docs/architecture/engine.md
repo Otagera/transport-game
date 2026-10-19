@@ -753,6 +753,15 @@ roads included) and `upkeep` (routine, plus wear repairs when wear is on), split
 `sliceTick` from the ledger's running cost; and `goods` apart from passenger `fares`. So
 fares + goods + tolls + levies + allocation − running − upkeep is the ledger's net.
 
+The **score's marks** (`score.ts`, R1 5): `updateMilestones`, called at the end of
+`sliceTick`, emits a `milestone` event when an original town passes the next of `MILESTONES`
+(+25%, +50%, ×2, ×3 of `startPopulation`); `world.milestones` keeps how many each town has
+passed, so each fires once a game (a town that shrinks and regrows doesn't earn it again;
+two at once is one event naming the higher). `start.ts` clears it at day 1. `history.trips`
+keeps the 5-day-average trips made at each day's end (the last 120); `tripsTrend` reads it
+against `TREND_DAYS` ago, from the world as you found it on. `peopleSinceStart` is the net
+change in people (unlike the allocation's `growthSinceStart`, which only pays on growth).
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

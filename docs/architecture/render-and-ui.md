@@ -202,13 +202,19 @@ terrain isn't applied: the map still draws shaded hills.
 - **The strip** (`renderStrip`) is the brief's headline, all 5-day averages
   (`history.ts`): day, budget (funds), net a day, trips made a day, and chips for your
   riders, informal, no road (hatched) and no seat -- one number each, the meaning on hover.
-  Your share in % moved one click down: the routes panel's last block.
+  Your share in % moved one click down: the routes panel's last block. The score marked like
+  the money (R1 5): trips made carries ▲/▼ and its change over `TREND_DAYS` (10), green or
+  red, and a sparkline of the 5-day average since day 1 (`sparkline`, an inline SVG, shape
+  only); then "People, since day 1" (`peopleSinceStart`: shrinking towns count against).
+  A town passing +25%, +50%, ×2 or ×3 of its day-1 size is a toast ("Owode has grown by a
+  quarter since day 1: 45k → 56k people") and a green tag over it on the map for
+  `MILESTONE_BADGE_DAYS` (`freshMilestone`, drawn in `drawTown`).
 - **Route cards** (`routeCard`): vehicles, in, cost and net a day; the pair with +/−; one
   verdict of at most 12 words naming one lever (`verdicts.ts` `shortVerdict`, tested), the
   long `reasonText` on the card's hover; the riders bar.
 - **The budget** (`budgetHtml`): fares, tolls, park levies (the agberos' cut beside them),
   allocation, running costs, upkeep, a day over the last 5 days (`averageBudget`), summing to
-  the strip's net; then the treasury: its rule, what it last took and the day it next does.
+  the strip's net; then the treasury (below).
 - **The town card** (`renderTown`): kicker (role, size, ▲/▼), name, three lines (biggest
   trip, who carried its trips, inside trips), "The problem here" (no road; no road to some
   towns; its road is full -- `roadFull`: grown to all its rung allows, naming the next rung;
