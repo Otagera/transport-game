@@ -46,7 +46,7 @@ right after this file. Progress on that build order:
 | R1 2a+++ | A lane's town size limit follows what it carries (slides to paved with encroachment); C3 re-measured without rail | Done 2026-10-19: **C3 passes** -- strict on the trunk, no lane on Ilase-Kuto: below |
 | R1 2a++++ | "Road is full" diagnoses a thin corridor (no lane suggested under 240 trips a day along it) | Done 2026-10-19 |
 | R1 2b | The named project; lane and rail priced for C2 | Done 2026-10-19: **lane 14 days, rail 27.8 days** of surplus (corridor probe, real money): below |
-| R1 3 | A seeded variation of the hand-made map: town sizes, the river's course and its crossing widths (`variation.ts`); P8 | Done 2026-10-19: **P8 (a) passes** (5 of 5 seeds), **P8 (b) fails** (5 of 5 seeds; the best gap is 9%): below |
+| R1 3 | A seeded variation of the hand-made map: town sizes, the river's course and its crossing widths (`variation.ts`); P8 | Done 2026-10-19: **P8 (a) passes** (5 of 5 seeds), **P8 (b) fails** (5 of 5 seeds; the best gap is 9% in trips, 8% in your riders): below |
 | — | **Next: your playtest of the whole ladder** (dirt → paved → lane → rail), strike warnings, the BRT, on new maps; P7 and P8 | |
 
 **Revision 1, step 3: the seeded variation, 2026-10-19.**
@@ -67,6 +67,12 @@ right after this file. Progress on that build order:
     day at day 20, own / replayed: seed 1 616 / 623 (−1%), 2 624 / 594 (+5%), 3 622 / 568 (+9%),
     4 588 / 577 (+2%), 5 561 / 597 (−6%). Every replayed move was affordable; every gap is
     within the ±50 trips a day treated as noise. Seed 0's own opening makes 602.
+  - **(b) on your riders only also fails** (re-measured 2026-10-19; informal riders left out,
+    since they're there whatever you buy). Own / replayed: seed 1 126 / 136 (replay ahead 8%),
+    2 152 / 140 (−8%), 3 147 / 136 (−7%), 4 110 / 128 (replay ahead 16%), 5 134 / 134 (0%).
+    Seed 0's own: 133. No seed reaches 15%, and on two the replay wins: trips-greedy's
+    trips-per-naira ranking isn't the most riders, and an 8-move opening on the same nine towns
+    serves much the same pairs whatever the sizes.
   - **Why (b) fails, as read**: a ₦2,500 opening is small against what the map carries
     without you (about 300 trips a day by informal transport on day 1), so on any seed most
     sensible openings land within noise of each other by day 20. Trips-greedy also ranks moves

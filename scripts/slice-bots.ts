@@ -602,7 +602,7 @@ for (const run of runs) {
   if (s.cost > 0) console.log(`${run.persona.name.padEnd(12)} ${money(s.upkeep)}  ${String(Math.round((s.upkeep / s.cost) * 100)).padStart(3)}% of ${money(s.cost).trim()}`);
 }
 
-if (process.env.OPENING_ONLY) for (const run of runs) if (run.samples.length >= P8_DAY) console.log(`P8 ${run.persona.name}: trips made a day at day ${P8_DAY} ${Math.round(avgHeadline(run, P8_DAY).tripsPerDay)}`);
+if (process.env.OPENING_ONLY) for (const run of runs) if (run.samples.length >= P8_DAY) console.log(`P8 ${run.persona.name}: trips made a day at day ${P8_DAY} ${Math.round(avgHeadline(run, P8_DAY).tripsPerDay)}, your riders ${Math.round(avgHeadline(run, P8_DAY).yourRidersPerDay)}`);
 if (process.env.CHECKS !== "0") await checks();
 for (const worker of workers) worker.terminate();
 
