@@ -29,7 +29,20 @@ right after this file. Progress on that build order:
 | 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep, fares by distance | Done, **M10 failing**: results below |
 | 5b | M1 with openings of equal skill; M10's fix proposed (treasury remittance) | Done: M1 fails, results below |
 | 6 | Price response with tolls, levies, the allocation; the remittance | Done, tuning stopped: allocation ₦10, M10 borderline pass, M2 and day-60 M1 fail (findings), M5 expected to fail until pushback: below |
+| 7 | The new headline (5-day averages, chips) and the panel's budget breakdown | Done 2026-10-19: below |
+| 8 | Best next moves, forecasts and receipts to `?dev=1`; the six hints | Done 2026-10-19: below |
 | — | **Next: your playtest** (brief P1-P6) | Slice zero goes to the user's sessions |
+
+**Steps 7 and 8, 2026-10-19** (render-and-ui.md §7). Styled from the design lab's "The
+brief, step 8" preset: no exported picks were found, so the preset stands in until you
+export yours. The strip is the headline as 5-day averages with chips; the routes panel has
+route cards (verdicts of at most 12 words, one lever, tested), the budget by line (summing
+to the strip's net, tested) and the treasury, then your share. Town panels are cards.
+Best next moves, forecast lines, losing-move confirmations, Results and receipt toasts are
+`?dev=1` only, and off it no forecast workers or shadow worlds run. The six hints fire on
+state, one at a time, beside the town they're about; `H` or "Hints off" turns them off.
+Not done: the preset's contour terrain; hint 6 assumes tolls stay automatic (brief Open
+question 3). Checked in Chrome at 1440×900: no console errors.
 
 **Step 6, pass 1, 2026-10-18** (`BOTS_WORKERS=6`, ~48 min). First-guess values: toll ₦10 a
 road per danfo-equivalent, levy ₦0.6 a seat (agberos half), allocation ₦50 a day + ₦20 per

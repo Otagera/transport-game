@@ -1,6 +1,7 @@
 import type { SliceWorld } from "./types";
 import { headline, type Headline } from "./world";
 import { lastDay } from "./ledger";
+import { createBudgetTally, type BudgetTally } from "./budget";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 // The headline as the player reads it: 5-day averages (docs/brief.md, What
@@ -21,22 +22,34 @@ export interface DaySample {
   headline: Headline;
   /** Fares minus running costs over the day (ledger.ts). */
   net: number;
+  /** The day's money by line (budget.ts): the tally's change over the day. */
+  budget: BudgetTally;
 }
 
 export interface DayHistory {
   days: DaySample[];
   nextDayAtSeconds: number;
+  /** The budget tally when the last day ended, to take the next day's lines from. */
+  tallyAtLastDay: BudgetTally;
 }
 
 export function createDayHistory(): DayHistory {
-  return { days: [], nextDayAtSeconds: SECONDS_PER_GAME_DAY };
+  return { days: [], nextDayAtSeconds: SECONDS_PER_GAME_DAY, tallyAtLastDay: createBudgetTally() };
+}
+
+function tallyDifference(now: BudgetTally, then: BudgetTally): BudgetTally {
+  const result = createBudgetTally();
+  for (const key of Object.keys(result) as Array<keyof BudgetTally>) result[key] = now[key] - then[key];
+  return result;
 }
 
 /** Called every tick; takes a sample when a game day ends. */
 export function recordDay(world: SliceWorld): void {
   const { history } = world;
   if (world.economy.elapsedSeconds < history.nextDayAtSeconds - 1e-6) return;
-  history.days.push({ atSeconds: world.economy.elapsedSeconds, headline: headline(world), net: lastDay(world.ledger).net });
+  const budget = tallyDifference(world.budget, history.tallyAtLastDay);
+  history.tallyAtLastDay = { ...world.budget };
+  history.days.push({ atSeconds: world.economy.elapsedSeconds, headline: headline(world), net: lastDay(world.ledger).net, budget });
   if (history.days.length > AVERAGE_DAYS) history.days.shift();
   history.nextDayAtSeconds += SECONDS_PER_GAME_DAY;
 }
@@ -59,4 +72,24 @@ export function averageNet(world: SliceWorld): number {
   const yours = world.history.days.filter((day) => day.atSeconds > world.startSeconds + 1e-6);
   if (yours.length === 0) return lastDay(world.ledger).net;
   return yours.reduce((sum, day) => sum + day.net, 0) / yours.length;
+}
+
+/**
+ * The budget by line, a day, averaged over the last five days since day 1
+ * (the panel's breakdown): the same days as averageNet, so its lines sum to
+ * the strip's net -- fares, goods, tolls, levies and allocation, less running
+ * costs and upkeep. Before day 1 has ended, the day so far scaled to a day.
+ */
+export function averageBudget(world: SliceWorld): BudgetTally {
+  const yours = world.history.days.filter((day) => day.atSeconds > world.startSeconds + 1e-6);
+  const result = createBudgetTally();
+  const keys = Object.keys(result) as Array<keyof BudgetTally>;
+  if (yours.length === 0) {
+    const seen = world.economy.elapsedSeconds - world.startSeconds;
+    const scale = seen > 0 ? SECONDS_PER_GAME_DAY / seen : 0;
+    for (const key of keys) result[key] = world.budget[key] * scale;
+    return result;
+  }
+  for (const key of keys) result[key] = yours.reduce((sum, day) => sum + day.budget[key], 0) / yours.length;
+  return result;
 }

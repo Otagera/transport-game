@@ -691,7 +691,13 @@ current period (`remittancePeriodDays`, 10) and its net -- income minus running 
 purchases are never a deficit. At the period's end the state takes `remittanceShare` (0.8)
 of the funds above `remittanceReserve` (₦3,000), never more than the period's net; a
 deficit pays nothing. Called last in `sliceTick`, after the ledger: a remittance is neither
-income nor running cost; `world.budget.remitted` keeps it. Day 1 starts a fresh period.
+income nor running cost; `world.budget.remitted` keeps it, and the period carries `last`
+(what the previous period's end took, and when) for the panel. Day 1 starts a fresh period.
+
+The tally also keeps money out (step 7): `running` (your vehicles' running costs, rough
+roads included) and `upkeep` (routine, plus wear repairs when wear is on), split in
+`sliceTick` from the ledger's running cost; and `goods` apart from passenger `fares`. So
+fares + goods + tolls + levies + allocation − running − upkeep is the ledger's net.
 
 ### The warm-up, and day numbers
 
@@ -706,7 +712,10 @@ stay on raw `elapsedSeconds`.
 `history.ts` — a sample of the headline and the day's net at the end of every game day
 (`recordDay`, called last in `sliceTick`), the last five kept. `averageHeadline` averages
 them all, warm-up days included, so it is filled on day 1; `averageNet` averages only days
-after `startSeconds`, so the warm-up's zeros don't dilute your first days' money.
+after `startSeconds`, so the warm-up's zeros don't dilute your first days' money. Each
+sample also holds the day's budget by line (the tally's change since the last sample;
+`start.ts` resets `tallyAtLastDay` with the tally), and `averageBudget` averages those over
+the same days as `averageNet`, so the panel's lines sum to the strip's net.
 
 ### The headline
 

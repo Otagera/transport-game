@@ -22,29 +22,43 @@ export interface Takings {
   agberos: number;
 }
 
-/** Money in since day 1, by line (and the agberos' cut, which isn't yours). */
+/**
+ * Money since day 1, by line: what came in, the agberos' cut (never yours,
+ * kept to be shown), what went out, and what the treasury took. The panel's
+ * budget breakdown (docs/brief.md, Information design) is its 5-day average
+ * (history.ts averageBudget).
+ */
 export interface BudgetTally {
+  /** Passenger fares. */
   fares: number;
+  /** Goods carried (lorries, freight trains): off in slice zero. */
+  goods: number;
   tolls: number;
   levies: number;
   agberos: number;
   allocation: number;
-  /** Paid to the treasury (remittance): money out, not in. */
+  /** Your vehicles' running costs, rough roads included. */
+  running: number;
+  /** Road upkeep: routine on the roads you built or paved, plus wear repairs when wear is on. */
+  upkeep: number;
+  /** Paid to the treasury (remittance): money out, but not a running cost. */
   remitted: number;
 }
 
 export function createBudgetTally(): BudgetTally {
-  return { fares: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, remitted: 0 };
+  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, upkeep: 0, remitted: 0 };
 }
 
 /** The current remittance period: when it ends, and its net so far (income minus running costs). */
 export interface RemittancePeriod {
   endsAtSeconds: number;
   net: number;
+  /** What the last period's end took, and when; null before the first. */
+  last: { amount: number; atSeconds: number } | null;
 }
 
 export function createRemittancePeriod(nowSeconds: number, tuning: { remittancePeriodDays: number }): RemittancePeriod {
-  return { endsAtSeconds: nowSeconds + tuning.remittancePeriodDays * SECONDS_PER_GAME_DAY, net: 0 };
+  return { endsAtSeconds: nowSeconds + tuning.remittancePeriodDays * SECONDS_PER_GAME_DAY, net: 0, last: null };
 }
 
 /**
@@ -68,7 +82,7 @@ export function remit(world: SliceWorld, netThisTick: number): number {
   const taken = Math.max(0, tuning.remittanceShare * Math.min(above, period.net));
   world.economy.funds -= taken;
   world.budget.remitted += taken;
-  world.remittance = createRemittancePeriod(period.endsAtSeconds, tuning);
+  world.remittance = { ...createRemittancePeriod(period.endsAtSeconds, tuning), last: { amount: taken, atSeconds: world.economy.elapsedSeconds } };
   return taken;
 }
 

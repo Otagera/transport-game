@@ -23,6 +23,7 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   // so does your budget; the allocation pays on growth from day 1.
   world.informal.earnings = 0;
   world.budget = createBudgetTally();
+  world.history.tallyAtLastDay = createBudgetTally();
   // Levies and the allocation flow during the warm-up too; none of it is yours.
   world.economy.funds = tuning.startingFunds;
   world.ledger = createDayLedger();

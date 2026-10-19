@@ -193,6 +193,35 @@ draws it.
 reads `engine/slice` state every frame and keeps no display state of its own (the same
 no-cached-view discipline as §2).
 
+**Slice zero's screen (brief steps 7-8, 2026-10-19).** Styled from the design lab's "The
+brief, step 8" preset (`src/design-lab/main.ts` `PRESETS.brief`): paper theme, solid panels,
+mono spaced-capital labels (`.k`, `--label-font`), chips, town and route cards, a control
+hint line over the toolbar, no key box (chips are their own key). The preset's contour
+terrain isn't applied: the map still draws shaded hills.
+
+- **The strip** (`renderStrip`) is the brief's headline, all 5-day averages
+  (`history.ts`): day, budget (funds), net a day, trips made a day, and chips for your
+  riders, informal, no road (hatched) and no seat -- one number each, the meaning on hover.
+  Your share in % moved one click down: the routes panel's last block.
+- **Route cards** (`routeCard`): vehicles, in, cost and net a day; the pair with +/−; one
+  verdict of at most 12 words naming one lever (`verdicts.ts` `shortVerdict`, tested), the
+  long `reasonText` on the card's hover; the riders bar.
+- **The budget** (`budgetHtml`): fares, tolls, park levies (the agberos' cut beside them),
+  allocation, running costs, upkeep, a day over the last 5 days (`averageBudget`), summing to
+  the strip's net; then the treasury: its rule, what it last took and the day it next does.
+- **The town card** (`renderTown`): kicker (role, size, ▲/▼), name, three lines (biggest
+  trip, who carried its trips, inside trips), "The problem here" (no road; no road to some
+  towns; or a road but no seat), growth, its top five trips, a pager through the towns.
+- **The developer view, `?dev=1`** (`dev`): Best next moves, forecast lines on previews,
+  the second click on a losing move, Results and receipt toasts, route rows' riders/load
+  line, and the key. Without it none of that runs: no forecast workers, and `act()` skips
+  `receipts.perform`, so no shadow world steps every frame.
+- **Hints** (`hints.ts`, no DOM; `renderHint` every frame): the brief's six, one at a time,
+  each latched by the game's state, shown lowest first, dismissed by doing the thing (a
+  hover; a route of yours; a road; a vehicle added; funds back or a sale; a day passing for
+  the toll hint), skipped if already done when its turn comes. A hint about a town sits
+  beside it on the map; × closes it; "Hints off" (or `H`) is remembered in localStorage.
+
 - **`render.ts`** draws, back to front: ground and terrain (water cells, hills shaded by height,
   cached in an offscreen canvas per view since terrain never changes), roads along their
   corridor polylines (dashed tan = inherited dirt, solid grey = built; a bridge deck under
@@ -294,8 +323,7 @@ no-cached-view discipline as §2).
   the traffic"); a jammed route on dirt names the roads to pave. Shift keeps
   the first town selected. Refusals come back as `reason` strings from `engine/slice`
   and show as a toast; the ghost previews the same `check*` result and `roadCost` before
-  you click. The strip shows day, funds, net/day (economy's burn-rate EMA), the
-  you/danfo/home share bar, and what danfos earned. The routes panel is worst-first with
+  you click. The strip and panel are slice zero's (above). The routes panel is worst-first with
   +/− per route; a "healthy" route that loses money says its riders don't fill its buses
   instead of "earning well". Speed: Space pauses, 1/2/3 give 1×/2×/4×.
 - **`map.ts`** — the hand-made map as a TS constant, not yet content JSON (it moves to
@@ -318,6 +346,8 @@ no-cached-view discipline as §2).
   next two days…", then the money, payback and biggest share move, green/red/grey). Cached by
   action, game day and an action counter that every `act()` bumps; only the latest request
   waits in the queue.
+- *Results, forecasts, Best next moves and the forecast click are the developer view's
+  (`?dev=1`) since slice zero step 8.*
 - **Best next moves** — the routes panel opens (after any debt note) with a ranked list:
   candidates are one more vehicle on each bus/minibus route and new buses and minibuses on
   every road-connected pair (most trips-along first), forecast by a pool of up to three

@@ -12,7 +12,7 @@ import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upk
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
-import { averageHeadline, averageNet } from "@engine/slice/history";
+import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { applyAction } from "@engine/slice/actions";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/slice/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
@@ -28,6 +28,9 @@ import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, removeLorry,
 import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
 import { slowOrder } from "@engine/slice/wear";
 import type { Vehicle } from "@engine/simulation/types";
+import { createHintState, dismissHint, updateHints } from "../src/slice/hints";
+import { MAX_VERDICT_WORDS, shortVerdict, wordCount } from "../src/slice/verdicts";
+import type { RouteVerdict } from "@engine/slice/world";
 
 // Tests that pin what the player should *feel*, not just that the
 // mechanics run (docs/principles.md §6): bounded queues, a frequency
@@ -1930,5 +1933,114 @@ describe("slice: the way out mends before it sells (playtest, day 25)", () => {
     // Selling is only advised for what it still loses once mended.
     const sell = advice.sell.find((s) => s.routeId === routeId);
     if (sell) expect(sell.savesPerDay).toBeCloseTo(loss - fix.savesPerDay, 6);
+  });
+});
+
+describe("slice zero step 7: the budget breakdown", () => {
+  test("its lines, a day over the last 5 days, sum to the strip's net", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    buildRoad(w, "mid", "cut");
+    run(w, 3 * SECONDS_PER_GAME_DAY);
+    const b = averageBudget(w);
+    expect(b.fares).toBeGreaterThan(0);
+    expect(b.running).toBeGreaterThan(0);
+    expect(b.upkeep).toBeGreaterThan(0); // the road you built
+    expect(b.levies).toBeGreaterThan(0);
+    expect(b.allocation).toBeGreaterThan(0);
+    const net = b.fares + b.goods + b.tolls + b.levies + b.allocation - b.running - b.upkeep;
+    expect(net).toBeCloseTo(averageNet(w), 0);
+  });
+
+  test("the warm-up's money isn't yours: the breakdown starts at day 1", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    run(w, SECONDS_PER_GAME_DAY);
+    // Doing nothing: the base allocation and the levies, a day's worth each.
+    const b = averageBudget(w);
+    expect(b.allocation).toBeCloseTo(DEFAULT_SLICE_TUNING.allocationBase, 0);
+    expect(b.fares).toBe(0);
+  });
+
+  test("the remittance remembers what it last took, and when", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 10_000 });
+    expect(w.remittance.last).toBeNull();
+    run(w, DEFAULT_SLICE_TUNING.remittancePeriodDays * SECONDS_PER_GAME_DAY + 1);
+    expect(w.remittance.last).not.toBeNull();
+    expect(w.remittance.last!.amount).toBeCloseTo(w.budget.remitted, 6);
+  });
+});
+
+describe("slice zero step 8: route verdicts and hints", () => {
+  test("every short verdict is at most 12 words", () => {
+    const verdicts: RouteVerdict[] = ["thin", "overcapacity", "jammed", "long", "worn", "full", "poached", "waiting", "healthy"];
+    for (const verdict of verdicts) {
+      for (const vehicle of ["bus", "minibus", "train"]) {
+        for (const netPerDay of [-50, 50]) {
+          for (const [dirtRoad, throughTo] of [[null, null], ["Owode–Ado", "Ikole"]] as const) {
+            const text = shortVerdict({ verdict, vehicle, netPerDay, dirtRoad, throughTo });
+            expect(wordCount(text)).toBeLessThanOrEqual(MAX_VERDICT_WORDS);
+          }
+        }
+      }
+    }
+  });
+
+  test("a route losing money is never told to add a vehicle", () => {
+    const verdicts: RouteVerdict[] = ["thin", "overcapacity", "jammed", "long", "worn", "full", "poached", "waiting", "healthy"];
+    for (const verdict of verdicts) {
+      const text = shortVerdict({ verdict, vehicle: "bus", netPerDay: -29, dirtRoad: null, throughTo: null });
+      if (verdict !== "full") expect(text).not.toContain("(+)");
+    }
+  });
+
+  test("hint 1 shows at the start and goes once you hover a town; hint 2 follows", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    const hints = createHintState();
+    expect(updateHints(hints, w, null)?.id).toBe(1);
+    expect(updateHints(hints, w, "big")?.id).toBe(2);
+    expect(updateHints(hints, w, "big")?.town).toBe("big");
+    // Done by doing the thing: running a bus.
+    addBus(w, "big", "mid");
+    expect(updateHints(hints, w, null)).toBeNull();
+    expect(hints.done.has(2)).toBe(true);
+  });
+
+  test("hint 3 waits its turn, and is skipped if a road was built meanwhile", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 1e6 });
+    const hints = createHintState();
+    updateHints(hints, w, null); // hint 1 showing
+    updateHints(hints, w, "big"); // hint 2 now, hint 1 done
+    updateHints(hints, w, "cut"); // hint 3 latched behind hint 2
+    expect(hints.triggered.has(3)).toBe(true);
+    buildRoad(w, "mid", "cut");
+    addBus(w, "big", "mid"); // hint 2 done
+    const next = updateHints(hints, w, null);
+    expect(next?.id).not.toBe(3);
+    expect(hints.done.has(3)).toBe(true);
+  });
+
+  test("a hint fires once: dismissed, it never comes back; off, nothing shows", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    const hints = createHintState();
+    updateHints(hints, w, null);
+    dismissHint(hints);
+    expect(updateHints(hints, w, null)).toBeNull();
+    expect(hints.done.has(1)).toBe(true);
+    const off = createHintState(true);
+    expect(updateHints(off, w, null)).toBeNull();
+  });
+
+  test("hint 6 follows the first road you build, by the road, and goes after a day", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 1e6 });
+    const hints = createHintState();
+    updateHints(hints, w, "big");
+    addBus(w, "big", "mid");
+    updateHints(hints, w, null);
+    buildRoad(w, "mid", "cut");
+    const hint = updateHints(hints, w, null);
+    expect(hint?.id).toBe(6);
+    expect(["mid", "cut"]).toContain(hint!.town!);
+    run(w, SECONDS_PER_GAME_DAY + 1);
+    expect(updateHints(hints, w, null)?.id).not.toBe(6);
   });
 });

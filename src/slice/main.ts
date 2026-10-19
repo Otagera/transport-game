@@ -1,5 +1,4 @@
 import { Accumulator, SIM_DT } from "@engine/loop";
-import { lastDay } from "@engine/slice/ledger";
 import { sliceTick } from "@engine/slice/tick";
 import {
   addBus,
@@ -53,7 +52,10 @@ import { vehicleMoves } from "@engine/slice/moves";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { startSliceGame } from "@engine/slice/start";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
+import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
+import { createHintState, dismissHint, updateHints } from "./hints";
+import { shortVerdict } from "./verdicts";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
 // list, one strip:
@@ -71,7 +73,13 @@ type Tool = "road" | "bus" | "minibus" | "lorry" | "track" | "train" | "freight"
 
 // Slice zero (docs/brief.md): wear, goods, rail and the straight alignment
 // are off. `?systems=all` turns them back on, for comparing.
-const allSystems = new URLSearchParams(location.search).get("systems") === "all";
+const params = new URLSearchParams(location.search);
+const allSystems = params.get("systems") === "all";
+// The developer view (docs/brief.md, Information design): forecasts on
+// previews, receipts, best next moves -- you, calibrating; never the player.
+// Without it none of them runs: no forecast workers, no shadow worlds.
+const dev = params.get("dev") === "1";
+document.body.dataset.dev = String(dev);
 // The world has already run five days when you arrive (start.ts).
 const world = startSliceGame(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...(allSystems ? ALL_SYSTEMS_ON : {}) });
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
@@ -80,6 +88,8 @@ const strip = document.querySelector<HTMLDivElement>("#strip")!;
 const routesEl = document.querySelector<HTMLDivElement>("#routes")!;
 const toolbar = document.querySelector<HTMLDivElement>("#toolbar")!;
 const toast = document.querySelector<HTMLDivElement>("#toast")!;
+const hintEl = document.querySelector<HTMLDivElement>("#hint")!;
+const controlsEl = document.querySelector<HTMLDivElement>("#controls")!;
 
 let tool: Tool = "bus";
 // Road and Track tools: bend round the terrain where it's cheaper, or hold the straight line and pay (A).
@@ -114,7 +124,7 @@ function resize(): void {
       keyEl.style.bottom = `${below(toolbar) + 8}px`;
     }
   }
-  const bottomInset = Math.max(56, below(toolbar), below(keyEl)) + 8;
+  const bottomInset = Math.max(56, below(toolbar), below(keyEl), below(controlsEl)) + 8;
   view = fitView(world, window.innerWidth - sidePanel, window.innerHeight, 24, 64, bottomInset);
 }
 window.addEventListener("resize", resize);
@@ -132,9 +142,14 @@ resize();
 // later a receipt says exactly what it did (receipts.ts).
 const book = createReceiptBook();
 
-/** Does an action and starts measuring it. The result is the real world's. */
+/**
+ * Does an action and, in the developer view, starts measuring it. The result
+ * is the real world's. Outside it there are no receipts, so no shadow world
+ * to step every frame.
+ */
 function act<T extends { ok: boolean }>(spec: ReceiptSpec, run: (w: SliceWorld) => T): T {
   actionVersion += 1; // every forecast was of the world before this
+  if (!dev) return run(world);
   let result: T | undefined;
   perform(world, book, (w) => {
     const r = run(w);
@@ -150,7 +165,7 @@ function act<T extends { ok: boolean }>(spec: ReceiptSpec, run: (w: SliceWorld) 
 // action, game day and how many actions you've taken, so a forecast is
 // redone once the world it described has moved on.
 
-const forecaster = new Worker(new URL("./forecast.worker.ts", import.meta.url), { type: "module" });
+const forecaster = dev ? new Worker(new URL("./forecast.worker.ts", import.meta.url), { type: "module" }) : null;
 let actionVersion = 0;
 const forecasts = new Map<string, Receipt | null | "pending">();
 let inFlight = false;
@@ -158,10 +173,10 @@ let queued: { key: string; action: ActionSpec; spec: ReceiptSpec } | null = null
 
 function sendForecast(key: string, action: ActionSpec, spec: ReceiptSpec): void {
   inFlight = true;
-  forecaster.postMessage({ key, world, action, spec });
+  forecaster?.postMessage({ key, world, action, spec });
 }
 
-forecaster.onmessage = (event: MessageEvent<{ key: string; receipt: Receipt | null }>) => {
+if (forecaster) forecaster.onmessage = (event: MessageEvent<{ key: string; receipt: Receipt | null }>) => {
   forecasts.set(event.data.key, event.data.receipt);
   inFlight = false;
   if (queued) {
@@ -245,7 +260,7 @@ function knownForecast(action: ActionSpec): Receipt | null | undefined {
 // in a small worker pool: one more vehicle on each route you run, and new
 // buses and minibuses on the pairs with the most trips along them.
 
-const POOL_SIZE = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
+const POOL_SIZE = dev ? Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1)) : 0;
 const pool = Array.from({ length: POOL_SIZE }, () => new Worker(new URL("./forecast.worker.ts", import.meta.url), { type: "module" }));
 const idle: Worker[] = [...pool];
 
@@ -320,9 +335,9 @@ function bestMovesHtml(): string {
   return `<h2>Best next moves</h2><p class="hint">Forecast two days on, against the same world without them. Checked again every three days and after anything you do.</p><ul class="moves">${rows}</ul>${none}${status}`;
 }
 
-/** A preview with its forecast, when the action could be done. */
+/** A preview with its forecast, when the action could be done (developer view only). */
 function withForecast(ghost: Ghost, action: ActionSpec, spec: ReceiptSpec): Ghost {
-  return ghost.ok ? { ...ghost, forecast: forecastLine(action, spec) } : ghost;
+  return ghost.ok && dev ? { ...ghost, forecast: forecastLine(action, spec) } : ghost;
 }
 
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
@@ -332,6 +347,9 @@ const pair = (a: string, b: string) => `${townName(a)} ↔ ${townName(b)}`;
 function addLabel(vehicle: string, count: number, a: string, b: string): string {
   return count <= 1 ? `a new ${vehicle} route ${pair(a, b)}` : `a ${ordinal(count)} ${vehicle} on ${pair(a, b)}`;
 }
+
+/** Toasts promise a receipt only where there are receipts. */
+const later = dev ? " Result in two days." : "";
 
 let toastTimer = 0;
 function say(message: string, bad = false, seconds = 2.6): void {
@@ -447,7 +465,7 @@ canvas.addEventListener("click", (event) => {
     if (!result.ok) say(`Can't maintain: ${result.reason}`, true);
     else if (on) {
       const upkeep = pieces.reduce((sum, piece) => sum + upkeepPerDay(world, piece), 0);
-      say(`Maintaining ${name}: repaired for ${naira(result.charged)}, about ${naira(upkeep)}/day to keep at this traffic. Result in two days.`);
+      say(`Maintaining ${name}: repaired for ${naira(result.charged)}, about ${naira(upkeep)}/day to keep at this traffic.${later}`);
     } else say(`Stopped maintaining ${name}: it will wear again`);
     renderPanel();
     return;
@@ -479,14 +497,13 @@ canvas.addEventListener("click", (event) => {
   const intended = actionFor(tool, from, town);
   const known = intended ? knownForecast(intended) : undefined;
   const confirmAs = intended ? JSON.stringify(intended) : null;
-  if (known && known.moneyPerDay < -5 && confirming !== confirmAs) {
+  if (dev && known && known.moneyPerDay < -5 && confirming !== confirmAs) {
     confirming = confirmAs;
     say(`Forecast: this loses ${naira(-known.moneyPerDay)}/day. Click ${townName(town)} again to do it anyway.`, true, 5);
     return;
   }
   confirming = null;
   const towns = [from, town];
-  const later = " Result in two days.";
   if (tool === "road" && roadChain(world, from, town)) {
     const cost = paveCost(world, from, town);
     const result = act({ label: `paving ${townName(from)} – ${townName(town)}`, towns }, (w) => paveRoad(w, from, town));
@@ -550,6 +567,14 @@ window.addEventListener("keydown", (event) => {
     alignment = alignment === "cheapest" ? "direct" : "cheapest";
     renderToolbar();
   }
+  else if (event.key === "h" || event.key === "H") {
+    hints.off = !hints.off;
+    try {
+      localStorage.setItem(HINTS_OFF_KEY, hints.off ? "1" : "0");
+    } catch {
+      // Remembered for this game only.
+    }
+  }
   else if (event.key === "Escape") selectedTown = null;
   else if (event.key === " ") {
     paused = !paused;
@@ -581,7 +606,7 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
     : `${roadName(id)} · ${state}${costing} · maintain for ~${upkeep}/day`;
   const ends = chainOf(world, id);
   const towns = ends ? [ends.a, ends.b] : [worst.fromNodeId, worst.toNodeId];
-  const forecast = forecastLine({ kind: "fix", segmentId: id, on: !world.maintained.has(id) }, { label: "maintaining", towns });
+  const forecast = dev ? forecastLine({ kind: "fix", segmentId: id, on: !world.maintained.has(id) }, { label: "maintaining", towns }) : undefined;
   return { segmentId: id, at: mouse, label, forecast };
 }
 
@@ -804,25 +829,26 @@ function renderToolbar(): void {
   );
 }
 
+// The headline (docs/brief.md, What doing well means): trips made a day,
+// stayed home split into no road and no seat, your riders, and the budget
+// with its 5-day net. Chips with counts (design lab, "the brief, step 8"):
+// each is its own key, and each carries one number.
 function renderStrip(): void {
-  const burn = { netPerDay: lastDay(world.ledger).net };
-  const share = networkShare(world);
-  const day = gameDay(world);
+  const h = averageHeadline(world);
+  const net = averageNet(world);
+  const n = (x: number) => Math.round(x).toLocaleString();
+  const signed = (x: number) => `${x < 0 ? "−" : "+"}₦${Math.abs(Math.round(x)).toLocaleString()}`;
   strip.innerHTML = `
-    <div class="stat"><span class="k">Day</span><span class="v">${day}</span></div>
-    <div class="stat"><span class="k">Funds</span><span class="v ${world.economy.funds < 0 ? "bad" : ""}">${naira(world.economy.funds)}</span></div>
-    <div class="stat"><span class="k" title="Fares minus running costs over the last game day">Net, last day</span><span class="v ${burn.netPerDay < 0 ? "bad" : "good"}">${naira(burn.netPerDay)}</span></div>
-    <div class="stat share">
-      <span class="k">Trips between towns: who carried them</span>
-      <div class="bar">
-        <i style="width:${pct(share.player)};background:var(--player)"></i>
-        <i style="width:${pct(share.informal)};background:var(--danfo)"></i>
-        <i style="width:${pct(share.lost)};background:var(--home)"></i>
-      </div>
-      <span class="legend"><b style="color:var(--player)">You ${pct(share.player)}</b> · <b class="danfo-text">Informal ${pct(share.informal)}</b> · <b style="color:var(--home-text)">Stayed home ${pct(share.lost)}</b></span>
-    </div>
-    <div class="stat"><span class="k">Informal sector earned</span><span class="v">${naira(world.informal.earnings)}</span></div>
-  `;
+    <div class="stat"><span class="k">Day</span><span class="v">${gameDay(world)}</span></div>
+    <div class="stat"><span class="k">Budget</span><span class="v ${world.economy.funds < 0 ? "bad" : ""}">${naira(world.economy.funds)}</span></div>
+    <div class="stat"><span class="k" title="Income less running costs and upkeep, a day, over the last 5 days">Net, 5-day average</span><span class="v ${net < 0 ? "bad" : "good"}">${signed(net)}</span></div>
+    <div class="stat"><span class="k" title="Trips between towns that happened, by anyone, a day: 5-day average">Trips made, a day</span><span class="v">${n(h.tripsPerDay)}</span></div>
+    <div class="chips">
+      <span class="chip" title="Trips your vehicles carried, a day"><b style="background:var(--player)"></b>Your riders <span class="num">${n(h.yourRidersPerDay)}</span></span>
+      <span class="chip" title="Trips danfos, kekes and okadas carried, a day"><b style="background:var(--danfo)"></b>Informal <span class="num">${n(h.tripsPerDay - h.yourRidersPerDay)}</span></span>
+      <span class="chip hatch" title="Stayed home: no road joins their towns. Falls when you build."><b></b>No road <span class="num">${n(h.noRoadPerDay)}</span></span>
+      <span class="chip" title="Stayed home: a road joins their towns, but nobody carried them. Falls when you run vehicles."><b style="background:var(--home)"></b>No seat <span class="num">${n(h.noSeatPerDay)}</span></span>
+    </div>`;
 }
 
 // The panel shows the focused town's trips when there is one, otherwise
@@ -848,9 +874,9 @@ function reachNote(townId: string): string {
   const biggest = stranded[0]!;
   if (isCutOff(world, townId)) {
     const total = perDay(stranded.reduce((sum, trip) => sum + trip.demand, 0));
-    return `<p class="callout">No road reaches ${townName(townId)}. Its people want to make ${total} trips a day and every one stays home. Build a road (<kbd>R</kbd>): the biggest trip is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
+    return `<p class="callout"><span class="k">The problem here</span>No road reaches ${townName(townId)}. Its people want to make ${total} trips a day and every one stays home. Build a road (<kbd>R</kbd>): the biggest trip is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
   }
-  return `<p class="callout">${stranded.length} of ${townName(townId)}'s trips have no road at all (dashed lines). The biggest is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
+  return `<p class="callout"><span class="k">The problem here</span>${stranded.length} of ${townName(townId)}'s trips have no road at all (dashed lines). The biggest is to ${townName(biggest.to)}, ${perDay(biggest.demand)}/day.</p>`;
 }
 
 // A line that passes the town without stopping, said where the player looks
@@ -880,45 +906,71 @@ function growthText(townId: string, name: string): string {
   return `<p class="townshare"><b>${name} is ${heading}.</b> ${why}</p>`;
 }
 
-// Inside the town: informal's own ground, said as such so a permanent
-// informal share doesn't read as failure (principles.md §5). Kept out of
-// every share bar and all money.
-function insideText(townId: string, name: string): string {
-  const local = localTravel(world, townId);
-  const feeder = Math.round(local.feederPerDay);
-  const reach = feeder > 0
-    ? `They also carry ~${feeder} of your riders a day to and from your buses (${pct(local.firstMileShare)} of them here).`
-    : `Once you run buses here, about ${pct(local.firstMileShare)} of your riders will reach them by keke or okada.`;
-  return `<p class="inside"><b>Inside ${name}:</b> ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day, all by keke and okada. Nothing you run reaches that finely, and it isn't counted against you. ${reach}</p>`;
-}
-
+// The town card (design lab, "the brief, step 8"): a kicker, the name, three
+// lines, the one problem here, then its trips. Its first screen fits without
+// scrolling (brief, text budget).
 function renderTown(townId: string): void {
   const town = world.towns.get(townId)!;
   const share = townShare(world, townId);
-  const rows = tripsFrom(world, townId)
+  const trips = tripsFrom(world, townId);
+  const perDay = (n: number) => Math.round(n * SECONDS_PER_GAME_DAY);
+  const rows = trips
+    .slice(0, 5)
     .map((trip) => {
       const s = trip.share;
       const bar = s.player + s.informal + s.lost > 0
         ? `<i style="width:${pct(s.player)};background:var(--player)"></i><i style="width:${pct(s.informal)};background:var(--danfo)"></i><i style="width:${pct(s.lost)};background:var(--home)"></i>`
         : "";
       return `
-        <div class="trip">
-          <span class="name">${townName(trip.to)}</span>
-          <span class="num">${Math.round(trip.demand * SECONDS_PER_GAME_DAY)}/day</span>
+        <div class="trip${trip.reachable ? "" : " cut"}">
+          <span class="name">${townName(trip.to)}${trip.reachable ? "" : " <span class=\"muted\">· no road</span>"}</span>
+          <span class="num">${perDay(trip.demand)}/day</span>
           <div class="bar">${bar}</div>
         </div>`;
     })
     .join("");
+  const role = world.settlement.emergent.has(townId) ? "Grew on the road" : townId === world.port && world.tuning.goodsEnabled ? "Port" : town.population >= world.tuning.marketPopulation ? "Market town" : "Farm town";
+  const trend = growthTrend(world, townId);
+  const kicker = `${role} · ${Math.round(town.population)}k people${trend === "growing" ? " · ▲ growing" : trend === "shrinking" ? " · ▼ shrinking" : ""}`;
+  const biggest = trips[0];
+  const biggestLine = biggest
+    ? `Biggest trip: ${townName(biggest.to)}, ${perDay(biggest.demand)}/day${biggest.share.player >= 0.005 ? `; you carry ${pct(biggest.share.player)}` : ""}`
+    : "";
+  const local = localTravel(world, townId);
+  const pagerTowns = [...world.towns.keys()];
+  const index = pagerTowns.indexOf(townId);
+  const prev = pagerTowns[(index - 1 + pagerTowns.length) % pagerTowns.length]!;
+  const next = pagerTowns[(index + 1) % pagerTowns.length]!;
   routesEl.innerHTML = `
-    ${reachNote(townId)}
-    <h2>${town.name} <span class="muted">· ${Math.round(town.population)}k people${world.settlement.emergent.has(townId) ? " · grew on the road" : ""}</span></h2>
-    <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: <b style="color:var(--player)">you</b> · <b class="danfo-text">informal</b> · <b style="color:var(--home-text)">stayed home</b>.</p>
-    <p class="townshare">Of everyone leaving ${town.name} for another town: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</p>
-    ${haltText(townId, town.name)}
-    ${growthText(townId, town.name)}
-    ${goodsText(townId)}
-    ${insideText(townId, town.name)}
-    ${rows}`;
+    <div class="town-card">
+      <div class="k">${kicker}</div>
+      <div class="title">${town.name}</div>
+      <ul>
+        ${biggestLine ? `<li>${biggestLine}</li>` : ""}
+        <li>Of its trips: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</li>
+        <li>Inside: ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day by keke and okada, not counted against you.</li>
+      </ul>
+      ${problemText(townId)}
+      ${growthText(townId, town.name)}
+      ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
+      ${world.tuning.goodsEnabled ? goodsText(townId) : ""}
+      ${rows}
+      <div class="pager">
+        <button data-select="${prev}">‹ ${townName(prev)}</button>
+        <span class="dots">${pagerTowns.map((id) => `<i class="${id === townId ? "on" : ""}"></i>`).join("")}</span>
+        <button data-select="${next}">${townName(next)} ›</button>
+      </div>
+    </div>`;
+}
+
+// The one problem here, named: no road reaches it, some of its trips have
+// none, or a road but no seat. Nothing when it's well served.
+function problemText(townId: string): string {
+  const stranded = reachNote(townId);
+  if (stranded) return stranded;
+  const share = townShare(world, townId);
+  if (share.lost < 0.2) return "";
+  return `<p class="callout hook"><span class="k">The problem here</span>${pct(share.lost)} of its trips have a road but no seat: nobody carried them.</p>`;
 }
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -998,38 +1050,89 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
   }
 }
 
+// Your routes as cards (design lab, "the brief, step 8"): what it runs and
+// its money, the pair, a verdict of at most 12 words naming one lever
+// (verdicts.ts; the long reason on hover), and where its riders went.
+function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
+  const index = world.routes.findIndex((route) => route.id === s.id);
+  const d = diagnoseRoute(world, s.id);
+  const vehicle = isRailRoute(s.id) ? "train" : isMinibusRoute(s.id) ? "minibus" : "bus";
+  const dirt = d ? dirtRoadsOn(world, s.id)[0] : undefined;
+  const through = d?.verdict === "thin" ? throughRoute(world, s.id) : null;
+  const verdict = d
+    ? shortVerdict({
+        verdict: d.verdict,
+        vehicle,
+        netPerDay: s.netPerDay,
+        dirtRoad: dirt ? `${townName(dirt.a)}–${townName(dirt.b)}` : null,
+        throughTo: through ? townName([through.a, through.b].find((t) => t !== s.a && t !== s.b) ?? through.b) : null,
+      })
+    : "Just started: give it a day.";
+  const long = d ? forVehicle(reasonText(d, s.buses, s.costPerDay, s.netPerDay), s.id).replace(/<[^>]+>/g, "") : "";
+  const bar = d
+    ? `<div class="bar" title="you / informal took them from your stop / gave up, then informal / stayed home">
+        <i style="width:${pct(d.carried)};background:var(--player)"></i>
+        <i style="width:${pct(d.poached)};background:var(--danfo)"></i>
+        <i style="width:${pct(d.gaveUp)};background:var(--danfo-light)"></i>
+        <i style="width:${pct(d.lost)};background:var(--home)"></i>
+      </div>`
+    : "";
+  const signed = `${s.netPerDay < 0 ? "−" : "+"}₦${Math.abs(Math.round(s.netPerDay)).toLocaleString()}`;
+  return `
+    <div class="route-card" title="${long.replace(/"/g, "&quot;")}">
+      <div class="top"><span class="k">${vehicleCount(s.id, s.buses)} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</span><span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${signed}/day</span></div>
+      <div class="name"><span class="swatch" style="background:${routeColor(index)}"></span>${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}
+        <span class="buttons"><button data-add="${s.id}" title="Add one">+</button><button data-remove="${s.id}" title="Sell one">−</button></span></div>
+      <div class="verdict why-${d?.verdict ?? "healthy"}">${verdict}</div>
+      ${bar}
+      ${dev && d ? `<small>${forVehicle(`${Math.round(d.boardingsPerDay)} riders/day · buses ${pct(d.loadFactor)} full · ${pct(d.speed)} speed · ceiling ${naira(d.ceilingPerDay)}/day`, s.id)}</small>` : ""}
+    </div>`;
+}
+
+// The budget breakdown (docs/brief.md, Information design): each line a
+// day, over the same 5 days as the strip's net, so the lines sum to it. Then
+// the treasury, which takes its share every 10 days and isn't a running cost.
+function budgetHtml(): string {
+  const b = averageBudget(world);
+  const signed = (x: number) => `${x < 0 ? "−" : "+"}₦${Math.abs(Math.round(x)).toLocaleString()}`;
+  const lines: Array<[string, number]> = [
+    ["Fares", b.fares],
+    ...(world.tuning.goodsEnabled ? [["Goods", b.goods] as [string, number]] : []),
+    ["Tolls", b.tolls],
+    [`Park levies <span class="muted">(agberos kept ${naira(b.agberos)})</span>`, b.levies],
+    ["State allocation", b.allocation],
+    ["Running costs", -b.running],
+    ["Road upkeep", -b.upkeep],
+  ];
+  const net = lines.reduce((sum, [, x]) => sum + x, 0);
+  const t = world.tuning;
+  const r = world.remittance;
+  const treasury = t.remittanceEnabled
+    ? `<p class="hint">Treasury: every ${t.remittancePeriodDays} days it takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus.${r.last ? ` Last took ${naira(r.last.amount)} on day ${gameDay(world, r.last.atSeconds)}.` : ""} Next on day ${gameDay(world, r.endsAtSeconds)}.</p>`
+    : "";
+  return `<h2 class="section">Budget, a day</h2><p class="hint">5-day average.</p>
+    <div class="budget">${lines.map(([label, x]) => `<span>${label}</span><span class="num ${x < 0 ? "bad" : ""}">${signed(x)}</span>`).join("")}
+      <span class="total">Net</span><span class="total num ${net < 0 ? "bad" : "good"}">${signed(net)}</span>
+    </div>${treasury}`;
+}
+
+// Your share of trips between towns: one click down, not the headline
+// (brief: as a headline it falls exactly when you grow towns).
+function shareHtml(): string {
+  const share = networkShare(world);
+  return `<h2 class="section">Who carried trips between towns</h2>
+    <div class="bar share-bar"><i style="width:${pct(share.player)};background:var(--player)"></i><i style="width:${pct(share.informal)};background:var(--danfo)"></i><i style="width:${pct(share.lost)};background:var(--home)"></i></div>
+    <p class="hint">You ${pct(share.player)} · informal ${pct(share.informal)} · stayed home ${pct(share.lost)}</p>`;
+}
+
 function renderRoutes(): void {
   const summaries = routeSummaries(world);
-  const header = `<h2>Your routes</h2><p class="hint">Worst first. Net is fares minus running cost. Bar: who carried this route's riders.</p>`;
-  if (summaries.length === 0 && world.lorryRoutes.length === 0) {
-    routesEl.innerHTML = `${bestMovesHtml()}${resultsHtml()}${header}<p class="empty">No buses yet. Hover a town to see where its people want to go. Then pick the <b>Bus</b> tool, click a town, then another town joined to it by road.</p>`;
-    return;
-  }
-  const rows = summaries.map((s) => {
-    const index = world.routes.findIndex((route) => route.id === s.id);
-    const d = diagnoseRoute(world, s.id);
-    const detail = d
-      ? `
-        <div class="bar" title="you / informal took them from your stop / gave up, then informal / stayed home">
-          <i style="width:${pct(d.carried)};background:var(--player)"></i>
-          <i style="width:${pct(d.poached)};background:var(--danfo)"></i>
-          <i style="width:${pct(d.gaveUp)};background:var(--danfo-light)"></i>
-          <i style="width:${pct(d.lost)};background:var(--home)"></i>
-        </div>
-        <div class="why why-${d.verdict}">${forVehicle(reasonText(d, s.buses, s.costPerDay, s.netPerDay), s.id)}</div>
-        <small>${forVehicle(`${Math.round(d.boardingsPerDay)} riders/day · buses ${pct(d.loadFactor)} full · ${pct(d.speed)} speed · ceiling ${naira(d.ceilingPerDay)}/day`, s.id)}</small>`
-      : "";
-    return `
-      <div class="route">
-        <span class="swatch" style="background:${routeColor(index)}"></span>
-        <div class="name">${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}<small>${vehicleCount(s.id, s.buses)} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
-        <span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${naira(s.netPerDay)}</span>
-        <button data-add="${s.id}" title="Add one">+</button>
-        <button data-remove="${s.id}" title="Sell one">−</button>
-        <div class="detail">${detail}</div>
-      </div>`;
-  });
-  routesEl.innerHTML = moneyNote() + bestMovesHtml() + resultsHtml() + (rows.length > 0 ? header + rows.join("") : "") + lorryRows(rows.length > 0);
+  const advice = dev ? bestMovesHtml() + resultsHtml() : "";
+  const header = `<h2>Your routes</h2><p class="hint">Worst first. Net over the last day; hover a card for why.</p>`;
+  const routes = summaries.length === 0 && world.lorryRoutes.length === 0
+    ? `${header}<p class="empty">No buses yet. Hover a town to see where its people want to go.</p>`
+    : (summaries.length > 0 ? header + summaries.map(routeCard).join("") : "") + lorryRows(summaries.length > 0);
+  routesEl.innerHTML = moneyNote() + advice + routes + budgetHtml() + shareHtml();
 }
 
 // --- Results: what each action did --------------------------------------
@@ -1186,19 +1289,25 @@ function moneyNote(): string {
 
 routesEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
+  // The town card's pager: the next town along, as if you'd clicked it.
+  if (target.dataset.select) {
+    selectedTown = target.dataset.select;
+    hoverTown = null;
+    renderPanel();
+    return;
+  }
   const moveIndex = target.dataset.move;
   if (moveIndex !== undefined) {
     const move = moves.list[Number(moveIndex)];
     if (!move) return;
     const result = act(move.spec, (w) => applyAction(w, move.action));
-    if (result.ok) say(`${move.title}: bought for ${naira(move.price)}. Result in two days.`);
+    if (result.ok) say(`${move.title}: bought for ${naira(move.price)}.${later}`);
     else say(`Can't: ${result.reason}`, true);
     renderPanel();
     return;
   }
   const addId = target.dataset.add;
   const removeId = target.dataset.remove;
-  const later = " Result in two days.";
   const sell = (routeId: string, vehicle: string, remove: (w: SliceWorld) => number) => {
     const route = [...world.routes, ...world.lorryRoutes].find((candidate) => candidate.id === routeId);
     if (!route) return;
@@ -1235,6 +1344,60 @@ routesEl.addEventListener("click", (event) => {
   renderRoutes();
 });
 
+// --- Hints ---------------------------------------------------------------
+// The six hints (hints.ts): one at a time, beside the town it's about, or
+// over the toolbar when it's about no town. "Hints off" is remembered.
+
+const HINTS_OFF_KEY = "slice:hints-off";
+const hintsOff = (() => {
+  try {
+    return localStorage.getItem(HINTS_OFF_KEY) === "1";
+  } catch {
+    return false;
+  }
+})();
+const hints = createHintState(hintsOff);
+
+function renderHint(): void {
+  const hint = updateHints(hints, world, hoverTown);
+  if (!hint) {
+    hintEl.hidden = true;
+    return;
+  }
+  if (hintEl.dataset.id !== String(hint.id)) {
+    hintEl.dataset.id = String(hint.id);
+    hintEl.innerHTML = `<span>${hint.text}</span><button data-hint="close" title="Got it">×</button><button data-hint="off" title="No more hints">Hints off</button>`;
+  }
+  hintEl.hidden = false;
+  const town = hint.town ? world.towns.get(hint.town) : undefined;
+  if (town) {
+    // Beside the town it's about: pointing at the map, not at a button.
+    const p = toScreen(view, town.x, town.y);
+    const r = townRadius(town, view);
+    hintEl.classList.add("anchored");
+    hintEl.style.left = `${Math.min(window.innerWidth - 340, p.x + r + 14)}px`;
+    hintEl.style.top = `${Math.max(64, p.y - 18)}px`;
+  } else {
+    hintEl.classList.remove("anchored");
+    hintEl.style.left = "";
+    hintEl.style.top = "";
+  }
+}
+
+hintEl.addEventListener("click", (event) => {
+  const action = (event.target as HTMLElement).dataset.hint;
+  if (action === "close") dismissHint(hints);
+  else if (action === "off") {
+    hints.off = true;
+    try {
+      localStorage.setItem(HINTS_OFF_KEY, "1");
+    } catch {
+      // Off for this game only.
+    }
+  }
+  renderHint();
+});
+
 // --- Loop -------------------------------------------------------------
 
 const accumulator = new Accumulator(SIM_DT);
@@ -1250,7 +1413,7 @@ function frame(now: number): void {
     for (let i = 0; i < speed; i += 1) {
       accumulator.advance(elapsed, (dt) => {
         for (const event of sliceTick(world, dt)) announce(event);
-        for (const receipt of tickReceipts(world, book, dt)) say(receiptLine(receipt), receipt.moneyPerDay < -5, 8);
+        if (dev) for (const receipt of tickReceipts(world, book, dt)) say(receiptLine(receipt), receipt.moneyPerDay < -5, 8);
       });
     }
   }
@@ -1262,6 +1425,8 @@ function frame(now: number): void {
     renderStrip();
     renderPanel();
   }
+  // Every frame: a hint pinned to a town follows it, and hovering dismisses hint 1 at once.
+  renderHint();
   requestAnimationFrame(frame);
 }
 
@@ -1269,5 +1434,6 @@ renderToolbar();
 resize(); // again, now the toolbar exists to be measured
 renderStrip();
 renderPanel();
-say("Danfos, kekes and okadas are already carrying your passengers. Click a town, then another, to run a bus.");
+// The hints take the start from here (hint 1); the developer view keeps the old line.
+if (dev) say("Danfos, kekes and okadas are already carrying your passengers. Click a town, then another, to run a bus.");
 requestAnimationFrame(frame);

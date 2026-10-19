@@ -199,6 +199,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       vehicle.carries === "goods" ? recordDeliveryRevenue(economy, vehicle.id, deliveries) : recordFares(world, vehicle.id, passengerFares(world, deliveries, world.railVehicles.has(vehicle.id)));
     revenueThisTick += revenue;
     if (vehicle.carries === "passengers") world.budget.fares += revenue;
+    else world.budget.goods += revenue;
     bump(routeRevenue, routeOf.get(vehicle.id) ?? "", revenue);
     if (vehicle.carries === "goods") {
       recordGoodsDelivered(deliveries, goodsDelivered);
@@ -246,6 +247,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   updateIncomeRateEMA(economy, revenueThisTick, dt);
   const runningCost = revenueThisTick - (economy.funds - fundsAtStart);
   recordMoney(world.ledger, revenueThisTick, runningCost, routeRevenue, dt, rough.byRoute);
+  world.budget.running += runningCost - upkeep;
+  world.budget.upkeep += upkeep;
   // The treasury's share of a surplus, once a period (budget.ts). After the
   // ledger: a remittance is neither income nor running cost.
   remit(world, revenueThisTick - runningCost);
