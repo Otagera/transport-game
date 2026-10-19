@@ -48,7 +48,7 @@ right after this file. Progress on that build order:
 | R1 2b | The named project; lane and rail priced for C2 | Done 2026-10-19: **lane 14 days, rail 27.8 days** of surplus (corridor probe, real money): below |
 | R1 3 | A seeded variation of the hand-made map: town sizes (cut-off towns wider), the river's course and its crossing widths (`variation.ts`); P8 | Done 2026-10-19: **P8 (a) passes** (5 of 5 seeds), **P8 (b) fails** (1 of 5 seeds: only where a cut-off town comes up big): below |
 | — | Your playtest of the whole ladder (dirt → paved → lane → rail), seed 0 | Played 2026-10-19: rail after 100+ days of idle waiting; played for money; the treasury unnoticed; rail's payoff temporary; strikes let pass (principles.md §6) |
-| R1 4 | The treasury visible: an event every 10 days with the amount, a countdown with "spend it or set it aside", a set-aside progress bar (brief, After the ladder's playtest, 1) | **Next**; then played |
+| R1 4 | The treasury visible in the budget breakdown (no new panel): a "Treasury took" line, the countdown "₦X over the reserve goes to the treasury in N days; spend it or set it aside", a set-aside progress bar, the 10-day remittance as a toast (brief, After the ladder's playtest, 1) | **Next**; then played |
 | R1 5 | The score as visible as money: town-growth milestones, the trips-made trend (2) | After R1 4's playtest |
 | R1 6 | Each corridor's informal share; "corridor taken" as a visible state, with its costs (3) | After R1 5's playtest |
 | — | Proposed, not built: rail reshapes the map (station towns grow, new desire lines) (4) | |
