@@ -32,7 +32,7 @@ right after this file. Progress on that build order:
 | 7 | The new headline (5-day averages, chips) and the panel's budget breakdown | Done 2026-10-19: below |
 | 8 | Best next moves, forecasts and receipts to `?dev=1`; the six hints | Done 2026-10-19: below |
 | — | Your playtest (brief P1-P6) | Played 2026-10-19: fun for minutes; one map; no story; no struggle (principles.md §6) |
-| — | **Next: Revision 1, the corridor's story** (brief) | Drafted 2026-10-19, **Proposed**: awaiting your decision before anything is built |
+| — | **Next: Revision 1, the corridor's story** (brief) | Drafted 2026-10-19, **Proposed**: nothing is built until you mark it Agreed. Then, one change and one measurement at a time: 1a growth tied to corridor capacity alone (C1 and the 20–40-day guard), then 1b the bus lane and pushback (C3) |
 
 **Steps 7 and 8, 2026-10-19** (render-and-ui.md §7). Styled from the design lab's "The
 brief, step 8" preset: no exported picks were found, so the preset stands in until you

@@ -329,7 +329,10 @@ Calendar eras stay paused (principles.md §6). Each corridor climbs at its own p
 
 ### The order
 
-1. **Pressure and the ladder:** growth tied to corridor capacity; the bus lane rung, with pushback in one form on its corridor; the corridor card and the corridor's drawn history; the named project the treasury leaves alone. Measure C1–C3, M5 and M10 again.
+1. **Pressure and the ladder, one change and one measurement at a time:**
+   - **1a. Growth tied to corridor capacity, alone.** Measure C1 and the 20–40-day breathing-room guard before anything else changes.
+   - **1b. The bus lane and pushback** (one form, on the map). Measure C3.
+   - Then the corridor card and its drawn history, and the named project the treasury leaves alone (C2); M10 and day-60 M1 again.
 2. **Rail returns as the top rung** (switched on; restore the old line, new track, halts, trains), priced for C2.
 3. **A seeded variation of the hand-made map:** the same geography, with town sizes and the river's crossing points varied by a seed, so a second game differs (P8). Full map generation waits until the variation has been played.
 4. **Wear returns after rail** (Fix tool): keeping what you built against climbing further.
