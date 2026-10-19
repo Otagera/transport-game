@@ -15,6 +15,9 @@ import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upk
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
+import { variedSliceMap } from "@engine/slice/variation";
+import { buildSliceTerrain } from "@engine/slice/terrain";
+import { SLICE_MAP } from "../src/slice/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { applyAction } from "@engine/slice/actions";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/slice/receipts";
@@ -2332,4 +2335,47 @@ describe("Revision 1: the named project the treasury leaves alone, for a while",
     expect(v.project).toBeNull();
   });
   const w0 = (w: SliceWorld) => (w.tuning.remittancePeriodDays + 0.5) * SECONDS_PER_GAME_DAY;
+});
+
+describe("seeded variation of the hand-made map (brief, Revision 1, the order, 3; P8)", () => {
+  test("seed 0 is the authored map, and a seed always draws the same map", () => {
+    expect(variedSliceMap(SLICE_MAP, 0)).toEqual(SLICE_MAP);
+    expect(variedSliceMap(SLICE_MAP, 7)).toEqual(variedSliceMap(SLICE_MAP, 7));
+    expect(variedSliceMap(SLICE_MAP, 7)).not.toEqual(variedSliceMap(SLICE_MAP, 8));
+  });
+
+  test("the same towns and roads; Ilase stays the biggest; every town dry and on its own bank", () => {
+    const riverX = (map: SliceMapDef, y: number) => {
+      const points = map.terrain!.rivers![0]!.points;
+      for (let k = 1; k < points.length; k += 1) {
+        const [ax, ay] = points[k - 1]!;
+        const [bx, by] = points[k]!;
+        if (y >= ay && y <= by) return ax + ((bx - ax) * (y - ay)) / (by - ay);
+      }
+      return points[0]![0];
+    };
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const map = variedSliceMap(SLICE_MAP, seed);
+      expect(map.towns.map((t) => [t.id, t.x, t.y])).toEqual(SLICE_MAP.towns.map((t) => [t.id, t.x, t.y]));
+      expect(map.roads).toEqual(SLICE_MAP.roads);
+      expect(map.rails).toEqual(SLICE_MAP.rails);
+      const ilase = map.towns.find((t) => t.id === "ilase")!;
+      for (const town of map.towns) if (town !== ilase) expect(town.population).toBeLessThan(ilase.population);
+      buildSliceTerrain(map); // throws if a town is in water
+      for (const town of map.towns) expect(Math.sign(town.x - riverX(map, town.y))).toBe(Math.sign(town.x - riverX(SLICE_MAP, town.y)));
+      expect(map.terrain!.rivers![0]!.widths!.some((w) => w < 2)).toBe(true); // a ford somewhere
+    }
+  });
+
+  test("a narrow stretch is cheaper to bridge than a wide one", () => {
+    const at = (widths: number[]) => {
+      const map = structuredClone(SLICE_MAP);
+      map.terrain!.rivers![0]!.widths = widths;
+      const terrain = buildSliceTerrain(map);
+      let row = 0; // water cells across the row at y = 22, where the third point is
+      for (let x = 0; x < map.width; x += 1) row += terrain.water[22 * map.width + x]!;
+      return row;
+    };
+    expect(at([3, 3, 1.2, 3, 3, 3, 3])).toBeLessThan(at([3, 3, 5, 3, 3, 3, 3]));
+  });
 });

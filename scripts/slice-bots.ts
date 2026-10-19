@@ -10,12 +10,17 @@
 //   CHECKS=0 bun scripts/slice-bots.ts        # personas only
 //   SLICE_TUNING='{"fare":5}' ...             # tuning overrides, as in slice-probe.ts
 //   BOTS_WORKERS=6 ...                        # forecast threads (default 2: runs cool, ~3x slower)
+//   SEED=7 ...                                # a seeded variation of the map (variation.ts; default 0, the authored map)
+//   BOTS_DAYS=3 BOTS_MOVES=1 ...              # a short run, logging each move bought (P8: the first three moves)
+//   OPENING_ONLY=1 ...                        # bots buy on day 1 only, then hold (P8 (b): an opening's worth)
+//   REPLAY='[{"kind":"bus",...}]' BOTS=replay  # buys these moves on day 1, in order, skipping refused ones (P8 (b))
 //
 // Greedy forecasts every move it could afford, every day, in a worker pool:
 // it's the slow one (a few minutes).
 import { availableParallelism } from "node:os";
 import { SLICE_MAP } from "../src/slice/map";
 import { startSliceGame } from "../src/engine/slice/start";
+import { variedSliceMap } from "../src/engine/slice/variation";
 import { addBus, buildRoad, chainOf, demandAlong, headline, routeSummaries, networkShare, paveRoad, roadChain, type Headline } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
@@ -31,10 +36,12 @@ import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
 import type { Trajectory } from "./slice-bots-worker";
 
 const DAYS = 40;
+// P8 (b): trips made a day at day 20 (5-day average), for comparing openings.
+const P8_DAY = 20;
 const tuning = { ...DEFAULT_SLICE_TUNING, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
 // Every persona and twin starts from the same warmed-up world (start.ts):
 // the game as the player meets it on day 1.
-const started = startSliceGame(SLICE_MAP, tuning);
+const started = startSliceGame(variedSliceMap(SLICE_MAP, Number(process.env.SEED ?? 0)), tuning);
 const newWorld = () => structuredClone(started);
 const log = (message: string) => process.stderr.write(`  ${message}\n`);
 
@@ -330,6 +337,18 @@ const personas: Persona[] = [
     decide: tripsGreedy(false),
   },
   {
+    // P8 (b): another map's opening, replayed here (REPLAY, a JSON list of
+    // moves): bought on day 1 in order, any this map refuses skipped.
+    name: "replay",
+    verbs: ["bus", "minibus", "road", "pave"],
+    decide: (world, d) => {
+      if (d !== 0) return;
+      const moves: ActionSpec[] = JSON.parse(process.env.REPLAY ?? "[]");
+      const bought = moves.filter((move) => applyAction(world, move).ok).length;
+      log(`replay: bought ${bought} of ${moves.length}`);
+    },
+  },
+  {
     // M10's comparison: trips-greedy with money no object.
     name: "trips-greedy unlimited",
     verbs: ["bus", "minibus", "road", "pave"],
@@ -395,6 +414,7 @@ function tripsGreedy(unlimited: boolean): (world: SliceWorld) => Promise<void | 
       const best = ranked.list[index]!;
       if (best.price > world.economy.funds) return "blocked";
       if (!applyAction(world, best.action).ok) return "blocked";
+      logMove(world, best.action);
       if (!unlimited) tripsGreedyBuys.push({ day: (world.economy.elapsedSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY + 1, perTrip: 1 / best.perNaira });
       net += best.money!;
       ranked.list.splice(index, 1);
@@ -416,7 +436,15 @@ async function greedyMove(world: SliceWorld): Promise<void> {
   const money = await forecastAll(world, actions);
   let best = -1;
   for (const [i, value] of money.entries()) if (value !== null && value > 0 && (best < 0 || value > money[best]!)) best = i;
-  if (best >= 0) applyAction(world, actions[best]!);
+  if (best >= 0 && applyAction(world, actions[best]!).ok) logMove(world, actions[best]!);
+}
+
+/** BOTS_MOVES=1: each move a bot buys, by day (P8 compares the first three across seeds). */
+function logMove(world: SliceWorld, action: ActionSpec): void {
+  if (!process.env.BOTS_MOVES) return;
+  const day = Math.floor((world.economy.elapsedSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1;
+  const { kind, ...rest } = action as ActionSpec & Record<string, unknown>;
+  log(`move day ${day}: ${kind} ${Object.values(rest).join("-")} ${JSON.stringify(action)}`);
 }
 
 /**
@@ -500,8 +528,9 @@ async function play(persona: Persona): Promise<Run> {
   let routesDay20: Array<{ id: string; net: number }> | undefined;
   let paved: string[] | undefined;
   const started = performance.now();
-  for (let d = 0; d < (persona.days ?? DAYS); d += 1) {
-    if ((await persona.decide(world, d)) === "blocked") blocked.add(d + 1);
+  for (let d = 0; d < Number(process.env.BOTS_DAYS ?? persona.days ?? DAYS); d += 1) {
+    // OPENING_ONLY: day 1's moves, then hold -- what the opening alone is worth.
+    if ((d === 0 || !process.env.OPENING_ONLY) && (await persona.decide(world, d)) === "blocked") blocked.add(d + 1);
     runDays(world, 1);
     samples.push(sample(world));
     if (d === 19) routesDay20 = routeSummaries(world).map((r) => ({ id: r.id, net: r.netPerDay }));
@@ -573,6 +602,7 @@ for (const run of runs) {
   if (s.cost > 0) console.log(`${run.persona.name.padEnd(12)} ${money(s.upkeep)}  ${String(Math.round((s.upkeep / s.cost) * 100)).padStart(3)}% of ${money(s.cost).trim()}`);
 }
 
+if (process.env.OPENING_ONLY) for (const run of runs) if (run.samples.length >= P8_DAY) console.log(`P8 ${run.persona.name}: trips made a day at day ${P8_DAY} ${Math.round(avgHeadline(run, P8_DAY).tripsPerDay)}`);
 if (process.env.CHECKS !== "0") await checks();
 for (const worker of workers) worker.terminate();
 

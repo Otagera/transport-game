@@ -9,12 +9,13 @@ import type { SliceMapDef } from "./types";
 // Cells are sampled at their integer coordinates, the same points towns
 // and the terrain A* use.
 
-function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+/** Distance from a point to a segment, and how far along the segment (0..1) the nearest point is. */
+function nearestOnSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): { distance: number; t: number } {
   const dx = bx - ax;
   const dy = by - ay;
   const lengthSq = dx * dx + dy * dy;
   const t = lengthSq === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq));
-  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  return { distance: Math.hypot(px - (ax + t * dx), py - (ay + t * dy)), t };
 }
 
 export function buildSliceTerrain(def: SliceMapDef): TerrainField {
@@ -31,7 +32,10 @@ export function buildSliceTerrain(def: SliceMapDef): TerrainField {
         for (let k = 1; k < river.points.length; k += 1) {
           const [ax, ay] = river.points[k - 1]!;
           const [bx, by] = river.points[k]!;
-          if (distanceToSegment(x, y, ax, ay, bx, by) <= river.width / 2) water[i] = 1;
+          const { distance, t } = nearestOnSegment(x, y, ax, ay, bx, by);
+          // A river narrows and widens between its points: a narrow stretch is a cheap crossing.
+          const width = river.widths ? river.widths[k - 1]! + (river.widths[k]! - river.widths[k - 1]!) * t : river.width;
+          if (distance <= width / 2) water[i] = 1;
         }
       }
       // A hill is a smooth bump: full height at its centre, zero at its

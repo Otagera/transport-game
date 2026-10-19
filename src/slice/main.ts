@@ -58,6 +58,7 @@ import { applyAction, type ActionSpec } from "@engine/slice/actions";
 import { vehicleMoves } from "@engine/slice/moves";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { startSliceGame } from "@engine/slice/start";
+import { variedSliceMap } from "@engine/slice/variation";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
 import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
@@ -90,8 +91,17 @@ const allSystems = params.get("systems") === "all";
 // Without it none of them runs: no forecast workers, no shadow worlds.
 const dev = params.get("dev") === "1";
 document.body.dataset.dev = String(dev);
+// Each game is a seeded variation of the hand-made map (variation.ts; the
+// brief's P8): a new game draws a seed, kept in the address so a reload
+// plays the same map; ?seed=0 is the authored map itself.
+const seedParam = Number(params.get("seed"));
+const seed = params.has("seed") && Number.isInteger(seedParam) && seedParam >= 0 ? seedParam : 1 + Math.floor(Math.random() * 9999);
+if (!params.has("seed")) {
+  params.set("seed", String(seed));
+  history.replaceState(null, "", `${location.pathname}?${params}`);
+}
 // The world has already run five days when you arrive (start.ts).
-const world = startSliceGame(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...(allSystems ? ALL_SYSTEMS_ON : {}) });
+const world = startSliceGame(variedSliceMap(SLICE_MAP, seed), { ...DEFAULT_SLICE_TUNING, ...(allSystems ? ALL_SYSTEMS_ON : {}) });
 // A developer start (?dev=1&funds=20000): enough money to reach a late rung
 // in a minute, for screenshots and checks. Ignored without ?dev=1.
 const devFunds = dev ? Number(params.get("funds")) : NaN;
@@ -104,6 +114,13 @@ const toolbar = document.querySelector<HTMLDivElement>("#toolbar")!;
 const toast = document.querySelector<HTMLDivElement>("#toast")!;
 const hintEl = document.querySelector<HTMLDivElement>("#hint")!;
 const controlsEl = document.querySelector<HTMLDivElement>("#controls")!;
+// Which map this is, and a new one: the same address without its seed draws another.
+{
+  const fresh = new URLSearchParams(params);
+  fresh.delete("seed");
+  const query = fresh.toString();
+  document.querySelector<HTMLSpanElement>("#map-seed")!.innerHTML = `Map ${seed} · <a href="${location.pathname}${query ? `?${query}` : ""}">New map</a>`;
+}
 
 let tool: Tool = "bus";
 // Road and Track tools: bend round the terrain where it's cheaper, or hold the straight line and pay (A).

@@ -46,7 +46,32 @@ right after this file. Progress on that build order:
 | R1 2a+++ | A lane's town size limit follows what it carries (slides to paved with encroachment); C3 re-measured without rail | Done 2026-10-19: **C3 passes** -- strict on the trunk, no lane on Ilase-Kuto: below |
 | R1 2a++++ | "Road is full" diagnoses a thin corridor (no lane suggested under 240 trips a day along it) | Done 2026-10-19 |
 | R1 2b | The named project; lane and rail priced for C2 | Done 2026-10-19: **lane 14 days, rail 27.8 days** of surplus (corridor probe, real money): below |
-| — | **Next: your playtest of the whole ladder** (dirt → paved → lane → rail), strike warnings, the BRT; P7 and P8 | |
+| R1 3 | A seeded variation of the hand-made map: town sizes, the river's course and its crossing widths (`variation.ts`); P8 | Done 2026-10-19: **P8 (a) passes** (5 of 5 seeds), **P8 (b) fails** (5 of 5 seeds; the best gap is 9%): below |
+| — | **Next: your playtest of the whole ladder** (dirt → paved → lane → rail), strike warnings, the BRT, on new maps; P7 and P8 | |
+
+**Revision 1, step 3: the seeded variation, 2026-10-19.**
+
+- **What a seed draws** (`variation.ts`, engine.md): every town's size (Ilase ×0.85-1.2 and always
+  the largest; the rest ×0.5-2), the river's course (shifted up to 5 cells) and its width along
+  it, with one ford. Seed 0 is the authored map. The page draws a seed per new game ("Map N · New
+  map"); `?seed=N` replays one.
+- **P8, read as two parts** (the brief). Trips-greedy, seeds 1-5 against seed 0
+  (`SEED=n BOTS_MOVES=1 BOTS_DAYS=2`):
+  - **(a) passes**: its first three moves are all new on seeds 1, 2 and 5, and 2 of 3 on seeds
+    3 and 4. The move that survives is the minibus Ilase-Ado (the two biggest towns). Roads to
+    cut-off towns follow the ford and the sizes: Ikole's comes from Owode on seed 0, from Kuto on
+    seeds 1, 2 and 4, and from Ogbe on seed 5.
+  - **(b) fails**: seed 0's day-1 opening (8 moves: six minibuses and the roads to Ilaro and
+    Ikole from Owode), replayed on each seed, against trips-greedy's own day-1 opening there.
+    Both hold after day 1 (`OPENING_ONLY=1 REPLAY=... BOTS=trips-greedy,replay`). Trips made a
+    day at day 20, own / replayed: seed 1 616 / 623 (−1%), 2 624 / 594 (+5%), 3 622 / 568 (+9%),
+    4 588 / 577 (+2%), 5 561 / 597 (−6%). Every replayed move was affordable; every gap is
+    within the ±50 trips a day treated as noise. Seed 0's own opening makes 602.
+  - **Why (b) fails, as read**: a ₦2,500 opening is small against what the map carries
+    without you (about 300 trips a day by informal transport on day 1), so on any seed most
+    sensible openings land within noise of each other by day 20. Trips-greedy also ranks moves
+    by trips per naira, not total trips, so its "best" opening can lose to another (seeds 1 and
+    5). The variation changes which moves come first (a), not yet what a wrong one costs (b).
 
 **Revision 1, 2b: the named project, and rungs that cost, 2026-10-19.**
 

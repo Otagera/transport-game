@@ -470,8 +470,18 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   by keke or okada (`pop / (pop + walkableTownPopulation)`), and that share of your riders
   starting or ending trips there (`pairOutcomes`, so riders changing buses aren't counted).
   Nothing in the tick reads it; it touches no share and no money (a test pins that).
+- **The seeded variation** (Revision 1, step 3; `variation.ts`) — `variedSliceMap(base, seed)`
+  returns a copy of the hand-made map with town sizes drawn (Ilase ×0.85-1.2 and always the
+  largest; every other town ×0.5-2, log-uniform, capped at 70% of Ilase) and the river's course
+  and widths drawn (interior points shifted up to 5 cells; widths 2.5-5 cells at each point,
+  one ford of 1.2). Bridges are paid by the water cell, so where the ford lands decides which
+  crossing a road takes. A drawn river that puts water within 2 cells of a town, or a town on
+  the other bank, is drawn again. Seed 0 returns the authored map unchanged: earlier
+  measurements were taken on it, and probes and tests default to it. The page reads `?seed=N`,
+  or draws one and writes it into the address so a reload replays the map ("Map N · New map"
+  on the controls line). The bots take `SEED=`.
 - **Terrain and roads** (step 3; `terrain.ts`, `roads.ts`) — `buildSliceTerrain` turns the map
-  def's authored rivers (centre line + width) and hills (smooth bumps; elevation unbounded,
+  def's authored rivers (centre line + width, or a width per point that varies between them) and hills (smooth bumps; elevation unbounded,
   since water is explicit) into the same `TerrainField` engine/map makes, and hard-fails a
   town in water. `planRoad` runs `pathing/plan.ts`'s `planCorridor` in auto mode (terrain A*,
   bridges as jump edges, smoothing) — or, for `alignment: "direct"`, `planDirect`: water by

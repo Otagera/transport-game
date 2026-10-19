@@ -36,6 +36,8 @@ export interface SliceRiverDef {
   points: Array<[number, number]>;
   /** Width in cells. */
   width: number;
+  /** Width at each point, in cells, narrowing or widening between them (variation.ts); absent means `width` throughout. */
+  widths?: number[];
 }
 
 export interface SliceHillDef {
