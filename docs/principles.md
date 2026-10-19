@@ -577,6 +577,20 @@ for if eras return; they are not live in the slice.*
 - **Road and rail need a distinct visual channel** — width, surface treatment,
   sleepers. Not hue or brightness, which are taken.
 
+### Maps
+
+- **Varying town sizes alone changes the game only when a cut-off town comes up big.** The
+  seeded variation (Revision 1, step 3) kept the hand-made map's towns, roads and trunk and
+  drew sizes and the river's crossings. It changed the order of the first moves on every seed,
+  but another map's opening, replayed, made about as many trips by day 20 on most seeds: an
+  opening of minibuses among the same nine towns serves the same pairs whatever their sizes.
+  It fell behind clearly only where a town no road reaches came up big enough to need a road
+  on day 1 (status.md, P8). What makes a map play differently is its network (which towns are
+  cut off, which corridor is the trunk), not its numbers.
+- **A bot's opening isn't the best opening.** Trips-greedy ranks by trips per naira, so it
+  buys cheap openings; on your riders, a replayed opening beat it on 3 of 5 seeds. Compare
+  openings against the best of several, never against one bot's.
+
 ### Process
 
 - **Sim logic keeps auditing clean; failures land at the display boundary.**

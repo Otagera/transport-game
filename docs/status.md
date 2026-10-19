@@ -46,8 +46,8 @@ right after this file. Progress on that build order:
 | R1 2a+++ | A lane's town size limit follows what it carries (slides to paved with encroachment); C3 re-measured without rail | Done 2026-10-19: **C3 passes** -- strict on the trunk, no lane on Ilase-Kuto: below |
 | R1 2a++++ | "Road is full" diagnoses a thin corridor (no lane suggested under 240 trips a day along it) | Done 2026-10-19 |
 | R1 2b | The named project; lane and rail priced for C2 | Done 2026-10-19: **lane 14 days, rail 27.8 days** of surplus (corridor probe, real money): below |
-| R1 3 | A seeded variation of the hand-made map: town sizes, the river's course and its crossing widths (`variation.ts`); P8 | Done 2026-10-19: **P8 (a) passes** (5 of 5 seeds), **P8 (b) fails** (5 of 5 seeds; the best gap is 9% in trips, 8% in your riders): below |
-| — | **Next: your playtest of the whole ladder** (dirt → paved → lane → rail), strike warnings, the BRT, on new maps; P7 and P8 | |
+| R1 3 | A seeded variation of the hand-made map: town sizes (cut-off towns wider), the river's course and its crossing widths (`variation.ts`); P8 | Done 2026-10-19: **P8 (a) passes** (5 of 5 seeds), **P8 (b) fails** (1 of 5 seeds: only where a cut-off town comes up big): below |
+| — | **Next: your playtest.** The whole ladder (dirt → paved → lane → rail), strike warnings and the BRT on seed 0 (`slice.html?seed=0`), then two or three seeds (suggested: 1, Ikole big; 3, Ikole small, roads first; 5); P7 and P8, by your account | |
 
 **Revision 1, step 3: the seeded variation, 2026-10-19.**
 
@@ -73,6 +73,27 @@ right after this file. Progress on that build order:
     Seed 0's own: 133. No seed reaches 15%, and on two the replay wins: trips-greedy's
     trips-per-naira ranking isn't the most riders, and an 8-move opening on the same nine towns
     serves much the same pairs whatever the sizes.
+  - **Cut-off towns widened** (`variation.ts` `CUT_OFF_RANGE`: a town no inherited road reaches,
+    Ikole and Ilaro, ×1/3-3 instead of ×0.5-2; nothing else on any seed moves). Re-measured:
+    **(a) still passes** (3 of 3 new on seeds 1, 2, 3, 5; 2 of 3 on 4; on seed 1, Ikole at 86k,
+    the road Ikole-Ilase is a first-three move; on seed 3 two of three are roads). **(b) still
+    fails.** Own / replayed, trips made a day: 1 683 / 513 (25%), 2 617 / 607 (2%), 3 577 / 582
+    (−1%), 4 562 / 556 (1%), 5 633 / 579 (9%); your riders: 1 136 / 143 (−5%), 2 156 / 137 (12%),
+    3 120 / 145 (−21%), 4 115 / 128 (−11%), 5 143 / 138 (3%).
+  - **What (b) is measuring**: on your riders the replay beats the seed's "own best" on 3 of 5
+    seeds, which a best opening can't do: trips-greedy ranks by trips per naira, so its opening
+    is a cheap one, not the best. A road to a big cut-off town shows in trips made (seed 1: 25%)
+    but not in your riders (it's danfos that serve a new road first). (b) is limited by the bot's
+    opening as much as by the map.
+  - **(b) as agreed** (the best of trips-greedy's, greedy's and the replayed opening, all trips;
+    `BOTS=trips-greedy,greedy,replay OPENING_ONLY=1`): **passes on 1 of 5 seeds.** Trips made a
+    day at day 20, trips-greedy / greedy / replayed, and the replay's gap to the best: seed 1
+    683 / 357 / 513 (**25%, passes**; Ikole at 86k, its road a first-day move), 2 617 / 428 / 607
+    (2%), 3 577 / 325 / 582 (0%: the replay is the best), 4 562 / 333 / 556 (1%), 5 633 / 373 /
+    579 (9%). Greedy buys one move a day (its persona), so its day-1 opening is a single move and
+    never the best. Finding (principles.md §3, Maps): sizes alone change the game only when a
+    cut-off town comes up big. Proposed, not built (brief): vary the inherited road network per
+    seed, if the playtest says the maps feel the same.
   - **Why (b) fails, as read**: a ₦2,500 opening is small against what the map carries
     without you (about 300 trips a day by informal transport on day 1), so on any seed most
     sensible openings land within noise of each other by day 20. Trips-greedy also ranks moves

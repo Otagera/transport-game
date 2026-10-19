@@ -7,7 +7,8 @@ import { createRng, type Rng } from "../map/random";
 // inherited roads and old railway, the ridge -- with two things a seed moves:
 //
 //   - Town sizes. Ilase stays the dominant city (a little bigger or smaller);
-//     every other town is between half and twice its authored size, and
+//     every other town is between half and twice its authored size (a town
+//     no inherited road reaches, between a third and three times), and
 //     never more than VARIED_TOWN_CAP of Ilase. A cut-off town that comes up
 //     big is a road worth building on day 1; one that comes up small isn't.
 //   - Where the river is cheap to cross. Its course shifts sideways a few
@@ -25,6 +26,13 @@ import { createRng, type Rng } from "../map/random";
 const DOMINANT_RANGE: [number, number] = [0.85, 1.2];
 /** Every other town, between these multiples of its authored size (log-uniform). */
 const TOWN_RANGE: [number, number] = [0.5, 2];
+/**
+ * A town no inherited road reaches, wider (P8 (b)): on some seeds it comes up
+ * big enough that an opening without a road to it loses riders, on others
+ * small enough that the road waits. At 0.5-2 like the rest, another map's
+ * opening served as many of your riders as the map's own (status.md).
+ */
+const CUT_OFF_RANGE: [number, number] = [1 / 3, 3];
 /** No other town grows past this share of the dominant city. */
 const VARIED_TOWN_CAP = 0.7;
 /** Smallest town, thousands. */
@@ -51,7 +59,8 @@ export function variedSliceMap(base: SliceMapDef, seed: number): SliceMapDef {
       town.population = dominantPopulation;
       continue;
     }
-    const scale = Math.exp(between(rng, [Math.log(TOWN_RANGE[0]), Math.log(TOWN_RANGE[1])]));
+    const range = base.roads.some((road) => road.a === town.id || road.b === town.id) ? TOWN_RANGE : CUT_OFF_RANGE;
+    const scale = Math.exp(between(rng, [Math.log(range[0]), Math.log(range[1])]));
     town.population = Math.max(MIN_TOWN, Math.min(Math.round(VARIED_TOWN_CAP * dominantPopulation), Math.round(town.population * scale)));
   }
 

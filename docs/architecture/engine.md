@@ -472,7 +472,7 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   Nothing in the tick reads it; it touches no share and no money (a test pins that).
 - **The seeded variation** (Revision 1, step 3; `variation.ts`) — `variedSliceMap(base, seed)`
   returns a copy of the hand-made map with town sizes drawn (Ilase ×0.85-1.2 and always the
-  largest; every other town ×0.5-2, log-uniform, capped at 70% of Ilase) and the river's course
+  largest; a town no inherited road reaches ×1/3-3, every other town ×0.5-2, log-uniform, capped at 70% of Ilase) and the river's course
   and widths drawn (interior points shifted up to 5 cells; widths 2.5-5 cells at each point,
   one ford of 1.2). Bridges are paid by the water cell, so where the ford lands decides which
   crossing a road takes. A drawn river that puts water within 2 cells of a town, or a town on
