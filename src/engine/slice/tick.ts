@@ -12,7 +12,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
 import { isDirt, updateRoadSpeeds, yourSpeeds } from "./congestion";
-import { struckSegments, updatePushback } from "./pushback";
+import { laneEncroachment, struckSegments, updateLanes } from "./pushback";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
@@ -239,7 +239,10 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // Roads wear with the traffic that just ran on them; maintained ones are
   // repaired as they go, and that upkeep is a running cost like a bus's.
   // Routine upkeep on the roads you built or paved, wear or no wear (upkeep.ts).
-  const upkeep = (tuning.wearEnabled ? updateRoadWear(world, dt) : 0) + chargeRoutineUpkeep(world, dt);
+  const roadUpkeep = (tuning.wearEnabled ? updateRoadWear(world, dt) : 0) + chargeRoutineUpkeep(world, dt);
+  // Bus lanes: encroachment, the union's grievance, and strict enforcement's wardens (pushback.ts).
+  const lanes = updateLanes(world, dt);
+  const upkeep = roadUpkeep + lanes.cost;
   // ...and your road vehicles pay more to run on worn roads (wear.ts).
   const rough = tuning.wearEnabled ? chargeRoughRoads(world, dt, routeOf) : { total: 0, byRoute: new Map<string, number>() };
 
@@ -251,7 +254,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   const runningCost = revenueThisTick - (economy.funds - fundsAtStart);
   recordMoney(world.ledger, revenueThisTick, runningCost, routeRevenue, dt, rough.byRoute);
   world.budget.running += runningCost - upkeep;
-  world.budget.upkeep += upkeep;
+  world.budget.upkeep += roadUpkeep;
+  world.budget.enforcement += lanes.cost;
   // The treasury's share of a surplus, once a period (budget.ts). After the
   // ledger: a remittance is neither income nor running cost.
   remit(world, revenueThisTick - runningCost);
@@ -281,7 +285,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
 
-  const events = [...updateSettlements(world, dt), ...updatePushback(world)];
+  const events = [...updateSettlements(world, dt), ...lanes.events];
   recordDay(world);
   return events;
 }
@@ -404,7 +408,7 @@ function sendInformal(
   // instead of 289, the trunk below half speed 94% of the time; counted,
   // 225 and 34%, and the danfos on Ilase-Owode fall as you add buses.
   // On strike (pushback.ts): no danfo sets off along a struck corridor. Kekes and okadas aren't the union's.
-  if (mode === "danfo" && world.pushback.length > 0) {
+  if (mode === "danfo" && world.lanes.length > 0) {
     const struck = struckSegments(world);
     if (run.path.segmentIds.some((id) => struck.has(id))) return false;
   }
@@ -455,8 +459,11 @@ function sendInformal(
 export function informalBudget(world: SliceWorld, segmentId: string): number {
   const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
   if (!segment) return world.tuning.informalRoadSpace;
-  // A bus lane takes a lane from them (Revision 1).
-  if (segment.busLane) return world.tuning.informalRoadSpaceLane;
+  // A bus lane takes a lane from them (Revision 1) -- less what they've taken back by encroaching on it.
+  if (segment.busLane) {
+    const taken = laneEncroachment(world).get(segmentId) ?? 0;
+    return world.tuning.informalRoadSpaceLane + (world.tuning.informalRoadSpace - world.tuning.informalRoadSpaceLane) * taken;
+  }
   return isDirt(segment) ? world.tuning.informalRoadSpaceDirt : world.tuning.informalRoadSpace;
 }
 
@@ -494,7 +501,7 @@ function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, numbe
   const drift = emaAlpha(dt, tuning.patienceSeconds * PARK_PATIENCE_MULTIPLIER);
   // Road space your vehicles are using now, per segment.
   // On a bus lane they're in their own lane: not the danfos' road space.
-  const laned = new Set(world.simulation.map.segments.filter((segment) => segment.busLane).map((segment) => segment.id));
+  const laned = new Set(world.laneSpeed.keys()); // lanes in use today (not blocked by a strike)
   const yours = new Map<string, number>();
   for (const vehicle of world.simulation.vehicles) {
     if (informal.active.has(vehicle.id) || world.railVehicles.has(vehicle.id)) continue;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/slice/world";
 import { informalBudget, sliceTick } from "@engine/slice/tick";
-import { struckSegments } from "@engine/slice/pushback";
+import { laneOn, setEnforcement, struckSegments } from "@engine/slice/pushback";
 import { addBusLane, checkLane, laneCost } from "@engine/slice/world";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -1950,7 +1950,7 @@ describe("slice zero step 7: the budget breakdown", () => {
     expect(b.upkeep).toBeGreaterThan(0); // the road you built
     expect(b.levies).toBeGreaterThan(0);
     expect(b.allocation).toBeGreaterThan(0);
-    const net = b.fares + b.goods + b.tolls + b.levies + b.allocation - b.running - b.upkeep;
+    const net = b.fares + b.goods + b.tolls + b.levies + b.allocation - b.running - b.upkeep - b.enforcement;
     expect(net).toBeCloseTo(averageNet(w), 0);
   });
 
@@ -2133,5 +2133,57 @@ describe("Revision 1, 1b: the bus lane, and the strike it brings", () => {
     expect(setOff).toHaveLength(0);
     step(SECONDS_PER_GAME_DAY);
     expect(events).toContain("strike-over");
+  });
+});
+
+describe("Revision 1, 1b+: enforcement, encroachment, and strikes that cost", () => {
+  const laneWorld = () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    paveRoad(w, "big", "mid");
+    addBusLane(w, "big", "mid");
+    return w;
+  };
+
+  test("a new lane is strictly enforced, and its wardens are billed as their own line", () => {
+    const w = laneWorld();
+    expect(laneOn(w, "big", "mid")!.enforcement).toBe("strict");
+    run(w, SECONDS_PER_GAME_DAY);
+    expect(w.budget.enforcement).toBeGreaterThan(0);
+  });
+
+  test("left lax, danfos creep into the lane and wear its speed away; strict clears them", () => {
+    const w = laneWorld();
+    setEnforcement(w, "big", "mid", "lax");
+    run(w, 10 * SECONDS_PER_GAME_DAY);
+    const lane = laneOn(w, "big", "mid")!;
+    expect(lane.encroachment).toBeCloseTo(Math.min(1, 10 * w.tuning.encroachmentPerDay), 1);
+    const road = roadChain(w, "big", "mid")![0]!;
+    // Their road space comes back as they take the lane.
+    expect(informalBudget(w, road.id)).toBeGreaterThan(w.tuning.informalRoadSpaceLane);
+    const spent = w.budget.enforcement;
+    setEnforcement(w, "big", "mid", "strict");
+    run(w, 3 * SECONDS_PER_GAME_DAY);
+    expect(lane.encroachment).toBeLessThan(0.01);
+    expect(w.budget.enforcement).toBeGreaterThan(spent);
+  });
+
+  test("strict enforcement brings strikes far sooner than lax", () => {
+    const firstStrike = (enforcement: "strict" | "lax") => {
+      const w = laneWorld();
+      setEnforcement(w, "big", "mid", enforcement);
+      for (let t = 0; t < 40 * SECONDS_PER_GAME_DAY; t += SIM_DT) if (sliceTick(w, SIM_DT).some((e) => e.kind === "strike")) return t / SECONDS_PER_GAME_DAY;
+      return Infinity;
+    };
+    expect(firstStrike("strict")).toBeLessThan(firstStrike("lax"));
+  });
+
+  test("on a strike day the strikers block the lane: your buses are back in general traffic", () => {
+    const w = laneWorld();
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    const road = roadChain(w, "big", "mid")![0]!;
+    for (let t = 0; t < 30 * SECONDS_PER_GAME_DAY && struckSegments(w).size === 0; t += SIM_DT) sliceTick(w, SIM_DT);
+    expect(struckSegments(w).has(road.id)).toBe(true);
+    run(w, 1);
+    expect(w.laneSpeed.has(road.id)).toBe(false);
   });
 });

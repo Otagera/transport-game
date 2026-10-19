@@ -221,7 +221,10 @@ terrain isn't applied: the map still draws shaded hills.
   will strike"); a lane draws as a band of your colour under the road (wider than a route
   line, so it reads as the road's); a struck road as a red dashed line, with a "STRIKE" tag
   drawn after the towns (`drawStrikeLabels`) so nothing covers it; strikes start and end
-  with a toast.
+  with a toast. Encroachment fades the band and grows yellow dashes in it; a strictly
+  enforced lane carries a "W" warden badge (`drawWardens`). The Road tool on a laned road
+  switches enforcement (preview: its cost a day, how much danfos have taken, what the union
+  will do); the budget shows "Lane enforcement".
 - **Developer start:** `?dev=1&funds=20000` sets the starting funds, to reach a late rung in a
   minute for checks and screenshots.
 - **Hints** (`hints.ts`, no DOM; `renderHint` every frame): the brief's six, one at a time,

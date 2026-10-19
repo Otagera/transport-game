@@ -21,7 +21,7 @@ import { isRailRoute, railPath, rebuildNetworks, routingFor, vehicleCostPerDay }
 import { repairCost, roughCostPerDay, upkeepPerDay, wearSpeed } from "./wear";
 import { costRate, planRoad, segmentLength, type Alignment, type Point } from "./roads";
 import { paveStepCost } from "../pathing/cost";
-import { answerBusLane } from "./pushback";
+import { openLane } from "./pushback";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -121,7 +121,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     segmentSpeed: new Map(),
     laneFlowEMA: new Map(),
     laneSpeed: new Map(),
-    pushback: [],
+    lanes: [],
     ruins: new Map(),
     pathCache: new Map(),
     roadPlans: new Map(),
@@ -308,14 +308,14 @@ export function checkLane(world: SliceWorld, a: string, b: string): ActionResult
  * Gives your vehicles a lane of their own along the whole road: congestion
  * no longer slows them there, and the danfos lose that lane's road space
  * (tick.ts informalBudget, congestion.ts) -- fewer of them, so fewer tolls
- * and levies. The union answers (pushback.ts).
+ * and levies. Strictly enforced to begin with; the union answers (pushback.ts).
  */
 export function addBusLane(world: SliceWorld, a: string, b: string): ActionResult {
   const check = checkLane(world, a, b);
   if (!check.ok) return check;
   world.economy.funds -= laneCost(world, a, b);
   for (const road of roadChain(world, a, b)!) road.busLane = true;
-  answerBusLane(world, a, b);
+  openLane(world, a, b);
   return { ok: true };
 }
 

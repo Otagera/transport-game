@@ -517,11 +517,17 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   `tickVehicle` for everything but informal vehicles, and `routeSpeed` reads it); general capacity is `laneGeneralCapacity` of the road; your vehicles'
   road space no longer counts against the danfos' budget, which falls to
   `informalRoadSpaceLane` (`tick.ts` `informalBudget`).
-- **Pushback: a strike** (`pushback.ts`) — `addBusLane` starts the union's clock
-  (`answerBusLane`); `updatePushback`, every tick, begins a strike `strikeDelayDays` later and
-  then every `strikeEveryDays`, for `strikeDays`: `struckSegments` blocks danfo departures
-  along the corridor in `sendInformal` (kekes and okadas still go). Emits `strike` and
-  `strike-over` events for the page's toast; render.ts draws the struck road. `growTowns` drifts each original town toward it every
+- **A lane's politics** (`pushback.ts`, `world.lanes: LaneState[]`) — `addBusLane` opens a
+  lane strictly enforced (`openLane`); `setEnforcement` switches strict/lax. `updateLanes`,
+  every tick from the money section: lax, `encroachment` grows by `encroachmentPerDay`;
+  strict, it clears by `encroachmentClearPerDay` and wardens bill `enforcementPerCellPerDay`
+  × the lane's length (`world.budget.enforcement`, with the running costs); the union's
+  `grievance` builds by a day over `strikeEveryStrictDays` or `strikeEveryLaxDays`, and at 1
+  a strike begins for `strikeDays`. A strike: `struckSegments` blocks danfo departures along
+  the corridor (`sendInformal`) and takes the lane out of `laned` (`congestion.ts`), so your
+  buses are back in general traffic. Encroachment (`laneEncroachment`): general capacity
+  and the danfos' road space blend back toward an unlaned road's, and your lane speed toward
+  general traffic's. Emits `strike`/`strike-over` for the page's toast. `growTowns` drifts each original town toward it every
   tick (from `updateSettlements`, after the roadside towns' drift); demand follows at the
   daily `refreshDemand`. Emergent towns are not in `basePopulation` and keep growing from
   traffic.

@@ -4,6 +4,7 @@ import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
 import { addTrain, buildHalt, buildTrack } from "./rail";
 import { setRoadMaintained } from "./wear";
 import type { Alignment } from "./roads";
+import { setEnforcement, type Enforcement } from "./pushback";
 
 // Every player action as plain data. Data, not a closure, so it can be
 // sent to a worker and replayed there: the forecast (forecast.ts) runs an
@@ -14,6 +15,7 @@ export type ActionSpec =
   | { kind: "road"; a: string; b: string; alignment: Alignment }
   | { kind: "pave"; a: string; b: string }
   | { kind: "lane"; a: string; b: string }
+  | { kind: "enforce"; a: string; b: string; enforcement: Enforcement }
   | { kind: "track"; a: string; b: string; alignment: Alignment }
   | { kind: "halt"; town: string }
   | { kind: "fix"; segmentId: string; on: boolean }
@@ -44,6 +46,8 @@ export function applyAction(world: SliceWorld, spec: ActionSpec): ActionOutcome 
       return paveRoad(world, spec.a, spec.b);
     case "lane":
       return addBusLane(world, spec.a, spec.b);
+    case "enforce":
+      return setEnforcement(world, spec.a, spec.b, spec.enforcement) ? { ok: true } : { ok: false, reason: "no bus lane there" };
     case "track":
       return buildTrack(world, spec.a, spec.b, spec.alignment);
     case "halt":

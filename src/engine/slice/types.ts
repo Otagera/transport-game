@@ -1,4 +1,4 @@
-import type { Pushback } from "./pushback";
+import type { LaneState } from "./pushback";
 import type { PathResult, RoutingContext, SimulationState } from "../simulation/types";
 import type { EconomyState } from "../economy/types";
 import type { SettlementState } from "./settlement";
@@ -193,10 +193,16 @@ export interface SliceTuning {
   busLaneCostShare: number;
   /** Of townGrowthCap, what a town whose best road has a bus lane can reach (paved: 1). */
   growthCapLaneShare: number;
-  /** Days after a lane opens before the first strike; days between strikes; how long one lasts. */
+  /** Days after a lane opens before the first strike (strictly enforced); days between strikes, strict and lax; how long one lasts. */
   strikeDelayDays: number;
-  strikeEveryDays: number;
+  strikeEveryStrictDays: number;
+  strikeEveryLaxDays: number;
   strikeDays: number;
+  /** Lax enforcement: the share of the lane danfos take a day; strict: the share cleared a day. */
+  encroachmentPerDay: number;
+  encroachmentClearPerDay: number;
+  /** Strict enforcement's cost, a cell of lane a day. */
+  enforcementPerCellPerDay: number;
   startingFunds: number;
   /** Time constant for every rolling rate the player reads. */
   outcomeTauSeconds: number;
@@ -351,8 +357,8 @@ export interface SliceWorld {
   vehicleSegment: Map<string, string>;
   /** segmentId -> speed as a share of free flow this tick. What slows a bus is what the map draws. */
   segmentSpeed: Map<string, number>;
-  /** Corridors with a bus lane, and the union's strikes over them (pushback.ts). */
-  pushback: Pushback[];
+  /** Corridors with a bus lane: enforcement, encroachment, the union's strikes (pushback.ts). */
+  lanes: LaneState[];
   /** The rail network (rail.ts): in-service track only. `simulation.routing` is roads only. */
   railRouting: RoutingContext;
   railPathCache: Map<string, PathResult | null>;

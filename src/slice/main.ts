@@ -56,6 +56,7 @@ import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { startSliceGame } from "@engine/slice/start";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
+import { enforcementPerDay, laneOn, setEnforcement } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
@@ -238,7 +239,11 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
     case "road": {
       const chain = roadChain(world, a, b);
       if (!chain) return { kind: "road", a, b, alignment };
-      return chain.some(isDirt) ? { kind: "pave", a, b } : { kind: "lane", a, b };
+      if (chain.some(isDirt)) return { kind: "pave", a, b };
+      // A lane already: the Road tool switches its enforcement, strict <-> lax.
+      const lane = chain.every((piece) => piece.busLane) ? laneOn(world, a, b) : undefined;
+      if (lane) return { kind: "enforce", a, b, enforcement: lane.enforcement === "strict" ? "lax" : "strict" };
+      return { kind: "lane", a, b };
     }
     case "track":
       return { kind: "track", a, b, alignment };
@@ -519,7 +524,14 @@ canvas.addEventListener("click", (event) => {
   }
   confirming = null;
   const towns = [from, town];
-  if (tool === "road" && intended?.kind === "lane") {
+  if (tool === "road" && intended?.kind === "enforce") {
+    const lane = laneOn(world, from, town)!;
+    const strict = intended.enforcement === "strict";
+    act({ label: `${strict ? "enforcing" : "relaxing"} the ${townName(from)} – ${townName(town)} lane`, towns }, (w) => ({ ok: setEnforcement(w, from, town, intended.enforcement) }));
+    say(strict
+      ? `Wardens on the ${townName(from)} – ${townName(town)} lane, ${naira(enforcementPerDay(world, lane))}/day: they'll clear it, and the union will strike more often.${later}`
+      : `Wardens off the ${townName(from)} – ${townName(town)} lane: danfos will creep into it, and the union will keep the peace.${later}`);
+  } else if (tool === "road" && intended?.kind === "lane") {
     const cost = laneCost(world, from, town);
     const result = act({ label: `a bus lane on ${townName(from)} – ${townName(town)}`, towns }, (w) => addBusLane(w, from, town));
     if (result.ok) say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic there. The danfos lost a lane.${later}`);
@@ -678,7 +690,17 @@ function ghost(): Ghost | null {
   if (!to) return { from: selectedTown, to: end, ok: true, label: "" };
   // The trip's demand rides along on every preview: what you'd be building for.
   const riders = `${Math.round(pairDemand(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want this trip`;
-  if (tool === "road" && actionFor("road", selectedTown, to)?.kind === "lane") {
+  const roadAction = tool === "road" ? actionFor("road", selectedTown, to) : null;
+  if (roadAction?.kind === "enforce") {
+    const lane = laneOn(world, selectedTown, to)!;
+    const cost = naira(enforcementPerDay(world, lane));
+    const taken = `${Math.round(lane.encroachment * 100)}% taken by danfos`;
+    const label = roadAction.enforcement === "strict"
+      ? `Enforce the lane strictly: ${cost}/day · clears it (${taken}) · the union strikes more often`
+      : `Relax enforcement: saves ${cost}/day · danfos creep into the lane · the union keeps the peace`;
+    return withForecast({ from: selectedTown, to: end, ok: true, label }, roadAction, { label: "enforcement", towns: [selectedTown, to] });
+  }
+  if (tool === "road" && roadAction?.kind === "lane") {
     const check = checkLane(world, selectedTown, to);
     const cost = naira(laneCost(world, selectedTown, to));
     const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Bus lane ${cost} · your vehicles skip the traffic · danfos lose a lane, and their union will strike` : `Bus lane ${cost} · ${check.reason}` };
@@ -1129,6 +1151,7 @@ function budgetHtml(): string {
     ["State allocation", b.allocation],
     ["Running costs", -b.running],
     ["Road upkeep", -b.upkeep],
+    ...(world.lanes.length > 0 ? [["Lane enforcement", -b.enforcement] as [string, number]] : []),
   ];
   const net = lines.reduce((sum, [, x]) => sum + x, 0);
   const t = world.tuning;

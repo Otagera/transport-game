@@ -36,6 +36,45 @@ right after this file. Progress on that build order:
 | R1 1a | A town's growth cap set by its best road's rung | Done 2026-10-19, **C1 passes on the trunk**: below |
 | R1 1b | The bus lane and pushback: a strike (C3) | Done 2026-10-19: C3 passes on paper; the lane's cost is 0.4% of the corridor's net and strikes earn you money |
 | R1 1b+ | The lane's own capacity; C1 for the lane re-measured; strike money against a twin | Done 2026-10-19: lane C1 33 days (knife-edge); strikes earn ₦22-38; lane encroachment and a stronger C3 proposed in the brief: below |
+| R1 1c | Strikes block the lane; encroachment and enforcement, strikes by enforcement; C1 by consequences | Done 2026-10-19: strikes cost ₦630-904; lane capacity 2.0 off the knife edge; dirt and paved never jam by consequences, they level off: below |
+
+**Revision 1, 1c: enforcement, encroachment, strikes that cost; C1 by consequences, 2026-10-19**
+(`scripts/corridor-probe.ts`; the player climbs a rung when the corridor jams *or* its end
+towns level off -- under 1% growth in 5 days).
+
+- **A strike blocks the lane**: your buses fall back into general traffic, and its riders
+  wait or stay home (trips made 855 -> 763 the first strike day; "no seat" 42 -> 74 the
+  next). Against a twin with the strike called off: **every strike costs you ₦630-904**
+  over its day and the next (it earned ₦22-38 before).
+- **Enforcement** (pushback.ts): a lane opens strictly enforced (wardens, ~₦30 a day on the
+  trunk, a "W" on the map; its own budget line); the Road tool on a laned road switches it
+  lax/strict. Lax: danfos take 5% of the lane a day -- the band fades, yellow dashes grow
+  in it, your buses' lane speed blends toward general traffic's and the danfos' road space
+  comes back. **Strikes follow enforcement, not a timer**: strict, every ~12 days; lax,
+  every ~60 (first at day 25 of a lax lane). Checked in Chrome: warden badge, the relax
+  preview, a lax lane at day 14.
+- **C1, a jam by consequences** ("no seat" 10 points over its low for 2 days, or the end
+  towns 5% below their peak):
+
+| Rung | Towns grew before levelling off | Jam (by consequences) |
+|---|---|---|
+| dirt (from day 1) | 35 days | after 84 days |
+| paved (day 36) | 29 days | after 49 days |
+| lane, strict (day 65) | 19 days | after 20 days: each lane jam falls 1-2 days after a strike |
+| lane, lax | 27 days | after 59 days |
+
+- **Dirt and paved never jam by consequences while you keep adding buses:** their towns
+  grow to the rung's cap and level off, service intact (the road slows, to ~0.6, but trips
+  are made). So what ends a rung's room is the cap, not a jam; the "jams" the speed rule
+  saw were slow roads, not lost trips. Reading C1 as *days of growth a rung buys* gives
+  35, 29, 19-27: in or near the target. For a decision.
+- **Lane capacity off the knife edge:** by consequences the lane's towns grow 18-23 days at
+  any capacity from 1.3 to 3.0 (below ~1.0 buses crawl): set 2.0, the middle.
+- **C3 (proposed: the lane's cost >= 10% of the corridor's net):** strict, the lane costs
+  ~₦130 a day -- lost takings ₦38, strikes ~₦62 a day averaged, wardens ~₦30 -- **about 6.5%
+  of the corridor's ₦2,014 net**: under 10%. Lax, the corridor's takings *rise* over the
+  twin (₦326 against ₦262: the danfos come back) and strikes are rare: the lane's price is
+  its speed instead.
 
 **Revision 1, 1b+: the lane's own capacity, and what a strike costs, 2026-10-19**
 (`scripts/corridor-probe.ts`, now to 30 buses).

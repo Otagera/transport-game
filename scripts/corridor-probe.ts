@@ -8,9 +8,14 @@
 //   - a day-by-day line: town sizes and caps, buses, load, the corridor's
 //     speed, "no seat" along it, danfos on it.
 //
-// A jam: the corridor's slowest piece averages under JAM_SPEED of free flow
-// over a whole day, or "no seat" along it is over JAM_NO_SEAT of the trips
-// along it. Usage: bun scripts/corridor-probe.ts [days=120] [a=ilase] [b=owode]
+// A jam, judged by its consequences, not by speed (brief C1, 2026-10-19):
+// since the last rung settled (3 days), the share of trips along the
+// corridor with no seat has risen JAM_RISE above its low for two days
+// running, or the corridor's two end towns together have fallen JAM_FALL
+// below their peak. (A speed rule sat on a knife edge: a lane settled just
+// above it while its towns shrank.)
+// Usage: bun scripts/corridor-probe.ts [days=120] [a=ilase] [b=owode]
+//   LAX=1 leaves the lane laxly enforced from the start.
 //   SLICE_TUNING='{"...":...}' overrides tuning, as the bots do.
 import { SLICE_MAP } from "../src/slice/map";
 import { startSliceGame } from "../src/engine/slice/start";
@@ -21,6 +26,7 @@ import { isDirt } from "../src/engine/slice/congestion";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { tollFor } from "../src/engine/slice/budget";
 import { informalSpec } from "../src/engine/slice/tick";
+import { setEnforcement } from "../src/engine/slice/pushback";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
@@ -28,8 +34,9 @@ import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
 const DAYS = Number(process.argv[2] ?? 120);
 const A = process.argv[3] ?? "ilase";
 const B = process.argv[4] ?? "owode";
-const JAM_SPEED = Number(process.env.JAM_SPEED ?? 0.7);
-const JAM_NO_SEAT = Number(process.env.JAM_NO_SEAT ?? 0.25);
+const JAM_RISE = Number(process.env.JAM_RISE ?? 0.1);
+const JAM_FALL = Number(process.env.JAM_FALL ?? 0.05);
+const SETTLE_DAYS = 3;
 const FULL = 0.85;
 const MAX_BUSES = Number(process.env.MAX_BUSES ?? 30);
 
@@ -100,10 +107,29 @@ const strikeMoney: Array<{ day: number; struck: number; calm: number }> = [];
 let c3Start: { lane: number; twin: number } | null = null;
 const ticks = Math.round(SECONDS_PER_GAME_DAY / SIM_DT);
 const rungs: Array<{ day: number; rung: string }> = [{ day: 1, rung: rung() }];
+function newRung(day: number, name: string): void {
+  rungs.push({ day, rung: name });
+  rungDay = day;
+  lowShare = Infinity;
+  peakTowns = 0;
+  risenDays = 0;
+  townsHistory = [];
+}
 const jams: number[] = [];
 let jammedYesterday = false;
+// Since the last rung: the lowest no-seat share (after settling), the end towns' peak, days risen.
+let rungDay = 1;
+let lowShare = Infinity;
+let peakTowns = 0;
+let risenDays = 0;
+// A plateau: the end towns grew under 1% over the last 5 days -- the rung's
+// room is used up, jam or not. The scripted player climbs on either.
+const PLATEAU_DAYS = 5;
+const PLATEAU_GROWTH = 0.01;
+let townsHistory: number[] = [];
+const plateaus: Array<{ rung: string; day: number }> = [];
 
-console.log(`Corridor ${A}-${B}: jam = slowest piece under ${JAM_SPEED} of free flow for a day, or no seat over ${JAM_NO_SEAT * 100}% of trips along it`);
+console.log(`Corridor ${A}-${B}: jam = no-seat share ${JAM_RISE * 100}pp over its low since the rung for 2 days, or the end towns ${JAM_FALL * 100}% below their peak`);
 console.log("day  rung   " + [...corridorTowns()].map((t) => `${t.padEnd(9)} cap  `).join("") + "buses load  speed  along  noSeat  danfos");
 for (let day = 1; day <= DAYS; day += 1) {
   world.economy.funds = 1e9;
@@ -111,9 +137,10 @@ for (let day = 1; day <= DAYS; day += 1) {
   let danfoSum = 0;
   // A strike begins within this day: twin the world with it called off.
   const now = world.economy.elapsedSeconds;
-  if (!strikeTwin && world.pushback.some((p) => p.nextStrikeAt > now && p.nextStrikeAt <= now + SECONDS_PER_GAME_DAY)) {
+  const strikesToday = world.lanes.some((lane) => lane.strikeUntil <= now && lane.grievance + 1 / (lane.enforcement === "strict" ? world.tuning.strikeEveryStrictDays : world.tuning.strikeEveryLaxDays) >= 1);
+  if (!strikeTwin && strikesToday) {
     strikeTwin = structuredClone(world);
-    for (const p of strikeTwin.pushback) p.nextStrikeAt = Infinity;
+    for (const lane of strikeTwin.lanes) lane.grievance = -1e9;
     strikeTwinDays = 0;
     strikeGain = { struck: 0, calm: 0 };
   }
@@ -142,7 +169,16 @@ for (let day = 1; day <= DAYS; day += 1) {
   const { made, noSeat } = along(world);
   const route = findRoute(world, A, B);
   const load = route?.loadFactorEMA ?? 0;
-  const jammed = speed < JAM_SPEED || noSeat > JAM_NO_SEAT * (made + noSeat);
+  const share = noSeat / Math.max(1, made + noSeat);
+  const endTowns = (world.towns.get(A)?.population ?? 0) + (world.towns.get(B)?.population ?? 0);
+  peakTowns = Math.max(peakTowns, endTowns);
+  if (day >= rungDay + SETTLE_DAYS) lowShare = Math.min(lowShare, share);
+  risenDays = share >= lowShare + JAM_RISE ? risenDays + 1 : 0;
+  const jammed = risenDays >= 2 || endTowns < peakTowns * (1 - JAM_FALL);
+  townsHistory.push(endTowns);
+  const back = townsHistory[townsHistory.length - 1 - PLATEAU_DAYS];
+  const plateau = day >= rungDay + PLATEAU_DAYS && back !== undefined && endTowns < back * (1 + PLATEAU_GROWTH);
+  if (plateau && !plateaus.some((p) => p.rung === rung() && p.day >= rungDay)) plateaus.push({ rung: rung(), day });
   const sizes = [...corridorTowns()]
     .map((t) => {
       const town = world.towns.get(t);
@@ -172,14 +208,16 @@ for (let day = 1; day <= DAYS; day += 1) {
     corridorNet = routeNet + c3.lane;
     twin = null;
   }
-  if (jammed && rung() === "dirt" && process.env.NO_PAVE !== "1") {
-    if (paveRoad(world, A, B).ok) rungs.push({ day, rung: "paved" });
-  } else if (jammed && rung() === "paved" && process.env.NO_LANE !== "1" && !laneDay) {
+  const climb = jammed || plateau;
+  if (climb && rung() === "dirt" && process.env.NO_PAVE !== "1") {
+    if (paveRoad(world, A, B).ok) newRung(day, "paved");
+  } else if (climb && rung() === "paved" && process.env.NO_LANE !== "1" && !laneDay) {
     const before = structuredClone(world);
     countTakings(world);
     countTakings(before);
     if (addBusLane(world, A, B).ok) {
-      rungs.push({ day, rung: "lane" });
+      newRung(day, "lane");
+      if (process.env.LAX === "1") setEnforcement(world, A, B, "lax");
       twin = before;
       laneDay = day;
       c3Start = { lane: takings(world), twin: takings(twin) };
@@ -193,9 +231,10 @@ for (let day = 1; day <= DAYS; day += 1) {
 
 console.log(`\nRungs: ${rungs.map((r) => `${r.rung} day ${r.day}`).join(", ")}`);
 console.log(`Jams began: ${jams.length ? jams.map((d) => `day ${d}`).join(", ") : "never"}`);
-for (const r of rungs.slice(1)) {
+for (const r of rungs) {
   const next = jams.find((d) => d > r.day + 1);
-  console.log(`C1: ${r.rung} on day ${r.day} held ${next ? `${next - r.day} days` : `past day ${DAYS}`} before the next jam (target 20-40)`);
+  const flat = plateaus.find((p) => p.rung === r.rung && p.day > r.day);
+  console.log(`C1: ${r.rung} from day ${r.day}: towns grew ${flat ? `${flat.day - r.day} days before levelling off` : `past day ${DAYS}`}; ${next ? `jammed after ${next - r.day} days` : `no jam by day ${DAYS}`} (target 20-40)`);
 }
 if (laneDay) {
   console.log(`C3: tolls and levies a day over the lane's first ${C3_DAYS} days: ${c3 ? `${c3.lane.toFixed(0)} with the lane against ${c3.twin.toFixed(0)} without (${c3.lane < c3.twin ? "lower" : "NOT lower"}, ${Math.round(c3.twin - c3.lane)} a day = ${Math.round(((c3.twin - c3.lane) / corridorNet) * 100)}% of the corridor's net ${Math.round(corridorNet)} a day)` : "not measured (ran out of days)"}; first strike ${strikeDay === null ? "never" : `day ${strikeDay}, ${strikeDay - laneDay} days after the lane`} (C3: within 10)`);

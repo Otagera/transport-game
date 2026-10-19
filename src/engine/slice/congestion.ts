@@ -3,6 +3,7 @@ import type { Segment } from "../map/types";
 import type { Vehicle } from "../simulation/types";
 import type { SliceWorld } from "./types";
 import { lineSpeed } from "./wear";
+import { laneEncroachment, struckSegments } from "./pushback";
 
 // Shared road (docs/principles.md §6, step 2). Your buses and the informal
 // sector slow each other down -- which closes the loop the hook depends on
@@ -46,11 +47,15 @@ export function isDirt(segment: Segment): boolean {
   return (segment.surface ?? (segment.provenance === "inherited" ? "dirt" : "paved")) === "dirt";
 }
 
-/** General traffic's capacity: a bus lane (Revision 1) takes a share of the road for your vehicles. */
-export function roadCapacity(world: SliceWorld, segmentId: string): number {
+/**
+ * General traffic's capacity: a bus lane (Revision 1) takes a share of the
+ * road for your vehicles, less what danfos have taken back by encroaching.
+ */
+export function roadCapacity(world: SliceWorld, segmentId: string, encroachment?: number): number {
   const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
   if (!segment) return Infinity;
-  const lane = segment.busLane ? world.tuning.laneGeneralCapacity : 1;
+  const taken = segment.busLane ? (encroachment ?? laneEncroachment(world).get(segmentId) ?? 0) : 0;
+  const lane = segment.busLane ? world.tuning.laneGeneralCapacity + (1 - world.tuning.laneGeneralCapacity) * taken : 1;
   return world.tuning.roadFlowCapacity * (isDirt(segment) ? world.tuning.dirtRoadCapacity : 1) * lane;
 }
 
@@ -97,8 +102,11 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
   const entering = new Map<string, number>();
   const heavy = new Map<string, number>();
   const nowOn = new Map<string, string>();
-  // Your vehicles on a bus lane are out of general traffic's way.
-  const laned = new Set(simulation.map.segments.filter((segment) => segment.busLane).map((segment) => segment.id));
+  // Your vehicles on a bus lane are out of general traffic's way -- except
+  // on a strike day, when the strikers block the lane and your buses are
+  // back in the traffic (pushback.ts).
+  const struck = struckSegments(world);
+  const laned = new Set(simulation.map.segments.filter((segment) => segment.busLane && !struck.has(segment.id)).map((segment) => segment.id));
   const laneEntering = new Map<string, number>();
   for (const vehicle of simulation.vehicles) {
     const segmentId = currentSegment(world, vehicle);
@@ -140,13 +148,7 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
     simulation.routing,
   );
   world.segmentSpeed = new Map();
-  world.laneSpeed = new Map();
-  for (const segmentId of laned) {
-    const previousLane = world.laneFlowEMA.get(segmentId) ?? 0;
-    const laneFlow = previousLane + ((laneEntering.get(segmentId) ?? 0) / dt - previousLane) * alpha;
-    world.laneFlowEMA.set(segmentId, laneFlow);
-    world.laneSpeed.set(segmentId, tuning.congestion ? speedFactor(laneFlow, tuning.busLaneCapacity, tuning.minSpeedFactor) : 1);
-  }
+  const encroached = laneEncroachment(world);
   for (const segment of simulation.map.segments) {
     if (segment.type === "rail") {
       // Track has no traffic but its own trains; worn track runs under a slow order (wear.ts).
@@ -160,6 +162,18 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
     world.roadFlowEMA.set(segment.id, flow);
     const previousHeavy = world.heavyFlowEMA.get(segment.id) ?? 0;
     world.heavyFlowEMA.set(segment.id, previousHeavy + ((heavy.get(segment.id) ?? 0) / dt - previousHeavy) * alpha);
-    world.segmentSpeed.set(segment.id, tuning.congestion ? speedFactor(flow, roadCapacity(world, segment.id), tuning.minSpeedFactor) : 1);
+    world.segmentSpeed.set(segment.id, tuning.congestion ? speedFactor(flow, roadCapacity(world, segment.id, encroached.get(segment.id)), tuning.minSpeedFactor) : 1);
+  }
+  // Your buses' speed in each lane: the lane's own capacity against their
+  // flow -- and, as danfos encroach, worn toward general traffic's speed:
+  // fully taken, the lane is no faster than the road.
+  world.laneSpeed = new Map();
+  for (const segmentId of laned) {
+    const previousLane = world.laneFlowEMA.get(segmentId) ?? 0;
+    const laneFlow = previousLane + ((laneEntering.get(segmentId) ?? 0) / dt - previousLane) * alpha;
+    world.laneFlowEMA.set(segmentId, laneFlow);
+    const own = tuning.congestion ? speedFactor(laneFlow, tuning.busLaneCapacity, tuning.minSpeedFactor) : 1;
+    const taken = encroached.get(segmentId) ?? 0;
+    world.laneSpeed.set(segmentId, own * (1 - taken) + Math.min(own, world.segmentSpeed.get(segmentId) ?? 1) * taken);
   }
 }

@@ -154,21 +154,29 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // traffic keeps 60% of the road's capacity; a lane costs what paving that
   // road did; its towns can grow 1.6x the paved cap's share (a first guess,
   // C1 not yet met: below). The union strikes 5 days after a lane opens,
-  // then every 20, for a day.
+  // then (Decisions log, lane encroachment) as often as enforcement provokes
+  // it: every 12 days held strictly, every 60 left lax; a strike lasts a day.
+  // Lax, danfos take 5% of the lane a day (all of it in 20); strict, wardens
+  // clear 25% a day, at 1 a cell a day (the trunk's lane ~₦30). First
+  // guesses.
   informalRoadSpaceLane: 4,
   laneGeneralCapacity: 0.6,
   // The lane's own capacity (C1 for the lane, corridor probe, the player
-  // adding buses while full): 0.6 or 1.0 and the buses crawl at once; 1.3
-  // jams 10 days after the lane, 1.6 18, 1.65 33, 1.7 and up never by the
-  // probe's jam rule -- though the towns still fall back ~15% from day ~70:
-  // the lane settles just above 0.7 speed. A knife edge in the rule, not the
-  // corridor.
-  busLaneCapacity: 1.65,
+  // adding buses while full). Judged by speed it sat on a knife edge (1.6 ->
+  // 18 days, 1.65 -> 33, 1.7 -> never). Judged by consequences (the jam rule
+  // since 2026-10-19: no seat rising, towns falling), the lane's towns grow
+  // 18-23 days at any capacity from 1.3 to 3.0; below ~1.0 the buses crawl.
+  // 2.0: the middle of that flat stretch.
+  busLaneCapacity: 2.0,
   busLaneCostShare: 1,
   growthCapLaneShare: 1.6,
   strikeDelayDays: 5,
-  strikeEveryDays: 20,
+  strikeEveryStrictDays: 12,
+  strikeEveryLaxDays: 60,
   strikeDays: 1,
+  encroachmentPerDay: 0.05,
+  encroachmentClearPerDay: 0.25,
+  enforcementPerCellPerDay: 1,
   startingFunds: 2500,
   // Inside towns (docs/principles.md §5, answered "acknowledge it"): short
   // trips and the last mile, which kekes and okadas carry and nothing you

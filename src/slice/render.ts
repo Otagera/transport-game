@@ -1,12 +1,12 @@
 import type { InformalMode, SliceTown, SliceWorld } from "@engine/slice/types";
 import type { RoutingContext, Vehicle } from "@engine/simulation/types";
 import { routingFor } from "@engine/slice/rail";
-import { isCutOff, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
+import { isCutOff, roadChain, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/slice/growth";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 import { isDirt } from "@engine/slice/congestion";
-import { struckSegments } from "@engine/slice/pushback";
+import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -123,6 +123,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   drawVehicles(ctx, world, view);
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   for (const town of world.towns.values()) drawTown(ctx, world, view, town, state);
+  drawWardens(ctx, world, view);
   drawStrikeLabels(ctx, world, view);
   // Last, so nothing on the map draws through the price.
   if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok, state.ghost.forecast);
@@ -235,6 +236,7 @@ function drawGround(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View
 function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
   ctx.lineCap = "round";
   const struck = struckSegments(world);
+  const encroached = laneEncroachment(world);
   for (const segment of world.simulation.map.segments) {
     const line = segmentPolyline(world.simulation.map, segment);
     if (segment.type === "rail") {
@@ -278,13 +280,23 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
     }
     // A bus lane (Revision 1): a band of your colour under the road, wider
     // than a route line, so it reads as the road's, not a route's.
+    // Encroachment fades it, and yellow dashes -- danfos in the lane -- grow
+    // along it as they take it (pushback.ts).
+    const taken = encroached.get(segment.id) ?? 0;
     if (segment.busLane) {
       ctx.strokeStyle = COLORS.player;
-      ctx.globalAlpha = 0.35;
+      ctx.globalAlpha = 0.35 * (1 - 0.7 * taken);
       ctx.lineWidth = 16;
       ctx.setLineDash([]);
       strokeLine(ctx, view, line);
       ctx.globalAlpha = 1;
+      if (taken > 0.05) {
+        ctx.strokeStyle = COLORS.danfo;
+        ctx.lineWidth = 5;
+        ctx.setLineDash([4 + 10 * taken, 14 * (1 - taken) + 3]);
+        strokeLine(ctx, view, line, 4);
+        ctx.setLineDash([]);
+      }
     }
     ctx.strokeStyle = built ? COLORS.builtRoad : COLORS.dirtRoad;
     ctx.lineWidth = built ? 7 : 6;
@@ -314,11 +326,35 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
   ctx.setLineDash([]);
 }
 
+// A warden mark at the middle of each strictly enforced lane: someone is
+// keeping it clear (pushback.ts).
+function drawWardens(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
+  for (const lane of world.lanes) {
+    if (lane.enforcement !== "strict" || lane.strikeUntil > world.economy.elapsedSeconds) continue;
+    const line = (roadChain(world, lane.a, lane.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+    if (line.length === 0) continue;
+    const [, rest] = splitPolyline(line, polylineLength(line) / 2);
+    const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
+    ctx.fillStyle = COLORS.player;
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(mid.x - 16, mid.y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "700 9px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("W", mid.x - 16, mid.y + 0.5);
+  }
+}
+
 // "STRIKE" over each struck corridor, once, at its middle: drawn after the
 // towns and routes, so nothing covers it (pushback.ts).
 function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
   const now = world.economy.elapsedSeconds;
-  for (const strike of world.pushback) {
+  for (const strike of world.lanes) {
     if (strike.strikeUntil <= now || strike.segmentIds.length === 0) continue;
     const pieces = strike.segmentIds.map((id) => world.simulation.map.segments.find((s) => s.id === id)).filter((s) => s !== undefined);
     const line = pieces.flatMap((piece) => segmentPolyline(world.simulation.map, piece));
