@@ -28,7 +28,8 @@ right after this file. Progress on that build order:
 | — | Bots baseline after 5b, with paving as a move | Done: results below |
 | 5 | Money: built roads born dirt, paving dear, running costs restored, routine upkeep, fares by distance | Done, **M10 failing**: results below |
 | 5b | M1 with openings of equal skill; M10's fix proposed (treasury remittance) | Done: M1 fails, results below |
-| 6 | Price response with tolls, levies, the allocation; the remittance | Both passes measured; back at ₦10, M2 (in trips), M5, M10 (+14.6%) and day-60 M1 fail: below |
+| 6 | Price response with tolls, levies, the allocation; the remittance | Done, tuning stopped: allocation ₦10, M10 borderline pass, M2 and day-60 M1 fail (findings), M5 expected to fail until pushback: below |
+| — | **Next: your playtest** (brief P1-P6) | Slice zero goes to the user's sessions |
 
 **Step 6, pass 1, 2026-10-18** (`BOTS_WORKERS=6`, ~48 min). First-guess values: toll ₦10 a
 road per danfo-equivalent, levy ₦0.6 a seat (agberos half), allocation ₦50 a day + ₦20 per
@@ -178,6 +179,21 @@ openings and greedy match pass 2 exactly (same tuning, deterministic).
   does. The tension sits on the edge.
 - The allocation is 22-27% of a strong network's income (the brief's quarter to a third, at
   its floor).
+
+**Decisions and M2 against trips-greedy's moves, 2026-10-18** (idle and trips-greedy, ~9
+min). Tuning stops here; slice zero goes to the playtest (brief P1-P6).
+
+| Check | Status | Reading |
+|---|---|---|
+| M2 (in trips) | FAIL, recorded as a finding (principles.md §3) | Lifelines cost ₦17-31 per added trip a day; trips-greedy's moves on days 20-30 cost a median ₦11 (17 moves), 1.5x = ₦16. Best: Ikole + minibus at ₦17, losing ₦18 a day (affordable: ₦518) |
+| M10 | PASS, **borderline** | +14.6% at day 20; "about 15%" passes at 14.5% and up, flagged below 15% |
+| M5 | FAIL, expected | Until pushback (after slice zero). The allocation isn't tuned to flip it (at ₦15 it flipped) |
+| M1 (day 60) | FAIL, not relaxed | Road first 35 trips short of minibus first, with the best net |
+
+**The bots' paving ranking can pick a paving that loses trips.** They rank paving by trips
+added per naira on a 5-day twin (days 6-10); on day 1 that puts Ado-Ogbe first, which loses
+39 trips a day over 60 days. Treat the bots' paving choices as suspect until the ranking is
+checked against a longer twin.
 
 **M1 with openings of equal skill, 2026-10-18** (~24 min). Four openings spend the whole
 first ₦2,500 on one kind of move -- the best each time (vehicles by forecast ₦/day, roads

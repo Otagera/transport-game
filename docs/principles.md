@@ -326,6 +326,19 @@ blow-by-blow; this section is the distilled rule.
   opening (a minibus to a newly connected town should pay); cap compounding with
   something that bites only on surplus, and test opening variety with plans of equal skill.
 
+- **A lifeline road buys trips at a premium, and loses a little money** (slice zero step 6,
+  M2 read in trips). A road to a cut-off town plus one vehicle adds 28-44 trips a day at
+  ₦17-31 per added trip a day, losing ₦18-64 a day; a budget-balancing trips-maximiser's
+  moves on days 20-30 cost a median ₦11 (17 moves). The best lifeline (Ikole, a minibus)
+  is at 1.5x that, just over; the rest are 2-3x. The losses are easily carried (a fifth of
+  that player's net is ₦518 a day). So lifelines aren't bad buys, they're dear ones: what
+  makes a player build one is a town left with "no road", not the per-naira ranking.
+  (Caveat: the moves it bought were ranked on 5-day twins, the lifelines measured over 60.)
+
+- **A short twin can rank a paving that costs trips over the long run.** On day 1 the best
+  paving by trips per naira over days 6-10 (Ado-Ogbe) loses 39 trips a day over 60 days.
+  The bots pave by that ranking, so their paving choices are suspect where the two disagree.
+
 ### Balance numbers (from the first attempt — starting points, not gospel)
 
 - Fleet optimum was ~15 vehicles under static demand; revenue plateaued around the
