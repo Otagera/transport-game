@@ -353,8 +353,25 @@ export function findRoute(world: SliceWorld, a: string, b: string): SliceRoute |
 // day needs more riders than most pairs of towns make. A 14-seat minibus at
 // half the running cost pays where a bus can't; on a busy route the bus's
 // seats win. Which to run is the decision.
-export type RoadVehicleKind = "bus" | "minibus";
+export type RoadVehicleKind = "bus" | "minibus" | "brt";
 export const MINIBUS_DEF_ID = "slice-minibus";
+export const BRT_DEF_ID = "slice-brt";
+
+// A BRT bus (Revision 1): articulated, 80 seats, and only for a bus lane --
+// every road its route runs on must have one. What a lane is for: carrying
+// more than the danfos it squeezes out (brief C3).
+export function brtRouteId(a: string, b: string): string {
+  return `brt:${routeKey(a, b)}`;
+}
+
+export function isBrtRoute(routeId: string): boolean {
+  return routeId.startsWith("brt:");
+}
+
+/** The route id a road vehicle of this kind runs between a and b. */
+export function roadRouteId(kind: RoadVehicleKind, a: string, b: string): string {
+  return kind === "minibus" ? minibusRouteId(a, b) : kind === "brt" ? brtRouteId(a, b) : routeKey(a, b);
+}
 
 export function minibusRouteId(a: string, b: string): string {
   return `mini:${routeKey(a, b)}`;
@@ -366,6 +383,7 @@ export function isMinibusRoute(routeId: string): boolean {
 
 function roadVehicleSpec(world: SliceWorld, kind: RoadVehicleKind) {
   const t = world.tuning;
+  if (kind === "brt") return { capacity: t.brtCapacity, speed: t.brtSpeed, price: t.brtPurchaseCost, perSecond: t.brtOperatingCostPerSecond, roadSpace: t.brtRoadSpace, defId: BRT_DEF_ID };
   return kind === "minibus"
     ? { capacity: t.minibusCapacity, speed: t.minibusSpeed, price: t.minibusPurchaseCost, perSecond: t.minibusOperatingCostPerSecond, roadSpace: t.minibusRoadSpace, defId: MINIBUS_DEF_ID }
     : { capacity: t.busCapacity, speed: t.busSpeed, price: t.busPurchaseCost, perSecond: t.busOperatingCostPerSecond, roadSpace: t.busRoadSpace, defId: BUS_DEF_ID };
@@ -373,8 +391,12 @@ function roadVehicleSpec(world: SliceWorld, kind: RoadVehicleKind) {
 
 export function checkBus(world: SliceWorld, a: string, b: string, kind: RoadVehicleKind = "bus"): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
-  if (!roadPath(world, a, b)) return { ok: false, reason: "no road between them" };
-  if (!canAfford(world.economy, roadVehicleSpec(world, kind).price)) return { ok: false, reason: `can't afford a ${kind}` };
+  const path = roadPath(world, a, b);
+  if (!path) return { ok: false, reason: "no road between them" };
+  if (kind === "brt" && !path.segmentIds.every((id) => world.simulation.map.segments.find((s) => s.id === id)?.busLane)) {
+    return { ok: false, reason: "a BRT runs only on bus lanes: give the whole way a lane" };
+  }
+  if (!canAfford(world.economy, roadVehicleSpec(world, kind).price)) return { ok: false, reason: `can't afford a ${kind === "brt" ? "BRT bus" : kind}` };
   return { ok: true };
 }
 
@@ -386,11 +408,19 @@ export function addMinibus(world: SliceWorld, a: string, b: string): ActionResul
   return addBus(world, a, b, "minibus");
 }
 
+export function checkBrt(world: SliceWorld, a: string, b: string): ActionResult {
+  return checkBus(world, a, b, "brt");
+}
+
+export function addBrt(world: SliceWorld, a: string, b: string): ActionResult {
+  return addBus(world, a, b, "brt");
+}
+
 export function addBus(world: SliceWorld, a: string, b: string, kind: RoadVehicleKind = "bus"): ActionResult {
   const check = checkBus(world, a, b, kind);
   if (!check.ok) return check;
 
-  const routeId = kind === "minibus" ? minibusRouteId(a, b) : routeKey(a, b);
+  const routeId = roadRouteId(kind, a, b);
   let route = world.routes.find((candidate) => candidate.id === routeId);
   if (!route) {
     route = { id: routeId, a, b, vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };

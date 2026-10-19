@@ -11,6 +11,10 @@ import {
   demandAlong,
   diagnoseRoute,
   addMinibus,
+  addBrt,
+  checkBrt,
+  brtRouteId,
+  isBrtRoute,
   addBusLane,
   checkLane,
   laneCost,
@@ -56,7 +60,7 @@ import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { startSliceGame } from "@engine/slice/start";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
-import { enforcementPerDay, laneOn, setEnforcement } from "@engine/slice/pushback";
+import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
@@ -74,7 +78,7 @@ import { shortVerdict } from "./verdicts";
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "minibus" | "lorry" | "track" | "train" | "freight" | "fix";
+type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "track" | "train" | "freight" | "fix";
 
 // Slice zero (docs/brief.md): wear, goods, rail and the straight alignment
 // are off. `?systems=all` turns them back on, for comparing.
@@ -249,6 +253,7 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
       return { kind: "track", a, b, alignment };
     case "bus":
     case "minibus":
+    case "brt":
     case "lorry":
     case "train":
     case "freight":
@@ -367,6 +372,22 @@ function addLabel(vehicle: string, count: number, a: string, b: string): string 
 /** Toasts promise a receipt only where there are receipts. */
 const later = dev ? " Result in two days." : "";
 
+// Pause on a strike at 4x (a player option, P; remembered): at 4x a strike's
+// two days pass in 15 seconds (playtest: "did a strike land? I couldn't tell").
+const PAUSE_ON_STRIKE_KEY = "slice:pause-on-strike";
+let pauseOnStrike = (() => {
+  try {
+    return localStorage.getItem(PAUSE_ON_STRIKE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+})();
+function pauseForStrike(): void {
+  if (!pauseOnStrike || speed !== 4 || paused) return;
+  paused = true;
+  renderToolbar();
+}
+
 let toastTimer = 0;
 function say(message: string, bad = false, seconds = 2.6): void {
   toast.textContent = message;
@@ -377,10 +398,19 @@ function say(message: string, bad = false, seconds = 2.6): void {
 }
 
 function announce(event: SliceEvent): void {
-  if (event.kind === "strike") {
-    say(`Danfo drivers on ${townName(event.a)} – ${townName(event.b)} are on strike today over your bus lane: no danfos, no levies there.`, true, 8);
+  const corridor = "a" in event ? `${townName(event.a)} – ${townName(event.b)}` : "";
+  if (event.kind === "strike-announced") {
+    const lane = laneOn(world, event.a, event.b);
+    const relax = lane?.enforcement === "strict" ? " Relax the lane's enforcement before then (Road tool on it) to call it off." : "";
+    say(`The danfo union calls a strike on ${corridor} from day ${gameDay(world, event.atSeconds)} over your bus lane.${relax}`, true, 10);
+    pauseForStrike();
+  } else if (event.kind === "strike-called-off") {
+    say(`The union called off the strike on ${corridor}: you relaxed the lane.`, false, 6);
+  } else if (event.kind === "strike") {
+    say(`Danfo drivers on ${corridor} are on strike for ${world.tuning.strikeDays} days: they block your lane, no danfos run, no levies there.`, true, 10);
+    pauseForStrike();
   } else if (event.kind === "strike-over") {
-    say(`The danfo strike on ${townName(event.a)} – ${townName(event.b)} is over.`, false, 4);
+    say(`The strike on ${corridor} is over.${event.cost !== null ? ` It cost you about ${naira(event.cost)}.` : ""}`, true, 8);
   } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
   } else {
@@ -441,6 +471,8 @@ function toolOn(candidate: Tool): boolean {
   if (candidate === "freight") return t.goodsEnabled && t.railEnabled;
   if (candidate === "track" || candidate === "train") return t.railEnabled;
   if (candidate === "fix") return t.wearEnabled;
+  // The BRT bus runs only in a bus lane: its tool appears once you have one.
+  if (candidate === "brt") return world.lanes.length > 0;
   return true;
 }
 
@@ -534,7 +566,10 @@ canvas.addEventListener("click", (event) => {
   } else if (tool === "road" && intended?.kind === "lane") {
     const cost = laneCost(world, from, town);
     const result = act({ label: `a bus lane on ${townName(from)} – ${townName(town)}`, towns }, (w) => addBusLane(w, from, town));
-    if (result.ok) say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic there. The danfos lost a lane.${later}`);
+    if (result.ok) {
+      say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic there. The danfos lost a lane. BRT buses (X) can run in it now.${later}`);
+      renderToolbar();
+    }
     else say(`Can't add a bus lane (${naira(cost)}): ${result.reason}`, true);
   } else if (tool === "road" && roadChain(world, from, town)) {
     const cost = paveCost(world, from, town);
@@ -568,6 +603,12 @@ canvas.addEventListener("click", (event) => {
     const result = act({ label: addLabel("lorry", (route?.vehicleIds.length ?? 0) + 1, from, town), towns, routeId: route?.id ?? lorryRouteId(from, town) }, (w) => addLorry(w, from, town));
     if (result.ok) say(`Lorry added: ${pair(from, town)}.${later}`);
     else say(`Can't add lorry (${naira(world.tuning.lorryPurchaseCost)}): ${result.reason}`, true);
+  } else if (tool === "brt") {
+    const routeId = brtRouteId(from, town);
+    const count = (world.routes.find((r) => r.id === routeId)?.vehicleIds.length ?? 0) + 1;
+    const result = act({ label: addLabel("BRT bus", count, from, town), towns, routeId }, (w) => addBrt(w, from, town));
+    if (result.ok) say(`BRT bus added: ${pair(from, town)}, in its lane.${later}`);
+    else say(`Can't add a BRT bus (${naira(world.tuning.brtPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "minibus") {
     const routeId = minibusRouteId(from, town);
     const count = (world.routes.find((r) => r.id === routeId)?.vehicleIds.length ?? 0) + 1;
@@ -590,6 +631,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "r" || event.key === "R") setTool("road");
   else if (event.key === "b" || event.key === "B") setTool("bus");
   else if (event.key === "m" || event.key === "M") setTool("minibus");
+  else if (event.key === "x" || event.key === "X") setTool("brt");
   else if (event.key === "f" || event.key === "F") setTool("fix");
   else if (event.key === "l" || event.key === "L") setTool("lorry");
   else if (event.key === "k" || event.key === "K") setTool("track");
@@ -598,6 +640,15 @@ window.addEventListener("keydown", (event) => {
   else if ((event.key === "a" || event.key === "A") && world.tuning.straightAlignmentEnabled) {
     alignment = alignment === "cheapest" ? "direct" : "cheapest";
     renderToolbar();
+  }
+  else if (event.key === "p" || event.key === "P") {
+    pauseOnStrike = !pauseOnStrike;
+    try {
+      localStorage.setItem(PAUSE_ON_STRIKE_KEY, pauseOnStrike ? "1" : "0");
+    } catch {
+      // Remembered for this game only.
+    }
+    say(pauseOnStrike ? "At 4×, the game pauses when a strike is called or begins." : "At 4×, strikes no longer pause the game.");
   }
   else if (event.key === "h" || event.key === "H") {
     hints.off = !hints.off;
@@ -766,11 +817,12 @@ function ghost(): Ghost | null {
     const ghost = { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, label, `Lorry ${naira(world.tuning.lorryPurchaseCost)}`) };
     return withForecast(ghost, { kind: "lorry", a: selectedTown, b: to }, { label: "a lorry", towns: [selectedTown, to] });
   }
-  // A bus or a minibus: the same preview, the vehicle named and priced.
+  // A bus, a minibus or a BRT bus: the same preview, the vehicle named and priced.
   const mini = tool === "minibus";
-  const vehicle = mini ? "Minibus" : "Bus";
-  const check = mini ? checkMinibus(world, selectedTown, to) : checkBus(world, selectedTown, to);
-  const price = naira(mini ? world.tuning.minibusPurchaseCost : world.tuning.busPurchaseCost);
+  const brt = tool === "brt";
+  const vehicle = brt ? "BRT bus (80 seats, lane only)" : mini ? "Minibus" : "Bus";
+  const check = brt ? checkBrt(world, selectedTown, to) : mini ? checkMinibus(world, selectedTown, to) : checkBus(world, selectedTown, to);
+  const price = naira(brt ? world.tuning.brtPurchaseCost : mini ? world.tuning.minibusPurchaseCost : world.tuning.busPurchaseCost);
   // Every trip along its road, not just the two towns clicked: a bus from
   // Ilase to Ikole carries Ilase-Kuto and Kuto-Ikole riders too.
   const along = `${Math.round(demandAlong(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want trips along it`;
@@ -778,7 +830,7 @@ function ghost(): Ghost | null {
   // from Ilase goes through Kuto.
   const path = shownPath(check, roadPath(world, selectedTown, to)?.nodeIds);
   const ghost = { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, `${vehicle} ${price} · ${along}`, `${vehicle} ${price}`) };
-  return withForecast(ghost, { kind: mini ? "minibus" : "bus", a: selectedTown, b: to }, { label: mini ? "a minibus" : "a bus", towns: [selectedTown, to] });
+  return withForecast(ghost, { kind: brt ? "brt" : mini ? "minibus" : "bus", a: selectedTown, b: to }, { label: brt ? "a BRT bus" : mini ? "a minibus" : "a bus", towns: [selectedTown, to] });
 }
 
 // A refusal never hides the price (playtest: "I can't see the price for
@@ -845,6 +897,7 @@ function renderToolbar(): void {
       "road",
       button("Bus", "B", tool === "bus", () => setTool("bus")),
       button("Minibus", "M", tool === "minibus", () => setTool("minibus")),
+      ...on(world.lanes.length > 0, button("BRT", "X", tool === "brt", () => setTool("brt"))),
       ...on(t.goodsEnabled, button("Lorry", "L", tool === "lorry", () => setTool("lorry"))),
     ),
     ...on(
@@ -998,6 +1051,7 @@ function renderTown(townId: string): void {
         <li>Of its trips: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</li>
         <li>Inside: ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day by keke and okada, not counted against you.</li>
       </ul>
+      ${strikeBadge(laneAtTown(townId))}
       ${problemText(townId)}
       ${growthText(townId, town.name)}
       ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
@@ -1020,7 +1074,7 @@ function problemText(townId: string): string {
   const full = roadFull(world, townId);
   if (full) {
     const name = townName(townId);
-    const next = full.next === "paved" ? "Pave its road (R)" : "A bus lane on its road (R)";
+    const next = full.next === "paved" ? "Pave its road (R)" : full.next === "lane" ? "A bus lane on its road (R)" : "Rail (K: restore the old line or lay track, then T for trains)";
     return `<p class="callout hook"><span class="k">The problem here</span>${name} can't grow: its road is full. ${next} to grow further.</p>`;
   }
   const share = townShare(world, townId);
@@ -1033,7 +1087,7 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 // A train route's reasons are a bus route's with the vehicle renamed: the
 // diagnosis is the same passenger model (rail.ts), only the vehicle differs.
 function forVehicle(text: string, routeId: string): string {
-  const [one, many] = isRailRoute(routeId) ? ["train", "trains"] : isMinibusRoute(routeId) ? ["minibus", "minibuses"] : [null, null];
+  const [one, many] = isRailRoute(routeId) ? ["train", "trains"] : isMinibusRoute(routeId) ? ["minibus", "minibuses"] : isBrtRoute(routeId) ? ["BRT bus", "BRT buses"] : [null, null];
   if (!one || !many) return text;
   return text
     .replace(/\bBuses\b/g, many.charAt(0).toUpperCase() + many.slice(1))
@@ -1045,6 +1099,7 @@ function forVehicle(text: string, routeId: string): string {
 function vehicleCount(routeId: string, n: number): string {
   if (isRailRoute(routeId)) return `${n} train${n === 1 ? "" : "s"}`;
   if (isMinibusRoute(routeId)) return `${n} minibus${n === 1 ? "" : "es"}`;
+  if (isBrtRoute(routeId)) return `${n} BRT bus${n === 1 ? "" : "es"}`;
   return `${n} bus${n === 1 ? "" : "es"}`;
 }
 
@@ -1111,7 +1166,7 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
 function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
   const index = world.routes.findIndex((route) => route.id === s.id);
   const d = diagnoseRoute(world, s.id);
-  const vehicle = isRailRoute(s.id) ? "train" : isMinibusRoute(s.id) ? "minibus" : "bus";
+  const vehicle = isRailRoute(s.id) ? "train" : isMinibusRoute(s.id) ? "minibus" : isBrtRoute(s.id) ? "BRT bus" : "bus";
   const dirt = d ? dirtRoadsOn(world, s.id)[0] : undefined;
   const through = d?.verdict === "thin" ? throughRoute(world, s.id) : null;
   const verdict = d
@@ -1138,10 +1193,50 @@ function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
       <div class="top"><span class="k">${vehicleCount(s.id, s.buses)} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</span><span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${signed}/day</span></div>
       <div class="name"><span class="swatch" style="background:${routeColor(index)}"></span>${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}
         <span class="buttons"><button data-add="${s.id}" title="Add one">+</button><button data-remove="${s.id}" title="Sell one">−</button></span></div>
+      ${strikeBadge(laneAlongRoute(s.a, s.b))}
       <div class="verdict why-${d?.verdict ?? "healthy"}">${verdict}</div>
       ${bar}
       ${dev && d ? `<small>${forVehicle(`${Math.round(d.boardingsPerDay)} riders/day · buses ${pct(d.loadFactor)} full · ${pct(d.speed)} speed · ceiling ${naira(d.ceilingPerDay)}/day`, s.id)}</small>` : ""}
     </div>`;
+}
+
+// A laned corridor's strike, as a badge on the cards that touch it (playtest:
+// "did a strike land? I couldn't tell"): on strike; called for a day; or,
+// for STRIKE_MARK_DAYS after, what the last one cost.
+const STRIKE_MARK_DAYS = 5;
+function strikeBadge(lane: LaneState | undefined): string {
+  if (!lane) return "";
+  const now = world.economy.elapsedSeconds;
+  const corridor = `${townName(lane.a)} – ${townName(lane.b)}`;
+  if (lane.strikeUntil > now) return `<div class="strike-badge on">On strike until day ${gameDay(world, lane.strikeUntil)} · ${corridor}</div>`;
+  if (lane.strikeAt > now) {
+    const relax = lane.enforcement === "strict" && lane.announcedStrict ? ": relax its lane to call it off" : "";
+    return `<div class="strike-badge called">Strike called for day ${gameDay(world, lane.strikeAt)} · ${corridor}${relax}</div>`;
+  }
+  const last = lane.lastStrike;
+  if (last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY) {
+    return `<div class="strike-badge past">Struck day ${gameDay(world, last.startedAt)}${last.cost !== null ? ` · cost ${naira(last.cost)}` : ""}</div>`;
+  }
+  return "";
+}
+
+/** The laned corridor a route runs along, if any. */
+function laneAlongRoute(a: string, b: string): LaneState | undefined {
+  if (world.lanes.length === 0) return undefined;
+  const by = lanesBySegment(world);
+  return roadPath(world, a, b)?.segmentIds.map((id) => by.get(id)).find((lane) => lane !== undefined);
+}
+
+/** A laned corridor that runs through a town, if any. */
+function laneAtTown(townId: string): LaneState | undefined {
+  if (world.lanes.length === 0) return undefined;
+  const by = lanesBySegment(world);
+  for (const segment of world.simulation.map.segments) {
+    if (segment.fromNodeId !== townId && segment.toNodeId !== townId) continue;
+    const lane = by.get(segment.id);
+    if (lane) return lane;
+  }
+  return undefined;
 }
 
 // The budget breakdown (docs/brief.md, Information design): each line a
@@ -1160,6 +1255,8 @@ function budgetHtml(): string {
     ["Road upkeep", -b.upkeep],
     ...(world.lanes.length > 0 ? [["Lane enforcement", -b.enforcement] as [string, number]] : []),
   ];
+  // Not money moved -- the fares and takings strikes kept from you -- so shown under the net, not in it.
+  const struck = world.lanes.length > 0 ? `<span class="muted">Lost to strikes (estimated)</span><span class="num bad">${b.struck > 0.5 ? signed(-b.struck) : "₦0"}</span>` : "";
   const net = lines.reduce((sum, [, x]) => sum + x, 0);
   const t = world.tuning;
   const r = world.remittance;
@@ -1169,6 +1266,7 @@ function budgetHtml(): string {
   return `<h2 class="section">Budget, a day</h2><p class="hint">5-day average.</p>
     <div class="budget">${lines.map(([label, x]) => `<span>${label}</span><span class="num ${x < 0 ? "bad" : ""}">${signed(x)}</span>`).join("")}
       <span class="total">Net</span><span class="total num ${net < 0 ? "bad" : "good"}">${signed(net)}</span>
+      ${struck}
     </div>${treasury}`;
 }
 
@@ -1387,15 +1485,16 @@ routesEl.addEventListener("click", (event) => {
     if (!route) return;
     const train = isRailRoute(addId);
     const mini = isMinibusRoute(addId);
-    const vehicle = train ? "train" : mini ? "minibus" : "bus";
+    const brt = isBrtRoute(addId);
+    const vehicle = train ? "train" : mini ? "minibus" : brt ? "BRT bus" : "bus";
     const spec = { label: addLabel(vehicle, route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
-    const result = act(spec, (w) => (train ? addTrain(w, route.a, route.b) : mini ? addMinibus(w, route.a, route.b) : addBus(w, route.a, route.b)));
-    const price = train ? world.tuning.trainPurchaseCost : mini ? world.tuning.minibusPurchaseCost : world.tuning.busPurchaseCost;
+    const result = act(spec, (w) => (train ? addTrain(w, route.a, route.b) : mini ? addMinibus(w, route.a, route.b) : brt ? addBrt(w, route.a, route.b) : addBus(w, route.a, route.b)));
+    const price = train ? world.tuning.trainPurchaseCost : mini ? world.tuning.minibusPurchaseCost : brt ? world.tuning.brtPurchaseCost : world.tuning.busPurchaseCost;
     if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {
     sell(removeId, isFreightRoute(removeId) ? "freight train" : "lorry", (w) => removeLorry(w, removeId));
   } else if (removeId) {
-    sell(removeId, isRailRoute(removeId) ? "train" : isMinibusRoute(removeId) ? "minibus" : "bus", (w) => removeBus(w, removeId));
+    sell(removeId, isRailRoute(removeId) ? "train" : isMinibusRoute(removeId) ? "minibus" : isBrtRoute(removeId) ? "BRT bus" : "bus", (w) => removeBus(w, removeId));
   }
   renderRoutes();
 });

@@ -38,7 +38,67 @@ right after this file. Progress on that build order:
 | R1 1b+ | The lane's own capacity; C1 for the lane re-measured; strike money against a twin | Done 2026-10-19: lane C1 33 days (knife-edge); strikes earn ₦22-38; lane encroachment and a stronger C3 proposed in the brief: below |
 | R1 1c | Strikes block the lane; encroachment and enforcement, strikes by enforcement; C1 by consequences | Done 2026-10-19: strikes cost ₦630-904; lane capacity 2.0 off the knife edge; dirt and paved never jam by consequences, they level off: below |
 | R1 1d | "Road is full" on the town card; C1 read as growth days; C3 strict against lax | Done 2026-10-19: **C1 passes** (35/29/19-27 days); **C3 fails**: lax wins on both corridors |
-| — | **Next: your playtest of the ladder** (dirt → paved → lane), checking P7 | Rail waits until after it |
+| — | Your playtest of the ladder (dirt → paved → lane) | Played 2026-10-19: liked rebuilding the road and enforcement; couldn't tell a strike landed (principles.md §6) |
+| R1 1e | Strikes made legible (announced, cancellable, 2 days, costed, on cards and road, pause option); the BRT bus; C3 re-measured | Done 2026-10-19: **C3 passes with BRT**: strict wins on the trunk, lax on Ilase-Kuto: below |
+| R1 2a | Rail switched on as the top rung (growth by a working station); C1 for rail | Done 2026-10-19: rail holds 34 days of growth: below |
+| R1 2b | Rail priced for C2 (20-40 days of surplus), the named project the treasury leaves alone | Next |
+
+**Revision 1, 2a: rail, the top rung, 2026-10-19.** `railEnabled` is on by default (wear,
+goods and the straight alignment stay off). A town with track in service at it -- a station
+or a halt's spur, not the old line out of service -- is on the "rail" rung, allowed
+`growthCapRailShare` (2.4, a first guess) of the growth cap; a laned town at its target is told
+"Rail (K ... then T for trains) to grow further". Corridor probe (BRT on the lane, then new
+track Ilase-Owode and trains while full, money no object):
+
+| Rung (day) | Towns grew before levelling off | Ilase / Owode at the plateau |
+|---|---|---|
+| dirt (1) | 35 days | 158k / 64k |
+| paved (36) | 29 days | 237k / 98k |
+| lane + BRT (65) | 33 days | 307k / 131k |
+| **rail (98)** | **34 days** | 423k / 178k (440k / 180k by day 200) |
+
+- **C1 passes for every rung** (20-40). Ilase ends at 3.7x its start: money is no object
+  here; C2 (rail at 20-40 days of a mid-game surplus, with the named project) is next.
+- The trunk reaches rail on day 98 with unlimited money: inside C4's 100-150 window only if
+  money doesn't hold it back much -- C2 decides.
+
+**Revision 1, 1e: strikes you can see; the BRT bus; C3 passes, 2026-10-19**
+
+- **Strikes** (pushback.ts; proposed in the brief): the union announces one 4 days ahead
+  ("STRIKE DAY N" in amber on the road, a toast, a badge on the route and town cards);
+  relaxing the lane before then calls it off. It lasts 2 days (red road and tag, "On strike
+  until day N"), at half the old frequency (strict ~every 24 days plus notice, lax ~120).
+  After it, "struck day N · cost ₦X" stays on the road and the cards for 5 days, and "Lost to
+  strikes (estimated)" sits under the budget's net. The estimate is the corridor's income
+  (your fares on routes along it, its tolls and levies) on the 3 days before, less what came
+  in; under 2 normal days (a new lane), no estimate. At 4× the game pauses when a strike is
+  called or begins (P toggles, remembered). Checked in Chrome: called, on, and the mark after.
+- **What strikes cost**, corridor probe against a twin with each called off, and the game's
+  own estimate beside it: ₦1,192 (estimate 624), ₦1,677 (1,836), ₦976 (1,509). Same range.
+- **The BRT bus** (X, in the toolbar once a lane exists): articulated, 80 seats, ₦1,500,
+  2x a bus's running cost (₦0.81 a seat-cell against ₦1.30), only on a route laned the whole
+  way. Drawn longer. Bought alongside the trunk's 13 buses, one BRT ran 18% full and changed
+  nothing; **replacing them** (same seats in BRTs, then more while full), it carries:
+
+| Days 66-105, trunk (lane day 65) | Trips a day | No seat a day | No-seat share | Your money a day |
+|---|---|---|---|---|
+| no lane (paved, buses) | 694 | 72 | 9.4% | ₦2,989 |
+| lane + buses | 936 | 145 | 13.4% | ₦4,911 |
+| **lane + BRT** | **986** | **117** | **10.6%** | **₦5,669** |
+
+- **Against a twin that never got the lane, the lane carries far more** (the lane's cap grows
+  the towns), but "no seat" rises with it; BRT brings the no-seat share almost back to the
+  twin's. The earlier "carries less than it displaces" was against *lax*, not no lane.
+- **C3 passes with BRT** -- money over the lane's first 40 days:
+
+| Corridor | Strict | Lax | Better |
+|---|---|---|---|
+| Ilase-Owode (trunk), BRT | **₦226,772** · 986 trips | ₦205,720 · 922 trips | strict |
+| Ilase-Kuto (modest), BRT | −₦1,858 · 36 trips | **−₦801** · 37 trips | lax |
+
+  On the thin corridor a BRT is too big and loses money either way: the lane is the wrong rung
+  there, which the town card's "road is full" line doesn't yet say.
+- The bots don't buy BRT buses yet (`moves.ts` lists another BRT on a BRT route, no new ones).
 
 **Revision 1, 1d: the road is full; C1 as growth; C3 as a choice, 2026-10-19**
 

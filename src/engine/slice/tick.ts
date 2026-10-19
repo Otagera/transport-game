@@ -12,7 +12,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
 import { isDirt, updateRoadSpeeds, yourSpeeds } from "./congestion";
-import { laneEncroachment, struckSegments, updateLanes } from "./pushback";
+import { creditLanes, laneEncroachment, lanesBySegment, struckSegments, updateLanes } from "./pushback";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
@@ -240,7 +240,17 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // repaired as they go, and that upkeep is a running cost like a bus's.
   // Routine upkeep on the roads you built or paved, wear or no wear (upkeep.ts).
   const roadUpkeep = (tuning.wearEnabled ? updateRoadWear(world, dt) : 0) + chargeRoutineUpkeep(world, dt);
-  // Bus lanes: encroachment, the union's grievance, and strict enforcement's wardens (pushback.ts).
+  // Bus lanes: encroachment, the union's grievance, and strict enforcement's
+  // wardens (pushback.ts). First, credit each laned corridor with your fares
+  // on the routes along it, so a strike's cost can be read against normal days.
+  if (world.lanes.length > 0) {
+    const by = lanesBySegment(world);
+    for (const [routeId, revenue] of routeRevenue) {
+      const route = world.routes.find((candidate) => candidate.id === routeId);
+      const path = route ? roadPath(world, route.a, route.b) : null;
+      if (path) creditLanes(by, path.segmentIds, revenue);
+    }
+  }
   const lanes = updateLanes(world, dt);
   const upkeep = roadUpkeep + lanes.cost;
   // ...and your road vehicles pay more to run on worn roads (wear.ts).
@@ -256,6 +266,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   world.budget.running += runningCost - upkeep;
   world.budget.upkeep += roadUpkeep;
   world.budget.enforcement += lanes.cost;
+  world.budget.struck += lanes.lost;
   // The treasury's share of a surplus, once a period (budget.ts). After the
   // ledger: a remittance is neither income nor running cost.
   remit(world, revenueThisTick - runningCost);
@@ -445,6 +456,7 @@ function sendInformal(
   const levy = tuning.levyPerSeat * spec.capacity;
   takings.levies += levy * (1 - tuning.agberoCut);
   takings.agberos += levy * tuning.agberoCut;
+  if (world.lanes.length > 0) creditLanes(lanesBySegment(world), run.path.segmentIds, toll + levy * (1 - tuning.agberoCut));
   simulation.vehicles.push(vehicle);
   informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode, released: 0 });
   for (const segmentId of run.path.segmentIds) bump(informal.segmentSpace, segmentId, spec.weight);

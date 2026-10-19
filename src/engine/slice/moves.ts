@@ -1,5 +1,5 @@
 import type { SliceWorld } from "./types";
-import { chainOf, checkPave, demandAlong, isCutOff, isMinibusRoute, minibusRouteId, paveCost, roadCost, roadPath, routeKey } from "./world";
+import { chainOf, checkPave, demandAlong, isBrtRoute, isCutOff, isMinibusRoute, minibusRouteId, paveCost, roadCost, roadPath, routeKey } from "./world";
 import { isDirt } from "./congestion";
 import { isRailRoute } from "./rail";
 import type { ActionSpec } from "./actions";
@@ -10,7 +10,7 @@ import type { ActionSpec } from "./actions";
 // exactly what the player was shown.
 
 export interface VehicleMove {
-  action: { kind: "bus" | "minibus"; a: string; b: string };
+  action: { kind: "bus" | "minibus" | "brt"; a: string; b: string };
   routeId: string;
   /** Vehicles on the route once this one is bought. */
   count: number;
@@ -27,10 +27,10 @@ export interface VehicleMove {
 export function vehicleMoves(world: SliceWorld): VehicleMove[] {
   const list: VehicleMove[] = [];
   const t = world.tuning;
-  const price = (kind: "bus" | "minibus") => (kind === "minibus" ? t.minibusPurchaseCost : t.busPurchaseCost);
+  const price = (kind: "bus" | "minibus" | "brt") => (kind === "minibus" ? t.minibusPurchaseCost : kind === "brt" ? t.brtPurchaseCost : t.busPurchaseCost);
   for (const route of world.routes) {
     if (isRailRoute(route.id)) continue;
-    const kind = isMinibusRoute(route.id) ? "minibus" : "bus";
+    const kind = isMinibusRoute(route.id) ? "minibus" : isBrtRoute(route.id) ? "brt" : "bus";
     list.push({ action: { kind, a: route.a, b: route.b }, routeId: route.id, count: route.vehicleIds.length + 1, price: price(kind) });
   }
   const towns = [...world.towns.keys()];

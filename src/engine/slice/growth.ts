@@ -53,15 +53,18 @@ export interface TownGrowth {
 }
 
 /** The rungs of the ladder built so far (brief, Revision 1): a town with no road has none. */
-export type CorridorRung = "none" | "dirt" | "paved" | "lane";
+export type CorridorRung = "none" | "dirt" | "paved" | "lane" | "rail";
 
 /** The best rung among the roads at a town -- what its people can travel on. */
 export function bestRung(world: SliceWorld, townId: string): CorridorRung {
-  const order: CorridorRung[] = ["none", "dirt", "paved", "lane"];
+  const order: CorridorRung[] = ["none", "dirt", "paved", "lane", "rail"];
   let best: CorridorRung = "none";
   for (const segment of world.simulation.map.segments) {
-    if (segment.type !== "road" || (segment.fromNodeId !== townId && segment.toNodeId !== townId)) continue;
-    const rung: CorridorRung = segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
+    if (segment.fromNodeId !== townId && segment.toNodeId !== townId) continue;
+    // Track in service at the town (a station, or a halt's spur) is the top
+    // rung; the old line out of service, or rail switched off, isn't.
+    if (segment.type === "rail" && (!world.tuning.railEnabled || world.railOutOfService.has(segment.id))) continue;
+    const rung: CorridorRung = segment.type === "rail" ? "rail" : segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
     if (order.indexOf(rung) > order.indexOf(best)) best = rung;
   }
   return best;
@@ -69,7 +72,8 @@ export function bestRung(world: SliceWorld, townId: string): CorridorRung {
 
 /** How much of the growth cap (townGrowthCap) a rung allows. */
 function rungShare(world: SliceWorld, rung: CorridorRung): number {
-  return rung === "lane" ? world.tuning.growthCapLaneShare : rung === "paved" ? 1 : rung === "dirt" ? world.tuning.growthCapDirtShare : 0;
+  const t = world.tuning;
+  return rung === "rail" ? t.growthCapRailShare : rung === "lane" ? t.growthCapLaneShare : rung === "paved" ? 1 : rung === "dirt" ? t.growthCapDirtShare : 0;
 }
 
 export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null {
@@ -95,7 +99,7 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
  * next rung. Null while the town still has room, when nothing you run grows
  * it, or when there's no rung above (rail is switched off).
  */
-export function roadFull(world: SliceWorld, townId: string): { rung: CorridorRung; next: "paved" | "lane" } | null {
+export function roadFull(world: SliceWorld, townId: string): { rung: CorridorRung; next: "paved" | "lane" | "rail" } | null {
   const growth = townGrowth(world, townId);
   const town = world.towns.get(townId);
   if (!growth || !town || growth.cap <= growth.base) return null;
@@ -104,6 +108,7 @@ export function roadFull(world: SliceWorld, townId: string): { rung: CorridorRun
   if (!grown || !levelled) return null;
   if (growth.rung === "dirt") return { rung: "dirt", next: "paved" };
   if (growth.rung === "paved") return { rung: "paved", next: "lane" };
+  if (growth.rung === "lane" && world.tuning.railEnabled) return { rung: "lane", next: "rail" };
   return null;
 }
 

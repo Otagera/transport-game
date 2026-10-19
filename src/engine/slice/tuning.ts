@@ -38,7 +38,8 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // points by day 10 (M7's limit is 5); at 7, about 2.
   warmUpDays: 7,
   goodsEnabled: false,
-  railEnabled: false,
+  // Rail returns as the ladder's top rung (brief, Revision 1, 2026-10-19).
+  railEnabled: true,
   straightAlignmentEnabled: false,
   patienceSeconds: 12,
   demandK: 0.008,
@@ -114,6 +115,16 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // Getting here: at 14 seats / ₦42 the minibus beat the bus everywhere; at
   // 12 seats / ₦54 it still did, because being faster made it cheaper per
   // seat-cell too; at a bus's speed it rescued no thin route.
+  // A BRT bus (Revision 1, for C3: the lane must carry more than it
+  // displaces): articulated, 80 seats, lane-only. Four buses' seats for
+  // three buses' price, at twice a bus's running cost -- ₦0.81 per
+  // seat-cell against the bus's ₦1.30 -- and twice its road space (in the
+  // lane, its own). First guesses, measured with scripts/corridor-probe.ts.
+  brtCapacity: 80,
+  brtSpeed: 3,
+  brtPurchaseCost: 1500,
+  brtOperatingCostPerSecond: 5.2,
+  brtRoadSpace: 2,
   minibusCapacity: 12,
   minibusSpeed: 3.5,
   minibusPurchaseCost: 250,
@@ -170,10 +181,18 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   busLaneCapacity: 2.0,
   busLaneCostShare: 1,
   growthCapLaneShare: 1.6,
+  // Rail, the top rung (Revision 1, stage 2): a town with a working station
+  // (track in service, or a halt) can grow this share of townGrowthCap. A
+  // first guess above the lane's 1.6, measured with the corridor probe (C1).
+  growthCapRailShare: 2.4,
+  // Strikes, made legible (playtest 2026-10-19, "did a strike land? I
+  // couldn't tell"): announced 4 days ahead, two days long, half as often
+  // (strict every ~24 days, lax ~120).
   strikeDelayDays: 5,
-  strikeEveryStrictDays: 12,
-  strikeEveryLaxDays: 60,
-  strikeDays: 1,
+  strikeNoticeDays: 4,
+  strikeEveryStrictDays: 24,
+  strikeEveryLaxDays: 120,
+  strikeDays: 2,
   encroachmentPerDay: 0.05,
   encroachmentClearPerDay: 0.25,
   enforcementPerCellPerDay: 1,

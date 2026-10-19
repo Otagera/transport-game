@@ -167,6 +167,12 @@ export interface SliceTuning {
   minibusPurchaseCost: number;
   minibusOperatingCostPerSecond: number;
   minibusRoadSpace: number;
+  /** Revision 1: a BRT bus (world.ts addBrt) -- articulated, many seats, runs only on bus lanes. */
+  brtCapacity: number;
+  brtSpeed: number;
+  brtPurchaseCost: number;
+  brtOperatingCostPerSecond: number;
+  brtRoadSpace: number;
   danfoCapacity: number;
   danfoSpeed: number;
   kekeCapacity: number;
@@ -193,8 +199,12 @@ export interface SliceTuning {
   busLaneCostShare: number;
   /** Of townGrowthCap, what a town whose best road has a bus lane can reach (paved: 1). */
   growthCapLaneShare: number;
+  /** Of townGrowthCap, what a town with a working station (or halt) can reach. */
+  growthCapRailShare: number;
   /** Days after a lane opens before the first strike (strictly enforced); days between strikes, strict and lax; how long one lasts. */
   strikeDelayDays: number;
+  /** The union announces a strike this many days ahead (Decisions log, proposed). */
+  strikeNoticeDays: number;
   strikeEveryStrictDays: number;
   strikeEveryLaxDays: number;
   strikeDays: number;

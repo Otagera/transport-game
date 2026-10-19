@@ -502,10 +502,11 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Twenty-six decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Twenty-seven decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-19 | The union announces a strike about 4 days ahead (3–5), and relaxing the lane's enforcement before then calls it off; a strike announced while the lane is already lax goes ahead. Strikes last 2 days, at about half the frequency (strict every ~24 days, lax ~120). A strike is shown on the route and town cards, as a tag on the road (called, on, then "struck day N · cost ₦X" for a few days), and as "Lost to strikes" under the budget's net; at 4× the game can pause when one is called or begins (P). From the playtest: "did a strike land? I couldn't tell" | Proposed |
 | 2026-10-19 | Strikes follow enforcement, not a timer: strict enforcement keeps the lane fast and clear but raises strike frequency (the union's grievance builds faster); lax enforcement keeps the peace but lets encroachment wear the lane down. A strike blocks the lane: your buses fall back into general traffic and the corridor's "no seat" spikes | Proposed |
 | 2026-10-19 | C1 reads as days of growth a rung buys; the town card names a town that can't grow because its road is full, and the next rung. C3 becomes "each enforcement choice wins somewhere" (strict against lax, trunk and a modest corridor; the better choice must differ). Stop before rail: you playtest the ladder (dirt → paved → lane), checking P7 | Agreed 2026-10-19 |
 | 2026-10-19 | C1's jam is judged by consequences: "no seat" rising clearly above its low since the rung, or the corridor's towns falling from their peak; not a speed threshold | Agreed 2026-10-19 |

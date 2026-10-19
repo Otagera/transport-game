@@ -43,12 +43,14 @@ export interface BudgetTally {
   upkeep: number;
   /** Wardens keeping your bus lanes clear (pushback.ts, strict enforcement). */
   enforcement: number;
+  /** What strikes cost you, estimated against the days before (pushback.ts): not money moved -- the fares and takings that didn't come. */
+  struck: number;
   /** Paid to the treasury (remittance): money out, but not a running cost. */
   remitted: number;
 }
 
 export function createBudgetTally(): BudgetTally {
-  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, upkeep: 0, enforcement: 0, remitted: 0 };
+  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, upkeep: 0, enforcement: 0, struck: 0, remitted: 0 };
 }
 
 /** The current remittance period: when it ends, and its net so far (income minus running costs). */

@@ -23,8 +23,10 @@ export type SliceEvent =
   | { kind: "founded"; townId: string; name: string; between: [string, string] }
   | { kind: "abandoned"; townId: string; name: string }
   // Pushback (pushback.ts): the danfos on a bus-lane corridor strike, and stop.
+  | { kind: "strike-announced"; a: string; b: string; atSeconds: number }
+  | { kind: "strike-called-off"; a: string; b: string }
   | { kind: "strike"; a: string; b: string }
-  | { kind: "strike-over"; a: string; b: string };
+  | { kind: "strike-over"; a: string; b: string; cost: number | null };
 
 export interface SettlementState {
   /** segmentId -> rolling riders per second passing a point on it. */

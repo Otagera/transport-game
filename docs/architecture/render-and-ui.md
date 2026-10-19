@@ -225,7 +225,11 @@ terrain isn't applied: the map still draws shaded hills.
   with a toast. Encroachment fades the band and grows yellow dashes in it; a strictly
   enforced lane carries a "W" warden badge (`drawWardens`). The Road tool on a laned road
   switches enforcement (preview: its cost a day, how much danfos have taken, what the union
-  will do); the budget shows "Lane enforcement".
+  will do); the budget shows "Lane enforcement". A strike: announced ("STRIKE DAY N", amber
+  tag; a toast saying how to call it off), on (red), then "struck day N · ₦X" for 5 days --
+  on the road and as a badge on the route and town cards (`strikeBadge`); "Lost to strikes
+  (estimated)" under the budget's net; at 4× the game pauses when one is called or begins
+  (P, `pauseOnStrike`). The BRT tool (X) appears once a lane exists; BRT buses draw longer.
 - **Developer start:** `?dev=1&funds=20000` sets the starting funds, to reach a late rung in a
   minute for checks and screenshots.
 - **Hints** (`hints.ts`, no DOM; `renderHint` every frame): the brief's six, one at a time,

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/slice/world";
 import { informalBudget, sliceTick } from "@engine/slice/tick";
 import { laneOn, setEnforcement, struckSegments } from "@engine/slice/pushback";
-import { addBusLane, checkLane, laneCost } from "@engine/slice/world";
+import { addBrt, addBusLane, brtRouteId, checkBrt, checkLane, laneCost } from "@engine/slice/world";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
@@ -213,22 +213,19 @@ describe("slice: where people want to go", () => {
 describe("slice zero: systems switched off", () => {
   const zero = () => createSliceWorld({ ...MAP, port: "big", rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0 });
 
-  test("the default tuning is slice zero: wear, goods, rail and the straight alignment off", () => {
+  test("the default tuning: wear, goods and the straight alignment off; rail back as the ladder's top rung (Revision 1)", () => {
     expect(DEFAULT_SLICE_TUNING.wearEnabled).toBe(false);
     expect(DEFAULT_SLICE_TUNING.goodsEnabled).toBe(false);
-    expect(DEFAULT_SLICE_TUNING.railEnabled).toBe(false);
+    expect(DEFAULT_SLICE_TUNING.railEnabled).toBe(true);
     expect(DEFAULT_SLICE_TUNING.straightAlignmentEnabled).toBe(false);
   });
 
-  test("their actions are refused; roads, buses and minibuses still work", () => {
+  test("their actions are refused; roads, buses, minibuses and track still work", () => {
     const w = zero();
     for (const spec of [
       { kind: "lorry", a: "big", b: "mid" },
-      { kind: "train", a: "big", b: "far" },
       { kind: "freight", a: "big", b: "far" },
-      { kind: "track", a: "big", b: "far", alignment: "cheapest" },
       { kind: "road", a: "mid", b: "cut", alignment: "direct" },
-      { kind: "halt", town: "mid" },
     ] as const) {
       expect(applyAction(w, spec).ok).toBe(false);
     }
@@ -237,6 +234,8 @@ describe("slice zero: systems switched off", () => {
     expect(applyAction(w, { kind: "road", a: "mid", b: "cut", alignment: "cheapest" }).ok).toBe(true);
     expect(applyAction(w, { kind: "bus", a: "big", b: "mid" }).ok).toBe(true);
     expect(applyAction(w, { kind: "minibus", a: "mid", b: "cut" }).ok).toBe(true);
+    w.economy.funds = 1e6;
+    expect(applyAction(w, { kind: "track", a: "big", b: "far", alignment: "cheapest" }).ok).toBe(true);
   });
 
   test("roads start sound and stay sound, and your buses pay no rough-road cost", () => {
@@ -1976,7 +1975,7 @@ describe("slice zero step 8: route verdicts and hints", () => {
   test("every short verdict is at most 12 words", () => {
     const verdicts: RouteVerdict[] = ["thin", "overcapacity", "jammed", "long", "worn", "full", "poached", "waiting", "healthy"];
     for (const verdict of verdicts) {
-      for (const vehicle of ["bus", "minibus", "train"]) {
+      for (const vehicle of ["bus", "minibus", "train", "BRT bus"]) {
         for (const netPerDay of [-50, 50]) {
           for (const [dirtRoad, throughTo] of [[null, null], ["Owode–Ado", "Ikole"]] as const) {
             const text = shortVerdict({ verdict, vehicle, netPerDay, dirtRoad, throughTo });
@@ -2112,7 +2111,7 @@ describe("Revision 1, 1b: the bus lane, and the strike it brings", () => {
     expect(w.laneSpeed.get(road.id)!).toBeLessThan(0.9);
   });
 
-  test("the union strikes a few days after the lane: no danfo sets off along it that day", () => {
+  test("the union calls a strike, then strikes a few days after the lane: no danfo sets off along it", () => {
     const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
     paveRoad(w, "big", "mid");
     addBusLane(w, "big", "mid");
@@ -2121,6 +2120,7 @@ describe("Revision 1, 1b: the bus lane, and the strike it brings", () => {
       for (let t = 0; t < seconds; t += SIM_DT) for (const e of sliceTick(w, SIM_DT)) events.push(e.kind);
     };
     step((w.tuning.strikeDelayDays - 0.5) * SECONDS_PER_GAME_DAY);
+    expect(events).toContain("strike-announced");
     expect(events).not.toContain("strike");
     step(SECONDS_PER_GAME_DAY);
     expect(events).toContain("strike");
@@ -2131,8 +2131,25 @@ describe("Revision 1, 1b: the bus lane, and the strike it brings", () => {
     step(SECONDS_PER_GAME_DAY * 0.4);
     const setOff = [...w.informal.active.entries()].filter(([id, trip]) => !before.has(id) && trip.mode === "danfo" && trip.segmentIds.some((s) => struck.has(s)));
     expect(setOff).toHaveLength(0);
-    step(SECONDS_PER_GAME_DAY);
+    step(w.tuning.strikeDays * SECONDS_PER_GAME_DAY);
     expect(events).toContain("strike-over");
+    expect(laneOn(w, "big", "mid")!.lastStrike).not.toBeNull();
+  });
+
+  test("relaxing enforcement after a strike is called calls it off", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    paveRoad(w, "big", "mid");
+    addBusLane(w, "big", "mid");
+    const events: string[] = [];
+    const step = (seconds: number) => {
+      for (let t = 0; t < seconds; t += SIM_DT) for (const e of sliceTick(w, SIM_DT)) events.push(e.kind);
+    };
+    step((w.tuning.strikeDelayDays - w.tuning.strikeNoticeDays + 0.5) * SECONDS_PER_GAME_DAY);
+    expect(events).toContain("strike-announced");
+    setEnforcement(w, "big", "mid", "lax");
+    step(w.tuning.strikeNoticeDays * SECONDS_PER_GAME_DAY);
+    expect(events).toContain("strike-called-off");
+    expect(events).not.toContain("strike");
   });
 });
 
@@ -2198,5 +2215,21 @@ describe("Revision 1: a town at its rung's cap says its road is full", () => {
     expect(roadFull(w, "mid")).toEqual({ rung: "dirt", next: "paved" });
     paveRoad(w, "big", "mid");
     expect(roadFull(w, "mid")).toBeNull(); // paving raised the cap, and the target with it: room again
+  });
+});
+
+describe("Revision 1: the BRT bus runs only in a bus lane", () => {
+  test("refused without a lane the whole way; 80 seats once there is one", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    paveRoad(w, "big", "mid");
+    expect(checkBrt(w, "big", "mid").ok).toBe(false);
+    addBusLane(w, "big", "mid");
+    expect(checkBrt(w, "big", "mid").ok).toBe(true);
+    // Mid-Far has no lane: a BRT can't run through to Far.
+    expect(checkBrt(w, "big", "far").ok).toBe(false);
+    expect(addBrt(w, "big", "mid").ok).toBe(true);
+    const route = w.routes.find((r) => r.id === brtRouteId("big", "mid"))!;
+    const vehicle = w.simulation.vehicles.find((v) => v.id === route.vehicleIds[0])!;
+    expect(vehicle.capacity).toBe(w.tuning.brtCapacity);
   });
 });

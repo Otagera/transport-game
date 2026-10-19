@@ -527,7 +527,14 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   the corridor (`sendInformal`) and takes the lane out of `laned` (`congestion.ts`), so your
   buses are back in general traffic. Encroachment (`laneEncroachment`): general capacity
   and the danfos' road space blend back toward an unlaned road's, and your lane speed toward
-  general traffic's. Emits `strike`/`strike-over` for the page's toast. `growTowns` drifts each original town toward it every
+  general traffic's. A strike is announced `strikeNoticeDays` ahead (`strikeAt`; relaxing a
+  lane announced while strict calls it off), lasts `strikeDays`, and its cost is estimated
+  from the corridor's income (`creditLanes`, from your route fares along it in `sliceTick`
+  and its takings in `sendInformal`) on up to 3 normal days before, into `lastStrike` and
+  `world.budget.struck`. Emits `strike-announced`, `strike-called-off`, `strike`,
+  `strike-over` (with the cost) for the page.
+- **The BRT bus** (`world.ts` `addBrt`; route ids `brt:`) — a road vehicle kind with
+  `brtCapacity` seats; `checkBus` refuses it unless every road on its path has a lane. `growTowns` drifts each original town toward it every
   tick (from `updateSettlements`, after the roadside towns' drift); demand follows at the
   daily `refreshDemand`. Emergent towns are not in `basePopulation` and keep growing from
   traffic.

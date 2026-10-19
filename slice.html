@@ -98,6 +98,11 @@
       .route-card .verdict.why-healthy { color: var(--good); }
       .route-card .bar { height: 6px; margin: 5px 0 0; }
       .route-card small { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; }
+      /* A strike, on the cards that touch its corridor */
+      .strike-badge { margin: 4px 0; padding: 3px 8px; border-radius: 6px; font: 600 11px var(--label-font); letter-spacing: 0.04em; }
+      .strike-badge.on { background: var(--bad); color: #fff; }
+      .strike-badge.called { background: color-mix(in srgb, #f08c00 18%, transparent); color: #9a4f00; border: 1px solid #f08c00; }
+      .strike-badge.past { background: color-mix(in srgb, var(--bad) 8%, transparent); color: var(--bad); }
       /* Budget */
       .budget { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12px; }
       .budget .num { font-variant-numeric: tabular-nums; text-align: right; }
@@ -182,7 +187,7 @@
       Track: sleepers · faded = disused (K restores) · pale bed = kept (F)<br />
       Double ring = interchange. Hover a town: where its people want to go.
     </details>
-    <div id="controls">Hover a town: where its people want to go · B bus · M minibus · R road · Space pause · H hints</div>
+    <div id="controls">Hover a town: where its people want to go · B bus · M minibus · X BRT (in a lane) · R road · Space pause · H hints · P pause on strikes</div>
     <div id="hint" hidden></div>
     <div id="toolbar"></div>
     <div id="toast"></div>

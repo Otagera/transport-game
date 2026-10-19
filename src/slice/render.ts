@@ -1,7 +1,7 @@
 import type { InformalMode, SliceTown, SliceWorld } from "@engine/slice/types";
 import type { RoutingContext, Vehicle } from "@engine/simulation/types";
 import { routingFor } from "@engine/slice/rail";
-import { isCutOff, roadChain, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
+import { gameDay, isCutOff, roadChain, townShare, tripsFrom, waitingAt } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/slice/growth";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
@@ -350,27 +350,37 @@ function drawWardens(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   }
 }
 
-// "STRIKE" over each struck corridor, once, at its middle: drawn after the
-// towns and routes, so nothing covers it (pushback.ts).
+// A strike on the map, where it happens (pushback.ts): a tag at the
+// corridor's middle, drawn after the towns so nothing covers it -- amber
+// when the union has called one ("STRIKE DAY 37"), red while it runs, and a
+// faint mark for a few days after with what it cost (playtest: "did a
+// strike land? I couldn't tell").
+const STRIKE_MARK_DAYS = 5;
 function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
   const now = world.economy.elapsedSeconds;
-  for (const strike of world.lanes) {
-    if (strike.strikeUntil <= now || strike.segmentIds.length === 0) continue;
-    const pieces = strike.segmentIds.map((id) => world.simulation.map.segments.find((s) => s.id === id)).filter((s) => s !== undefined);
-    const line = pieces.flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+  for (const lane of world.lanes) {
+    const last = lane.lastStrike;
+    const tag =
+      lane.strikeUntil > now ? { text: "STRIKE", fill: COLORS.strike, ink: "#fff" }
+      : lane.strikeAt > now ? { text: `STRIKE DAY ${gameDay(world, lane.strikeAt)}`, fill: COLORS.slow, ink: "#fff" }
+      : last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY
+        ? { text: `struck day ${gameDay(world, last.startedAt)}${last.cost !== null ? ` · ₦${Math.round(last.cost).toLocaleString()}` : ""}`, fill: "rgba(201, 42, 42, 0.14)", ink: COLORS.strike }
+        : null;
+    if (!tag) continue;
+    const line = (roadChain(world, lane.a, lane.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
     if (line.length === 0) continue;
     const [, rest] = splitPolyline(line, polylineLength(line) / 2);
     const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
     ctx.font = "700 11px ui-monospace, monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const width = ctx.measureText("STRIKE").width + 10;
-    ctx.fillStyle = COLORS.strike;
+    const width = ctx.measureText(tag.text).width + 10;
+    ctx.fillStyle = tag.fill;
     ctx.beginPath();
     ctx.roundRect(mid.x + 14, mid.y - 9, width, 18, 4);
     ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.fillText("STRIKE", mid.x + 14 + width / 2, mid.y);
+    ctx.fillStyle = tag.ink;
+    ctx.fillText(tag.text, mid.x + 14 + width / 2, mid.y);
   }
 }
 
@@ -671,8 +681,8 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     } else {
       const color = routeColor(routeIndex.get(vehicle.id) ?? 0);
       const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
-      // A minibus is drawn smaller than a bus: the size is the seats.
-      const half = vehicle.id.startsWith("minibus-") ? 6.5 : 10;
+      // A minibus is drawn smaller than a bus, a BRT bus longer (articulated): the size is the seats.
+      const half = vehicle.id.startsWith("minibus-") ? 6.5 : vehicle.id.startsWith("brt-") ? 15 : 10;
       ctx.fillStyle = "#fffdf8";
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
