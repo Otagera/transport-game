@@ -246,8 +246,10 @@ terrain isn't applied: the map still draws shaded hills.
   corridor you run along, taken ones first, with a you / informal / stayed home bar, "You N% ·
   informal N%", the levies lost a day and, if laned, the last strike's cost (or "no pushback
   without a lane" once taken); a blue "Taken, day N" pill, else "Taken at 40%". Taking and
-  losing one is a toast; a taken corridor carries a blue TAKEN tag a third of the way along
-  it on the map (`drawTakenLabels`; the middle is where roadside towns and strike tags sit).
+  losing one is a toast and, for `CORRIDOR_TAG_DAYS` (3), a tag a third of the way along it
+  on the map: blue TAKEN or grey LOST (`corridorChanges`, `drawTakenLabels`; the middle is
+  where roadside towns and strike tags sit). A change, not a state: tagging every taken
+  corridor for good put ~17 tags on a day-300 map, some over town names (playtest, R1 4-6).
   Map tags draw centred text inside `ctx.save()`/`restore()`, and `drawLabel` sets its own
   alignment: the TAKEN tag's leaked `textAlign = "center"` once drew the price label's text
   half its width left of its box (playtest).

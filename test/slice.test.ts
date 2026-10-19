@@ -15,7 +15,7 @@ import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upk
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
-import { corridorSummaries, takenCorridors } from "@engine/slice/corridors";
+import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
 import { buildSliceTerrain } from "@engine/slice/terrain";
@@ -2101,11 +2101,17 @@ describe("R1 6: each corridor's informal share, and corridor taken", () => {
     expect(gameDay(w, trunk.takenSince!)).toBeLessThanOrEqual(4);
     expect(trunk.leviesLostPerDay).toBeGreaterThanOrEqual(0);
     expect(trunk.hasLane).toBe(false);
+    // The map tags the change for a few days, then leaves it to the panel.
+    expect(corridorChanges(w).map((c) => c.change)).toEqual(["taken"]);
+    run(w, (CORRIDOR_TAG_DAYS + 1) * SECONDS_PER_GAME_DAY);
+    expect(corridorChanges(w)).toEqual([]);
+    expect(takenCorridors(w).length).toBe(1);
     const route = w.routes.find((r) => r.a === "big" || r.b === "big")!;
     while (route.vehicleIds.length > 0) removeBus(w, route.id);
     const losing = runCollecting(w, 4 * SECONDS_PER_GAME_DAY);
     expect(losing).toContain("corridor-released");
     expect(takenCorridors(w)).toEqual([]);
+    expect(w.corridors.get(routeKey("big", "mid"))!.change).toBe("lost");
   });
 });
 

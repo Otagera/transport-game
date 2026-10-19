@@ -37,6 +37,9 @@ export interface CorridorState {
   levyBefore: number | null;
   /** When you took it; null while you haven't. */
   takenSince: number | null;
+  /** The last time it was taken or lost, and which: the map tags a change, not a state (corridorChanges). */
+  changedAt: number | null;
+  change: "taken" | "lost" | null;
 }
 
 export interface CorridorSummary {
@@ -76,7 +79,7 @@ function corridorKeys(world: SliceWorld): Map<string, string> {
     if (!chain) continue;
     const key = routeKey(chain.a, chain.b);
     for (const piece of chain.pieces) keys.set(piece.id, key);
-    if (!world.corridors.has(key)) world.corridors.set(key, { a: chain.a, b: chain.b, levyRateEMA: 0, levyBefore: null, takenSince: null });
+    if (!world.corridors.has(key)) world.corridors.set(key, { a: chain.a, b: chain.b, levyRateEMA: 0, levyBefore: null, takenSince: null, changedAt: null, change: null });
   }
   keyCache.set(world, { signature: sig, keys });
   return keys;
@@ -147,9 +150,13 @@ export function updateCorridors(world: SliceWorld, dt: number, levies: ReadonlyM
     if (corridor.levyBefore === null && you >= RUNNING_ALONG) corridor.levyBefore = corridor.levyRateEMA;
     if (corridor.takenSince === null && you >= corridorTakenShare) {
       corridor.takenSince = world.economy.elapsedSeconds;
+      corridor.changedAt = world.economy.elapsedSeconds;
+      corridor.change = "taken";
       events.push({ kind: "corridor-taken", a: corridor.a, b: corridor.b, share: you });
     } else if (corridor.takenSince !== null && you < corridorReleaseShare) {
       corridor.takenSince = null;
+      corridor.changedAt = world.economy.elapsedSeconds;
+      corridor.change = "lost";
       events.push({ kind: "corridor-released", a: corridor.a, b: corridor.b, share: you });
     }
   }
@@ -161,6 +168,8 @@ export function resetCorridors(world: SliceWorld): void {
   for (const corridor of world.corridors.values()) {
     corridor.levyBefore = null;
     corridor.takenSince = null;
+    corridor.changedAt = null;
+    corridor.change = null;
   }
   nextJudgedAt.set(world, world.economy.elapsedSeconds + SECONDS_PER_GAME_DAY);
 }
@@ -187,7 +196,21 @@ export function corridorSummaries(world: SliceWorld): CorridorSummary[] {
   return result.sort((x, y) => Number(y.takenSince !== null) - Number(x.takenSince !== null) || y.you - x.you);
 }
 
-/** The corridor a road piece belongs to, if you've taken it: for the map's tag. */
+/** The corridors you've taken. */
 export function takenCorridors(world: SliceWorld): CorridorState[] {
   return [...world.corridors.values()].filter((corridor) => corridor.takenSince !== null);
+}
+
+/** How long the map tags a corridor taken or lost, game days. */
+export const CORRIDOR_TAG_DAYS = 3;
+
+/**
+ * Corridors taken or lost in the last CORRIDOR_TAG_DAYS, for the map's tag:
+ * a change, not a state. Tagging every taken corridor for good put about 17
+ * tags on a day-300 map, some over town names (playtest, R1 4-6); the ones
+ * that stay taken are in the panel's Corridors section.
+ */
+export function corridorChanges(world: SliceWorld): CorridorState[] {
+  const now = world.economy.elapsedSeconds;
+  return [...world.corridors.values()].filter((c) => c.changedAt !== null && now - c.changedAt <= CORRIDOR_TAG_DAYS * SECONDS_PER_GAME_DAY);
 }
