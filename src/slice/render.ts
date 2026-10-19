@@ -363,6 +363,7 @@ const STRIKE_MARK_DAYS = 5;
 // of the way along -- its middle is where a roadside town tends to sit, and
 // where a strike's tag goes.
 function drawTakenLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
+  ctx.save(); // its centred text mustn't leak into what draws next (the price label)
   for (const corridor of takenCorridors(world)) {
     const line = (roadChain(world, corridor.a, corridor.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
     if (line.length === 0) continue;
@@ -380,10 +381,11 @@ function drawTakenLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view:
     ctx.fillStyle = "#fff";
     ctx.fillText(text, mid.x - 14 - width / 2, mid.y);
   }
-  ctx.textBaseline = "alphabetic";
+  ctx.restore();
 }
 
 function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
+  ctx.save();
   const now = world.economy.elapsedSeconds;
   for (const lane of world.lanes) {
     const last = lane.lastStrike;
@@ -409,6 +411,7 @@ function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view
     ctx.fillStyle = tag.ink;
     ctx.fillText(tag.text, mid.x + 14 + width / 2, mid.y);
   }
+  ctx.restore();
 }
 
 // Track: a dark rail line with sleepers across it -- width and surface, not
@@ -611,6 +614,9 @@ function drawGhostLine(ctx: CanvasRenderingContext2D, world: SliceWorld, view: V
 function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, label: string, ok: boolean, forecast?: ForecastLine): void {
   const ghost = { to, label, ok };
   if (ghost.label) {
+    // Laid out from the left edge: say so, whatever drew before (a centred tag once shifted the text off its box).
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
     ctx.font = "12px system-ui, sans-serif";
     const subWidth = forecast ? ctx.measureText(forecast.text).width : 0;
     ctx.font = "600 13px system-ui, sans-serif";
