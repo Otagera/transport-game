@@ -934,6 +934,27 @@ Steps, each played before the next:
    - **Upkeep should be easy to do**: per corridor, not per piece. And you asked to remove
      things: a road you no longer want, or a road replaced by rail.
 
+   **Played 2026-10-19, Revision 2, two games past day 150** (both maps since renamed by
+   region, their geography unchanged):
+   - **Goods and wear off** (`?goods=off&wear=off`, map 8687, to day 224): ₦144,872 at
+     +₦24,069 a day, 5,404 trips made (▲413), your riders 3,500, no seat 2,807, strikes landing.
+     Every move the game suggested cost ₦500. Money is loose late by design: the treasury keeps
+     taking 80% of each period's surplus, so 20% piles up.
+   - **Everything on** (map 543, to day 185): *"its harder, see how long it took me to get
+     here"*; *"waiting for money mostly, routes kept losing."* ₦6,315 at +₦881 a day, 900 trips
+     made, your riders 181 against informal 719; most route cards red ("thin", "danfos take its
+     riders, sell one"); two quarries closed, two working.
+   - **Not yet a fair comparison:** different maps. 8687's largest town reached 476k, 543's
+     147k, and demand grows with town sizes multiplied. Next: everything on, on map 8687.
+   - *"This mini metro style is not the end please. We are looking at the core game mechanics
+     at play."* Goods and industries are core to a transport-infrastructure game: playtests
+     tune them, never size them away.
+   - *"On goods, just saying good is not enough... when we expand it, it needs to feel real"*,
+     and *"the economy can be interconnected, like refinery will need crude oil and filling
+     station will need fuel"*: the brief, Revision 2, "When goods expand".
+   - Asked for: town names from all over Nigeria (built, one region per map); save files of a
+     run, readable by hand or by a script.
+
 Rules for working this way:
 
 - **Every step is played before the next starts.** Every finding that mattered came from

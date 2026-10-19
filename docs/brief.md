@@ -419,6 +419,16 @@ Proposed, each a line where the player already looks, each naming one move:
 
 **Built 2026-10-19, the quarry first** (`industries.ts`): goods are back on; a quarry opens from day 20, one every 20–40 days, at most three at once, 8–20 cells from the nearest town on the ridge's flanks, announced with its buyers; it ships 100 t of stone a day (30% to the port, the rest to its three nearest towns by size), closes if nothing moves in 30 days, works out after 90–180, and leaves a ruin. Stone delivered raises a town's cap by up to a quarter of the growth cap. Goods now pay per tonne per cell (₦0.1; Fares), and a lorry loads what waits for each stop ahead in proportion. Measured: a lorry full one way about breaks even (Ilase–Ado +₦8 a day), both ways pays (Ilase–Kuto +₦41), one way short doesn't (Ado–Ogbe −₦47); a quarry's lorries lose ₦36–127 a day on worn dirt -- stone is one-way -- and buy growth instead (35% of Ilase's stone delivered: its cap 180k → 193k). A freight spur is where stone pays: 100 t a day over ~45 cells is ~₦450 a day against a freight train's ₦180. The mill and the factory come after rail's own job.
 
+### When goods expand: real goods, in chains (your requirement, 2026-10-19; not built)
+
+**"Just saying goods is not enough; when we expand it, it needs to feel real", and "the economy can be interconnected, like a refinery will need crude oil and a filling station will need fuel."** Today's goods are generic: stone, produce, supplies. When the mill, the factory and what follows are built, they meet this:
+
+- **Real cargo, where it really comes from.** The map's region (its town names, `generate.ts`) decides its goods: cocoa and kola in the south-west; palm oil, cassava and garri in the south-east and south-south; crude oil in the Delta; groundnuts, cotton, grain and cattle in the north; yams and sesame in the Middle Belt; limestone where the ridges are, timber from the forest belt. (From general knowledge: check before relying on any one.)
+- **Chains, not single hops.** One site's output is another's input: crude oil → refinery → fuel → filling stations in the towns; limestone → cement works → building in the towns that grow; cassava → mill → garri to the markets; cocoa → the port. A chain broken anywhere shows downstream, at the town that runs short.
+- **The second economy reaches the first.** Fuel is the link, and it's true here: a fuel shortage is when the danfos park and the queues start. A town short of fuel raises danfo fares and thins them out (riders crowd your buses, or stay home), and costs your own vehicles more to run. Goods then aren't a side business; they move the passenger game.
+- **Real people own the loads.** Traders and market women, trailer parks and their touts, the truckers (The informal hook in goods, below).
+- **Its check, played:** *did the goods feel like this place's economy, and did one chain change what you did with passengers?*
+
 ### The informal hook in goods
 
 **Principles.md §1: informal transport stays an antagonist, never a subsystem; and §3: paratransit is passengers-only (informal freight needs capital an okada does not).** Goods as built have no antagonist: nobody else carries freight. Three proposals, cheapest first; the third is the real hook and the real question.
