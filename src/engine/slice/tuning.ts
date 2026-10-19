@@ -440,6 +440,11 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   truckSpeed: 2.2,
   truckerFareShare: 0.8,
   loadingLevyPerTonne: 0.4,
+  // Retiring a road (brief, Revision 2): gone 60 days after you retire it
+  // unless restored; track laid on a retired road's alignment costs half of
+  // new track -- the earthworks are done.
+  retireGoneDays: 60,
+  railOnRoadShare: 0.5,
   trackSlots: 4,
   railInducedDemand: 0.3,
   stationCapShare: 0.3,

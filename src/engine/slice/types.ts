@@ -379,6 +379,9 @@ export interface SliceTuning {
   truckSpeed: number;
   truckerFareShare: number;
   loadingLevyPerTonne: number;
+  /** A retired road is gone after this many days (retire.ts), and track on its alignment costs this share of new track. */
+  retireGoneDays: number;
+  railOnRoadShare: number;
   /** Trains a piece of track carries, passenger and freight together (rail.ts lineSlots). */
   trackSlots: number;
   /** Trips between two stops of the same passenger line rise by this share (rail.ts applyRailDemand). */

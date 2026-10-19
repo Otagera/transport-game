@@ -39,7 +39,9 @@ export type SliceEvent =
   | { kind: "corridor-released"; a: string; b: string; share: number }
   // An industrial site opening near a town, or closing (industries.ts).
   | { kind: "industry-opened"; townId: string; name: string; industry: "quarry"; near: string }
-  | { kind: "industry-closed"; townId: string; name: string; reason: "worked out" | "nothing moved" };
+  | { kind: "industry-closed"; townId: string; name: string; reason: "worked out" | "nothing moved" }
+  // A retired road gone from the map (retire.ts): routes that lost their way sold.
+  | { kind: "road-gone"; a: string; b: string; sold: number; refund: number };
 
 export interface SettlementState {
   /** segmentId -> rolling riders per second passing a point on it. */

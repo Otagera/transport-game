@@ -242,6 +242,11 @@ terrain isn't applied: the map still draws shaded hills.
   "Save for it: ₦X" when the next rung is out of reach (`saveButton`); a named project shows
   at the top of the budget ("Saving for ... safe until day N", a progress bar of what's set
   aside against the price, "Drop it").
+- **Retiring (Revision 2)** — a Corridors row of a road that's yours carries "Retire"
+  (its consequences in the tooltip); retired, "Retired day N · gone day M · Restore ₦X". A
+  retired road draws faded and dashed, nothing else on it. The Track preview between a retired
+  road's towns reads "Track on the retired road ₦X · its earthworks are done; the road goes";
+  a road gone is a toast naming the vehicles sold and the refund.
 - **Truckers (Revision 2)** — a trucker's lorry draws brown with a yellow cab and the
   informal outline (`drawInformal`, mode `truck`); the budget adds "Loading levies (touts kept
   ₦X)"; a quarry's buyer bars show yours in brown and the truckers' in yellow; the goods line

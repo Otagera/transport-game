@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**544 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**547 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Where things stand (2026-10-19)
@@ -37,22 +37,27 @@ M1 under Revision 1 all unmeasured; no full bots run since rail came on); taking
 costs ₦1-10 a day against the brief's 20-40% (parked); rail reshaping the map, proposed in
 the brief, now folded into Revision 2.
 
-## Next: play Revision 2, step 1, past day 150
+## Next: play Revision 2
 
-**Agreed 2026-10-19:** step 1 first and alone, and the informal hook in goods (truckers
-included; principles.md §3 amended in spirit). **Step 1 is built** (`problems.ts`; brief,
-Revision 2, Step 1): a shrinking town says why and names the move ("you carry 6% of its trips,
-down from 14% on day 120; it grows only above 10%" · the bus back); a town's no seat names the
-trip most of it wants, the road, and the move with its price; the Corridors section lists
-no seat worst first with the same moves; the map draws no seat as a grey band beside each
-corridor. C5's measure (`namedMoves`, `affordable`) prints in the corridor probe from day 150: on the
-hand-made map to day 210, a move named and affordable on 61 of 61 days -- but that player serves
-one corridor, so the rest of the map's problems are its own; the real C5 is your playtest.
+**Revision 2 is built** (2026-10-19, all agreed; brief, Revision 2, The order), each step
+measured where a number decides it:
 
-**Your playtest:** a generated map past day 150. Bring back: does the screen still ask for a
-move then, and do you make one you can say why you made (C5)? Its answer sizes the rest of
-Revision 2: alive, and goods may be smaller than drafted; still "nothing more to build", and
-the second economy has earned its place.
+1. Problems made visible: no seat and shrinking towns name their cause and one move; no seat
+   drawn beside each corridor (`problems.ts`).
+2. Settlements at 0.3 of a day's corridor income (they cost 2.5-20x what strikes did); wear
+   back on, per corridor ("Keep it up", "Fix now"; C2 holds with the corridor kept up).
+3. The quarry: industries open and close; goods back on, per tonne per cell; stone grows towns.
+4. Rail's own job: 4 trains a line, passenger and freight together; induced trips between a
+   line's stops; station towns grow (rail now buys 21-26 days of growth, C1).
+5. Private truckers and loading levies: short hauls theirs, long hauls yours.
+6. Retiring a road (gone in 60 days unless restored; routes re-pathed or sold); track on a
+   retired road's line at half price.
+
+**Your playtest:** a generated map past day 150. Bring back: does the late game still ask for
+moves (C5); do quarries opening and closing give you new problems (C6); is a line a choice
+between freight and passengers (C7); do you keep some corridors up and let others go (C8); do
+the truckers feel like a rival (C9); did you settle a strike, or retire a road, and why?
+Unmeasured: C6-C9 by bots (they don't run goods or rail); the mill and the factory wait.
 
 ### What the draft was asked to cover (agreed to draft 2026-10-19)
 

@@ -459,11 +459,15 @@ Proposed, each a line where the player already looks, each naming one move:
 - **Retire a road** (on its corridor card): its upkeep stops; it stays on the map as an abandoned road, slower and wearing, then gone after ~60 days unless restored (cheaper than building). Brownfield: removal has consequences -- towns that relied on it lose access (a cut-off town is cut off again and starts to shrink), the danfos lose ground, and your tolls there stop.
 - **Road to rail on the same alignment:** lay track along a road you retire, cheaper than new track (the earthworks are done: the price breakdown says so), and the corridor's story gains a line ("the road became the railway on day 140").
 
+**Built 2026-10-19** (`retire.ts`): "Retire" on a Corridors row of a road you built or paved stops its upkeep and tolls at once (and takes any lane with it); it draws faded and broken, decays, and is gone after 60 days ("Retired day N · gone day M · Restore ₦X" -- the repair to new). When it goes, every road route is re-pathed round it, keeping each vehicle's place in its cycle, and a route whose towns nothing else joins is sold, with a toast naming the refund. The Track tool between a retired road's towns lays track on its own line at half the price of new track (`railOnRoadShare`), and the road goes at once: "the road became the railway".
+
 ### Settlements priced by what the corridor is worth
 
 **Built 2026-10-19, and the draft's premise was backwards.** The price was already proportional to the corridor's value (half its income a day × the strike's two days, at least ₦150: `pushback.ts` `settlementPrice`) -- and far too dear, not too cheap. Measured against a twin without each strike (corridor probe, seed 0, 210 days): a strict lane's strikes cost ₦812–2,069 against quotes of ₦2,581–6,359; with BRT on the lane, ₦86–614 (one earned ₦542) against ₦2,376–6,814; lax, ₦313–835 against ₦2,429–2,586. Letting it pass always won, which is what you did. Now 0.3 of a day's income (`settlementShare` 0.15): settling wins 3 of 5 strikes on the strict bus trunk, never with BRT on the lane, 1 of 2 on a lax lane -- each choice wins somewhere (C10).
 
 ### The order
+
+All six built 2026-10-19, in this order, without playtests between (your call); the playtest of the whole revision comes now.
 
 1. **Step 1: show the problems the late game already has.** Alone; played past day 150 (C5). Its playtest sizes the rest of this list.
 2. **Settlements priced by corridor value**, and **wear made easy** (per corridor). Both small, both on parts that exist; can ride with step 1's playtest findings.

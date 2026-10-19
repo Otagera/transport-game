@@ -842,6 +842,18 @@ that to the cap's share (bounded by the town's start). Goods fares are per tonne
 (`fares.ts` `goodsFares`, `goodsFarePerTonneCell`), and `goodsLoader` loads every stop
 ahead in proportion to what waits for it.
 
+**Retiring a road** (Revision 2; `retire.ts`): `retireRoad` marks every piece of a road
+that `isYourRoad` with `segment.retiredAt` (a new optional `Segment` field, unset in the
+original game), drops its maintenance and any lane; `isYourRoad` then says no, so routine
+upkeep and tolls stop. `updateRetired` (end of `sliceTick`) decays retired pieces to the
+floor over `retireGoneDays` and, past it, `removeRoads`: the segments and their corridors go,
+`rebuildNetworks`, and every road route is re-pathed with `findPath` both ways (each vehicle
+put back at its old `cycleFraction`), or sold vehicle by vehicle if nothing joins its towns
+(a `road-gone` event with the count and refund). `restoreRoad` repairs a retired road to new
+and keeps it. `rail.ts` `trackAction` gains `"onroad"`: track between a retired road's ends
+costs its length x `railCostPerCell` x `railOnRoadShare`, is laid on the road's own
+polyline, and removes the road.
+
 **Truckers** (Revision 2; `truckers.ts`): `truckersPickUp` (after `produceAndSpoil`) moves
 a share of each yard's waiting goods into `world.truckers` (`from|to|kind` -> tonnes held), at
 `1/truckerPickupSeconds` x `haulShare` (1 at 0 cells, 0 at `truckerMaxHaulCells` and past);

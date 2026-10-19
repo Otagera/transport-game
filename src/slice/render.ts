@@ -315,6 +315,17 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
       if (!disused && !kept && segment.condition < 0.85) drawCracks(ctx, view, line, segment.condition);
       continue;
     }
+    // A retired road (retire.ts): faded and broken, until it's gone.
+    if (segment.retiredAt !== undefined) {
+      ctx.strokeStyle = COLORS.dirtRoad;
+      ctx.globalAlpha = 0.45;
+      ctx.lineWidth = 4;
+      ctx.setLineDash([3, 6]);
+      strokeLine(ctx, view, line);
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      continue;
+    }
     // A bridge deck under the road where it crosses water.
     ctx.strokeStyle = COLORS.bridge;
     ctx.lineWidth = 13;

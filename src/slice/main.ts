@@ -47,7 +47,7 @@ import { corridorWear, fixRoadNow, roughCostPerDay, setRoadMaintained, upkeepPer
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/slice/receipts";
 import type { SliceWorld } from "@engine/slice/types";
 import { growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
-import { addTrain, buildHalt, buildTrack, checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots } from "@engine/slice/rail";
+import { addTrain, buildHalt, buildTrack, checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/slice/rail";
 import { addFreightTrain, checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
 import { addLorry, checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
@@ -66,6 +66,8 @@ import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
+import { isYourRoad } from "@engine/slice/upkeep";
+import { goneAt, restoreCost as restoreRoadCost, restoreRoad, retireRoad } from "@engine/slice/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/slice/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
@@ -450,6 +452,8 @@ function announce(event: SliceEvent): void {
     say(`You've taken ${corridor} from the danfos: you carry ${pct(event.share)} of its trips. Their park levies there fall.`, false, 8);
   } else if (event.kind === "corridor-released") {
     say(`The danfos have ${corridor} back: you carry ${pct(event.share)} of its trips.`, true, 6);
+  } else if (event.kind === "road-gone") {
+    say(`The retired road ${townName(event.a)} – ${townName(event.b)} is gone.${event.sold > 0 ? ` ${event.sold} vehicle${event.sold === 1 ? "" : "s"} that had no other way were sold for ${naira(event.refund)}.` : ""}`, true, 8);
   } else if (event.kind === "industry-opened") {
     // A new problem arriving (brief, Revision 2: industries that open and close).
     const buyers = industryFlows(world).filter((flow) => flow.from === event.townId).map((flow) => townName(flow.to));
@@ -634,11 +638,12 @@ canvas.addEventListener("click", (event) => {
     if (result.ok) say(`Built road ${townName(from)} – ${townName(town)} for ${naira(cost)}.${later}`);
     else say(`Can't build: ${result.reason}`, true);
   } else if (tool === "track") {
-    const restoring = trackAction(world, from, town) === "restore";
-    const cost = restoring ? restoreCost(world, from, town) : (planRail(world, from, town, alignment)?.cost ?? 0);
+    const action = trackAction(world, from, town);
+    const restoring = action === "restore";
+    const cost = trackCost(world, from, town, alignment);
     const label = restoring ? `restoring the old line ${townName(from)} – ${townName(town)}` : `track ${townName(from)} – ${townName(town)}`;
     const result = act({ label, towns }, (w) => buildTrack(w, from, town, alignment));
-    if (result.ok) say(restoring ? `Restored the old line ${townName(from)} – ${townName(town)} for ${naira(cost)}: trains can run on it` : `Laid track ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
+    if (result.ok) say(restoring ? `Restored the old line ${townName(from)} – ${townName(town)} for ${naira(cost)}: trains can run on it` : action === "onroad" ? `The road ${townName(from)} – ${townName(town)} became the railway, for ${naira(cost)}.` : `Laid track ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't lay track: ${result.reason}`, true);
   } else if (tool === "freight") {
     const count = (world.lorryRoutes.find((r) => r.id === freightRouteId(from, town))?.vehicleIds.length ?? 0) + 1;
@@ -832,6 +837,11 @@ function ghost(): Ghost | null {
   }
   if (tool === "track") {
     const check = checkTrack(world, selectedTown, to, alignment);
+    if (trackAction(world, selectedTown, to) === "onroad") {
+      const label = `Track on the retired road ${naira(onRoadCost(world, selectedTown, to))} · its earthworks are done; the road goes · ${riders}`;
+      const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? label : `${naira(onRoadCost(world, selectedTown, to))} · ${check.reason}` };
+      return withForecast(ghost, { kind: "track", a: selectedTown, b: to, alignment }, { label: "track on the old road", towns: [selectedTown, to] });
+    }
     if (trackAction(world, selectedTown, to) === "restore") {
       const label = `Restore the old line ${naira(restoreCost(world, selectedTown, to))} · built for export: it stops nowhere between`;
       const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? label : check.reason };
@@ -1465,7 +1475,7 @@ function corridorsHtml(): string {
   const noSeat = corridorNoSeat(world);
   const seatOf = (key: string) => noSeat.get(key)?.perDay ?? 0;
   const shown = corridorSummaries(world)
-    .filter((c) => c.takenSince !== null || c.you >= 0.005 || seatOf(c.key) >= NO_SEAT_MIN_PER_DAY)
+    .filter((c) => c.takenSince !== null || c.you >= 0.005 || seatOf(c.key) >= NO_SEAT_MIN_PER_DAY || (roadChain(world, c.a, c.b) ?? []).some((p) => p.retiredAt !== undefined))
     .sort((x, y) => seatOf(y.key) - seatOf(x.key) || Number(y.takenSince !== null) - Number(x.takenSince !== null) || y.you - x.you);
   if (shown.length === 0) return "";
   const target = world.tuning.corridorTakenShare;
@@ -1503,10 +1513,17 @@ function wearLine(a: string, b: string): string {
   const wear = corridorWear(world, a, b);
   if (!wear) return "";
   const id = wear.pieceIds[0]!;
-  if (wear.kept) return `<div class="wear">Kept up · ${naira(wear.upkeepPerDay)}/day <span class="actions"><button data-keep="${id}|0" title="Stop paying to keep it up: it starts wearing again">Stop</button></span></div>`;
+  // Retired (retire.ts): when it goes, and the way back.
+  const piece = world.simulation.map.segments.find((segment) => segment.id === id);
+  if (piece?.retiredAt !== undefined) {
+    return `<div class="wear">Retired day ${gameDay(world, piece.retiredAt)} · gone day ${gameDay(world, goneAt(world, piece))} <span class="actions"><button data-restore="${id}" title="Repair it to new and keep it">Restore ${naira(restoreRoadCost(world, id))}</button></span></div>`;
+  }
+  const yours = (roadChain(world, a, b) ?? []).every((p) => isYourRoad(p));
+  const retire = yours ? `<button data-retire="${id}" title="Stop its upkeep and tolls now; it decays and is gone in ${world.tuning.retireGoneDays} days. Towns it joined can be cut off; your routes on it go round, or are sold if nothing else joins their towns. Track can then be laid on its line for less (K).">Retire</button>` : "";
+  if (wear.kept) return `<div class="wear">Kept up · ${naira(wear.upkeepPerDay)}/day <span class="actions"><button data-keep="${id}|0" title="Stop paying to keep it up: it starts wearing again">Stop</button>${retire}</span></div>`;
   const state = wear.condition >= 0.97 ? "Sound" : `Worn: ${pct(wear.speed)} speed${wear.roughPerDay >= 1 ? ` · costs your vehicles ${naira(wear.roughPerDay)}/day` : ""}`;
   const fix = wear.repair >= 1 ? `<button data-fixnow="${id}" title="Repair all of it to new, once">Fix now ${naira(wear.repair)}</button>` : "";
-  return `<div class="wear">${state} <span class="actions"><button data-keep="${id}|1" title="Repair it as it wears, billed as it goes${wear.repair >= 1 ? `; the catch-up repair (${naira(wear.repair)}) is charged now` : ""}">Keep it up ${naira(wear.upkeepPerDay)}/day</button>${fix}</span></div>`;
+  return `<div class="wear">${state} <span class="actions"><button data-keep="${id}|1" title="Repair it as it wears, billed as it goes${wear.repair >= 1 ? `; the catch-up repair (${naira(wear.repair)}) is charged now` : ""}">Keep it up ${naira(wear.upkeepPerDay)}/day</button>${fix}${retire}</span></div>`;
 }
 
 // Your share of trips between towns: one click down, not the headline
@@ -1712,6 +1729,22 @@ routesEl.addEventListener("click", (event) => {
     const name = roadName(id);
     const result = act({ label: on === "1" ? `keeping up ${name}` : `letting ${name} wear`, towns: roadTowns(id) }, (w) => setRoadMaintained(w, id, on === "1"));
     say(result.ok ? (on === "1" ? `Keeping up ${name}${result.charged > 0 ? `: ${naira(result.charged)} to repair it first` : ""}.` : `${capitalise(name)} will wear again.`) : `Can't: ${result.reason}`, !result.ok);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.retire) {
+    const id = target.dataset.retire;
+    const name = roadName(id);
+    const result = act({ label: `retiring ${name}`, towns: roadTowns(id) }, (w) => retireRoad(w, id));
+    say(result.ok ? `Retired ${name}: no upkeep or tolls from today, and it's gone in ${world.tuning.retireGoneDays} days unless you restore it.` : `Can't: ${result.reason}`, !result.ok, 7);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.restore) {
+    const id = target.dataset.restore;
+    const name = roadName(id);
+    const result = act({ label: `restoring ${name}`, towns: roadTowns(id) }, (w) => restoreRoad(w, id));
+    say(result.ok ? `Restored ${name}.` : `Can't: ${result.reason}`, !result.ok);
     renderPanel();
     return;
   }

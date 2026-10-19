@@ -16,7 +16,8 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 /** Whether this road is yours to keep: you built it, or you paved it. */
 export function isYourRoad(segment: Segment): boolean {
-  return segment.type === "road" && (segment.provenance === "built" || !isDirt(segment));
+  // A retired road is no longer yours to keep, or to toll (retire.ts).
+  return segment.type === "road" && segment.retiredAt === undefined && (segment.provenance === "built" || !isDirt(segment));
 }
 
 /** Upkeep a game day for a stretch of road: `cells` long, `bridgeCells` of them bridge. */

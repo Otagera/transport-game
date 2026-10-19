@@ -16,8 +16,10 @@ import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed } from "@engine/slice/industries";
-import { lineSlots, stationTowns } from "@engine/slice/rail";
+import { lineSlots, onRoadCost, stationTowns, trackCost } from "@engine/slice/rail";
 import { haulShare } from "@engine/slice/truckers";
+import { restoreRoad, retireRoad } from "@engine/slice/retire";
+import { isYourRoad } from "@engine/slice/upkeep";
 import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, wornRoadAt } from "@engine/slice/problems";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
@@ -2691,6 +2693,56 @@ describe("Revision 2: private truckers, the informal freight rival", () => {
     run(alone, 3 * SECONDS_PER_GAME_DAY);
     const spoiled = (x: SliceWorld) => [...x.goods.outcomes.values()].reduce((sum, o) => sum + o.spoiled, 0);
     expect(spoiled(w)).toBeLessThan(spoiled(alone));
+  });
+});
+
+describe("Revision 2: retiring a road, and the road that became the railway", () => {
+  const retireWorld = (overrides: Partial<SliceTuning> = {}) =>
+    createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e7, maxEmergentTowns: 0, industryFirstDay: 999, retireGoneDays: 2, ...overrides });
+
+  test("only a road you built or paved is yours to retire; retired, it's no longer yours to keep or toll", () => {
+    const w = retireWorld();
+    const inherited = directRoad(w, "big", "mid")!;
+    expect(retireRoad(w, inherited.id).ok).toBe(false);
+    expect(buildRoad(w, "mid", "cut").ok).toBe(true);
+    const built = directRoad(w, "mid", "cut")!;
+    expect(isYourRoad(built)).toBe(true);
+    expect(retireRoad(w, built.id).ok).toBe(true);
+    expect(isYourRoad(built)).toBe(false);
+    // Restored: yours again, repaired.
+    expect(restoreRoad(w, built.id).ok).toBe(true);
+    expect(built.retiredAt).toBeUndefined();
+    expect(built.condition).toBe(1);
+  });
+
+  test("gone after its days: towns it joined are cut off again, and a route with no other way is sold", () => {
+    const w = retireWorld();
+    buildRoad(w, "mid", "cut");
+    addBus(w, "mid", "cut");
+    const road = directRoad(w, "mid", "cut")!;
+    retireRoad(w, road.id);
+    const funds = w.economy.funds;
+    const events: Array<{ kind: string; sold?: number }> = [];
+    for (let t = 0; t < 3 * SECONDS_PER_GAME_DAY; t += SIM_DT) events.push(...(sliceTick(w, SIM_DT) as Array<{ kind: string; sold?: number }>));
+    const gone = events.find((e) => e.kind === "road-gone");
+    expect(gone?.sold).toBe(1);
+    expect(directRoad(w, "mid", "cut")).toBeUndefined();
+    expect(isCutOff(w, "cut")).toBe(true);
+    expect(w.routes.some((r) => r.a === "cut" || r.b === "cut")).toBe(false);
+    expect(w.economy.funds).toBeGreaterThan(funds - 1000); // the bus's resale came back
+  });
+
+  test("track on a retired road's line costs less than new track, and the road goes with it", () => {
+    const w = retireWorld({ retireGoneDays: 60 });
+    buildRoad(w, "mid", "cut");
+    const road = directRoad(w, "mid", "cut")!;
+    const fresh = trackCost(w, "mid", "cut");
+    retireRoad(w, road.id);
+    expect(trackAction(w, "mid", "cut")).toBe("onroad");
+    expect(onRoadCost(w, "mid", "cut")).toBeLessThan(fresh);
+    expect(buildTrack(w, "mid", "cut").ok).toBe(true);
+    expect(directRoad(w, "mid", "cut")).toBeUndefined();
+    expect(w.simulation.map.segments.some((s) => s.type === "rail" && ((s.fromNodeId === "mid" && s.toNodeId === "cut") || (s.fromNodeId === "cut" && s.toNodeId === "mid")))).toBe(true);
   });
 });
 

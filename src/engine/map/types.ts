@@ -63,6 +63,9 @@ export interface Segment {
   // A lane only the player's vehicles use (the slice, Revision 1's bus
   // lane): on a paved road; copied to both halves when a town splits it.
   busLane?: boolean;
+  // When the player retired it (the slice, Revision 2): no upkeep, no tolls,
+  // decaying until it's gone. Undefined in the original game.
+  retiredAt?: number;
 }
 
 export interface TerrainField {

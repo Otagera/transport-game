@@ -10,6 +10,7 @@ import { SWITCHED_OFF } from "./tuning";
 import { planAlignment, polylineLength, segmentLength, segmentPolyline, splitPolyline, type Alignment, type Point, type RoadPlan } from "./roads";
 import { insertIntoPath } from "./settlement";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, routeKey, type ActionResult } from "./world";
+import { removeRoads, retiredRoadBetween } from "./retire";
 
 // Rail (docs/principles.md §6, step 4: depth, one at a time -- rail last,
 // the user's pick: an inherited line plus new track, passenger trains).
@@ -99,13 +100,23 @@ export function restoreCost(world: SliceWorld, a: string, b: string): number {
   return track ? Math.round(segmentLength(world, track) * world.tuning.railRestoreCostPerCell) : Infinity;
 }
 
-/** What the Rail tool would do between two towns: restore the old line there, or lay new track. */
-export function trackAction(world: SliceWorld, a: string, b: string): "restore" | "build" {
-  return derelictTrack(world, a, b) ? "restore" : "build";
+/** What the Rail tool would do between two towns: restore the old line there, lay track on a retired road's alignment, or lay new track. */
+export function trackAction(world: SliceWorld, a: string, b: string): "restore" | "onroad" | "build" {
+  return derelictTrack(world, a, b) ? "restore" : retiredRoadBetween(world, a, b) ? "onroad" : "build";
+}
+
+/** Track along a retired road (retire.ts): its length at track's price per cell, times `railOnRoadShare` -- the earthworks are done. */
+export function onRoadCost(world: SliceWorld, a: string, b: string): number {
+  const pieces = retiredRoadBetween(world, a, b);
+  if (!pieces) return Infinity;
+  return Math.round(pieces.reduce((sum, piece) => sum + segmentLength(world, piece), 0) * world.tuning.railCostPerCell * world.tuning.railOnRoadShare);
 }
 
 export function trackCost(world: SliceWorld, a: string, b: string, alignment: Alignment = "cheapest"): number {
-  return trackAction(world, a, b) === "restore" ? restoreCost(world, a, b) : (planRail(world, a, b, alignment)?.cost ?? Infinity);
+  const action = trackAction(world, a, b);
+  if (action === "restore") return restoreCost(world, a, b);
+  if (action === "onroad") return onRoadCost(world, a, b);
+  return planRail(world, a, b, alignment)?.cost ?? Infinity;
 }
 
 export function checkTrack(world: SliceWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
@@ -124,9 +135,25 @@ export function buildTrack(world: SliceWorld, a: string, b: string, alignment: A
   if (!check.ok) return check;
   world.economy.funds -= trackCost(world, a, b, alignment);
   const derelict = derelictTrack(world, a, b);
+  const road = derelict ? null : retiredRoadBetween(world, a, b);
   if (derelict) {
     world.railOutOfService.delete(derelict.id);
     derelict.condition = 1;
+  } else if (road) {
+    // Along the retired road's own line, which goes now: the road became the railway.
+    const polyline: Array<{ x: number; y: number }> = [];
+    let at = a;
+    for (const piece of road) {
+      const line = segmentPolyline(world.simulation.map, piece);
+      const oriented = piece.fromNodeId === at ? line : [...line].reverse();
+      polyline.push(...(polyline.length > 0 ? oriented.slice(1) : oriented));
+      at = piece.fromNodeId === at ? piece.toNodeId : piece.fromNodeId;
+    }
+    const length = road.reduce((sum, piece) => sum + segmentLength(world, piece), 0);
+    removeRoads(world, road.map((piece) => piece.id));
+    const id = `rail-${world.nextId++}`;
+    world.simulation.map.segments.push({ id, corridorId: `corridor-${id}`, fromNodeId: a, toNodeId: b, type: "rail", level: "ground", condition: 1, provenance: "built", length });
+    world.simulation.map.corridors.push({ id: `corridor-${id}`, nodeIds: [a, b], polyline });
   } else {
     const plan = planRail(world, a, b, alignment)!;
     const id = `rail-${world.nextId++}`;
