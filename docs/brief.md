@@ -377,6 +377,110 @@ The straight alignment and goods come back later, one per playtest, as before.
 
 The slice-zero checks that pass stay as regression checks. **Closing slice zero is a one-time, recorded exception** to "nothing moves on until every check passes": M5 is replaced by C3 (the tension it asked for comes from the bus lane and pushback); M2 stays a finding (principles.md §3: a lifeline road buys trips at a premium); day-60 M1 is re-measured under Revision 1. **For Revision 1, every check passes before moving on.**
 
+## Revision 2 (proposed 2026-10-19): a second economy
+
+**Proposed, nothing agreed. The late game has problems it doesn't show (step 1, built first), and a map that asks for a fixed amount of building has nothing to ask once it's built; a second economy -- industries that open and close, goods that must be moved, rail with a job of its own -- keeps new problems arriving after every town is connected.** Prompted by your playtest of R1 7 (principles.md §6, Played 2026-10-19, a generated map to day 210): *"I think I have gotten to its end"*, *"nothing more to build"*, and your read that stopping here makes it *Mini Metro with money*. On screen at day 210: 2,865 trips a day with no seat against 3,337 of your riders, three towns falling, and ₦72,385 in the bank. The map still had problems; none of them asked for a move.
+
+What you should be able to say after an hour, revised again: "Ikire turned out to be the hub. The quarry opened on day 90 and its lorries jammed the Ikire road until I put a spur in; when it closed on day 160 I pulled the spur up and the track went to passengers. The truckers took the mill's loads until I undercut them."
+
+Two questions decide this draft, and they're yours: **does the informal answer for goods (truckers, market touts) feel like your game**, and **does "show the problems first" really come before any goods** (The order, below). Mark what you agree with in the Decisions log; nothing is built until you do.
+
+### Step 1: show the problems the late game already has
+
+**Built first, alone, and played past day 150 before anything else in this revision.** If the late game comes alive once its problems are visible, the second economy may be smaller than drafted; if it still ends at "nothing more to build", the second economy has earned its place.
+
+What's missing today, from the code (`main.ts` `problemText`, `growthText`):
+
+- **A shrinking town isn't told why.** The card says "shrinking toward 31k" and the service share, not what changed: its service fell (whose: yours, or the danfos' as you took their road), or its cap fell (a lane encroached, worn track under a slow order), or a neighbour it traded with fell.
+- **"No seat" names no fix.** The last problem line reads "N% of its trips have a road but no seat: nobody carried them": no corridor, no move. At day 210 that was 2,865 trips a day.
+- **The map doesn't carry it** (Information design: "nothing is said only in text that the map could show"). No seat is a chip in the strip and a grey slice of a bar.
+
+Proposed, each a line where the player already looks, each naming one move:
+
+| Where | What it says | The move it names |
+| --- | --- | --- |
+| Town card, shrinking | "<Town> is shrinking: you carry 6% of its trips, down from 14% on day 120 (you sold the Ikire bus)" / "its lane is 60% encroached" / "its line is under a slow order" | The bus back, enforce the lane, keep the track up |
+| Town card, no seat | "212 of its trips a day find no seat, most toward Ikire on the Ikire road" | Another vehicle there, a through-route, or the next rung if that road is full |
+| Corridors section | Each corridor's no seat a day, worst first, with the same named move | As above |
+| Map | Unserved trips drawn on the corridor: a grey band beside the road, as thick as its no seat a day, the way traffic is drawn now | Read where to act without opening a card |
+
+**Measured** (check C5, below): from day 150 on a good game, the screen names an affordable move on most days. If it already does and you still find nothing to do, the problem isn't legibility, and the rest of this revision is the answer.
+
+### The second economy: industries that open and close
+
+**Industries are sites on the map that want goods moved, and they come and go, so the map keeps asking.** Goods return from slice zero's switch (`goods.ts`: produce to the nearest market, supplies from the port, export from markets, lorries and freight trains, spoilage at the yard), with industries as the new source of what's moved.
+
+- **What an industry is:** a site, not a town (no passengers of its own beyond a few workers), with an input and an output, each a different cargo (principles.md §3: goods stay one-way; reverse flows are different cargo). Three kinds to start, each true here:
+  - **Quarry** (granite, laterite): no input; heavy output to the towns that are growing (construction follows growth) and to the port. A quarry near a ridge.
+  - **Mill** (rice, cassava, palm oil): produce in from farm towns, food out to markets. Near farm towns.
+  - **Factory** (cement, bottling): supplies in from the port, goods out to the big towns. Near the dominant city or the trunk.
+- **They open and close.** One opens every 20–40 days (a target), where its kind fits the map, announced like a strike (a toast, a mark on the map) with what it wants and from where; one with nothing moved for its first ~30 days, or with its input cut off, closes, and its line goes quiet. A closed site stays on the map as a ruin, like an emptied town. Towns don't flood the map (your taste: towns appear over time, not a flood); industries are the new arrivals.
+- **Why you move them:** goods pay per tonne per cell (Fares), and goods pay only where they go both ways (principles.md §3, measured: one-way lorries lose) -- the decision is which pairs of flows to pair up. An industry you serve grows the towns that trade with it (an input to growth, finally answering "goods into growth", parked since 4c): a quarry's stone feeds construction where towns are growing, so the growth you already caused asks for the next move.
+
+### The informal hook in goods
+
+**Principles.md §1: informal transport stays an antagonist, never a subsystem; and §3: paratransit is passengers-only (informal freight needs capital an okada does not).** Goods as built have no antagonist: nobody else carries freight. Three proposals, cheapest first; the third is the real hook and the real question.
+
+1. **The shared road (built, made visible).** Lorries take 1.5 road space and wear a road ~2× a bus (`goods.ts`, tuning). On the corridors danfos and your buses share, an industry's lorries are the jam: the ladder's pressure now comes from freight as well as growth.
+2. **Loading levies at markets and the port.** The agberos' cousins at the loading bays: every load lifted at a market or the port pays a levy, the touts keep their cut, the rest is yours (the park levy's form, Money). Taking a market's freight off the road (a rail spur) cuts that levy, as taking a corridor cuts the park's.
+3. **Private truckers: the informal freight rival.** Not paratransit -- a trucker owns a 30-tonne lorry, which an okada rider can't -- so §3's asymmetry stands; but true to the region, where nearly all freight moves by private road haulage and the railway carries a sliver (as commonly reported; check the figures before relying on them). Truckers take the loads you don't (an industry you ignore still ships, by trucker, and its town still grows, a little), undercut the ones you do (they charge less per tonne on short hauls), crowd the corridors, and pay your tolls and loading levies. They're beaten where volume over distance favours rail (principles.md §3: a lorry on a long run loses; a freight train pays). **This is an amendment to principles.md §3's "passengers-only" in spirit, not in letter: it needs your agreement.**
+
+### Rail gets a job of its own
+
+**Freight is heavy and long, so a line is a choice: this corridor carries ore, that one people.** Today rail is the top rung of a passenger corridor, "a faster bus everywhere" by day 210 (about eight lines). Proposed:
+
+- **A train is passengers or freight, and a line's capacity is shared** (track slots, not unlimited trains): a freight train on a line takes a passenger train's slot. Where both want the same line, you choose, or build a second.
+- **Station towns grow** (the proposed (4), folded in): a town with a working station grows past its road's cap, and new desire lines appear once rail opens (pairs that didn't exist: a station town pulling trips from its neighbours), so the map you know stops being the whole map.
+- **A spur to an industry** is the cheap rail: short, freight-only, and the brownfield line comes back into it (the colonial export line was built for exactly this; restoring it for ore is the use its geometry fits).
+
+### The second ladder: an industry's access
+
+| Rung | What it changes | Price (target) | What it costs you besides money |
+| --- | --- | --- | --- |
+| Dirt track | Joins the site to the network; lorries can reach it | About a road to a cut-off town | Truckers arrive first; wear |
+| Paved | Lorries run faster and more of them; tolls on the truckers | About paving | Upkeep; the shared corridor jams sooner |
+| Your lorries | You carry its goods; it grows, and its towns with it | A few lorries | Running costs; the truckers' loads you take cut their tolls and levies |
+| Rail spur | Freight off the road altogether; volume over distance pays | 20–40 days of surplus, like rail | Loading levies fall; the spur is worth nothing when the site closes |
+
+### Wear returns, made easy
+
+**Per corridor, never per piece.** Wear (`wear.ts`) returns with a "Keep it up" switch on each corridor in the Corridors section, with its cost a day (`setRoadMaintained` already keeps a whole road as one decision). Off, the road visibly wears and slows, and the town card says why ("its road is worn: 70% speed. Keep it up for ₦40/day"). One "Fix all on this corridor" for a catch-up. The decision is which corridors to keep (principles.md §3, Decay: a choice of roads, not a chore of clicks), and closing industries give it a reason: a spur to a closed quarry is the one you let go.
+
+### Retiring what you built
+
+**You asked to remove things.** Routes already go (selling a route's last vehicle closes it, `removeBus`); roads and track can't. Proposed:
+
+- **Retire a road** (on its corridor card): its upkeep stops; it stays on the map as an abandoned road, slower and wearing, then gone after ~60 days unless restored (cheaper than building). Brownfield: removal has consequences -- towns that relied on it lose access (a cut-off town is cut off again and starts to shrink), the danfos lose ground, and your tolls there stop.
+- **Road to rail on the same alignment:** lay track along a road you retire, cheaper than new track (the earthworks are done: the price breakdown says so), and the corridor's story gains a line ("the road became the railway on day 140").
+
+### Settlements priced by what the corridor is worth
+
+**Today a settlement is half a strike's estimated cost, at least ₦150** (`pushback.ts` `settlementPrice`), so on a busy corridor paying the union off is small change and never a decision. Proposed: price it in proportion to the corridor's value to you -- a share of the corridor's income over a few days (your fares along it, its tolls and levies), the same measure strikes are costed by -- so that settling is a real choice where it matters most: pay to keep the peace on the trunk, or take the strike. Calibrate so that settling and taking the strike each win somewhere (C3's shape).
+
+### The order
+
+1. **Step 1: show the problems the late game already has.** Alone; played past day 150 (C5). Its playtest sizes the rest of this list.
+2. **Settlements priced by corridor value**, and **wear made easy** (per corridor). Both small, both on parts that exist; can ride with step 1's playtest findings.
+3. **Industries, goods back on, with the shared road and loading levies** (hooks 1 and 2). One kind of industry first (the quarry: no input, so it plays without a chain).
+4. **Rail's own job:** freight trains on shared lines, spurs, station towns growing.
+5. **Truckers** (hook 3), if you agree the amendment.
+6. **Retiring a road**, and road to rail on the same alignment.
+
+Each played before the next, as before.
+
+### Checks for Revision 2
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C5 | The late game still asks | From day 150 to 210 of a good game (the strongest bot, or your playtest), on at least two days in three the screen names an affordable move (a problem line with its fix, priced within ~10 days of the surplus); and in your playtest you make a move after day 150 that you can say why you made |
+| C6 | New problems keep arriving | After every town is connected, a new site opens or closes at least every 40 days, and each opening changes what at least one corridor carries within 20 days |
+| C7 | A line is a choice | On at least one map, the best use of a line differs between two lines of the strongest strategy: one carries mostly freight, another mostly passengers |
+| C8 | Upkeep is a decision per corridor | By day 150, the strongest strategy keeps some corridors and lets others go, and the panel says why for each; no per-piece clicks |
+| C9 | The informal sector is in goods too | Truckers (if agreed) carry a measurable share of the goods you don't, and taking a market's freight costs you levies there, felt (target: 20–40% of what your freight gains there, like the park levy's target) |
+| C10 | Settling is a choice | Settling a strike wins on one corridor and taking it wins on another (C3's shape), with the settlement priced by the corridor's value |
+
+The Revision 1 checks stay as regression checks.
+
 ## Slice zero: what's on, what's off, and the order things come back
 
 **Slice zero is the smallest game that tests this brief: roads, buses and danfos, with the new money and the new headline.** Everything else is already built and tested; it goes behind a switch in `tuning.ts`, not into the bin.
@@ -518,10 +622,17 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Thirty-three decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; nine are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Forty decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; nine are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-19 | Revision 2, step 1 first and alone: show the problems the late game already has (why a town is shrinking, where "no seat" is and the move that carries it, unserved trips drawn on the corridor), played past day 150 (C5) before any goods. Its playtest sizes the rest | Proposed |
+| 2026-10-19 | Revision 2: industries that open and close (quarry, mill, factory) as the second reason to build; goods back on; an industry's own ladder (dirt track, paved, your lorries, a rail spur); served industries grow the towns that trade with them | Proposed |
+| 2026-10-19 | The informal hook in goods: lorries on the shared road (built), loading levies at markets and the port, and private truckers as the informal freight rival -- the last amends principles.md §3's "paratransit is passengers-only" in spirit (truckers aren't paratransit) | Proposed |
+| 2026-10-19 | Rail's own job: a train is passengers or freight on shared track slots; spurs to industries; station towns grow and new desire lines appear (absorbs "rail reshapes the map") | Proposed |
+| 2026-10-19 | Wear returns per corridor: a "Keep it up" switch with its cost a day, "Fix all on this corridor", the town card naming a worn road | Proposed |
+| 2026-10-19 | Retire a road (upkeep stops; access lost, consequences kept), and road to rail on the same alignment, cheaper for the earthworks | Proposed |
+| 2026-10-19 | Settlements priced by the corridor's value to you (a share of its income over a few days), not half a strike's estimated cost with a ₦150 minimum; settling and striking each win somewhere (C10) | Proposed |
 | 2026-10-19 | Generated maps per seed with guards (town positions, the inherited trunk, cut-off towns, the old railway, the dominant city's setting; trunk length within ~±25% of today's; seed 0 the hand-made map), no re-tuning, one probe check; TAKEN shown only when it changes. Next, before (4) rail reshapes the map and wear. From the playtest: "I think I have played to its end" | Agreed 2026-10-19 |
 | 2026-10-19 | Rail reshapes the map: station towns grow, and new desire lines appear once rail opens, so the routes you know aren't the whole map any more. After (1)-(3) below, each played first. From the playtest: "I already know all the routes" | Proposed |
 | 2026-10-19 | After the ladder's playtest, in order, each played before the next, ahead of wear: (1) the treasury visible inside the existing budget breakdown, no new panel (a "Treasury took" line, a countdown "₦X over the reserve goes to the treasury in N days; spend it or set it aside", a set-aside progress bar, the 10-day remittance as a toast; a full treasury panel waits for the full game); (2) the score as visible as money (town-growth milestones, the trips-made trend); (3) each corridor's informal share and "corridor taken" as a visible state, with its costs | Agreed 2026-10-19 |
@@ -587,19 +698,24 @@ The game's vocabulary, alphabetical. Add a word the session it first matters.
 | Desire line | A line from a town to each town its people want to reach; thickness is trips a day |
 | Feeder | A route that brings riders to a trunk |
 | Halt | A short spur that brings the old line into a town it passes |
+| Industry, site | A quarry, mill or factory: a place that wants goods moved in or out, and that opens and closes (Revision 2, proposed) |
 | Interchange | A town where riders change between your routes |
 | Jam | A corridor whose traffic holds your vehicles well below free speed and whose "no seat" is rising: the signal for the next rung (Revision 1) |
 | Keke | A three-wheeled taxi, 3 seats |
 | Ladder, rung | The upgrades a corridor climbs, dirt → paved → bus lane → rail; each is a rung (Revision 1) |
 | Levy | What each informal vehicle pays to load at a park |
+| Loading levy | What each load lifted at a market or the port pays to the touts there, as a park levy does (Revision 2, proposed) |
 | No road / no seat | The two kinds of stayed home: no road joins the towns; or one does, but nobody carried them |
 | Okada | A motorcycle taxi, 1 passenger |
 | Park | A town's motor park, where danfos load and levies are collected |
 | Poached | Your waiting riders taken by a danfo passing through |
+| Retire | Stop keeping a road you built: its upkeep stops, it decays, and what relied on it loses access (Revision 2, proposed) |
 | Slice zero | The smallest game that tests this brief (see its section) |
 | Slow order | A speed limit on worn track |
+| Spur | A short line from the network to an industry, freight-only (Revision 2, proposed) |
 | Stage | A fare step: fares are called by stop, so the price rises in steps |
 | Through-route | One route running through a hub, carrying every trip along it |
 | Toll | What every vehicle except yours pays to use a road you built or paved |
+| Trucker | A private road haulier with a lorry of their own: the informal freight rival (Revision 2, proposed) |
 | Trunk | The busiest corridor: Ilase–Owode on today's map |
 | Union | The drivers' union (in Nigeria, the NURTW); the agberos work for it |

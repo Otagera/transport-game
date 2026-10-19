@@ -37,7 +37,15 @@ M1 under Revision 1 all unmeasured; no full bots run since rail came on); taking
 costs ₦1-10 a day against the brief's 20-40% (parked); rail reshaping the map, proposed in
 the brief, now folded into Revision 2.
 
-## Next: draft Revision 2, "a second economy" (agreed to draft 2026-10-19)
+## Next: your marks on Revision 2's draft
+
+**The draft is written** (brief.md, Revision 2, proposed 2026-10-19: step 1 first, the second
+economy, the informal hook in goods, rail's own job, the second ladder, wear per corridor,
+retiring roads, settlements by corridor value, the order, checks C5-C10; seven Proposed rows
+in the Decisions log). Mark in the Decisions log what you agree with; build nothing until then.
+The two questions that decide it are at the top of the revision. What it was asked to cover:
+
+### What the draft was asked to cover (agreed to draft 2026-10-19)
 
 From the R1 7 playtest (principles.md §6): the slice ends at "nothing more to build", and
 stopping here makes it "Mini Metro with money". Draft brief Revision 2 as **Proposed**, in the
