@@ -251,7 +251,8 @@ for (let day = 1; day <= DAYS; day += 1) {
     countTakings(before);
     if (addBusLane(world, A, B).ok) {
       newRung(day, "lane");
-      if (process.env.LAX === "1") setEnforcement(world, A, B, "lax");
+      // Lanes open lax; the probe's default player enforces strictly (LAX=1 leaves it).
+      setEnforcement(world, A, B, process.env.LAX === "1" ? "lax" : "strict");
       // BRT=1: the corridor's buses are sold and BRT buses bought with as many seats.
       if (process.env.BRT === "1") {
         const buses = findRoute(world, A, B)?.vehicleIds.length ?? 0;

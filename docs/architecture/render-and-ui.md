@@ -227,7 +227,9 @@ terrain isn't applied: the map still draws shaded hills.
   switches enforcement (preview: its cost a day, how much danfos have taken, what the union
   will do); the budget shows "Lane enforcement". A strike: announced ("STRIKE DAY N", amber
   tag; a toast saying how to call it off), on (red), then "struck day N · ₦X" for 5 days --
-  on the road and as a badge on the route and town cards (`strikeBadge`); "Lost to strikes
+  on the road and as a badge on the route and town cards (`strikeBadge`; a called strike's
+  badge carries "Settle ₦X" and, if the lane was strict, "Relax enforcement" buttons; a strike
+  that cost nothing reads "no loss to you"); "Lost to strikes
   (estimated)" under the budget's net; at 4× the game pauses when one is called or begins
   (P, `pauseOnStrike`). The BRT tool (X) appears once a lane exists; BRT buses draw longer.
 - **Developer start:** `?dev=1&funds=20000` sets the starting funds, to reach a late rung in a

@@ -60,7 +60,7 @@ import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { startSliceGame } from "@engine/slice/start";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
-import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, type LaneState } from "@engine/slice/pushback";
+import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
@@ -401,7 +401,7 @@ function announce(event: SliceEvent): void {
   const corridor = "a" in event ? `${townName(event.a)} – ${townName(event.b)}` : "";
   if (event.kind === "strike-announced") {
     const lane = laneOn(world, event.a, event.b);
-    const relax = lane?.enforcement === "strict" ? " Relax the lane's enforcement before then (Road tool on it) to call it off." : "";
+    const relax = lane?.enforcement === "strict" ? " Relax its enforcement, or settle with the union, to call it off: buttons on its route card." : " Settle with the union to call it off: the button is on its route card.";
     say(`The danfo union calls a strike on ${corridor} from day ${gameDay(world, event.atSeconds)} over your bus lane.${relax}`, true, 10);
     pauseForStrike();
   } else if (event.kind === "strike-called-off") {
@@ -567,7 +567,7 @@ canvas.addEventListener("click", (event) => {
     const cost = laneCost(world, from, town);
     const result = act({ label: `a bus lane on ${townName(from)} – ${townName(town)}`, towns }, (w) => addBusLane(w, from, town));
     if (result.ok) {
-      say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic there. The danfos lost a lane. BRT buses (X) can run in it now.${later}`);
+      say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic, and BRT buses (X) can run in it. No wardens yet (Road tool on it to enforce). The danfo union will answer the lane within days.${later}`, false, 8);
       renderToolbar();
     }
     else say(`Can't add a bus lane (${naira(cost)}): ${result.reason}`, true);
@@ -1210,14 +1210,23 @@ function strikeBadge(lane: LaneState | undefined): string {
   const corridor = `${townName(lane.a)} – ${townName(lane.b)}`;
   if (lane.strikeUntil > now) return `<div class="strike-badge on">On strike until day ${gameDay(world, lane.strikeUntil)} · ${corridor}</div>`;
   if (lane.strikeAt > now) {
-    const relax = lane.enforcement === "strict" && lane.announcedStrict ? ": relax its lane to call it off" : "";
-    return `<div class="strike-badge called">Strike called for day ${gameDay(world, lane.strikeAt)} · ${corridor}${relax}</div>`;
+    // Always a way out, right here (playtest: "I can't tell what I can do").
+    const key = `${lane.a}|${lane.b}`;
+    const relax = lane.enforcement === "strict" && lane.announcedStrict ? `<button data-relax="${key}" title="No wardens: danfos creep back into the lane, and the strike is off">Relax enforcement</button>` : "";
+    const settle = `<button data-settle="${key}" title="Pay the union to call it off">Settle ${naira(settlementPrice(world, lane))}</button>`;
+    return `<div class="strike-badge called">Strike called for day ${gameDay(world, lane.strikeAt)} · ${corridor}<span class="actions">${relax}${settle}</span></div>`;
   }
   const last = lane.lastStrike;
   if (last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY) {
-    return `<div class="strike-badge past">Struck day ${gameDay(world, last.startedAt)}${last.cost !== null ? ` · cost ${naira(last.cost)}` : ""}</div>`;
+    return `<div class="strike-badge past">Struck day ${gameDay(world, last.startedAt)}${strikeCostText(last.cost)}</div>`;
   }
   return "";
+}
+
+/** " · cost ₦X", " · no loss to you", or nothing when there's no estimate. */
+function strikeCostText(cost: number | null): string {
+  if (cost === null) return "";
+  return cost < 1 ? " · no loss to you" : ` · cost ${naira(cost)}`;
 }
 
 /** The laned corridor a route runs along, if any. */
@@ -1443,6 +1452,23 @@ function moneyNote(): string {
 
 routesEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
+  // A called strike's way out, from its badge.
+  const settleKey = target.dataset.settle ?? target.dataset.relax;
+  if (settleKey) {
+    const [a, b] = settleKey.split("|") as [string, string];
+    const lane = laneOn(world, a, b);
+    if (!lane) return;
+    if (target.dataset.settle) {
+      const price = settlementPrice(world, lane);
+      const result = act({ label: `settling with the union on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, (w) => settleStrike(w, a, b));
+      say(result.ok ? `Paid the union ${naira(price)}: the strike on ${townName(a)} – ${townName(b)} is off.` : `Can't settle (${naira(price)}): ${result.reason}`, !result.ok);
+    } else {
+      act({ label: `relaxing the ${townName(a)} – ${townName(b)} lane`, towns: [a, b] }, (w) => ({ ok: setEnforcement(w, a, b, "lax") }));
+      say(`Wardens off the ${townName(a)} – ${townName(b)} lane: the strike will be called off, and danfos will creep back into it.`);
+    }
+    renderPanel();
+    return;
+  }
   // The town card's pager: the next town along, as if you'd clicked it.
   if (target.dataset.select) {
     selectedTown = target.dataset.select;

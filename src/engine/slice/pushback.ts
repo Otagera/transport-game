@@ -58,15 +58,24 @@ export interface LaneState {
 
 const sameCorridor = (lane: LaneState, a: string, b: string) => (lane.a === a && lane.b === b) || (lane.a === b && lane.b === a);
 
-/** Starts a new lane strictly enforced, the union's clock set to strike `strikeDelayDays` later. */
+/**
+ * Opens a lane laxly enforced -- no wardens until you choose them (playtest:
+ * "I did not put restrictions") -- with the union's answer to the lane
+ * itself coming strikeDelayDays later, each new lane a few days after the
+ * last so they don't all strike at once. Settling (settleStrike) or, once
+ * you enforce, relaxing, calls an announced strike off.
+ */
 export function openLane(world: SliceWorld, a: string, b: string): void {
   if (world.lanes.some((lane) => sameCorridor(lane, a, b))) return;
   const t = world.tuning;
-  // The first strike lands strikeDelayDays after the lane opens: announced strikeNoticeDays before that.
-  const grievance = Math.max(0, 1 - Math.max(0, t.strikeDelayDays - t.strikeNoticeDays) / t.strikeEveryStrictDays);
+  // The first strike lands strikeDelayDays after the lane opens (staggered
+  // by STAGGER_DAYS a lane), announced strikeNoticeDays before that: the
+  // grievance starts where the lax pace reaches 1 at the announcement.
+  const delay = t.strikeDelayDays + STAGGER_DAYS * world.lanes.length;
+  const grievance = Math.max(0, 1 - Math.max(0, delay - t.strikeNoticeDays) / t.strikeEveryLaxDays);
   const now = world.economy.elapsedSeconds;
   world.lanes.push({
-    a, b, enforcement: "strict", encroachment: 0, grievance, strikeAt: 0, announcedStrict: false, strikeUntil: 0, segmentIds: [],
+    a, b, enforcement: "lax", encroachment: 0, grievance, strikeAt: 0, announcedStrict: false, strikeUntil: 0, segmentIds: [],
     incomeToday: 0, incomeDays: [], dayEndsAt: now + SECONDS_PER_GAME_DAY, strikeExpected: 0, strikeIncome: 0, lastStrike: null, strikeBaselineDays: 0,
   });
 }
@@ -203,3 +212,28 @@ export function updateLanes(world: SliceWorld, dt: number): { cost: number; lost
 
 /** Days of corridor income a strike's cost is measured against. */
 const INCOME_DAYS = 3;
+/** Days between new lanes' first strikes. */
+const STAGGER_DAYS = 3;
+
+/** What the union asks to call off an announced strike: a share of what the strike would cost you (at least settlementMin). */
+export function settlementPrice(world: SliceWorld, lane: LaneState): number {
+  const normal = lane.incomeDays.length > 0 ? lane.incomeDays.reduce((sum, x) => sum + x, 0) / lane.incomeDays.length : 0;
+  return Math.round(Math.max(world.tuning.settlementMin, world.tuning.settlementShare * normal * world.tuning.strikeDays));
+}
+
+/**
+ * Pays the union to call off an announced strike (docs/brief.md, The
+ * informal sector, pushback form (a), a settlement): always open to you,
+ * lax or strict. The grievance starts again from nothing.
+ */
+export function settleStrike(world: SliceWorld, a: string, b: string): { ok: boolean; reason?: string; amount?: number } {
+  const lane = laneOn(world, a, b);
+  if (!lane || lane.strikeAt <= world.economy.elapsedSeconds) return { ok: false, reason: "no strike called there" };
+  const price = settlementPrice(world, lane);
+  if (world.economy.funds < price) return { ok: false, reason: "can't afford it" };
+  world.economy.funds -= price;
+  lane.strikeAt = 0;
+  lane.grievance = 0;
+  world.budget.settlements += price;
+  return { ok: true, amount: price };
+}

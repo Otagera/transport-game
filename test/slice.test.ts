@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/slice/world";
 import { informalBudget, sliceTick } from "@engine/slice/tick";
-import { laneOn, setEnforcement, struckSegments } from "@engine/slice/pushback";
+import { laneOn, setEnforcement, settleStrike, settlementPrice, struckSegments } from "@engine/slice/pushback";
 import { addBrt, addBusLane, brtRouteId, checkBrt, checkLane, laneCost } from "@engine/slice/world";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
@@ -2144,6 +2144,7 @@ describe("Revision 1, 1b: the bus lane, and the strike it brings", () => {
     const step = (seconds: number) => {
       for (let t = 0; t < seconds; t += SIM_DT) for (const e of sliceTick(w, SIM_DT)) events.push(e.kind);
     };
+    setEnforcement(w, "big", "mid", "strict");
     step((w.tuning.strikeDelayDays - w.tuning.strikeNoticeDays + 0.5) * SECONDS_PER_GAME_DAY);
     expect(events).toContain("strike-announced");
     setEnforcement(w, "big", "mid", "lax");
@@ -2161,9 +2162,12 @@ describe("Revision 1, 1b+: enforcement, encroachment, and strikes that cost", ()
     return w;
   };
 
-  test("a new lane is strictly enforced, and its wardens are billed as their own line", () => {
+  test("a new lane opens with no wardens; enforcing it bills them as their own line", () => {
     const w = laneWorld();
-    expect(laneOn(w, "big", "mid")!.enforcement).toBe("strict");
+    expect(laneOn(w, "big", "mid")!.enforcement).toBe("lax");
+    run(w, SECONDS_PER_GAME_DAY);
+    expect(w.budget.enforcement).toBe(0);
+    setEnforcement(w, "big", "mid", "strict");
     run(w, SECONDS_PER_GAME_DAY);
     expect(w.budget.enforcement).toBeGreaterThan(0);
   });
@@ -2231,5 +2235,34 @@ describe("Revision 1: the BRT bus runs only in a bus lane", () => {
     const route = w.routes.find((r) => r.id === brtRouteId("big", "mid"))!;
     const vehicle = w.simulation.vehicles.find((v) => v.id === route.vehicleIds[0])!;
     expect(vehicle.capacity).toBe(w.tuning.brtCapacity);
+  });
+});
+
+describe("Revision 1: a called strike always has a way out -- settle with the union", () => {
+  test("settling pays the union and calls the strike off, lax lane or strict", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    paveRoad(w, "big", "mid");
+    addBusLane(w, "big", "mid");
+    const events: string[] = [];
+    for (let t = 0; t < 30 * SECONDS_PER_GAME_DAY && !events.includes("strike-announced"); t += SIM_DT) for (const e of sliceTick(w, SIM_DT)) events.push(e.kind);
+    const lane = laneOn(w, "big", "mid")!;
+    expect(lane.enforcement).toBe("lax");
+    const price = settlementPrice(w, lane);
+    expect(price).toBeGreaterThanOrEqual(w.tuning.settlementMin);
+    const funds = w.economy.funds;
+    expect(settleStrike(w, "big", "mid").ok).toBe(true);
+    expect(w.economy.funds).toBeCloseTo(funds - price);
+    for (let t = 0; t < (w.tuning.strikeNoticeDays + 1) * SECONDS_PER_GAME_DAY; t += SIM_DT) for (const e of sliceTick(w, SIM_DT)) events.push(e.kind);
+    expect(events).not.toContain("strike");
+  });
+
+  test("new lanes' first strikes are staggered, not all on one day", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    paveRoad(w, "big", "mid");
+    paveRoad(w, "mid", "far");
+    addBusLane(w, "big", "mid");
+    addBusLane(w, "mid", "far");
+    const [first, second] = w.lanes;
+    expect(second!.grievance).toBeLessThan(first!.grievance);
   });
 });

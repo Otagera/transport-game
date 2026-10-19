@@ -364,7 +364,7 @@ function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view
       lane.strikeUntil > now ? { text: "STRIKE", fill: COLORS.strike, ink: "#fff" }
       : lane.strikeAt > now ? { text: `STRIKE DAY ${gameDay(world, lane.strikeAt)}`, fill: COLORS.slow, ink: "#fff" }
       : last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY
-        ? { text: `struck day ${gameDay(world, last.startedAt)}${last.cost !== null ? ` · ₦${Math.round(last.cost).toLocaleString()}` : ""}`, fill: "rgba(201, 42, 42, 0.14)", ink: COLORS.strike }
+        ? { text: `struck day ${gameDay(world, last.startedAt)}${last.cost === null ? "" : last.cost < 1 ? " · no loss" : ` · ₦${Math.round(last.cost).toLocaleString()}`}`, fill: "rgba(201, 42, 42, 0.14)", ink: COLORS.strike }
         : null;
     if (!tag) continue;
     const line = (roadChain(world, lane.a, lane.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));

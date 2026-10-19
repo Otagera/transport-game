@@ -41,7 +41,24 @@ right after this file. Progress on that build order:
 | — | Your playtest of the ladder (dirt → paved → lane) | Played 2026-10-19: liked rebuilding the road and enforcement; couldn't tell a strike landed (principles.md §6) |
 | R1 1e | Strikes made legible (announced, cancellable, 2 days, costed, on cards and road, pause option); the BRT bus; C3 re-measured | Done 2026-10-19: **C3 passes with BRT**: strict wins on the trunk, lax on Ilase-Kuto: below |
 | R1 2a | Rail switched on as the top rung (growth by a working station); C1 for rail | Done 2026-10-19: rail holds 34 days of growth: below |
-| R1 2b | Rail priced for C2 (20-40 days of surplus), the named project the treasury leaves alone | Next |
+| R1 2a+ | Lanes open lax; a way out of every called strike (Settle, Relax) on its card; "no loss to you"; staggered strike clocks | Done 2026-10-19; **C3 now fails on the trunk** (lax ahead by 2%): below |
+| R1 2b | Rail priced for C2 (20-40 days of surplus), the named project the treasury leaves alone | Next, after C3 |
+
+**Revision 1, 2a+: a strike you can answer, 2026-10-19** (playtest: "the strike has pull now
+but I can't tell what I can do in this case since I did not put restrictions").
+
+- **Lanes open lax** (no wardens); strict is your choice (Road tool on the lane). The union
+  answers a new lane with a strike ~5 days on regardless; each new lane's clock starts 3 days
+  after the last, so they don't all strike at once.
+- **Every called strike has a way out on its card:** "Settle ₦X" (always: half what the strike
+  would cost you on the corridor's normal days, at least ₦150) and "Relax enforcement" (if it
+  was called while strict). Checked in Chrome: called on day 2 for day 6, "Settle ₦380",
+  paid, strike off.
+- A strike that cost you nothing says "no loss to you" (it said "₦0").
+- **C3 now fails on the trunk.** Strict against lax, BRT, money over the lane's first 40 days:
+  trunk ₦236,230 strict against **₦240,674 lax** (it was ₦226,772 against ₦205,720 before
+  this change); Ilase-Kuto −₦4,804 against **−₦3,891 lax**. The trunk's margin either way is
+  2-10%: the result is fragile to when strikes fall. For a decision before rail's pricing.
 
 **Revision 1, 2a: rail, the top rung, 2026-10-19.** `railEnabled` is on by default (wear,
 goods and the straight alignment stay off). A town with track in service at it -- a station

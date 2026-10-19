@@ -190,6 +190,10 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // (strict every ~24 days, lax ~120).
   strikeDelayDays: 5,
   strikeNoticeDays: 4,
+  // Settling (the brief's pushback form (a)): half what the strike would
+  // cost you, at least ₦150 -- always cheaper than striking, never free.
+  settlementShare: 0.5,
+  settlementMin: 150,
   strikeEveryStrictDays: 24,
   strikeEveryLaxDays: 120,
   strikeDays: 2,

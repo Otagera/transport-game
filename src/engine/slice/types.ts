@@ -205,6 +205,9 @@ export interface SliceTuning {
   strikeDelayDays: number;
   /** The union announces a strike this many days ahead (Decisions log, proposed). */
   strikeNoticeDays: number;
+  /** Settling an announced strike: this share of what it would cost you, at least settlementMin. */
+  settlementShare: number;
+  settlementMin: number;
   strikeEveryStrictDays: number;
   strikeEveryLaxDays: number;
   strikeDays: number;

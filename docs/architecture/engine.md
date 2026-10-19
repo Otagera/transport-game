@@ -518,7 +518,9 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   road space no longer counts against the danfos' budget, which falls to
   `informalRoadSpaceLane` (`tick.ts` `informalBudget`).
 - **A lane's politics** (`pushback.ts`, `world.lanes: LaneState[]`) — `addBusLane` opens a
-  lane strictly enforced (`openLane`); `setEnforcement` switches strict/lax. `updateLanes`,
+  lane laxly enforced (`openLane`; its first strike `strikeDelayDays` on, staggered 3 days a
+  lane); `settleStrike` pays `settlementPrice` (half the strike's estimated cost, at least
+  `settlementMin`; `world.budget.settlements`) to call an announced strike off; `setEnforcement` switches strict/lax. `updateLanes`,
   every tick from the money section: lax, `encroachment` grows by `encroachmentPerDay`;
   strict, it clears by `encroachmentClearPerDay` and wardens bill `enforcementPerCellPerDay`
   × the lane's length (`world.budget.enforcement`, with the running costs); the union's
