@@ -3,6 +3,7 @@ import { headline, type Headline } from "./world";
 import { lastDay } from "./ledger";
 import { createBudgetTally, type BudgetTally } from "./budget";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
+import type { TownSample } from "./problems";
 
 // The headline as the player reads it: 5-day averages (docs/brief.md, What
 // doing well means). One day's trips made jitter by about what a good move
@@ -33,12 +34,14 @@ export interface DayHistory {
   tallyAtLastDay: BudgetTally;
   /** Trips made a day (5-day average) at each day's end, for the strip's trend (score.ts); the last TRIPS_KEPT days. */
   trips: Array<{ atSeconds: number; trips: number }>;
+  /** Each original town's days, to say why it's shrinking (problems.ts sampleTowns). */
+  towns: Map<string, TownSample[]>;
 }
 
 const TRIPS_KEPT = 120;
 
 export function createDayHistory(): DayHistory {
-  return { days: [], nextDayAtSeconds: SECONDS_PER_GAME_DAY, tallyAtLastDay: createBudgetTally(), trips: [] };
+  return { days: [], nextDayAtSeconds: SECONDS_PER_GAME_DAY, tallyAtLastDay: createBudgetTally(), trips: [], towns: new Map() };
 }
 
 function tallyDifference(now: BudgetTally, then: BudgetTally): BudgetTally {
@@ -47,10 +50,10 @@ function tallyDifference(now: BudgetTally, then: BudgetTally): BudgetTally {
   return result;
 }
 
-/** Called every tick; takes a sample when a game day ends. */
-export function recordDay(world: SliceWorld): void {
+/** Called every tick; takes a sample when a game day ends, and says whether it did. */
+export function recordDay(world: SliceWorld): boolean {
   const { history } = world;
-  if (world.economy.elapsedSeconds < history.nextDayAtSeconds - 1e-6) return;
+  if (world.economy.elapsedSeconds < history.nextDayAtSeconds - 1e-6) return false;
   const budget = tallyDifference(world.budget, history.tallyAtLastDay);
   history.tallyAtLastDay = { ...world.budget };
   history.days.push({ atSeconds: world.economy.elapsedSeconds, headline: headline(world), net: lastDay(world.ledger).net, budget });
@@ -58,6 +61,7 @@ export function recordDay(world: SliceWorld): void {
   history.trips.push({ atSeconds: world.economy.elapsedSeconds, trips: averageHeadline(world).tripsPerDay });
   if (history.trips.length > TRIPS_KEPT) history.trips.shift();
   history.nextDayAtSeconds += SECONDS_PER_GAME_DAY;
+  return true;
 }
 
 /** The headline averaged over the last five days; before a day has ended, as it is now. */

@@ -242,6 +242,15 @@ terrain isn't applied: the map still draws shaded hills.
   "Save for it: ₦X" when the next rung is out of reach (`saveButton`); a named project shows
   at the top of the budget ("Saving for ... safe until day N", a progress bar of what's set
   aside against the price, "Drop it").
+- **Problems named (Revision 2, step 1)** — the town card's last problem line is
+  `townNoSeat`: "212 of its trips a day find no seat, most toward Ikire on the Ikire–Ado road.
+  **Add a bus to Ikire ↔ Ido (+)** · ₦500" (`moveText`: the move named and priced, never a
+  buy button). A shrinking town's growth line becomes a "Why it's shrinking" callout
+  (`shrinkCause`) with its move. The Corridors section lists corridors with no seat first
+  (≥ 20 a day), worst first, each with "No seat N/day, most A ↔ B: <move>". The map draws
+  each such corridor's no seat as a grey band beside the road, 2-12 px by trips a day
+  (`drawNoSeat`, `strokeOffset`: offset along the polyline's normals; cached once a sim
+  second).
 - **Corridors (R1 6)** — `corridorsHtml`, between the route cards and the budget: each
   corridor you run along, taken ones first, with a you / informal / stayed home bar, "You N% ·
   informal N%", the levies lost a day and, if laned, the last strike's cost (or "no pushback

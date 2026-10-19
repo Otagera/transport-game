@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**530 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**534 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Where things stand (2026-10-19)
@@ -37,13 +37,22 @@ M1 under Revision 1 all unmeasured; no full bots run since rail came on); taking
 costs ₦1-10 a day against the brief's 20-40% (parked); rail reshaping the map, proposed in
 the brief, now folded into Revision 2.
 
-## Next: your marks on Revision 2's draft
+## Next: play Revision 2, step 1, past day 150
 
-**The draft is written** (brief.md, Revision 2, proposed 2026-10-19: step 1 first, the second
-economy, the informal hook in goods, rail's own job, the second ladder, wear per corridor,
-retiring roads, settlements by corridor value, the order, checks C5-C10; seven Proposed rows
-in the Decisions log). Mark in the Decisions log what you agree with; build nothing until then.
-The two questions that decide it are at the top of the revision. What it was asked to cover:
+**Agreed 2026-10-19:** step 1 first and alone, and the informal hook in goods (truckers
+included; principles.md §3 amended in spirit). **Step 1 is built** (`problems.ts`; brief,
+Revision 2, Step 1): a shrinking town says why and names the move ("you carry 6% of its trips,
+down from 14% on day 120; it grows only above 10%" · the bus back); a town's no seat names the
+trip most of it wants, the road, and the move with its price; the Corridors section lists
+no seat worst first with the same moves; the map draws no seat as a grey band beside each
+corridor. C5's measure (`namedMoves`, `affordable`) prints in the corridor probe from day 150: on the
+hand-made map to day 210, a move named and affordable on 61 of 61 days -- but that player serves
+one corridor, so the rest of the map's problems are its own; the real C5 is your playtest.
+
+**Your playtest:** a generated map past day 150. Bring back: does the screen still ask for a
+move then, and do you make one you can say why you made (C5)? Its answer sizes the rest of
+Revision 2: alive, and goods may be smaller than drafted; still "nothing more to build", and
+the second economy has earned its place.
 
 ### What the draft was asked to cover (agreed to draft 2026-10-19)
 

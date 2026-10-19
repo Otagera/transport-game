@@ -26,6 +26,7 @@
 //   trunk's first leg (the dominant city to the middle town).
 import { SLICE_MAP } from "../src/slice/map";
 import { generatedMapInfo } from "../src/engine/slice/generate";
+import { affordable, namedMoves } from "../src/engine/slice/problems";
 import { startSliceGame } from "../src/engine/slice/start";
 import { sliceTick } from "../src/engine/slice/tick";
 import { addBrt, addBus, addBusLane, brtRouteId, findRoute, paveRoad, removeBus, roadChain, routeKey, routeSummaries } from "../src/engine/slice/world";
@@ -166,7 +167,15 @@ const plateaus: Array<{ rung: string; day: number }> = [];
 
 console.log(`Corridor ${A}-${B}: jam = no-seat share ${JAM_RISE * 100}pp over its low since the rung for 2 days, or the end towns ${JAM_FALL * 100}% below their peak`);
 console.log("day  rung   " + [...corridorTowns()].map((t) => `${t.padEnd(9)} cap  `).join("") + "buses load  speed  along  noSeat  danfos");
+// C5 (brief, Revision 2): from day 150, the days the screen names a move the player can afford.
+const c5 = { days: 0, named: 0, affordable: 0 };
 for (let day = 1; day <= DAYS; day += 1) {
+  if (day >= 150) {
+    const moves = namedMoves(world);
+    c5.days += 1;
+    if (moves.length > 0) c5.named += 1;
+    if (moves.some((move) => affordable(world, move))) c5.affordable += 1;
+  }
   if (!REAL) world.economy.funds = 1e9;
   let slowSum = 0;
   let danfoSum = 0;
@@ -342,6 +351,7 @@ if (windowStats.days > 0) {
   const brt = world.routes.find((r) => r.id === brtRouteId(A, B));
   console.log(`  at the end: ${findRoute(world, A, B)?.vehicleIds.length ?? 0} buses${brt ? `, ${brt.vehicleIds.length} BRT buses (${Math.round(brt.loadFactorEMA * 100)}% full)` : ""}`);
 }
+if (c5.days > 0) console.log(`C5: from day 150, a move named on ${c5.named} of ${c5.days} days, an affordable one on ${c5.affordable} (needs two in three; this player serves one corridor, so the rest of the map's problems are its own)`);
 for (const [name, w] of Object.entries(wanted)) {
   const days = w.net > 0 ? w.price / w.net : Infinity;
   console.log(`C2: ${name} wanted day ${w.day}, ${w.built ? `built day ${w.built} (waited ${w.built - w.day} days)` : "not built"}; price ₦${Math.round(w.price).toLocaleString()} = ${days.toFixed(1)} days of the surplus then (₦${Math.round(w.net).toLocaleString()} a day)`);

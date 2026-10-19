@@ -6,6 +6,7 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/slice/growth";
 import { freshMilestone } from "@engine/slice/score";
 import { corridorChanges } from "@engine/slice/corridors";
+import { NO_SEAT_MIN_PER_DAY, corridorNoSeat } from "@engine/slice/problems";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
@@ -117,6 +118,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   ctx.clearRect(0, 0, width, height);
 
   drawGround(ctx, world, view);
+  drawNoSeat(ctx, world, view);
   drawRoads(ctx, world, view);
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawRouteLines(ctx, world, view);
@@ -234,6 +236,57 @@ function drawGround(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View
   const dpr = window.devicePixelRatio || 1;
   ctx.drawImage(terrainLayer(world, view, ctx.canvas.width / dpr, ctx.canvas.height / dpr), 0, 0);
   ctx.restore();
+}
+
+// Riders who find no seat, drawn on the corridor they'd travel (brief,
+// Revision 2, step 1: "nothing is said only in text that the map could
+// show"): a grey band beside the road, thicker the more trips a day nobody
+// carried along it -- traffic's way of drawing, on one side. Recomputed once
+// a sim second, not every frame.
+let noSeatCache: { at: number; world: SliceWorld; bands: Array<{ line: Point[]; perDay: number }> } | null = null;
+function drawNoSeat(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
+  const at = Math.floor(world.economy.elapsedSeconds);
+  if (noSeatCache?.world !== world || noSeatCache.at !== at) {
+    const bands: Array<{ line: Point[]; perDay: number }> = [];
+    for (const [key, entry] of corridorNoSeat(world)) {
+      if (entry.perDay < NO_SEAT_MIN_PER_DAY) continue;
+      const corridor = world.corridors.get(key);
+      const line = corridor ? (roadChain(world, corridor.a, corridor.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece)) : [];
+      if (line.length >= 2) bands.push({ line, perDay: entry.perDay });
+    }
+    noSeatCache = { at, world, bands };
+  }
+  ctx.save();
+  ctx.strokeStyle = COLORS.home;
+  ctx.globalAlpha = 0.45;
+  ctx.lineCap = "butt";
+  ctx.lineJoin = "round";
+  for (const band of noSeatCache.bands) {
+    const width = Math.min(12, 2 + band.perDay / 40);
+    ctx.lineWidth = width;
+    strokeOffset(ctx, view, band.line, 8 + width / 2);
+  }
+  ctx.restore();
+}
+
+/** A polyline drawn `offset` screen pixels to its left, each vertex moved along the mean of its segments' normals. */
+function strokeOffset(ctx: CanvasRenderingContext2D, view: View, line: Point[], offset: number): void {
+  const pts = line.map((p) => toScreen(view, p.x, p.y));
+  const normal = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: -(b.y - a.y) / length, y: (b.x - a.x) / length };
+  };
+  ctx.beginPath();
+  pts.forEach((p, i) => {
+    const before = i > 0 ? normal(pts[i - 1]!, p) : null;
+    const after = i < pts.length - 1 ? normal(p, pts[i + 1]!) : null;
+    const n = before && after ? { x: (before.x + after.x) / 2, y: (before.y + after.y) / 2 } : (before ?? after)!;
+    const x = p.x + n.x * offset;
+    const y = p.y + n.y * offset;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
 }
 
 function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {

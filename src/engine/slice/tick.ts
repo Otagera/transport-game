@@ -5,6 +5,7 @@ import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types"
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { updateMilestones } from "./score";
+import { sampleTowns } from "./problems";
 import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
@@ -303,7 +304,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
 
   const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor)];
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
-  recordDay(world);
+  if (recordDay(world)) sampleTowns(world);
   return events;
 }
 

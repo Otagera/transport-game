@@ -802,6 +802,21 @@ are the levy rate on the first day you ran along it less now (against a peak, a 
 departures read as ₦3-10 lost on corridors you'd never touched). `resetCorridors` at day 1.
 Not a pushback trigger: the union still answers lanes only (`pushback.ts`).
 
+**Problems and their moves** (`problems.ts`, brief Revision 2 step 1): `noSeatPairs` is the
+strip's no seat split by pair (joined pairs only; it sums to `headline().noSeatPerDay`);
+`townNoSeat` and `corridorNoSeat` group it by town and by corridor (`corridorsAlong` over the
+pair's road path) with the pair most of it wants. `seatMove(a, b)` is the one move that would
+carry more of a pair: the next rung where a town at either end has grown to all its road allows
+on the road the pair uses (`roadFull`, not when thin); else one more of the vehicle you run
+there; else a new minibus (pair under 100 trips a day) or bus -- a `NamedMove` (`ActionSpec`,
+price, label). `shrinkCause` reads a shrinking town against its recent peak target from
+`history.towns` (`sampleTowns`, each original town's target, cap, service and your share at
+every day's end, the last 30; sampled from `sliceTick` when `recordDay` says a day ended):
+your share below `growthMinPlayerShare` (and from what, on what day), its cap fallen (a lane the
+danfos have taken: enforce it), or its service fallen. `namedMoves` is every move the screen
+names; `affordable` is within funds plus 10 days of the 5-day net -- C5's measure, which the
+corridor probe prints from day 150.
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

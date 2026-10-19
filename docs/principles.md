@@ -245,7 +245,10 @@ blow-by-blow; this section is the distilled rule.
   decision" — taken on purpose, for truth; the formal tier that would make it a decision
   waits on play.
 - Paratransit is **passengers-only**. Informal freight needs capital an okada does not.
-  The asymmetry is deliberate and historically true.
+  The asymmetry is deliberate and historically true. *Amended in spirit (brief, Revision 2,
+  agreed 2026-10-19):* private truckers -- hauliers who own a lorry, not paratransit -- are
+  the informal sector's freight rival, so goods get an antagonist without paratransit
+  carrying freight.
 - Paratransit **counts toward service at a discount** (~0.5) for growth purposes:
   informal service *sustains* a place, player service *develops* it.
 

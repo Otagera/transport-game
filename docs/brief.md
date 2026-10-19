@@ -379,7 +379,7 @@ The slice-zero checks that pass stay as regression checks. **Closing slice zero 
 
 ## Revision 2 (proposed 2026-10-19): a second economy
 
-**Proposed, nothing agreed. The late game has problems it doesn't show (step 1, built first), and a map that asks for a fixed amount of building has nothing to ask once it's built; a second economy -- industries that open and close, goods that must be moved, rail with a job of its own -- keeps new problems arriving after every town is connected.** Prompted by your playtest of R1 7 (principles.md §6, Played 2026-10-19, a generated map to day 210): *"I think I have gotten to its end"*, *"nothing more to build"*, and your read that stopping here makes it *Mini Metro with money*. On screen at day 210: 2,865 trips a day with no seat against 3,337 of your riders, three towns falling, and ₦72,385 in the bank. The map still had problems; none of them asked for a move.
+**Proposed; two parts agreed 2026-10-19 (step 1 first, and the informal hook in goods, truckers included). The late game has problems it doesn't show (step 1, built first), and a map that asks for a fixed amount of building has nothing to ask once it's built; a second economy -- industries that open and close, goods that must be moved, rail with a job of its own -- keeps new problems arriving after every town is connected.** Prompted by your playtest of R1 7 (principles.md §6, Played 2026-10-19, a generated map to day 210): *"I think I have gotten to its end"*, *"nothing more to build"*, and your read that stopping here makes it *Mini Metro with money*. On screen at day 210: 2,865 trips a day with no seat against 3,337 of your riders, three towns falling, and ₦72,385 in the bank. The map still had problems; none of them asked for a move.
 
 What you should be able to say after an hour, revised again: "Ikire turned out to be the hub. The quarry opened on day 90 and its lorries jammed the Ikire road until I put a spur in; when it closed on day 160 I pulled the spur up and the track went to passengers. The truckers took the mill's loads until I undercut them."
 
@@ -622,13 +622,13 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Forty decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; nine are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Forty decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; eleven are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
-| 2026-10-19 | Revision 2, step 1 first and alone: show the problems the late game already has (why a town is shrinking, where "no seat" is and the move that carries it, unserved trips drawn on the corridor), played past day 150 (C5) before any goods. Its playtest sizes the rest | Proposed |
+| 2026-10-19 | Revision 2, step 1 first and alone: show the problems the late game already has (why a town is shrinking, where "no seat" is and the move that carries it, unserved trips drawn on the corridor), played past day 150 (C5) before any goods. Its playtest sizes the rest | Agreed 2026-10-19 |
 | 2026-10-19 | Revision 2: industries that open and close (quarry, mill, factory) as the second reason to build; goods back on; an industry's own ladder (dirt track, paved, your lorries, a rail spur); served industries grow the towns that trade with them | Proposed |
-| 2026-10-19 | The informal hook in goods: lorries on the shared road (built), loading levies at markets and the port, and private truckers as the informal freight rival -- the last amends principles.md §3's "paratransit is passengers-only" in spirit (truckers aren't paratransit) | Proposed |
+| 2026-10-19 | The informal hook in goods: lorries on the shared road (built), loading levies at markets and the port, and private truckers as the informal freight rival -- the last amends principles.md §3's "paratransit is passengers-only" in spirit (truckers aren't paratransit) | Agreed 2026-10-19 (the direction; built after step 1's playtest, as the order says) |
 | 2026-10-19 | Rail's own job: a train is passengers or freight on shared track slots; spurs to industries; station towns grow and new desire lines appear (absorbs "rail reshapes the map") | Proposed |
 | 2026-10-19 | Wear returns per corridor: a "Keep it up" switch with its cost a day, "Fix all on this corridor", the town card naming a worn road | Proposed |
 | 2026-10-19 | Retire a road (upkeep stops; access lost, consequences kept), and road to rail on the same alignment, cheaper for the earthworks | Proposed |

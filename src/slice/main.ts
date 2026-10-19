@@ -65,6 +65,7 @@ import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, t
 import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
+import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, type NamedMove } from "@engine/slice/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
@@ -1065,7 +1066,15 @@ function growthText(townId: string, name: string): string {
     : growth.playerShare < min
     ? `It only grows once you carry at least ${pct(min)} of its trips (now ${pct(growth.playerShare)}); danfos alone keep it as it is.`
     : `Service ${pct(growth.service)} (yours ${pct(growth.playerShare)}, plus informal at half). The better served, the bigger: up to ${k(growth.cap)}.`;
+  // Shrinking, it says why and what would stop it (brief, Revision 2, step 1).
+  const shrink = trend === "shrinking" ? shrinkCause(world, townId) : null;
+  if (shrink) return `<p class="callout hook"><span class="k">Why it's shrinking</span><b>${name} is ${heading}:</b> ${shrink.why}.${shrink.move ? ` ${moveText(shrink.move)}` : ""}</p>`;
   return `<p class="townshare"><b>${name} is ${heading}.</b> ${why}</p>`;
+}
+
+/** A named move as the screen says it: what, and its price. Named, not bought: the player does it (brief, Information design). */
+function moveText(move: NamedMove): string {
+  return `<b>${move.label}</b>${move.price > 0 ? ` · ${naira(move.price)}` : ""}`;
 }
 
 // The town card (design lab, "the brief, step 8"): a kicker, the name, three
@@ -1153,9 +1162,13 @@ function problemText(townId: string): string {
     const next = full.next === "paved" ? "Pave its road (R)" : full.next === "lane" ? "A bus lane on its road (R)" : "Rail (K: restore the old line or lay track, then T for trains)";
     return `<p class="callout hook"><span class="k">The problem here</span>${name} can't grow: its road is full. ${next} to grow further.${saveButton(full)}</p>`;
   }
-  const share = townShare(world, townId);
-  if (share.lost < 0.2) return "";
-  return `<p class="callout hook"><span class="k">The problem here</span>${pct(share.lost)} of its trips have a road but no seat: nobody carried them.</p>`;
+  // No seat, with where and the move (brief, Revision 2, step 1): it used to
+  // say only "N% ... nobody carried them" -- no corridor, no move.
+  const seat = townNoSeat(world, townId);
+  if (!seat) return "";
+  const other = seat.worst.a === townId ? seat.worst.b : seat.worst.a;
+  const road = seat.corridor ? ` on the ${townName(seat.corridor.a)}–${townName(seat.corridor.b)} road` : " by rail";
+  return `<p class="callout hook"><span class="k">The problem here</span>${Math.round(seat.perDay)} of its trips a day find no seat, most toward ${townName(other)}${road}. ${moveText(seat.move)}</p>`;
 }
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -1381,7 +1394,13 @@ function budgetHtml(): string {
 // ladder's playtest, 3). Corridors you don't run along stay off the list:
 // the map's traffic already shows the danfos' roads.
 function corridorsHtml(): string {
-  const shown = corridorSummaries(world).filter((c) => c.takenSince !== null || c.you >= 0.005);
+  // Where riders find no seat, worst first, each with the move that would
+  // carry them (brief, Revision 2, step 1); then the rest you run along.
+  const noSeat = corridorNoSeat(world);
+  const seatOf = (key: string) => noSeat.get(key)?.perDay ?? 0;
+  const shown = corridorSummaries(world)
+    .filter((c) => c.takenSince !== null || c.you >= 0.005 || seatOf(c.key) >= NO_SEAT_MIN_PER_DAY)
+    .sort((x, y) => seatOf(y.key) - seatOf(x.key) || Number(y.takenSince !== null) - Number(x.takenSince !== null) || y.you - x.you);
   if (shown.length === 0) return "";
   const target = world.tuning.corridorTakenShare;
   const rows = shown
@@ -1393,15 +1412,20 @@ function corridorsHtml(): string {
       const state = c.takenSince !== null
         ? `<span class="taken">Taken, day ${gameDay(world, c.takenSince)}</span>`
         : `<span class="muted">Taken at ${pct(target)}</span>`;
+      const seat = noSeat.get(c.key);
+      const seatLine = seat && seat.perDay >= NO_SEAT_MIN_PER_DAY
+        ? `<div class="noseat">No seat ${Math.round(seat.perDay)}/day, most ${townName(seat.worst.a)} ↔ ${townName(seat.worst.b)}: ${moveText(seat.move)}</div>`
+        : "";
       return `
         <div class="corridor">
           <div class="top"><span class="name">${townName(c.a)} – ${townName(c.b)}</span>${state}</div>
           <div class="bar" title="you / informal / stayed home"><i style="width:${pct(c.you)};background:var(--player)"></i><i style="width:${pct(c.informal)};background:var(--danfo)"></i><i style="width:${pct(c.lost)};background:var(--home)"></i></div>
           <div class="hint">You ${pct(c.you)} · informal ${pct(c.informal)}${costs.length > 0 ? ` · ${costs.join(" · ")}` : ""}</div>
+          ${seatLine}
         </div>`;
     })
     .join("");
-  return `<h2 class="section">Corridors</h2><p class="hint">Who carries the trips along each road you run on.</p>${rows}`;
+  return `<h2 class="section">Corridors</h2><p class="hint">Where riders find no seat first, then the roads you run on.</p>${rows}`;
 }
 
 // Your share of trips between towns: one click down, not the headline

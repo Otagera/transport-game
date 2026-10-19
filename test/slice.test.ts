@@ -15,6 +15,7 @@ import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upk
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
+import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat } from "@engine/slice/problems";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
@@ -2476,6 +2477,59 @@ describe("Revision 1: the named project the treasury leaves alone, for a while",
     expect(v.project).toBeNull();
   });
   const w0 = (w: SliceWorld) => (w.tuning.remittancePeriodDays + 0.5) * SECONDS_PER_GAME_DAY;
+});
+
+describe("Revision 2, step 1: the problems the late game already has, with their moves", () => {
+  test("no seat by pair adds up to the strip's no seat: the same trips, now with where they are", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    addBus(w, "big", "mid");
+    run(w, 3 * SECONDS_PER_GAME_DAY);
+    const total = noSeatPairs(w).reduce((sum, p) => sum + p.perDay, 0);
+    expect(total).toBeCloseTo(headline(w).noSeatPerDay, 3);
+    // The cut-off town's trips are "no road", never a seat problem.
+    expect(noSeatPairs(w).some((p) => p.a === "cut" || p.b === "cut")).toBe(false);
+  });
+
+  test("the move for a pair: one more of the vehicle you run there, else a new one sized to the pair", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    const fresh = seatMove(w, "big", "mid");
+    expect(fresh.action.kind === "bus" || fresh.action.kind === "minibus").toBe(true);
+    expect(fresh.label).toMatch(/^Run a (bus|minibus) Big ↔ Mid/);
+    addMinibus(w, "big", "mid");
+    const more = seatMove(w, "big", "mid");
+    expect(more.action.kind).toBe("minibus");
+    expect(more.label).toBe("Add a minibus to Big ↔ Mid (+)");
+    expect(more.price).toBe(DEFAULT_SLICE_TUNING.minibusPurchaseCost);
+  });
+
+  test("a town's no seat names the trip most of it wants and a move; corridors list theirs worst first", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    run(w, 2 * SECONDS_PER_GAME_DAY);
+    const seat = townNoSeat(w, "big");
+    if (seat) {
+      expect(seat.perDay).toBeGreaterThan(0);
+      expect([seat.worst.a, seat.worst.b]).toContain("big");
+      expect(seat.move.label.length).toBeGreaterThan(0);
+    }
+    const corridors = [...corridorNoSeat(w).values()].map((c) => c.perDay);
+    expect(corridors).toEqual([...corridors].sort((x, y) => y - x));
+  });
+
+  test("a town you stop serving says why it's shrinking, and the move back", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 1e6, townGrowthTauSeconds: 60, remittanceEnabled: false });
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    run(w, 12 * SECONDS_PER_GAME_DAY);
+    expect(w.towns.get("mid")!.population).toBeGreaterThan(55); // grown on your service
+    const route = w.routes[0]!;
+    while (route.vehicleIds.length > 0) removeBus(w, route.id);
+    run(w, 3 * SECONDS_PER_GAME_DAY);
+    const cause = shrinkCause(w, "mid");
+    expect(cause).not.toBeNull();
+    expect(cause!.why).toMatch(/you carry \d+% of its trips/);
+    expect(cause!.move).not.toBeNull();
+    // C5's measure: the screen names a move, and one this rich player can afford.
+    expect(namedMoves(w).some((move) => affordable(w, move))).toBe(true);
+  });
 });
 
 describe("generated maps per seed, with guards (brief, After the ladder's playtest, 5; P8)", () => {
