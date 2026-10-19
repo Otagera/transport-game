@@ -43,7 +43,7 @@ import {
 } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { planRoad, segmentPolyline, type Alignment, type RoadPlan } from "@engine/slice/roads";
-import { roughCostPerDay, setRoadMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
+import { corridorWear, fixRoadNow, roughCostPerDay, setRoadMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/slice/receipts";
 import type { SliceWorld } from "@engine/slice/types";
 import { growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
@@ -65,7 +65,7 @@ import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, t
 import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
-import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, type NamedMove } from "@engine/slice/problems";
+import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/slice/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
@@ -495,6 +495,13 @@ function roadName(segmentId: string): string {
   const whole = segment.type === "road" ? chainOf(world, segmentId) : null;
   const [a, b] = whole ? [whole.a, whole.b] : [segment.fromNodeId, segment.toNodeId];
   return `${segment.type === "rail" ? "Track " : ""}${townName(a)} – ${townName(b)}`;
+}
+
+/** The two end towns of the road a segment belongs to. */
+function roadTowns(segmentId: string): string[] {
+  const whole = chainOf(world, segmentId);
+  const segment = world.simulation.map.segments.find((s) => s.id === segmentId);
+  return whole ? [whole.a, whole.b] : segment ? [segment.fromNodeId, segment.toNodeId] : [];
 }
 
 /** Every piece of the road a segment belongs to (just itself for track). */
@@ -1162,6 +1169,11 @@ function problemText(townId: string): string {
     const next = full.next === "paved" ? "Pave its road (R)" : full.next === "lane" ? "A bus lane on its road (R)" : "Rail (K: restore the old line or lay track, then T for trains)";
     return `<p class="callout hook"><span class="k">The problem here</span>${name} can't grow: its road is full. ${next} to grow further.${saveButton(full)}</p>`;
   }
+  // A worn road your vehicles pay for (brief, Revision 2: wear per corridor).
+  const worn = wornRoadAt(world, townId);
+  if (worn) {
+    return `<p class="callout hook"><span class="k">The problem here</span>Its road ${townName(worn.a)}–${townName(worn.b)} is worn: ${pct(worn.speed)} speed, costing your vehicles ${naira(worn.roughPerDay)}/day. Keep it up from its row under Corridors (repair now ${naira(worn.move.price)}).</p>`;
+  }
   // No seat, with where and the move (brief, Revision 2, step 1): it used to
   // say only "N% ... nobody carried them" -- no corridor, no move.
   const seat = townNoSeat(world, townId);
@@ -1412,6 +1424,7 @@ function corridorsHtml(): string {
       const state = c.takenSince !== null
         ? `<span class="taken">Taken, day ${gameDay(world, c.takenSince)}</span>`
         : `<span class="muted">Taken at ${pct(target)}</span>`;
+      const wear = world.tuning.wearEnabled ? wearLine(c.a, c.b) : "";
       const seat = noSeat.get(c.key);
       const seatLine = seat && seat.perDay >= NO_SEAT_MIN_PER_DAY
         ? `<div class="noseat">No seat ${Math.round(seat.perDay)}/day, most ${townName(seat.worst.a)} ↔ ${townName(seat.worst.b)}: ${moveText(seat.move)}</div>`
@@ -1422,10 +1435,24 @@ function corridorsHtml(): string {
           <div class="bar" title="you / informal / stayed home"><i style="width:${pct(c.you)};background:var(--player)"></i><i style="width:${pct(c.informal)};background:var(--danfo)"></i><i style="width:${pct(c.lost)};background:var(--home)"></i></div>
           <div class="hint">You ${pct(c.you)} · informal ${pct(c.informal)}${costs.length > 0 ? ` · ${costs.join(" · ")}` : ""}</div>
           ${seatLine}
+          ${wear}
         </div>`;
     })
     .join("");
   return `<h2 class="section">Corridors</h2><p class="hint">Where riders find no seat first, then the roads you run on.</p>${rows}`;
+}
+
+// A corridor's wear as one decision (brief, Revision 2: wear per corridor,
+// never per piece): kept up, with what that costs a day; or how worn it is,
+// what that costs your vehicles, and the two ways to answer it.
+function wearLine(a: string, b: string): string {
+  const wear = corridorWear(world, a, b);
+  if (!wear) return "";
+  const id = wear.pieceIds[0]!;
+  if (wear.kept) return `<div class="wear">Kept up · ${naira(wear.upkeepPerDay)}/day <span class="actions"><button data-keep="${id}|0" title="Stop paying to keep it up: it starts wearing again">Stop</button></span></div>`;
+  const state = wear.condition >= 0.97 ? "Sound" : `Worn: ${pct(wear.speed)} speed${wear.roughPerDay >= 1 ? ` · costs your vehicles ${naira(wear.roughPerDay)}/day` : ""}`;
+  const fix = wear.repair >= 1 ? `<button data-fixnow="${id}" title="Repair all of it to new, once">Fix now ${naira(wear.repair)}</button>` : "";
+  return `<div class="wear">${state} <span class="actions"><button data-keep="${id}|1" title="Repair it as it wears, billed as it goes${wear.repair >= 1 ? `; the catch-up repair (${naira(wear.repair)}) is charged now` : ""}">Keep it up ${naira(wear.upkeepPerDay)}/day</button>${fix}</span></div>`;
 }
 
 // Your share of trips between towns: one click down, not the headline
@@ -1612,6 +1639,23 @@ routesEl.addEventListener("click", (event) => {
   if (target.dataset.dropProject) {
     dropProject(world);
     say("Project dropped: the treasury takes its usual share again.");
+    renderPanel();
+    return;
+  }
+  // A corridor's wear, from its row in the Corridors section.
+  if (target.dataset.keep) {
+    const [id, on] = target.dataset.keep.split("|") as [string, string];
+    const name = roadName(id);
+    const result = act({ label: on === "1" ? `keeping up ${name}` : `letting ${name} wear`, towns: roadTowns(id) }, (w) => setRoadMaintained(w, id, on === "1"));
+    say(result.ok ? (on === "1" ? `Keeping up ${name}${result.charged > 0 ? `: ${naira(result.charged)} to repair it first` : ""}.` : `${capitalise(name)} will wear again.`) : `Can't: ${result.reason}`, !result.ok);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.fixnow) {
+    const id = target.dataset.fixnow;
+    const name = roadName(id);
+    const result = act({ label: `repairing ${name}`, towns: roadTowns(id) }, (w) => fixRoadNow(w, id));
+    say(result.ok ? `Repaired ${name} to new for ${naira(result.charged)}. It wears again from here.` : `Can't: ${result.reason}`, !result.ok);
     renderPanel();
     return;
   }

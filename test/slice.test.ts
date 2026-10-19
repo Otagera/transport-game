@@ -15,7 +15,7 @@ import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upk
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
-import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat } from "@engine/slice/problems";
+import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, wornRoadAt } from "@engine/slice/problems";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
@@ -31,7 +31,7 @@ import { setRoadMaintained } from "@engine/slice/wear";
 import { routesOnTrip, tripPlans } from "@engine/slice/transfers";
 import { roadCapacity, speedFactor } from "@engine/slice/congestion";
 import { costRate, planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
-import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
+import { bridgeCellsOn, corridorWear, fixRoadNow, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
 import { bestRung, growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
 import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, removeLorry, lorrySummaries } from "@engine/slice/goods";
@@ -219,10 +219,11 @@ describe("slice: where people want to go", () => {
 });
 
 describe("slice zero: systems switched off", () => {
-  const zero = () => createSliceWorld({ ...MAP, port: "big", rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0 });
+  // Wear came back on by default (Revision 2); switched off it still behaves as slice zero had it.
+  const zero = () => createSliceWorld({ ...MAP, port: "big", rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, wearEnabled: false });
 
-  test("the default tuning: wear, goods and the straight alignment off; rail back as the ladder's top rung (Revision 1)", () => {
-    expect(DEFAULT_SLICE_TUNING.wearEnabled).toBe(false);
+  test("the default tuning: goods and the straight alignment off; rail back as the ladder's top rung (Revision 1); wear back (Revision 2)", () => {
+    expect(DEFAULT_SLICE_TUNING.wearEnabled).toBe(true);
     expect(DEFAULT_SLICE_TUNING.goodsEnabled).toBe(false);
     expect(DEFAULT_SLICE_TUNING.railEnabled).toBe(true);
     expect(DEFAULT_SLICE_TUNING.straightAlignmentEnabled).toBe(false);
@@ -2529,6 +2530,35 @@ describe("Revision 2, step 1: the problems the late game already has, with their
     expect(cause!.move).not.toBeNull();
     // C5's measure: the screen names a move, and one this rich player can afford.
     expect(namedMoves(w).some((move) => affordable(w, move))).toBe(true);
+  });
+});
+
+describe("Revision 2: wear returns, per corridor", () => {
+  test("a corridor's wear is one decision: its worst piece, kept as a whole, fixed as a whole", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 1e6 });
+    for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");
+    run(w, 15 * SECONDS_PER_GAME_DAY);
+    const worn = corridorWear(w, "big", "mid")!;
+    expect(worn.condition).toBeLessThan(1);
+    expect(worn.speed).toBeLessThan(1);
+    expect(worn.repair).toBeGreaterThan(0);
+    expect(worn.kept).toBe(false);
+    // The town card names it once your buses pay for it.
+    if (worn.speed < 0.85 && worn.roughPerDay >= 1) expect(wornRoadAt(w, "mid")?.move.action.kind).toBe("fix");
+    // Fix now: new again, charged once, not kept.
+    const funds = w.economy.funds;
+    const fixed = fixRoadNow(w, worn.pieceIds[0]!);
+    expect(fixed.ok).toBe(true);
+    expect(w.economy.funds).toBeCloseTo(funds - worn.repair, 6);
+    expect(corridorWear(w, "big", "mid")!.condition).toBe(1);
+    expect(corridorWear(w, "big", "mid")!.kept).toBe(false);
+    // Kept up: it stays new, billed as it goes.
+    expect(applyAction(w, { kind: "fix", segmentId: worn.pieceIds[0]!, on: true }).ok).toBe(true);
+    run(w, 5 * SECONDS_PER_GAME_DAY);
+    const kept = corridorWear(w, "big", "mid")!;
+    expect(kept.kept).toBe(true);
+    expect(kept.condition).toBe(1);
+    expect(kept.upkeepPerDay).toBeGreaterThan(0);
   });
 });
 

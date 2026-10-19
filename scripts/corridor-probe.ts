@@ -39,6 +39,7 @@ import { setEnforcement, settlementPrice } from "../src/engine/slice/pushback";
 import { nameProject, rungPrice } from "../src/engine/slice/project";
 import { averageNet } from "../src/engine/slice/history";
 import { addTrain, buildTrack, railPath, railRouteId } from "../src/engine/slice/rail";
+import { setRoadMaintained } from "../src/engine/slice/wear";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
@@ -179,6 +180,10 @@ for (let day = 1; day <= DAYS; day += 1) {
     if (moves.some((move) => affordable(world, move))) c5.affordable += 1;
   }
   if (!REAL) world.economy.funds = 1e9;
+  // Wear (Revision 2): the player keeps its corridor up once it's paved, as
+  // the strongest strategy keeps its trunk (principles.md §3, Decay). NO_KEEP=1 lets it wear.
+  const first = chain()[0];
+  if (world.tuning.wearEnabled && !process.env.NO_KEEP && first && !isDirt(first) && !chain().every((piece) => world.maintained.has(piece.id))) setRoadMaintained(world, first.id, true);
   let slowSum = 0;
   let danfoSum = 0;
   // A strike begins within this day: twin the world with it called off.

@@ -21,9 +21,10 @@ import type { SliceTuning } from "./types";
 // Time: one game day is 30 seconds (economy/state.ts SECONDS_PER_GAME_DAY).
 // Distance: map cells.
 export const DEFAULT_SLICE_TUNING: SliceTuning = {
-  // Slice zero (docs/brief.md): wear, goods, rail and the straight
-  // alignment are off, and return one per playtest in the brief's order.
-  wearEnabled: false,
+  // Slice zero (docs/brief.md) switched wear, goods, rail and the straight
+  // alignment off, to return one per playtest. Wear is back (brief, Revision
+  // 2: wear returns, per corridor); goods and the straight alignment wait.
+  wearEnabled: true,
   // Routine upkeep (step 5, upkeep.ts): per cell per game day on every road
   // you built or paved, wear or no wear. More on paved roads, more again on
   // bridges. Inherited roads you haven't paved are the state's, and free.

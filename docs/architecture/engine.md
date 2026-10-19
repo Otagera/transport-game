@@ -817,6 +817,14 @@ danfos have taken: enforce it), or its service fallen. `namedMoves` is every mov
 names; `affordable` is within funds plus 10 days of the 5-day net -- C5's measure, which the
 corridor probe prints from day 150.
 
+**Wear per corridor** (Revision 2; `wear.ts`): `corridorWear(a, b)` reads a whole road
+(`roadChain`) as one: its worst piece's condition and speed, whether every piece is kept,
+upkeep a day if kept, the repair to new now, and what its wear costs your vehicles a day.
+`fixRoadNow` repairs every piece to new once without keeping it up. `wearEnabled` is on by
+default again; `problems.ts` `wornRoadAt` names a worn road your vehicles pay for (speed under
+0.85, rough cost ≥ ₦1 a day) with "keep it up" as its move. The corridor probe keeps its
+corridor up once paved (`NO_KEEP=1` lets it wear).
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

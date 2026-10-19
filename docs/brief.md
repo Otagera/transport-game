@@ -444,7 +444,7 @@ Proposed, each a line where the player already looks, each naming one move:
 
 ### Wear returns, made easy
 
-**Per corridor, never per piece.** Wear (`wear.ts`) returns with a "Keep it up" switch on each corridor in the Corridors section, with its cost a day (`setRoadMaintained` already keeps a whole road as one decision). Off, the road visibly wears and slows, and the town card says why ("its road is worn: 70% speed. Keep it up for ₦40/day"). One "Fix all on this corridor" for a catch-up. The decision is which corridors to keep (principles.md §3, Decay: a choice of roads, not a chore of clicks), and closing industries give it a reason: a spur to a closed quarry is the one you let go.
+**Built 2026-10-19:** wear is on by default again (`wearEnabled`). Each row of the Corridors section carries its wear as one decision: "Kept up · ₦N/day · Stop", or "Worn: 72% speed · costs your vehicles ₦106/day" with "Keep it up ₦33/day" (the catch-up repair charged at once) and "Fix now ₦499" (a one-off repair to new, `fixRoadNow`). A town card whose road your vehicles pay for is worn names it ("Its road A–B is worn: 72% speed, costing your vehicles ₦N/day"), and keeping it up is one of the moves C5 counts. The Fix tool (F) stays, for track and for clicking a road. Measured (corridor probe, real money, the player keeping its corridor up once paved): seed 0 lane 14.4 days of surplus, rail 35.2 (day 130); seed 1 lane 13.7, rail 35.1 (day 124) -- C2 holds. Left to wear, the same corridor's surplus fell by a third and rail never came (seed 0, 210 days).
 
 ### Retiring what you built
 

@@ -251,6 +251,11 @@ terrain isn't applied: the map still draws shaded hills.
   each such corridor's no seat as a grey band beside the road, 2-12 px by trips a day
   (`drawNoSeat`, `strokeOffset`: offset along the polyline's normals; cached once a sim
   second).
+- **Wear per corridor (Revision 2)** — `wearLine` under each Corridors row (`corridorWear`):
+  kept up and its cost a day with "Stop", or its state ("Sound" / "Worn: N% speed · costs
+  your vehicles ₦X/day") with "Keep it up ₦U/day" (`setRoadMaintained`, whole road) and "Fix
+  now ₦R" (`fixRoadNow`). The town card's problem line names a worn road your vehicles pay
+  for (`wornRoadAt`) before its no seat.
 - **Corridors (R1 6)** — `corridorsHtml`, between the route cards and the budget: each
   corridor you run along, taken ones first, with a you / informal / stayed home bar, "You N% ·
   informal N%", the levies lost a day and, if laned, the last strike's cost (or "no pushback

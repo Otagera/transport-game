@@ -7,6 +7,8 @@ import { laneEncroachment, lanesBySegment } from "./pushback";
 import { isRailRoute, railPath } from "./rail";
 import { rungPrice } from "./project";
 import { averageNet } from "./history";
+import { corridorWear } from "./wear";
+import { chainOf } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 // Revision 2, step 1 (docs/brief.md, agreed 2026-10-19): show the problems
@@ -225,6 +227,45 @@ function laneAtTown(world: SliceWorld, townId: string): { a: string; b: string; 
   return null;
 }
 
+/** Below this speed, a road your vehicles use is worn enough to name. */
+export const WORN_SPEED = 0.85;
+
+export interface WornRoad {
+  a: string;
+  b: string;
+  speed: number;
+  roughPerDay: number;
+  move: NamedMove;
+}
+
+/**
+ * The most worn road at a town that your vehicles pay for (brief, Revision
+ * 2: the town card says why), with the move: keep it up, its catch-up repair
+ * as the price. Null when wear is off, or no road of yours there is worn.
+ */
+export function wornRoadAt(world: SliceWorld, townId: string): WornRoad | null {
+  if (!world.tuning.wearEnabled) return null;
+  let worst: WornRoad | null = null;
+  const seen = new Set<string>();
+  for (const segment of world.simulation.map.segments) {
+    if (segment.type !== "road" || (segment.fromNodeId !== townId && segment.toNodeId !== townId)) continue;
+    const chain = chainOf(world, segment.id);
+    if (!chain || seen.has(`${chain.a}~${chain.b}`)) continue;
+    seen.add(`${chain.a}~${chain.b}`);
+    const wear = corridorWear(world, chain.a, chain.b);
+    if (!wear || wear.kept || wear.speed >= WORN_SPEED || wear.roughPerDay < 1) continue;
+    if (worst && wear.speed >= worst.speed) continue;
+    worst = {
+      a: chain.a,
+      b: chain.b,
+      speed: wear.speed,
+      roughPerDay: wear.roughPerDay,
+      move: { action: { kind: "fix", segmentId: wear.pieceIds[0]!, on: true }, price: wear.repair, label: `Keep ${nameOf(world, chain.a)}–${nameOf(world, chain.b)} up (${Math.round(wear.upkeepPerDay)}/day after)` },
+    };
+  }
+  return worst;
+}
+
 /**
  * Every move the screen names now -- each town's no seat and shrink cause,
  * each corridor's no seat -- once each. C5 counts the days one of them is
@@ -238,6 +279,7 @@ export function namedMoves(world: SliceWorld): NamedMove[] {
   for (const townId of world.towns.keys()) {
     add(townNoSeat(world, townId)?.move);
     add(shrinkCause(world, townId)?.move);
+    add(wornRoadAt(world, townId)?.move);
   }
   for (const entry of corridorNoSeat(world).values()) if (entry.perDay >= NO_SEAT_MIN_PER_DAY) add(entry.move);
   return [...moves.values()];

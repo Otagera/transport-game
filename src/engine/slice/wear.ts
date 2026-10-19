@@ -2,7 +2,7 @@ import type { Segment } from "../map/types";
 import { MIN_CONDITION, conditionSpeedFactor } from "../map/decay";
 import { BASE_COST_PER_CELL, BRIDGE_PREMIUM_PER_CELL, maintenanceCost } from "../pathing/cost";
 import { canAfford } from "../economy/state";
-import { chainOf } from "./world";
+import { chainOf, roadChain } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { SliceWorld } from "./types";
 import { SWITCHED_OFF } from "./tuning";
@@ -245,4 +245,51 @@ export function roughCostPerDay(world: SliceWorld, segment: Segment): number {
 /** Each road's condition, keyed by segment, for tickVehicle's speed. */
 export function segmentConditions(world: SliceWorld): Map<string, number> {
   return new Map(world.simulation.map.segments.map((segment) => [segment.id, segment.condition]));
+}
+
+/** A whole road's wear, as one decision (brief, Revision 2: wear per corridor, never per piece). */
+export interface CorridorWear {
+  /** Its pieces, through any roadside towns. The first stands for the road in buttons. */
+  pieceIds: string[];
+  /** Its worst piece's condition, 0..1, and the speed that lets traffic go there. */
+  condition: number;
+  speed: number;
+  /** Every piece kept up. */
+  kept: boolean;
+  /** What keeping all of it up costs a day at today's traffic. */
+  upkeepPerDay: number;
+  /** What repairing all of it to new costs now. */
+  repair: number;
+  /** What its wear costs your vehicles a day in running costs. */
+  roughPerDay: number;
+}
+
+export function corridorWear(world: SliceWorld, a: string, b: string): CorridorWear | null {
+  const pieces = roadChain(world, a, b);
+  if (!pieces || pieces.length === 0) return null;
+  return {
+    pieceIds: pieces.map((piece) => piece.id),
+    condition: Math.min(...pieces.map((piece) => piece.condition)),
+    speed: Math.min(...pieces.map((piece) => wearSpeed(world, piece))),
+    kept: pieces.every((piece) => world.maintained.has(piece.id)),
+    upkeepPerDay: pieces.reduce((sum, piece) => sum + upkeepPerDay(world, piece), 0),
+    repair: pieces.reduce((sum, piece) => sum + repairCost(world, piece, 1 - piece.condition), 0),
+    roughPerDay: pieces.reduce((sum, piece) => sum + roughCostPerDay(world, piece), 0),
+  };
+}
+
+/**
+ * Repairs the whole road a piece belongs to, to new, now -- "Fix all on
+ * this corridor" -- without keeping it up after: it wears again from new.
+ * Charged as one, refused as one if you can't afford it.
+ */
+export function fixRoadNow(world: SliceWorld, segmentId: string): MaintainResult {
+  if (!world.tuning.wearEnabled) return { ok: false, reason: SWITCHED_OFF };
+  const chain = chainOf(world, segmentId);
+  const pieces = chain?.pieces ?? world.simulation.map.segments.filter((segment) => segment.id === segmentId);
+  const cost = pieces.reduce((sum, piece) => sum + repairCost(world, piece, 1 - piece.condition), 0);
+  if (!canAfford(world.economy, cost)) return { ok: false, reason: "can't afford the repair" };
+  world.economy.funds -= cost;
+  for (const piece of pieces) piece.condition = 1;
+  return { ok: true, charged: cost };
 }
