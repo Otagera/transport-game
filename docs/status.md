@@ -42,7 +42,51 @@ right after this file. Progress on that build order:
 | R1 1e | Strikes made legible (announced, cancellable, 2 days, costed, on cards and road, pause option); the BRT bus; C3 re-measured | Done 2026-10-19: **C3 passes with BRT**: strict wins on the trunk, lax on Ilase-Kuto: below |
 | R1 2a | Rail switched on as the top rung (growth by a working station); C1 for rail | Done 2026-10-19: rail holds 34 days of growth: below |
 | R1 2a+ | Lanes open lax; a way out of every called strike (Settle, Relax) on its card; "no loss to you"; staggered strike clocks | Done 2026-10-19; **C3 now fails on the trunk** (lax ahead by 2%): below |
-| R1 2b | Rail priced for C2 (20-40 days of surplus), the named project the treasury leaves alone | Next, after C3 |
+| R1 2a++ | C3 over longer windows | Done 2026-10-19: **still fails** -- lax wins on both corridors at 80 and 120 days: below |
+| R1 2a+++ | A lane's town size limit follows what it carries (slides to paved with encroachment); C3 re-measured without rail | Done 2026-10-19: **C3 passes** -- strict on the trunk, no lane on Ilase-Kuto: below |
+| R1 2b | Rail priced for C2 (20-40 days of surplus), the named project the treasury leaves alone | Next |
+
+**Revision 1, 2a+++: a lane grows towns only while it carries, 2026-10-19** (`growth.ts`
+`carriedShare`; principles.md §3, Geometry and pathing). A town's cap share is the best of its
+roads and track by what each carries now: a lane's slides from `growthCapLaneShare` toward a
+paved road's as danfos encroach, and fully taken it is a paved road. The BRT bus (built in
+`cc3a9a8`, 80 seats, lane-only) is in every run: the probe replaces the corridor's buses with
+BRTs when the lane opens. C3 without rail, your money a day over the window (and trips a day
+along the corridor):
+
+| Corridor, window | Strict | Lax | No lane |
+|---|---|---|---|
+| Trunk, days 66-145 | **₦5,965** · 1,039 | ₦4,224 · 815 | |
+| Trunk, days 66-185 | **₦5,980** · 1,040 | ₦3,903 · 774 | |
+| Ilase-Kuto, days 13-92 | −₦50 · 37 | −₦20 · 37 | **₦61 · 37** |
+| Ilase-Kuto, days 13-132 | −₦48 · 37 | −₦20 · 37 | **₦60 · 37** |
+
+- **C3 passes:** on the busy trunk strict enforcement wins by ~40-50%, and carries a third more
+  trips; on the modest Ilase-Kuto the lane loses money either way (lax loses less) and **no
+  lane is right** -- the lane is the wrong rung for a thin corridor.
+- On Ilase-Kuto a lane changes no trips (37 a day in all three): its towns are thin. Neither
+  the panel nor the hints say so yet ("road is full" names the lane as the next rung there).
+
+**Revision 1, 2a++: C3 over longer windows, 2026-10-19** (corridor probe, BRT, money over
+the lane's first N days).
+
+| | Strict | Lax |
+|---|---|---|
+| Trunk, 80 days, rail allowed | **₦638,901** · 1,414 trips | ₦594,823 · 1,316 trips |
+| Trunk, 120 days, rail allowed | **₦1,072,300** · 1,598 trips | ₦932,949 · 1,389 trips |
+| Trunk, 80 days, no rail | ₦477,160 · 1,039 trips | **₦486,437** · 1,104 trips |
+| Trunk, 120 days, no rail | ₦717,540 · 1,040 trips | **₦744,038** · 1,123 trips |
+| Ilase-Kuto, 80 / 120 days, no rail | −₦3,971 / −₦5,765 | **−₦1,636 / −₦2,295** |
+
+- **C3 still fails.** With rail in the window strict wins, but only because the strict lane's
+  towns level off sooner and the probe climbs to rail sooner: rail, not enforcement. Holding
+  rail back, lax wins on both corridors, and by more the longer the window.
+- **A likely flaw:** an encroached lane still counts as the lane rung for growth
+  (`growth.ts` `bestRung`), so a lax lane keeps the lane's town cap while the danfos take it
+  back and pay tolls and levies again -- the lane's benefit without its cost. Fully
+  encroached, a lane is no faster than the road, so it should grow towns like a paved road:
+  the rung's cap share sliding from the lane's toward paved's with encroachment. For a
+  decision.
 
 **Revision 1, 2a+: a strike you can answer, 2026-10-19** (playtest: "the strike has pull now
 but I can't tell what I can do in this case since I did not put restrictions").

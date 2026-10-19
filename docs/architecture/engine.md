@@ -508,7 +508,9 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   (1.25), dirt `growthCapDirtShare` (0.4, i.e. the old +50%), a town no road reaches none.
   Paving a corridor lets its towns grow, and their growth jams it again
   (`scripts/corridor-probe.ts`, brief C1). A bus lane is the rung above paved
-  (`growthCapLaneShare`).
+  (`growthCapLaneShare`), rail above that (`growthCapRailShare`). `carriedShare` takes the
+  best of a town's roads and track by what each carries now: a lane's share slides toward
+  paved's with its encroachment.
 - **The bus lane** (Revision 1, 1b; `world.ts` `addBusLane`/`checkLane`/`laneCost`) — a flag
   on every piece of a paved road (`Segment.busLane`, copied when a town splits it), priced as
   `busLaneCostShare` × paving it. On it: your vehicles' flow isn't general traffic's and they

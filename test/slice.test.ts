@@ -2266,3 +2266,19 @@ describe("Revision 1: a called strike always has a way out -- settle with the un
     expect(second!.grievance).toBeLessThan(first!.grievance);
   });
 });
+
+describe("Revision 1: a lane's town size limit follows what it carries", () => {
+  test("as danfos take a lax lane, its towns' cap slides back to a paved road's", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    paveRoad(w, "big", "mid");
+    const paved = townGrowth(w, "mid")!.cap;
+    addBusLane(w, "big", "mid");
+    const clear = townGrowth(w, "mid")!.cap;
+    expect(clear).toBeGreaterThan(paved);
+    laneOn(w, "big", "mid")!.encroachment = 0.5;
+    const half = townGrowth(w, "mid")!.cap;
+    expect(half).toBeCloseTo((clear + paved) / 2);
+    laneOn(w, "big", "mid")!.encroachment = 1;
+    expect(townGrowth(w, "mid")!.cap).toBeCloseTo(paved);
+  });
+});

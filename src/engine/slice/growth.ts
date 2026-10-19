@@ -1,6 +1,7 @@
 import type { SliceWorld } from "./types";
 import { townShare } from "./world";
 import { isDirt } from "./congestion";
+import { laneEncroachment } from "./pushback";
 
 // The original towns grow (docs/principles.md §6, step 4: depth, one at a
 // time -- growth second, after decay). Served well, a town draws people;
@@ -76,6 +77,31 @@ function rungShare(world: SliceWorld, rung: CorridorRung): number {
   return rung === "rail" ? t.growthCapRailShare : rung === "lane" ? t.growthCapLaneShare : rung === "paved" ? 1 : rung === "dirt" ? t.growthCapDirtShare : 0;
 }
 
+/**
+ * The growth cap's share a town's roads and track allow: the best of them,
+ * each by what it carries now. A bus lane carries a lane's worth only while
+ * it's kept clear -- as danfos encroach, it slides back toward a paved
+ * road's share, and fully taken it is one (principles §3, Growth: the size
+ * limit follows what the corridors carry; a lax lane kept the lane's cap
+ * while the danfos paid tolls again in it, its benefit without its cost).
+ */
+function carriedShare(world: SliceWorld, townId: string): number {
+  const encroached = world.lanes.length > 0 ? laneEncroachment(world) : null;
+  let best = 0;
+  for (const segment of world.simulation.map.segments) {
+    if (segment.fromNodeId !== townId && segment.toNodeId !== townId) continue;
+    if (segment.type === "rail" && (!world.tuning.railEnabled || world.railOutOfService.has(segment.id))) continue;
+    const rung: CorridorRung = segment.type === "rail" ? "rail" : segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
+    let share = rungShare(world, rung);
+    if (rung === "lane") {
+      const taken = encroached?.get(segment.id) ?? 0;
+      share -= (share - rungShare(world, "paved")) * taken;
+    }
+    best = Math.max(best, share);
+  }
+  return best;
+}
+
 export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null {
   const base = world.basePopulation.get(townId);
   if (base === undefined) return null; // emergent towns grow from traffic (settlement.ts)
@@ -83,7 +109,7 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   const share = townShare(world, townId);
   const service = share.player + INFORMAL_SERVICE_WEIGHT * share.informal;
   const rung = bestRung(world, townId);
-  const cap = base * (1 + tuning.townGrowthCap * rungShare(world, rung));
+  const cap = base * (1 + tuning.townGrowthCap * carriedShare(world, townId));
   const developed = share.player >= tuning.growthMinPlayerShare
     ? smoothstep((service - tuning.growthServiceFloor) / (tuning.growthServiceFull - tuning.growthServiceFloor))
     : 0;

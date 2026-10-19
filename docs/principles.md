@@ -403,6 +403,13 @@ blow-by-blow; this section is the distilled rule.
   and vehicles measured every road as the straight line between its nodes, so a road bent
   round a ridge cost less *and* drove no slower — "around" always won. A segment now
   carries its alignment's length.
+- **A town's size limit must follow what its corridors carry now** (Revision 1,
+  2026-10-19), the same rule as travel length following the alignment: a measure that
+  ignores the thing it stands for gets gamed. A bus lane left lax kept the lane's growth
+  cap while the danfos took it back and paid tolls and levies again in it -- the lane's
+  benefit without its cost -- and lax beat strict enforcement on every corridor (trunk,
+  120 days: ₦744,038 against ₦717,540). The cap now slides from the lane's share toward a
+  paved road's as encroachment grows; fully taken, a lane grows towns like the road it is.
 - **One geometry representation.** Everything has a polyline, including straight-line
   corridors (a two-point polyline). Dual representations produce a bug class.
 - **No corner cutting in A\*.** A diagonal move between two land cells whose shared
