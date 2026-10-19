@@ -119,6 +119,8 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),
     segmentSpeed: new Map(),
+    laneFlowEMA: new Map(),
+    laneSpeed: new Map(),
     pushback: [],
     ruins: new Map(),
     pathCache: new Map(),

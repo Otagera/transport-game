@@ -56,13 +56,14 @@ export function roadCapacity(world: SliceWorld, segmentId: string): number {
 
 /**
  * The speeds your road vehicles see: general traffic's, except on a bus
- * lane, where nothing else is in their way. The same map when there's no lane.
+ * lane, where only your own vehicles are in their way -- the lane's own
+ * capacity (busLaneCapacity): past it, buses bunch and slow, as a real lane
+ * does. The same map when there's no lane.
  */
 export function yourSpeeds(world: SliceWorld): Map<string, number> {
-  const lanes = world.simulation.map.segments.filter((segment) => segment.busLane);
-  if (lanes.length === 0) return world.segmentSpeed;
+  if (world.laneSpeed.size === 0) return world.segmentSpeed;
   const speeds = new Map(world.segmentSpeed);
-  for (const segment of lanes) speeds.set(segment.id, 1);
+  for (const [segmentId, speed] of world.laneSpeed) speeds.set(segmentId, speed);
   return speeds;
 }
 
@@ -98,12 +99,16 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
   const nowOn = new Map<string, string>();
   // Your vehicles on a bus lane are out of general traffic's way.
   const laned = new Set(simulation.map.segments.filter((segment) => segment.busLane).map((segment) => segment.id));
+  const laneEntering = new Map<string, number>();
   for (const vehicle of simulation.vehicles) {
     const segmentId = currentSegment(world, vehicle);
     if (!segmentId) continue;
     const leg = `${segmentId}#${vehicle.pathIndex}`;
     nowOn.set(vehicle.id, leg);
-    if (laned.has(segmentId) && vehicle.lifecycle !== "one-shot") continue;
+    if (laned.has(segmentId) && vehicle.lifecycle !== "one-shot") {
+      if (world.vehicleSegment.get(vehicle.id) !== leg) laneEntering.set(segmentId, (laneEntering.get(segmentId) ?? 0) + vehicle.congestionWeight);
+      continue;
+    }
     if (world.vehicleSegment.get(vehicle.id) !== leg) {
       entering.set(segmentId, (entering.get(segmentId) ?? 0) + vehicle.congestionWeight);
       // Lorries counted apart too: they wear a road harder (wear.ts).
@@ -135,6 +140,13 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
     simulation.routing,
   );
   world.segmentSpeed = new Map();
+  world.laneSpeed = new Map();
+  for (const segmentId of laned) {
+    const previousLane = world.laneFlowEMA.get(segmentId) ?? 0;
+    const laneFlow = previousLane + ((laneEntering.get(segmentId) ?? 0) / dt - previousLane) * alpha;
+    world.laneFlowEMA.set(segmentId, laneFlow);
+    world.laneSpeed.set(segmentId, tuning.congestion ? speedFactor(laneFlow, tuning.busLaneCapacity, tuning.minSpeedFactor) : 1);
+  }
   for (const segment of simulation.map.segments) {
     if (segment.type === "rail") {
       // Track has no traffic but its own trains; worn track runs under a slow order (wear.ts).

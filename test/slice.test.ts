@@ -2094,11 +2094,22 @@ describe("Revision 1, 1b: the bus lane, and the strike it brings", () => {
     expect(informalBudget(w, road.id)).toBe(30);
     addBusLane(w, "big", "mid");
     expect(informalBudget(w, road.id)).toBe(w.tuning.informalRoadSpaceLane);
-    for (let i = 0; i < 12; i += 1) addBus(w, "big", "mid");
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
     run(w, 120);
-    // Twelve of your buses on it, and general traffic isn't slowed by them.
+    // A few of your buses: the lane is theirs, and they run at its free speed.
     const route = w.routes.find((r) => r.id === routeKey("big", "mid"))!;
     expect(route.speedEMA).toBeGreaterThan(0.95);
+    expect(w.roadFlowEMA.get(road.id) ?? 0).toBeLessThan(w.laneFlowEMA.get(road.id)!);
+  });
+
+  test("a lane has its own capacity: too many buses bunch and slow", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    paveRoad(w, "big", "mid");
+    addBusLane(w, "big", "mid");
+    const road = roadChain(w, "big", "mid")![0]!;
+    for (let i = 0; i < 40; i += 1) addBus(w, "big", "mid");
+    run(w, 120);
+    expect(w.laneSpeed.get(road.id)!).toBeLessThan(0.9);
   });
 
   test("the union strikes a few days after the lane: no danfo sets off along it that day", () => {

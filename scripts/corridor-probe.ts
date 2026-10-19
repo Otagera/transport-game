@@ -15,7 +15,7 @@
 import { SLICE_MAP } from "../src/slice/map";
 import { startSliceGame } from "../src/engine/slice/start";
 import { sliceTick } from "../src/engine/slice/tick";
-import { addBus, addBusLane, findRoute, paveRoad, roadChain } from "../src/engine/slice/world";
+import { addBus, addBusLane, findRoute, paveRoad, roadChain, routeSummaries } from "../src/engine/slice/world";
 import { townGrowth } from "../src/engine/slice/growth";
 import { isDirt } from "../src/engine/slice/congestion";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
@@ -31,7 +31,7 @@ const B = process.argv[4] ?? "owode";
 const JAM_SPEED = Number(process.env.JAM_SPEED ?? 0.7);
 const JAM_NO_SEAT = Number(process.env.JAM_NO_SEAT ?? 0.25);
 const FULL = 0.85;
-const MAX_BUSES = Number(process.env.MAX_BUSES ?? 16);
+const MAX_BUSES = Number(process.env.MAX_BUSES ?? 30);
 
 const tuning = { ...DEFAULT_SLICE_TUNING, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
 const world = startSliceGame(SLICE_MAP, tuning);
@@ -89,6 +89,14 @@ function countTakings(w: SliceWorld): void {
 const chainOf = (w: SliceWorld) => roadChain(w, A, B) ?? [];
 const takings = (w: SliceWorld) => corridorTakings.get(w)?.total ?? 0;
 let c3: { lane: number; twin: number } | null = null;
+let corridorNet = 0;
+// Strike days: does a strike cost you money, or earn it (riders flood your
+// buses)? At each strike, a twin with the strike called off, the same buses
+// in both, for the strike day and the day after: your money in each.
+let strikeTwin: SliceWorld | null = null;
+let strikeTwinDays = 0;
+let strikeGain = { struck: 0, calm: 0 };
+const strikeMoney: Array<{ day: number; struck: number; calm: number }> = [];
 let c3Start: { lane: number; twin: number } | null = null;
 const ticks = Math.round(SECONDS_PER_GAME_DAY / SIM_DT);
 const rungs: Array<{ day: number; rung: string }> = [{ day: 1, rung: rung() }];
@@ -101,10 +109,21 @@ for (let day = 1; day <= DAYS; day += 1) {
   world.economy.funds = 1e9;
   let slowSum = 0;
   let danfoSum = 0;
+  // A strike begins within this day: twin the world with it called off.
+  const now = world.economy.elapsedSeconds;
+  if (!strikeTwin && world.pushback.some((p) => p.nextStrikeAt > now && p.nextStrikeAt <= now + SECONDS_PER_GAME_DAY)) {
+    strikeTwin = structuredClone(world);
+    for (const p of strikeTwin.pushback) p.nextStrikeAt = Infinity;
+    strikeTwinDays = 0;
+    strikeGain = { struck: 0, calm: 0 };
+  }
+  const fundsAtDayStart = world.economy.funds;
+  if (strikeTwin) strikeTwin.economy.funds = 1e9;
   const twinning = twin !== null && day <= laneDay + C3_DAYS;
   if (twinning) twin!.economy.funds = 1e9;
   for (let i = 0; i < ticks; i += 1) {
     for (const event of sliceTick(world, SIM_DT)) if (event.kind === "strike" && strikeDay === null) strikeDay = day;
+    if (strikeTwin) sliceTick(strikeTwin, SIM_DT);
     if (twinning) {
       sliceTick(twin!, SIM_DT);
       countTakings(world);
@@ -137,8 +156,20 @@ for (let day = 1; day <= DAYS; day += 1) {
   if (jammed && !jammedYesterday) jams.push(day);
   jammedYesterday = jammed;
   // The scripted player: the next rung on a jam, else another bus while they run full.
+  if (strikeTwin) {
+    strikeGain.struck += world.economy.funds - fundsAtDayStart;
+    strikeGain.calm += strikeTwin.economy.funds - 1e9;
+    strikeTwinDays += 1;
+    if (strikeTwinDays === 2) {
+      strikeMoney.push({ day: day - 1, ...strikeGain });
+      strikeTwin = null;
+    }
+  }
   if (twin && day === laneDay + C3_DAYS) {
     c3 = { lane: (takings(world) - c3Start!.lane) / C3_DAYS, twin: (takings(twin) - c3Start!.twin) / C3_DAYS };
+    // The corridor's net a day: your route on it (fares less running costs) plus its takings.
+    const routeNet = routeSummaries(world).find((r) => r.id === findRoute(world, A, B)?.id)?.netPerDay ?? 0;
+    corridorNet = routeNet + c3.lane;
     twin = null;
   }
   if (jammed && rung() === "dirt" && process.env.NO_PAVE !== "1") {
@@ -156,6 +187,7 @@ for (let day = 1; day <= DAYS; day += 1) {
   } else if ((load > FULL || !route) && (route?.vehicleIds.length ?? 0) < MAX_BUSES) {
     addBus(world, A, B);
     if (twin && day < laneDay + C3_DAYS) addBus(twin, A, B);
+    if (strikeTwin) addBus(strikeTwin, A, B);
   }
 }
 
@@ -166,5 +198,9 @@ for (const r of rungs.slice(1)) {
   console.log(`C1: ${r.rung} on day ${r.day} held ${next ? `${next - r.day} days` : `past day ${DAYS}`} before the next jam (target 20-40)`);
 }
 if (laneDay) {
-  console.log(`C3: tolls and levies a day over the lane's first ${C3_DAYS} days: ${c3 ? `${c3.lane.toFixed(0)} with the lane against ${c3.twin.toFixed(0)} without (${c3.lane < c3.twin ? "lower" : "NOT lower"})` : "not measured (ran out of days)"}; first strike ${strikeDay === null ? "never" : `day ${strikeDay}, ${strikeDay - laneDay} days after the lane`} (C3: within 10)`);
+  console.log(`C3: tolls and levies a day over the lane's first ${C3_DAYS} days: ${c3 ? `${c3.lane.toFixed(0)} with the lane against ${c3.twin.toFixed(0)} without (${c3.lane < c3.twin ? "lower" : "NOT lower"}, ${Math.round(c3.twin - c3.lane)} a day = ${Math.round(((c3.twin - c3.lane) / corridorNet) * 100)}% of the corridor's net ${Math.round(corridorNet)} a day)` : "not measured (ran out of days)"}; first strike ${strikeDay === null ? "never" : `day ${strikeDay}, ${strikeDay - laneDay} days after the lane`} (C3: within 10)`);
+}
+for (const s of strikeMoney) {
+  const diff = s.struck - s.calm;
+  console.log(`Strike from day ${s.day}: your money over it and the day after ${Math.round(s.struck)} against ${Math.round(s.calm)} without it: ${diff < 0 ? `costs you ${Math.round(-diff)}` : `EARNS you ${Math.round(diff)}`}`);
 }

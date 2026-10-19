@@ -34,7 +34,33 @@ right after this file. Progress on that build order:
 | — | Your playtest (brief P1-P6) | Played 2026-10-19: fun for minutes; one map; no story; no struggle (principles.md §6) |
 | R1 | Revision 1, the corridor's story (brief) | **Agreed 2026-10-19.** One change and one measurement at a time |
 | R1 1a | A town's growth cap set by its best road's rung | Done 2026-10-19, **C1 passes on the trunk**: below |
-| R1 1b | The bus lane and pushback: a strike (C3) | Done 2026-10-19, **C3 passes**; the lane's own C1 doesn't: below |
+| R1 1b | The bus lane and pushback: a strike (C3) | Done 2026-10-19: C3 passes on paper; the lane's cost is 0.4% of the corridor's net and strikes earn you money |
+| R1 1b+ | The lane's own capacity; C1 for the lane re-measured; strike money against a twin | Done 2026-10-19: lane C1 33 days (knife-edge); strikes earn ₦22-38; lane encroachment and a stronger C3 proposed in the brief: below |
+
+**Revision 1, 1b+: the lane's own capacity, and what a strike costs, 2026-10-19**
+(`scripts/corridor-probe.ts`, now to 30 buses).
+
+| Lane capacity (road space a second) | Lane held, days to the next jam |
+|---|---|
+| 0.6, 1.0 | buses crawl at once (the lane far over capacity) |
+| 1.3 | 10 |
+| 1.6 | 18 |
+| **1.65 (set)** | **33** |
+| 1.7-2.2 | never, by the probe's rule |
+
+- **C1 for the lane passes at 1.65, on a knife edge.** Past ~1.7 the lane settles just above
+  the rule's 0.7 speed, so it never "jams", though its towns fall back ~15% from about day 70.
+  The rule, not the corridor, is the edge; a jam rule that reads the towns' decline would be
+  steadier. For a decision.
+- **Route speed now reads the lane** (`tick.ts`): it read general traffic's, which hid the
+  first crawl.
+- **Strikes earn you money.** A twin with each strike called off, the same buses: over the
+  strike day and the next, you ended ₦38, ₦37, ₦22 ahead and once ₦6 behind. The danfos'
+  riders board your buses. **Not pushback**, by your test.
+- **The lane's lost takings are 0.4% of the corridor's net** (₦9 a day against ₦2,413).
+- Proposed in the brief (Revision 1, "lane encroachment, and pushback that costs"): danfos
+  encroach on an unenforced lane, enforcement is a daily cost, shown on the map; a strike
+  must cost you; C3 requires the lane's cost to be at least 10% of the corridor's net.
 
 **Revision 1, 1b: the bus lane and pushback, 2026-10-19** (`scripts/corridor-probe.ts`: the
 same trunk player climbs to a bus lane on the paved trunk's jam, day 41; a twin without the

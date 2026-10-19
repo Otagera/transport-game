@@ -157,6 +157,13 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // then every 20, for a day.
   informalRoadSpaceLane: 4,
   laneGeneralCapacity: 0.6,
+  // The lane's own capacity (C1 for the lane, corridor probe, the player
+  // adding buses while full): 0.6 or 1.0 and the buses crawl at once; 1.3
+  // jams 10 days after the lane, 1.6 18, 1.65 33, 1.7 and up never by the
+  // probe's jam rule -- though the towns still fall back ~15% from day ~70:
+  // the lane settles just above 0.7 speed. A knife edge in the rule, not the
+  // corridor.
+  busLaneCapacity: 1.65,
   busLaneCostShare: 1,
   growthCapLaneShare: 1.6,
   strikeDelayDays: 5,

@@ -307,7 +307,8 @@ function routeSpeed(world: SliceWorld, vehicleIds: string[]): number {
     const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length]!;
     const to = vehicle.path[vehicle.pathIndex % length]!;
     const edge = routingFor(world, vehicle).graph.get(from)?.find((candidate) => candidate.to === to);
-    total += edge ? (world.segmentSpeed.get(edge.segmentId) ?? 1) : 1;
+    // Your vehicles on a bus lane go at the lane's speed, not general traffic's.
+    total += edge ? (world.laneSpeed.get(edge.segmentId) ?? world.segmentSpeed.get(edge.segmentId) ?? 1) : 1;
     count += 1;
   }
   return count > 0 ? total / count : 1;

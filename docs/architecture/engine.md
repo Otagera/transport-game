@@ -512,8 +512,9 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
 - **The bus lane** (Revision 1, 1b; `world.ts` `addBusLane`/`checkLane`/`laneCost`) — a flag
   on every piece of a paved road (`Segment.busLane`, copied when a town splits it), priced as
   `busLaneCostShare` × paving it. On it: your vehicles' flow isn't general traffic's and they
-  run at free speed (`congestion.ts` `yourSpeeds`, passed to `tickVehicle` for everything but
-  informal vehicles); general capacity is `laneGeneralCapacity` of the road; your vehicles'
+  run at the lane's own speed (`congestion.ts`: their flow on it, `laneFlowEMA`, against
+  `busLaneCapacity` on the same speed curve, into `laneSpeed`; `yourSpeeds` passes it to
+  `tickVehicle` for everything but informal vehicles, and `routeSpeed` reads it); general capacity is `laneGeneralCapacity` of the road; your vehicles'
   road space no longer counts against the danfos' budget, which falls to
   `informalRoadSpaceLane` (`tick.ts` `informalBudget`).
 - **Pushback: a strike** (`pushback.ts`) — `addBusLane` starts the union's clock

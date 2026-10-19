@@ -187,6 +187,8 @@ export interface SliceTuning {
   informalRoadSpaceLane: number;
   /** General traffic's share of a road's capacity once a lane is yours. */
   laneGeneralCapacity: number;
+  /** A bus lane's own capacity, road space entering per second (as roadFlowCapacity): past it your buses bunch and slow. */
+  busLaneCapacity: number;
   /** A bus lane's price, as a share of what paving that road costs. */
   busLaneCostShare: number;
   /** Of townGrowthCap, what a town whose best road has a bus lane can reach (paved: 1). */
@@ -342,6 +344,9 @@ export interface SliceWorld {
   segmentLoad: Map<string, number>;
   /** segmentId -> rolling road space entering per second: what congests it. */
   roadFlowEMA: Map<string, number>;
+  /** segmentId -> rolling flow of your vehicles in a bus lane, and the speed it allows (congestion.ts). */
+  laneFlowEMA: Map<string, number>;
+  laneSpeed: Map<string, number>;
   /** vehicleId -> the leg (segment#pathIndex) it was on last tick, to detect entering. */
   vehicleSegment: Map<string, string>;
   /** segmentId -> speed as a share of free flow this tick. What slows a bus is what the map draws. */
