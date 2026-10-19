@@ -29,6 +29,7 @@ import { buildSliceTerrain } from "@engine/slice/terrain";
 import { SLICE_MAP } from "../src/slice/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { applyAction } from "@engine/slice/actions";
+import { createRunRecorder, recordAction, recordTick, replayRun, runFile, startRun, type RunFile } from "@engine/slice/runlog";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/slice/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/slice/settlement";
@@ -2850,5 +2851,34 @@ describe("seeded variation of the hand-made map (brief, Revision 1, the order, 3
       return row;
     };
     expect(at([3, 3, 1.2, 3, 3, 3, 3])).toBeLessThan(at([3, 3, 5, 3, 3, 3, 3]));
+  });
+});
+
+describe("run files: a played game saved, read and replayed (runlog.ts)", () => {
+  test("a run saved as JSON replays to exactly the same world", () => {
+    const switches = { all: false, goodsOff: false, wearOff: false };
+    const world = startRun(SLICE_MAP, 3, switches, null);
+    const recorder = createRunRecorder(world, 3, switches, null);
+    const ticksADay = Math.round(SECONDS_PER_GAME_DAY / SIM_DT);
+    const towns = [...world.towns.keys()];
+    const play = (days: number) => {
+      for (let i = 0; i < days * ticksADay; i += 1) recordTick(recorder, world, sliceTick(world, SIM_DT));
+    };
+    const act = (action: Parameters<typeof applyAction>[1]) => {
+      if (applyAction(world, action).ok) recordAction(recorder, world, action);
+    };
+    act({ kind: "bus", a: towns[0]!, b: towns[1]! });
+    play(3);
+    act({ kind: "minibus", a: towns[0]!, b: towns[2]! });
+    act({ kind: "pave", a: towns[0]!, b: towns[1]! });
+    play(4);
+    const file = JSON.parse(JSON.stringify(runFile(recorder))) as RunFile;
+    expect(file.actions.length).toBeGreaterThanOrEqual(2);
+    expect(file.days.length).toBe(7);
+    expect(file.days.at(-1)!.routes.length).toBeGreaterThan(0);
+    const replayed = replayRun(SLICE_MAP, file);
+    expect(replayed.economy.funds).toBe(world.economy.funds);
+    expect(headline(replayed)).toEqual(headline(world));
+    expect([...replayed.towns.values()].map((t) => t.population)).toEqual([...world.towns.values()].map((t) => t.population));
   });
 });

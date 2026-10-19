@@ -127,6 +127,10 @@ if it still ends at "nothing more to build", the second economy has earned its p
   `BOTS_WORKERS=2` by default; 6 only on a machine that can take it).
 - One corridor up the ladder: `bun scripts/corridor-probe.ts [days]` (`SEED=n`,
   `REAL_MONEY=1`, `BRT=1`, `LAX=1`, ...).
+- A played game: "Save run" (beside "New map") downloads it; `bun scripts/slice-run.ts run.json`
+  prints the timeline, what you did, what the game announced and the last day (`--day N` for
+  one day in full, `--verify` replays it and checks it reproduces). `?goods=off` and
+  `?wear=off` switch those systems off.
 - Calibrate: `bun scripts/slice-probe.ts [days]`, with `SLICE_TUNING='{"fare":5}'` to try
   overrides.
 - Detail: [architecture/engine.md](architecture/engine.md) §slice/,

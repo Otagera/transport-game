@@ -1,8 +1,6 @@
 import { Accumulator, SIM_DT } from "@engine/loop";
 import { sliceTick } from "@engine/slice/tick";
 import {
-  addBus,
-  buildRoad,
   checkBus,
   checkPave,
   checkRoad,
@@ -10,12 +8,9 @@ import {
   debtAdvice,
   demandAlong,
   diagnoseRoute,
-  addMinibus,
-  addBrt,
   checkBrt,
   brtRouteId,
   isBrtRoute,
-  addBusLane,
   checkLane,
   laneCost,
   checkMinibus,
@@ -31,8 +26,6 @@ import {
   localTravel,
   networkShare,
   pairDemand,
-  paveRoad,
-  removeBus,
   paveCost,
   roadCost,
   roadPath,
@@ -43,33 +36,30 @@ import {
 } from "@engine/slice/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { planRoad, segmentPolyline, type Alignment, type RoadPlan } from "@engine/slice/roads";
-import { corridorWear, fixRoadNow, roughCostPerDay, setRoadMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
+import { corridorWear, roughCostPerDay, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/slice/receipts";
-import type { SliceWorld } from "@engine/slice/types";
 import { growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
-import { addTrain, buildHalt, buildTrack, checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/slice/rail";
-import { addFreightTrain, checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
-import { addLorry, checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
+import { checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/slice/rail";
+import { checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
+import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, isLorryRoute, lorrySummaries, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
 import type { ForecastLine } from "./render";
-import { applyAction, type ActionSpec } from "@engine/slice/actions";
+import { applyAction, type ActionOutcome, type ActionSpec } from "@engine/slice/actions";
+import { createRunRecorder, recordAction, recordTick, runFile, startRun, type RunSwitches } from "@engine/slice/runlog";
 import { vehicleMoves } from "@engine/slice/moves";
-import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
-import { startSliceGame } from "@engine/slice/start";
-import { generatedSliceMap } from "@engine/slice/generate";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
-import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
+import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
 import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { isYourRoad } from "@engine/slice/upkeep";
-import { goneAt, restoreCost as restoreRoadCost, restoreRoad, retireRoad } from "@engine/slice/retire";
+import { goneAt, restoreCost as restoreRoadCost } from "@engine/slice/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/slice/problems";
-import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
+import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
@@ -112,16 +102,15 @@ if (!params.has("seed")) {
   history.replaceState(null, "", `${location.pathname}?${params}`);
 }
 // The world has already run five days when you arrive (start.ts).
-const world = startSliceGame(generatedSliceMap(SLICE_MAP, seed), {
-  ...DEFAULT_SLICE_TUNING,
-  ...(allSystems ? ALL_SYSTEMS_ON : {}),
-  ...(switchedOff.includes("goods") ? { goodsEnabled: false } : {}),
-  ...(switchedOff.includes("wear") ? { wearEnabled: false } : {}),
-});
+const switches: RunSwitches = { all: allSystems, goodsOff: switchedOff.includes("goods"), wearOff: switchedOff.includes("wear") };
 // A developer start (?dev=1&funds=20000): enough money to reach a late rung
 // in a minute, for screenshots and checks. Ignored without ?dev=1.
-const devFunds = dev ? Number(params.get("funds")) : NaN;
-if (Number.isFinite(devFunds) && params.has("funds")) world.economy.funds = devFunds;
+const fundsParam = Number(params.get("funds"));
+const devFunds = dev && params.has("funds") && Number.isFinite(fundsParam) ? fundsParam : null;
+// Started as a replay would start it (runlog.ts), and recorded as it goes:
+// "Save run" writes the file a script can read or replay.
+const world = startRun(SLICE_MAP, seed, switches, devFunds);
+const recorder = createRunRecorder(world, seed, switches, devFunds);
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
 const strip = document.querySelector<HTMLDivElement>("#strip")!;
@@ -137,8 +126,22 @@ const controlsEl = document.querySelector<HTMLDivElement>("#controls")!;
   const query = fresh.toString();
   // A new map keeps the switches: the next game of a playtest runs the same systems.
   const off = switchedOff.map((system) => ` · ${system} off`).join("");
-  document.querySelector<HTMLSpanElement>("#map-seed")!.innerHTML = `Map ${seed}${off} · <a href="${location.pathname}${query ? `?${query}` : ""}">New map</a>`;
+  document.querySelector<HTMLSpanElement>("#map-seed")!.innerHTML =
+    `Map ${seed}${off} · <a href="${location.pathname}${query ? `?${query}` : ""}">New map</a> · <a href="#" id="save-run">Save run</a>`;
 }
+// The run so far as a file (runlog.ts): what you did and what each day looked
+// like, for reading by hand or with scripts/slice-run.ts.
+document.querySelector<HTMLAnchorElement>("#save-run")!.addEventListener("click", (event) => {
+  event.preventDefault();
+  const file = runFile(recorder);
+  const blob = new Blob([JSON.stringify(file)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `run-map${seed}-day${gameDay(world)}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  say(`Saved: ${link.download} (${file.actions.length} actions, ${file.days.length} days).`);
+});
 
 let tool: Tool = "bus";
 // Road and Track tools: bend round the terrain where it's cheaper, or hold the straight line and pay (A).
@@ -196,16 +199,22 @@ const book = createReceiptBook();
  * is the real world's. Outside it there are no receipts, so no shadow world
  * to step every frame.
  */
-function act<T extends { ok: boolean }>(spec: ReceiptSpec, run: (w: SliceWorld) => T): T {
+function act(spec: ReceiptSpec, action: ActionSpec): ActionOutcome {
   actionVersion += 1; // every forecast was of the world before this
-  if (!dev) return run(world);
-  let result: T | undefined;
-  perform(world, book, (w) => {
-    const r = run(w);
-    if (w === world) result = r;
-    return r.ok;
-  }, spec);
-  return result!;
+  // As data, never a closure: what the run file records is exactly what ran.
+  let result: ActionOutcome;
+  if (!dev) result = applyAction(world, action);
+  else {
+    let real: ActionOutcome | undefined;
+    perform(world, book, (w) => {
+      const r = applyAction(w, action);
+      if (w === world) real = r;
+      return r.ok;
+    }, spec);
+    result = real!;
+  }
+  if (result.ok) recordAction(recorder, world, action);
+  return result;
 }
 
 // --- Forecasts: a receipt before the action (forecast.ts) ----------------
@@ -580,11 +589,11 @@ canvas.addEventListener("click", (event) => {
     const pieces = roadPieces(road);
     const ends = chainOf(world, road);
     const towns = ends ? [ends.a, ends.b] : [pieces[0]!.fromNodeId, pieces[0]!.toNodeId];
-    const result = act({ label: on ? `maintaining ${name}` : `letting ${name} wear`, towns }, (w) => setRoadMaintained(w, road, on));
+    const result = act({ label: on ? `maintaining ${name}` : `letting ${name} wear`, towns }, { kind: "fix", segmentId: road, on });
     if (!result.ok) say(`Can't maintain: ${result.reason}`, true);
     else if (on) {
       const upkeep = pieces.reduce((sum, piece) => sum + upkeepPerDay(world, piece), 0);
-      say(`Maintaining ${name}: repaired for ${naira(result.charged)}, about ${naira(upkeep)}/day to keep at this traffic.${later}`);
+      say(`Maintaining ${name}: repaired for ${naira(result.amount ?? 0)}, about ${naira(upkeep)}/day to keep at this traffic.${later}`);
     } else say(`Stopped maintaining ${name}: it will wear again`);
     renderPanel();
     return;
@@ -598,7 +607,7 @@ canvas.addEventListener("click", (event) => {
   if (tool === "track" && selectedTown === town && haltSite(world, town)) {
     const site = haltSite(world, town)!;
     const cost = haltCost(world, site);
-    const result = act({ label: `a halt at ${townName(town)}`, towns: [town] }, (w) => buildHalt(w, town));
+    const result = act({ label: `a halt at ${townName(town)}`, towns: [town] }, { kind: "halt", town });
     if (result.ok) say(`Built a halt at ${townName(town)} for ${naira(cost)}: trains on the line now stop here. Result in two days.`);
     else say(`Can't build a halt (${naira(cost)}): ${result.reason}`, true);
     selectedTown = null;
@@ -626,13 +635,13 @@ canvas.addEventListener("click", (event) => {
   if (tool === "road" && intended?.kind === "enforce") {
     const lane = laneOn(world, from, town)!;
     const strict = intended.enforcement === "strict";
-    act({ label: `${strict ? "enforcing" : "relaxing"} the ${townName(from)} – ${townName(town)} lane`, towns }, (w) => ({ ok: setEnforcement(w, from, town, intended.enforcement) }));
+    act({ label: `${strict ? "enforcing" : "relaxing"} the ${townName(from)} – ${townName(town)} lane`, towns }, intended);
     say(strict
       ? `Wardens on the ${townName(from)} – ${townName(town)} lane, ${naira(enforcementPerDay(world, lane))}/day: they'll clear it, and the union will strike more often.${later}`
       : `Wardens off the ${townName(from)} – ${townName(town)} lane: danfos will creep into it, and the union will keep the peace.${later}`);
   } else if (tool === "road" && intended?.kind === "lane") {
     const cost = laneCost(world, from, town);
-    const result = act({ label: `a bus lane on ${townName(from)} – ${townName(town)}`, towns }, (w) => addBusLane(w, from, town));
+    const result = act({ label: `a bus lane on ${townName(from)} – ${townName(town)}`, towns }, { kind: "lane", a: from, b: town });
     if (result.ok) {
       say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic, and BRT buses (X) can run in it. No wardens yet (Road tool on it to enforce). The danfo union will answer the lane within days.${later}`, false, 8);
       renderToolbar();
@@ -640,12 +649,12 @@ canvas.addEventListener("click", (event) => {
     else say(`Can't add a bus lane (${naira(cost)}): ${result.reason}`, true);
   } else if (tool === "road" && roadChain(world, from, town)) {
     const cost = paveCost(world, from, town);
-    const result = act({ label: `paving ${townName(from)} – ${townName(town)}`, towns }, (w) => paveRoad(w, from, town));
+    const result = act({ label: `paving ${townName(from)} – ${townName(town)}`, towns }, { kind: "pave", a: from, b: town });
     if (result.ok) say(`Paved ${townName(from)} – ${townName(town)} for ${naira(cost)}: it now carries ${paveGain()}× the traffic.${later}`);
     else say(`Can't pave: ${result.reason}`, true);
   } else if (tool === "road") {
     const cost = roadCost(world, from, town, alignment);
-    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, (w) => buildRoad(w, from, town, alignment));
+    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment });
     if (result.ok) say(`Built road ${townName(from)} – ${townName(town)} for ${naira(cost)}.${later}`);
     else say(`Can't build: ${result.reason}`, true);
   } else if (tool === "track") {
@@ -653,39 +662,39 @@ canvas.addEventListener("click", (event) => {
     const restoring = action === "restore";
     const cost = trackCost(world, from, town, alignment);
     const label = restoring ? `restoring the old line ${townName(from)} – ${townName(town)}` : `track ${townName(from)} – ${townName(town)}`;
-    const result = act({ label, towns }, (w) => buildTrack(w, from, town, alignment));
+    const result = act({ label, towns }, { kind: "track", a: from, b: town, alignment });
     if (result.ok) say(restoring ? `Restored the old line ${townName(from)} – ${townName(town)} for ${naira(cost)}: trains can run on it` : action === "onroad" ? `The road ${townName(from)} – ${townName(town)} became the railway, for ${naira(cost)}.` : `Laid track ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't lay track: ${result.reason}`, true);
   } else if (tool === "freight") {
     const count = (world.lorryRoutes.find((r) => r.id === freightRouteId(from, town))?.vehicleIds.length ?? 0) + 1;
-    const result = act({ label: addLabel("freight train", count, from, town), towns, routeId: freightRouteId(from, town) }, (w) => addFreightTrain(w, from, town));
+    const result = act({ label: addLabel("freight train", count, from, town), towns, routeId: freightRouteId(from, town) }, { kind: "freight", a: from, b: town });
     if (result.ok) say(`Freight train added: ${pair(from, town)}.${later}`);
     else say(`Can't add freight train (${naira(world.tuning.freightPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "train") {
     const count = (world.routes.find((r) => r.id === railRouteId(from, town))?.vehicleIds.length ?? 0) + 1;
-    const result = act({ label: addLabel("train", count, from, town), towns, routeId: railRouteId(from, town) }, (w) => addTrain(w, from, town));
+    const result = act({ label: addLabel("train", count, from, town), towns, routeId: railRouteId(from, town) }, { kind: "train", a: from, b: town });
     if (result.ok) say(`Train added: ${pair(from, town)}.${later}`);
     else say(`Can't add train (${naira(world.tuning.trainPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "lorry") {
     const route = findLorryRoute(world, from, town);
-    const result = act({ label: addLabel("lorry", (route?.vehicleIds.length ?? 0) + 1, from, town), towns, routeId: route?.id ?? lorryRouteId(from, town) }, (w) => addLorry(w, from, town));
+    const result = act({ label: addLabel("lorry", (route?.vehicleIds.length ?? 0) + 1, from, town), towns, routeId: route?.id ?? lorryRouteId(from, town) }, { kind: "lorry", a: from, b: town });
     if (result.ok) say(`Lorry added: ${pair(from, town)}.${later}`);
     else say(`Can't add lorry (${naira(world.tuning.lorryPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "brt") {
     const routeId = brtRouteId(from, town);
     const count = (world.routes.find((r) => r.id === routeId)?.vehicleIds.length ?? 0) + 1;
-    const result = act({ label: addLabel("BRT bus", count, from, town), towns, routeId }, (w) => addBrt(w, from, town));
+    const result = act({ label: addLabel("BRT bus", count, from, town), towns, routeId }, { kind: "brt", a: from, b: town });
     if (result.ok) say(`BRT bus added: ${pair(from, town)}, in its lane.${later}`);
     else say(`Can't add a BRT bus (${naira(world.tuning.brtPurchaseCost)}): ${result.reason}`, true);
   } else if (tool === "minibus") {
     const routeId = minibusRouteId(from, town);
     const count = (world.routes.find((r) => r.id === routeId)?.vehicleIds.length ?? 0) + 1;
-    const result = act({ label: addLabel("minibus", count, from, town), towns, routeId }, (w) => addMinibus(w, from, town));
+    const result = act({ label: addLabel("minibus", count, from, town), towns, routeId }, { kind: "minibus", a: from, b: town });
     if (result.ok) say(`Minibus added: ${pair(from, town)}.${later}`);
     else say(`Can't add minibus (${naira(world.tuning.minibusPurchaseCost)}): ${result.reason}`, true);
   } else {
     const count = (findRoute(world, from, town)?.vehicleIds.length ?? 0) + 1;
-    const result = act({ label: addLabel("bus", count, from, town), towns, routeId: routeKey(from, town) }, (w) => addBus(w, from, town));
+    const result = act({ label: addLabel("bus", count, from, town), towns, routeId: routeKey(from, town) }, { kind: "bus", a: from, b: town });
     if (result.ok) say(`Bus added: ${pair(from, town)}.${later}`);
     else say(`Can't add bus (${naira(world.tuning.busPurchaseCost)}): ${result.reason}`, true);
   }
@@ -1723,13 +1732,13 @@ routesEl.addEventListener("click", (event) => {
   // The named project: name it from a town's road-full line, or drop it.
   if (target.dataset.project) {
     const [a, b, rung] = target.dataset.project.split("|") as [string, string, ProjectRung];
-    const result = act({ label: `saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, (w) => nameProject(w, a, b, rung));
+    const result = act({ label: `saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, { kind: "project", a, b, rung });
     say(result.ok ? `Saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone for ${world.tuning.projectLapseDays} days. Build it before then, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }
   if (target.dataset.dropProject) {
-    dropProject(world);
+    act({ label: "dropping the named project", towns: [] }, { kind: "dropProject" });
     say("Project dropped: the treasury takes its usual share again.");
     renderPanel();
     return;
@@ -1738,15 +1747,15 @@ routesEl.addEventListener("click", (event) => {
   if (target.dataset.keep) {
     const [id, on] = target.dataset.keep.split("|") as [string, string];
     const name = roadName(id);
-    const result = act({ label: on === "1" ? `keeping up ${name}` : `letting ${name} wear`, towns: roadTowns(id) }, (w) => setRoadMaintained(w, id, on === "1"));
-    say(result.ok ? (on === "1" ? `Keeping up ${name}${result.charged > 0 ? `: ${naira(result.charged)} to repair it first` : ""}.` : `${capitalise(name)} will wear again.`) : `Can't: ${result.reason}`, !result.ok);
+    const result = act({ label: on === "1" ? `keeping up ${name}` : `letting ${name} wear`, towns: roadTowns(id) }, { kind: "fix", segmentId: id, on: on === "1" });
+    say(result.ok ? (on === "1" ? `Keeping up ${name}${(result.amount ?? 0) > 0 ? `: ${naira(result.amount ?? 0)} to repair it first` : ""}.` : `${capitalise(name)} will wear again.`) : `Can't: ${result.reason}`, !result.ok);
     renderPanel();
     return;
   }
   if (target.dataset.retire) {
     const id = target.dataset.retire;
     const name = roadName(id);
-    const result = act({ label: `retiring ${name}`, towns: roadTowns(id) }, (w) => retireRoad(w, id));
+    const result = act({ label: `retiring ${name}`, towns: roadTowns(id) }, { kind: "retire", segmentId: id });
     say(result.ok ? `Retired ${name}: no upkeep or tolls from today, and it's gone in ${world.tuning.retireGoneDays} days unless you restore it.` : `Can't: ${result.reason}`, !result.ok, 7);
     renderPanel();
     return;
@@ -1754,7 +1763,7 @@ routesEl.addEventListener("click", (event) => {
   if (target.dataset.restore) {
     const id = target.dataset.restore;
     const name = roadName(id);
-    const result = act({ label: `restoring ${name}`, towns: roadTowns(id) }, (w) => restoreRoad(w, id));
+    const result = act({ label: `restoring ${name}`, towns: roadTowns(id) }, { kind: "restore", segmentId: id });
     say(result.ok ? `Restored ${name}.` : `Can't: ${result.reason}`, !result.ok);
     renderPanel();
     return;
@@ -1762,8 +1771,8 @@ routesEl.addEventListener("click", (event) => {
   if (target.dataset.fixnow) {
     const id = target.dataset.fixnow;
     const name = roadName(id);
-    const result = act({ label: `repairing ${name}`, towns: roadTowns(id) }, (w) => fixRoadNow(w, id));
-    say(result.ok ? `Repaired ${name} to new for ${naira(result.charged)}. It wears again from here.` : `Can't: ${result.reason}`, !result.ok);
+    const result = act({ label: `repairing ${name}`, towns: roadTowns(id) }, { kind: "repair", segmentId: id });
+    say(result.ok ? `Repaired ${name} to new for ${naira(result.amount ?? 0)}. It wears again from here.` : `Can't: ${result.reason}`, !result.ok);
     renderPanel();
     return;
   }
@@ -1775,10 +1784,10 @@ routesEl.addEventListener("click", (event) => {
     if (!lane) return;
     if (target.dataset.settle) {
       const price = settlementPrice(world, lane);
-      const result = act({ label: `settling with the union on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, (w) => settleStrike(w, a, b));
+      const result = act({ label: `settling with the union on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, { kind: "settle", a, b });
       say(result.ok ? `Paid the union ${naira(price)}: the strike on ${townName(a)} – ${townName(b)} is off.` : `Can't settle (${naira(price)}): ${result.reason}`, !result.ok);
     } else {
-      act({ label: `relaxing the ${townName(a)} – ${townName(b)} lane`, towns: [a, b] }, (w) => ({ ok: setEnforcement(w, a, b, "lax") }));
+      act({ label: `relaxing the ${townName(a)} – ${townName(b)} lane`, towns: [a, b] }, { kind: "enforce", a, b, enforcement: "lax" });
       say(`Wardens off the ${townName(a)} – ${townName(b)} lane: the strike will be called off, and danfos will creep back into it.`);
     }
     renderPanel();
@@ -1795,7 +1804,7 @@ routesEl.addEventListener("click", (event) => {
   if (moveIndex !== undefined) {
     const move = moves.list[Number(moveIndex)];
     if (!move) return;
-    const result = act(move.spec, (w) => applyAction(w, move.action));
+    const result = act(move.spec, move.action);
     if (result.ok) say(`${move.title}: bought for ${naira(move.price)}.${later}`);
     else say(`Can't: ${result.reason}`, true);
     renderPanel();
@@ -1803,14 +1812,11 @@ routesEl.addEventListener("click", (event) => {
   }
   const addId = target.dataset.add;
   const removeId = target.dataset.remove;
-  const sell = (routeId: string, vehicle: string, remove: (w: SliceWorld) => number) => {
+  const sell = (routeId: string, vehicle: string) => {
     const route = [...world.routes, ...world.lorryRoutes].find((candidate) => candidate.id === routeId);
     if (!route) return;
-    const result = act({ label: `selling a ${vehicle} on ${pair(route.a, route.b)}`, towns: [route.a, route.b], routeId }, (w) => {
-      const refund = remove(w);
-      return { ok: refund > 0, refund };
-    });
-    if (result.ok) say(`Sold a ${vehicle} for ${naira(result.refund)}.${later}`);
+    const result = act({ label: `selling a ${vehicle} on ${pair(route.a, route.b)}`, towns: [route.a, route.b], routeId }, { kind: "sell", routeId });
+    if (result.ok) say(`Sold a ${vehicle} for ${naira(result.amount ?? 0)}.${later}`);
   };
   if (addId && isLorryRoute(addId)) {
     const route = world.lorryRoutes.find((candidate) => candidate.id === addId);
@@ -1818,7 +1824,7 @@ routesEl.addEventListener("click", (event) => {
     const freight = isFreightRoute(addId);
     const vehicle = freight ? "freight train" : "lorry";
     const spec = { label: addLabel(vehicle, route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
-    const result = act(spec, (w) => (freight ? addFreightTrain(w, route.a, route.b) : addLorry(w, route.a, route.b)));
+    const result = act(spec, { kind: freight ? "freight" : "lorry", a: route.a, b: route.b });
     const price = freight ? world.tuning.freightPurchaseCost : world.tuning.lorryPurchaseCost;
     if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (addId) {
@@ -1829,13 +1835,13 @@ routesEl.addEventListener("click", (event) => {
     const brt = isBrtRoute(addId);
     const vehicle = train ? "train" : mini ? "minibus" : brt ? "BRT bus" : "bus";
     const spec = { label: addLabel(vehicle, route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
-    const result = act(spec, (w) => (train ? addTrain(w, route.a, route.b) : mini ? addMinibus(w, route.a, route.b) : brt ? addBrt(w, route.a, route.b) : addBus(w, route.a, route.b)));
+    const result = act(spec, { kind: train ? "train" : mini ? "minibus" : brt ? "brt" : "bus", a: route.a, b: route.b });
     const price = train ? world.tuning.trainPurchaseCost : mini ? world.tuning.minibusPurchaseCost : brt ? world.tuning.brtPurchaseCost : world.tuning.busPurchaseCost;
     if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {
-    sell(removeId, isFreightRoute(removeId) ? "freight train" : "lorry", (w) => removeLorry(w, removeId));
+    sell(removeId, isFreightRoute(removeId) ? "freight train" : "lorry");
   } else if (removeId) {
-    sell(removeId, isRailRoute(removeId) ? "train" : isMinibusRoute(removeId) ? "minibus" : isBrtRoute(removeId) ? "BRT bus" : "bus", (w) => removeBus(w, removeId));
+    sell(removeId, isRailRoute(removeId) ? "train" : isMinibusRoute(removeId) ? "minibus" : isBrtRoute(removeId) ? "BRT bus" : "bus");
   }
   renderRoutes();
 });
@@ -1908,7 +1914,9 @@ function frame(now: number): void {
     // than being clipped by the accumulator's per-frame catch-up cap.
     for (let i = 0; i < speed; i += 1) {
       accumulator.advance(elapsed, (dt) => {
-        for (const event of sliceTick(world, dt)) announce(event);
+        const events = sliceTick(world, dt);
+        recordTick(recorder, world, events);
+        for (const event of events) announce(event);
         if (dev) for (const receipt of tickReceipts(world, book, dt)) say(receiptLine(receipt), receipt.moneyPerDay < -5, 8);
       });
     }

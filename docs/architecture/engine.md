@@ -694,7 +694,17 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
 
 - **`actions.ts`** — every player action as an `ActionSpec` (plain data: bus, lorry, train,
   freight, road, pave, track, halt, fix, sell) and `applyAction(world, spec)`. Data rather
-  than closures so an action can be sent to a worker and replayed there.
+  than closures so an action can be sent to a worker and replayed there. The page's `act()`
+  takes the spec itself and runs it through `applyAction`, so every action the page takes
+  (including retire, restore, repair and dropping a named project) is one of these.
+- **`runlog.ts`** — run files. `startRun(base, seed, switches, devFunds)` starts a game exactly
+  as the page does; a `RunRecorder` keeps every successful action with the tick it came after
+  (`recordAction`) and, as each game day ends, a row of what the screen showed (`recordTick` →
+  `daySummary`: funds, 5-day net and headline, budget totals, routes with verdicts, lorries,
+  towns, corridors, lanes, industries, the day's events). "Save run" on the page downloads
+  `runFile(recorder)` as JSON. `replayRun(base, file, untilTick)` rebuilds the world at any
+  tick: the sim is deterministic (the seed is its only randomness), and a test pins that a
+  saved run replays to the same funds, headline and towns. `scripts/slice-run.ts` reads one.
 - **`forecast.ts`** — `forecast(world, action, spec)` copies the world and runs the receipt
   machinery on the copy (`perform`, then ticks until the receipt finishes): the receipt the
   action would get two days on, if nothing else changes. The real world is untouched. A test

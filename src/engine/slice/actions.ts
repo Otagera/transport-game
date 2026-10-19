@@ -2,14 +2,16 @@ import type { SliceWorld } from "./types";
 import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
 import { addTrain, buildHalt, buildTrack } from "./rail";
-import { setRoadMaintained } from "./wear";
+import { fixRoadNow, setRoadMaintained } from "./wear";
 import type { Alignment } from "./roads";
 import { setEnforcement, settleStrike, type Enforcement } from "./pushback";
-import { nameProject, type ProjectRung } from "./project";
+import { dropProject, nameProject, type ProjectRung } from "./project";
+import { restoreRoad, retireRoad } from "./retire";
 
 // Every player action as plain data. Data, not a closure, so it can be
 // sent to a worker and replayed there: the forecast (forecast.ts) runs an
-// action on a copy of the world before the player commits to it.
+// action on a copy of the world before the player commits to it, and a
+// run file (runlog.ts) records them so a whole game can be replayed.
 
 export type ActionSpec =
   | { kind: "bus" | "minibus" | "brt" | "lorry" | "train" | "freight"; a: string; b: string }
@@ -22,6 +24,8 @@ export type ActionSpec =
   | { kind: "track"; a: string; b: string; alignment: Alignment }
   | { kind: "halt"; town: string }
   | { kind: "fix"; segmentId: string; on: boolean }
+  | { kind: "retire" | "restore" | "repair"; segmentId: string }
+  | { kind: "dropProject" }
   | { kind: "sell"; routeId: string };
 
 /** `amount`: money charged (a repair) or returned (a sale), where the caller wants to say it. */
@@ -65,6 +69,19 @@ export function applyAction(world: SliceWorld, spec: ActionSpec): ActionOutcome 
       const result = setRoadMaintained(world, spec.segmentId, spec.on);
       return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };
     }
+    case "retire":
+      return retireRoad(world, spec.segmentId);
+    case "restore": {
+      const result = restoreRoad(world, spec.segmentId);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
+    case "repair": {
+      const result = fixRoadNow(world, spec.segmentId);
+      return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };
+    }
+    case "dropProject":
+      dropProject(world);
+      return { ok: true };
     case "sell": {
       const refund = isLorryRoute(spec.routeId) ? removeLorry(world, spec.routeId) : removeBus(world, spec.routeId);
       return refund > 0 ? { ok: true, amount: refund } : { ok: false, reason: "nothing to sell" };
