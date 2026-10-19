@@ -53,10 +53,19 @@ measured where a number decides it:
 6. Retiring a road (gone in 60 days unless restored; routes re-pathed or sold); track on a
    retired road's line at half price.
 
-**Your playtest:** a generated map past day 150. Bring back: does the late game still ask for
-moves (C5); do quarries opening and closing give you new problems (C6); is a line a choice
-between freight and passengers (C7); do you keep some corridors up and let others go (C8); do
-the truckers feel like a rival (C9); did you settle a strike, or retire a road, and why?
+**Your playtest: two games, each a generated map past day 150.** All of Revision 2 landed at
+once, so the first game separates "problems shown" (step 1) from goods and wear:
+
+1. `slice.html?goods=off&wear=off`: problems shown, settlements and rail's job only. Does the
+   late game still ask for moves (C5)?
+2. `slice.html`: everything on. Do quarries opening and closing give you new problems (C6); is a
+   line a choice between freight and passengers (C7); do you keep some corridors up and let
+   others go (C8); do the truckers feel like a rival (C9); did you settle a strike, or retire a
+   road, and why?
+
+In both, note what set off each "I should do something" moment (a problem line, a quarry, a
+trucker, a strike warning, a worn road). If game 1 already feels alive, goods stay small; if
+only game 2 does, goods carry the late game. Log the two games separately in principles §6.
 Unmeasured: C6-C9 by bots (they don't run goods or rail); the mill and the factory wait.
 
 ### What the draft was asked to cover (agreed to draft 2026-10-19)

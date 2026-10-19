@@ -89,10 +89,14 @@ import { shortVerdict } from "./verdicts";
 
 type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "track" | "train" | "freight" | "fix";
 
-// Slice zero (docs/brief.md): wear, goods, rail and the straight alignment
-// are off. `?systems=all` turns them back on, for comparing.
+// Which systems run (tuning.ts). `?systems=all` turns every one on, for
+// comparing; `?goods=off` and `?wear=off` turn those off, so a playtest can
+// tell what Revision 2's goods and wear add over its problems made visible
+// (status.md, Revision 2's playtest). Goods off takes quarries, truckers and
+// the goods tools with it.
 const params = new URLSearchParams(location.search);
 const allSystems = params.get("systems") === "all";
+const switchedOff = (["goods", "wear"] as const).filter((system) => params.get(system) === "off");
 // The developer view (docs/brief.md, Information design): forecasts on
 // previews, receipts, best next moves -- you, calibrating; never the player.
 // Without it none of them runs: no forecast workers, no shadow worlds.
@@ -108,7 +112,12 @@ if (!params.has("seed")) {
   history.replaceState(null, "", `${location.pathname}?${params}`);
 }
 // The world has already run five days when you arrive (start.ts).
-const world = startSliceGame(generatedSliceMap(SLICE_MAP, seed), { ...DEFAULT_SLICE_TUNING, ...(allSystems ? ALL_SYSTEMS_ON : {}) });
+const world = startSliceGame(generatedSliceMap(SLICE_MAP, seed), {
+  ...DEFAULT_SLICE_TUNING,
+  ...(allSystems ? ALL_SYSTEMS_ON : {}),
+  ...(switchedOff.includes("goods") ? { goodsEnabled: false } : {}),
+  ...(switchedOff.includes("wear") ? { wearEnabled: false } : {}),
+});
 // A developer start (?dev=1&funds=20000): enough money to reach a late rung
 // in a minute, for screenshots and checks. Ignored without ?dev=1.
 const devFunds = dev ? Number(params.get("funds")) : NaN;
@@ -126,7 +135,9 @@ const controlsEl = document.querySelector<HTMLDivElement>("#controls")!;
   const fresh = new URLSearchParams(params);
   fresh.delete("seed");
   const query = fresh.toString();
-  document.querySelector<HTMLSpanElement>("#map-seed")!.innerHTML = `Map ${seed} · <a href="${location.pathname}${query ? `?${query}` : ""}">New map</a>`;
+  // A new map keeps the switches: the next game of a playtest runs the same systems.
+  const off = switchedOff.map((system) => ` · ${system} off`).join("");
+  document.querySelector<HTMLSpanElement>("#map-seed")!.innerHTML = `Map ${seed}${off} · <a href="${location.pathname}${query ? `?${query}` : ""}">New map</a>`;
 }
 
 let tool: Tool = "bus";
