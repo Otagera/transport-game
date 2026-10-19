@@ -4,6 +4,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { isDirt } from "./congestion";
 import { laneEncroachment } from "./pushback";
 import { stoneServed } from "./industries";
+import { stationTowns } from "./rail";
 
 // The original towns grow (docs/principles.md §6, step 4: depth, one at a
 // time -- growth second, after decay). Served well, a town draws people;
@@ -115,7 +116,10 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   // quarries raises the cap, by a share of it bounded by the town's start --
   // never its current size (principles §3, Growth).
   const stone = tuning.goodsEnabled && tuning.industriesEnabled && world.industries.size > 0 ? stoneServed(world, townId) : 0;
-  const cap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone));
+  // A town a passenger train stops at grows past its rail rung (brief,
+  // Revision 2: station towns grow) -- bounded, like every share, by its start.
+  const station = tuning.railEnabled && stationTowns(world).has(townId) ? tuning.stationCapShare : 0;
+  const cap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone + station));
   const developed = share.player >= tuning.growthMinPlayerShare
     ? smoothstep((service - tuning.growthServiceFloor) / (tuning.growthServiceFull - tuning.growthServiceFloor))
     : 0;

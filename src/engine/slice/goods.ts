@@ -6,7 +6,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { SliceRoute, SliceWorld } from "./types";
 import { SWITCHED_OFF } from "./tuning";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, routeKey, type ActionResult } from "./world";
-import { railPath } from "./rail";
+import { lineSlots, railPath } from "./rail";
 import { industryFlows } from "./industries";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
@@ -250,6 +250,8 @@ export function checkFreight(world: SliceWorld, a: string, b: string): ActionRes
   if (!world.tuning.goodsEnabled || !world.tuning.railEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!railPath(world, a, b)) return { ok: false, reason: "no working track between them" };
+  const line = lineSlots(world, a, b);
+  if (line.used >= line.slots) return { ok: false, reason: `the line is full: ${line.used} of ${line.slots} trains` };
   if (!canAfford(world.economy, world.tuning.freightPurchaseCost)) return { ok: false, reason: "can't afford a freight train" };
   return { ok: true };
 }

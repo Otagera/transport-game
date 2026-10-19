@@ -842,6 +842,14 @@ that to the cap's share (bounded by the town's start). Goods fares are per tonne
 (`fares.ts` `goodsFares`, `goodsFarePerTonneCell`), and `goodsLoader` loads every stop
 ahead in proportion to what waits for it.
 
+**Rail's own job** (Revision 2; `rail.ts`): `trainsBySegment` counts every passenger and
+freight route's trains on each piece of its track path; `lineSlots(a, b)` is the fullest
+piece's count against `trackSlots`, and `checkTrain` / `checkFreight` refuse a full line.
+`stationTowns` are the stops of running passenger rail routes: `townGrowth` adds
+`stationCapShare` for them, and `applyRailDemand` (called from `settlement.ts`
+`refreshDemand`, so daily) multiplies demand between two stops of one line by
+`1 + railInducedDemand`.
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

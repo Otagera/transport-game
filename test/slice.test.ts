@@ -16,6 +16,7 @@ import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed } from "@engine/slice/industries";
+import { lineSlots, stationTowns } from "@engine/slice/rail";
 import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, wornRoadAt } from "@engine/slice/problems";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
@@ -2625,6 +2626,41 @@ describe("Revision 2: industries that open and close -- the quarry", () => {
     const deliveries = (entry: typeof near) => [{ entry, amount: entry.amount }] as never;
     const one = goodsFares(w, deliveries(near));
     expect(one).toBeCloseTo(10 * roadPath(w, "big", "mid")!.distance * w.tuning.goodsFarePerTonneCell, 6);
+  });
+});
+
+describe("Revision 2: rail gets a job of its own", () => {
+  const railWorld = (overrides: Partial<SliceTuning> = {}) =>
+    createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e7, maxEmergentTowns: 0, industryFirstDay: 999, ...overrides });
+
+  test("a line carries trackSlots trains, passenger and freight together: a freight train takes a passenger train's slot", () => {
+    const w = railWorld({ trackSlots: 3 });
+    expect(buildTrack(w, "big", "mid").ok).toBe(true);
+    expect(addTrain(w, "big", "mid").ok).toBe(true);
+    expect(addTrain(w, "big", "mid").ok).toBe(true);
+    expect(addFreightTrain(w, "big", "mid").ok).toBe(true);
+    expect(lineSlots(w, "big", "mid")).toEqual({ used: 3, slots: 3 });
+    const refused = checkTrain(w, "big", "mid");
+    expect(refused.ok).toBe(false);
+    expect(!refused.ok && refused.reason).toContain("the line is full");
+    expect(addFreightTrain(w, "big", "mid").ok).toBe(false);
+  });
+
+  test("a passenger line makes trips that weren't made before, and its towns can grow past the rail rung", () => {
+    const w = railWorld();
+    buildTrack(w, "big", "mid");
+    const before = pairDemand(w, "big", "mid");
+    const capBefore = townGrowth(w, "mid")!.cap;
+    addTrain(w, "big", "mid");
+    expect(stationTowns(w).has("mid")).toBe(true);
+    run(w, SECONDS_PER_GAME_DAY + 1); // demand follows within the day
+    expect(pairDemand(w, "big", "mid")).toBeGreaterThan(before * 1.2);
+    expect(townGrowth(w, "mid")!.cap).toBeGreaterThan(capBefore);
+    // A freight line alone makes no station.
+    const f = railWorld();
+    buildTrack(f, "big", "mid");
+    addFreightTrain(f, "big", "mid");
+    expect(stationTowns(f).size).toBe(0);
   });
 });
 

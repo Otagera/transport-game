@@ -3,7 +3,7 @@ import type { SliceTown, SliceWorld } from "./types";
 import { emptyOutcome, gravityDemand, pairKey } from "./world";
 import { parsePoolKey, parseQueueKey } from "./tick";
 import { growTowns } from "./growth";
-import { rebuildNetworks } from "./rail";
+import { applyRailDemand, rebuildNetworks } from "./rail";
 import { overWater, pointAlong, polylineLength, segmentLength, segmentPolyline, splitPolyline } from "./roads";
 
 // Towns that appear along busy roads, and -- rarely -- fade (step 3 of
@@ -149,6 +149,7 @@ function driftPopulations(world: SliceWorld, dt: number): void {
 
 export function refreshDemand(world: SliceWorld): void {
   world.simulation.demand = gravityDemand([...world.towns.values()], world.tuning.demandK);
+  applyRailDemand(world); // trips a passenger line makes that weren't made before
   for (const pair of world.simulation.demand) {
     const key = pairKey(pair.from, pair.to);
     if (!world.pairOutcomes.has(key)) world.pairOutcomes.set(key, emptyOutcome());

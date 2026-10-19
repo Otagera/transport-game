@@ -370,6 +370,12 @@ export interface SliceTuning {
   quarryExportShare: number;
   /** A town getting all the stone it wants can grow this share of townGrowthCap more (growth.ts). */
   stoneCapShare: number;
+  /** Trains a piece of track carries, passenger and freight together (rail.ts lineSlots). */
+  trackSlots: number;
+  /** Trips between two stops of the same passenger line rise by this share (rail.ts applyRailDemand). */
+  railInducedDemand: number;
+  /** A town a passenger train stops at can grow this share of townGrowthCap more (growth.ts). */
+  stationCapShare: number;
 }
 
 export interface SliceWorld {

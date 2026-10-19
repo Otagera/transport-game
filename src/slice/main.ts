@@ -47,7 +47,7 @@ import { corridorWear, fixRoadNow, roughCostPerDay, setRoadMaintained, upkeepPer
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/slice/receipts";
 import type { SliceWorld } from "@engine/slice/types";
 import { growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
-import { addTrain, buildHalt, buildTrack, checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction } from "@engine/slice/rail";
+import { addTrain, buildHalt, buildTrack, checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots } from "@engine/slice/rail";
 import { addFreightTrain, checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
 import { addLorry, checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
@@ -848,14 +848,17 @@ function ghost(): Ghost | null {
     const check = checkTrain(world, selectedTown, to);
     const path = railPath(world, selectedTown, to)?.nodeIds;
     const along = path ? `${Math.round(demandAlong(world, selectedTown, to, path) * SECONDS_PER_GAME_DAY)} riders/day want trips along it` : "";
-    const label = `Train ${naira(world.tuning.trainPurchaseCost)} · ${along}`;
+    const line = lineSlots(world, selectedTown, to);
+    const slots = path ? ` · line ${line.used + 1} of ${line.slots} trains` : "";
+    const label = `Train ${naira(world.tuning.trainPurchaseCost)} · ${along}${slots}`;
     const ghost = { from: selectedTown, to: end, ok: check.ok, path: shownPath(check, path), rail: true, label: refusedOr(check, label, `Train ${naira(world.tuning.trainPurchaseCost)}`) };
     return withForecast(ghost, { kind: "train", a: selectedTown, b: to }, { label: "a train", towns: [selectedTown, to] });
   }
   if (tool === "freight") {
     const check = checkFreight(world, selectedTown, to);
     const goods = goodsAlong(world, selectedTown, to, true);
-    const label = `Freight train ${naira(world.tuning.freightPurchaseCost)} · goods along the track: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back`;
+    const line = lineSlots(world, selectedTown, to);
+    const label = `Freight train ${naira(world.tuning.freightPurchaseCost)} · goods along the track: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back · line ${line.used + 1} of ${line.slots} trains`;
     const path = shownPath(check, railPath(world, selectedTown, to)?.nodeIds);
     const ghost = { from: selectedTown, to: end, ok: check.ok, path, rail: true, label: refusedOr(check, label, `Freight train ${naira(world.tuning.freightPurchaseCost)}`) };
     return withForecast(ghost, { kind: "freight", a: selectedTown, b: to }, { label: "a freight train", towns: [selectedTown, to] });

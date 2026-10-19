@@ -277,10 +277,69 @@ export function railRouteId(a: string, b: string): string {
   return `rail:${routeKey(a, b)}`;
 }
 
+// --- A line's slots, and what rail does to the map (brief, Revision 2:
+// rail gets a job of its own) ------------------------------------------------
+
+/** Trains on each piece of track: every passenger and freight route's trains, on each piece of its path. */
+export function trainsBySegment(world: SliceWorld): Map<string, number> {
+  const count = new Map<string, number>();
+  const routes = [...world.routes.filter((route) => isRailRoute(route.id)), ...world.lorryRoutes.filter((route) => route.id.startsWith("freight:"))];
+  for (const route of routes) {
+    const path = railPath(world, route.a, route.b);
+    if (!path) continue;
+    for (const id of new Set(path.segmentIds)) count.set(id, (count.get(id) ?? 0) + route.vehicleIds.length);
+  }
+  return count;
+}
+
+/**
+ * How full the line between two towns is (`trackSlots` trains a piece of
+ * track, passenger and freight together): a freight train takes a passenger
+ * train's slot, so where both want a line you choose, or build a second.
+ */
+export function lineSlots(world: SliceWorld, a: string, b: string): { used: number; slots: number } {
+  const path = railPath(world, a, b);
+  const by = trainsBySegment(world);
+  const used = path ? Math.max(0, ...path.segmentIds.map((id) => by.get(id) ?? 0)) : 0;
+  return { used, slots: world.tuning.trackSlots };
+}
+
+/** The towns a passenger train stops at: every stop on a running rail route's path. */
+export function stationTowns(world: SliceWorld): Set<string> {
+  const towns = new Set<string>();
+  for (const route of world.routes) {
+    if (!isRailRoute(route.id) || route.vehicleIds.length === 0) continue;
+    for (const id of railPath(world, route.a, route.b)?.nodeIds ?? []) if (world.towns.has(id)) towns.add(id);
+  }
+  return towns;
+}
+
+/**
+ * Rail makes trips that weren't made before (the proposed "rail reshapes
+ * the map", folded into Revision 2): between two towns the same passenger
+ * line stops at, demand rises by `railInducedDemand` -- new desire lines, a
+ * station town pulling from along its line. Applied after gravity demand.
+ */
+export function applyRailDemand(world: SliceWorld): void {
+  if (!world.tuning.railEnabled || world.tuning.railInducedDemand <= 0) return;
+  const lines: Array<Set<string>> = [];
+  for (const route of world.routes) {
+    if (!isRailRoute(route.id) || route.vehicleIds.length === 0) continue;
+    const stops = railPath(world, route.a, route.b)?.nodeIds;
+    if (stops) lines.push(new Set(stops));
+  }
+  if (lines.length === 0) return;
+  for (const pair of world.simulation.demand) {
+    if (lines.some((stops) => stops.has(pair.from) && stops.has(pair.to))) pair.rate *= 1 + world.tuning.railInducedDemand;
+  }
+}
+
 export function checkTrain(world: SliceWorld, a: string, b: string): ActionResult {
   if (!world.tuning.railEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!railPath(world, a, b)) return { ok: false, reason: "no working track between them" };
+  const line = lineSlots(world, a, b);
+  if (line.used >= line.slots) return { ok: false, reason: `the line is full: ${line.used} of ${line.slots} trains` };
   if (!canAfford(world.economy, world.tuning.trainPurchaseCost)) return { ok: false, reason: "can't afford a train" };
   return { ok: true };
 }
@@ -295,6 +354,7 @@ export function addTrain(world: SliceWorld, a: string, b: string): ActionResult 
     world.routes.push(route);
     forgetRoute(world.ledger, route.id);
     world.plans = null; // a new route changes how riders cross the network
+    // Its new trips (applyRailDemand) arrive with the day's demand refresh (settlement.ts).
   }
   const { tuning } = world;
   const vehicleId = `train-${world.nextId++}`;
@@ -317,3 +377,4 @@ export function vehicleCostPerDay(world: SliceWorld, routeId: string, secondsPer
   const perSecond = isRailRoute(routeId) ? t.trainOperatingCostPerSecond : routeId.startsWith("mini:") ? t.minibusOperatingCostPerSecond : t.busOperatingCostPerSecond;
   return perSecond * secondsPerDay;
 }
+

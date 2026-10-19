@@ -435,6 +435,8 @@ Proposed, each a line where the player already looks, each naming one move:
 - **Station towns grow** (the proposed (4), folded in): a town with a working station grows past its road's cap, and new desire lines appear once rail opens (pairs that didn't exist: a station town pulling trips from its neighbours), so the map you know stops being the whole map.
 - **A spur to an industry** is the cheap rail: short, freight-only, and the brownfield line comes back into it (the colonial export line was built for exactly this; restoring it for ore is the use its geometry fits).
 
+**Built 2026-10-19** (`rail.ts`): a piece of track carries 4 trains (`trackSlots`), passenger and freight together, so a freight train takes a passenger one's slot and a full line refuses the next ("the line is full: 4 of 4 trains"; the Train and Freight previews say "line N of 4"); between two stops of one passenger line, trips rise by a third (`railInducedDemand`, applied with each day's demand); a town a passenger train stops at can grow 0.3 of the growth cap more (`stationCapShare`). A spur to a quarry is the Track tool from a town to the site. Measured (corridor probe, real money): rail now buys 26 days of growth on seed 0 and 21 on seed 1, against 19 before (C1: 20-40), priced at 34.9 and 31.4 days of surplus (C2). C7 (a line is a choice) waits on play: the bots don't run freight.
+
 ### The second ladder: an industry's access
 
 | Rung | What it changes | Price (target) | What it costs you besides money |

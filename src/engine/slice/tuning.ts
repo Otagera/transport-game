@@ -421,6 +421,15 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   quarryLifeMaxDays: 180,
   quarryExportShare: 0.3,
   stoneCapShare: 0.25,
+
+  // Rail's own job (brief, Revision 2). A line carries `trackSlots` trains,
+  // passenger and freight together: a freight train takes a passenger one's
+  // slot, so a busy line is a choice (C7). Rail makes trips that weren't made
+  // before -- between two stops of one passenger line, a third more -- and a
+  // station town can grow past its rail rung. First guesses, to measure.
+  trackSlots: 4,
+  railInducedDemand: 0.3,
+  stationCapShare: 0.3,
 };
 
 /** Every system on: what the calibration probe and lever audit measure, and most tests. */
