@@ -7,6 +7,7 @@ import type { SliceRoute, SliceWorld } from "./types";
 import { SWITCHED_OFF } from "./tuning";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, routeKey, type ActionResult } from "./world";
 import { railPath } from "./rail";
+import { industryFlows } from "./industries";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -103,10 +104,12 @@ export function goodsFlows(world: SliceWorld): GoodsFlow[] {
       flows.push({ from: market, to: port.id, kind: "produce", rate: delivered * tuning.exportShare });
     }
     for (const town of towns) {
-      if (town.id === port.id) continue;
+      if (town.id === port.id || town.industry) continue; // a site's supplies come with its kind, not from the port
       flows.push({ from: port.id, to: town.id, kind: "supplies", rate: perSecond(tuning.suppliesPerThousandPerDay, town.population) });
     }
   }
+  // Industries' output (industries.ts): a quarry's stone to its towns and the port.
+  if (tuning.industriesEnabled) flows.push(...industryFlows(world));
   return flows;
 }
 
@@ -138,16 +141,20 @@ export function goodsLoader(world: SliceWorld, loaded: Map<string, number>, rout
     const yard = world.goods.yards.get(at);
     if (!yard) return;
     const ahead = nodesAhead(vehicle, index);
-    let free = freeSeats(vehicle);
-    for (const [key, amount] of yard) {
-      if (free <= 0) break;
-      if (amount <= 0) continue;
+    const free = freeSeats(vehicle);
+    if (free <= 0) return;
+    // Everything waiting here for a stop ahead, loaded in proportion when it
+    // won't all fit: in yard order, the nearest town's stone filled a lorry
+    // from a quarry and left none for the city beyond it.
+    const bound = [...yard].filter(([key, amount]) => amount > 0 && ahead.has(parseYardKey(key).to));
+    const waiting = bound.reduce((sum, [, amount]) => sum + amount, 0);
+    if (waiting <= 0) return;
+    const share = Math.min(1, free / waiting);
+    for (const [key, amount] of bound) {
       const { to, kind } = parseYardKey(key);
-      if (!ahead.has(to)) continue;
-      const take = Math.min(amount, free);
+      const take = amount * share;
       vehicle.cargo.push({ from: at, to, kind, amount: take });
       yard.set(key, amount - take);
-      free -= take;
       const routeId = routeOf.get(vehicle.id);
       if (routeId) loaded.set(routeId, (loaded.get(routeId) ?? 0) + take);
     }
@@ -387,7 +394,8 @@ export function diagnoseLorryRoute(world: SliceWorld, routeId: string): LorryDia
     verdict: "healthy",
   };
   const { tuning } = world;
-  const fare = Math.min(tuning.produceFare, tuning.suppliesFare);
+  // A tonne along this route's own length, at the per-cell rate (fares.ts goodsFares).
+  const fare = tuning.goodsFarePerTonneCell * path.distance;
   const oneLorryPerDay = goodsVehicleCostPerDay(world, routeId);
   const weaker = Math.min(diagnosis.outbound, diagnosis.inbound);
   const stronger = Math.max(diagnosis.outbound, diagnosis.inbound);

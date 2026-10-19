@@ -10,8 +10,11 @@ import { railPath } from "./rail";
 // pay (the "long" verdict existed to explain it) and made changing buses
 // cost a whole second fare; now a transfer costs one more boarding fare.
 //
-// Passengers only: goods keep their per-tonne fare (goods are off in slice
-// zero; per tonne per cell comes back with them).
+// Goods pay per tonne per cell (brief, Fares; back with goods in Revision
+// 2): a flat ₦4 a tonne left a long run unable to pay -- a lorry from a
+// quarry through Owode to Ilase made under a round trip a day, ₦72-120
+// against ₦108 of running cost -- and made rail's edge a side effect of
+// the flat fare instead of speed and volume.
 
 /** The fare for a ride of `cells` along the network. */
 export function stageFare(tuning: SliceTuning, cells: number): number {
@@ -48,6 +51,20 @@ export function faresAlong(world: SliceWorld, a: string, b: string, along?: stri
   let total = 0;
   for (const pair of world.simulation.demand) {
     if (stops.has(pair.from) && stops.has(pair.to)) total += pair.rate * legFare(world, pair.from, pair.to, along !== undefined);
+  }
+  return total;
+}
+
+/** What a goods vehicle's loads paid getting off this tick: tonnes x cells along the road (or track) x the rate. */
+export function goodsFares(world: SliceWorld, deliveries: DeliveryEvent[], rail = false): number {
+  let total = 0;
+  for (const { entry, amount } of deliveries) {
+    if (!entry || entry.kind === "passengers") continue;
+    const path = rail ? railPath(world, entry.from, entry.to) : roadPath(world, entry.from, entry.to);
+    const a = world.towns.get(entry.from) ?? world.ruins.get(entry.from);
+    const b = world.towns.get(entry.to) ?? world.ruins.get(entry.to);
+    const cells = path?.distance ?? (a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0);
+    total += amount * cells * world.tuning.goodsFarePerTonneCell;
   }
   return total;
 }

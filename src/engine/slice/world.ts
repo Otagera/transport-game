@@ -6,6 +6,7 @@ import { computeSegmentLoads } from "../simulation/congestion";
 import { createVehicle } from "../simulation/vehicle";
 import { canAfford, createEconomyState, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
 import { createDayHistory } from "./history";
+import { createIndustrySchedule } from "./industries";
 import { createBudgetTally, createRemittancePeriod } from "./budget";
 import { faresAlong, legFare } from "./fares";
 import { createDayLedger, forgetRoute, lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
@@ -118,6 +119,9 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     startPopulation: new Map(def.towns.map((town) => [town.id, town.population])),
     milestones: new Map(),
     corridors: new Map(),
+    industries: new Map(),
+    // Seeded by the map, so the same map draws the same sites.
+    industrySchedule: createIndustrySchedule(tuning, def.towns.reduce((sum, town) => sum * 31 + Math.round(town.x * 7 + town.y * 13 + town.population), 17)),
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),

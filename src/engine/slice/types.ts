@@ -10,6 +10,7 @@ import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
 import type { MilestoneState } from "./score";
 import type { CorridorState } from "./corridors";
+import type { IndustryState } from "./industries";
 import type { BudgetTally, RemittancePeriod } from "./budget";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
@@ -26,7 +27,12 @@ export interface SliceTown {
   y: number;
   /** Thousands of people. Drives gravity demand; nothing else yet. */
   population: number;
+  /** An industrial site, not a town (industries.ts, brief Revision 2): its population is its workers. */
+  industry?: IndustryKind;
 }
+
+/** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
+export type IndustryKind = "quarry";
 
 export interface SliceRoadDef {
   a: string;
@@ -269,6 +275,8 @@ export interface SliceTuning {
   /** Freight fares, per tonne delivered. */
   produceFare: number;
   suppliesFare: number;
+  /** Goods pay this per tonne per cell along the road or track (fares.ts goodsFares). */
+  goodsFarePerTonneCell: number;
   lorryCapacity: number;
   lorrySpeed: number;
   lorryPurchaseCost: number;
@@ -344,6 +352,24 @@ export interface SliceTuning {
   corridorTakenShare: number;
   /** ...and let go only below this, so one near the line doesn't flicker. */
   corridorReleaseShare: number;
+  /** Industries (industries.ts, brief Revision 2): on, when the first opens, the gap between openings, how many at once. */
+  industriesEnabled: boolean;
+  industryFirstDay: number;
+  industryEveryMinDays: number;
+  industryEveryMaxDays: number;
+  industryMaxOpen: number;
+  /** An industry nothing is moved from in its first this-many days closes. */
+  industryGraceDays: number;
+  industryMinDeliveredPerDay: number;
+  /** Its workers, thousands: the site's own (small) passenger demand. */
+  industryWorkers: number;
+  /** A quarry's output, tonnes a day, its working life (days, min-max), and the share of its stone that goes to the port. */
+  quarryOutputPerDay: number;
+  quarryLifeMinDays: number;
+  quarryLifeMaxDays: number;
+  quarryExportShare: number;
+  /** A town getting all the stone it wants can grow this share of townGrowthCap more (growth.ts). */
+  stoneCapShare: number;
 }
 
 export interface SliceWorld {
@@ -365,6 +391,9 @@ export interface SliceWorld {
   milestones: Map<string, MilestoneState>;
   /** Each corridor's levies and whether you've taken it, keyed routeKey(a, b) of its end towns (corridors.ts). */
   corridors: Map<string, CorridorState>;
+  /** Industrial sites open now, and the drawing of the next (industries.ts). */
+  industries: Map<string, IndustryState>;
+  industrySchedule: { nextAtSeconds: number; rngState: number; opened: number };
   width: number;
   height: number;
   towns: Map<string, SliceTown>;

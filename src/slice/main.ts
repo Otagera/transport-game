@@ -49,7 +49,7 @@ import type { SliceWorld } from "@engine/slice/types";
 import { growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
 import { addTrain, buildHalt, buildTrack, checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction } from "@engine/slice/rail";
 import { addFreightTrain, checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
-import { addLorry, checkLorry, diagnoseLorryRoute, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
+import { addLorry, checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
@@ -65,6 +65,7 @@ import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, t
 import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
+import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/slice/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
@@ -449,6 +450,12 @@ function announce(event: SliceEvent): void {
     say(`You've taken ${corridor} from the danfos: you carry ${pct(event.share)} of its trips. Their park levies there fall.`, false, 8);
   } else if (event.kind === "corridor-released") {
     say(`The danfos have ${corridor} back: you carry ${pct(event.share)} of its trips.`, true, 6);
+  } else if (event.kind === "industry-opened") {
+    // A new problem arriving (brief, Revision 2: industries that open and close).
+    const buyers = industryFlows(world).filter((flow) => flow.from === event.townId).map((flow) => townName(flow.to));
+    say(`A quarry has opened near ${townName(event.near)}: ${world.tuning.quarryOutputPerDay} t of stone a day for ${[...new Set(buyers)].join(", ")}. Nothing moves it until you do.`, false, 9);
+  } else if (event.kind === "industry-closed") {
+    say(`${event.name} has closed: ${event.reason === "worked out" ? "it's worked out" : "nothing was moved from it"}.`, true, 7);
   } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
   } else {
@@ -1087,8 +1094,50 @@ function moveText(move: NamedMove): string {
 // The town card (design lab, "the brief, step 8"): a kicker, the name, three
 // lines, the one problem here, then its trips. Its first screen fits without
 // scrolling (brief, text budget).
+// An industrial site's card (brief, Revision 2): what it is and for how
+// long, where its stone goes and how much of it arrives, and the one
+// problem with it -- no road, or nothing moved and the day it closes.
+function renderIndustry(townId: string): void {
+  const site = world.towns.get(townId)!;
+  const industry = world.industries.get(townId);
+  const flows = industryFlows(world).filter((flow) => flow.from === townId);
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const rows = flows
+    .map((flow) => {
+      const outcome = world.goods.outcomes.get(flowKey(flow));
+      const total = (outcome?.delivered ?? 0) + (outcome?.spoiled ?? 0);
+      const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
+      return `<div class="trip"><span class="name">${townName(flow.to)}${flow.to === world.port ? " <span class=\"muted\">· the port</span>" : ""}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i></div></div>`;
+    })
+    .join("");
+  const now = world.economy.elapsedSeconds;
+  const kicker = industry ? `Quarry · opened day ${gameDay(world, industry.openedAtSeconds)} · works out about day ${gameDay(world, industry.closesAtSeconds)}` : "Quarry";
+  const biggest = [...flows].sort((p, q) => q.rate - p.rate)[0];
+  let problem = "";
+  if (isCutOff(world, townId)) {
+    // From the nearest town a road already reaches: a spur from a cut-off town connects nothing.
+    const near = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id)).sort((p, q) => Math.hypot(p.x - site.x, p.y - site.y) - Math.hypot(q.x - site.x, q.y - site.y))[0];
+    problem = `No road reaches it. Build one (<kbd>R</kbd>)${near ? ` from ${townName(near.id)}` : ""} and its stone can move.`;
+  } else if (industry && industry.deliveredEMA * SECONDS_PER_GAME_DAY < world.tuning.industryMinDeliveredPerDay) {
+    const closes = industry.openedAtSeconds + world.tuning.industryGraceDays * SECONDS_PER_GAME_DAY;
+    problem = `Nothing is moving its stone${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
+  }
+  routesEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">${kicker}</div>
+      <div class="title">${site.name}</div>
+      <ul>
+        <li>${world.tuning.quarryOutputPerDay} t of stone a day. Stone feeds construction: a town that gets the stone it wants can grow more.</li>
+        <li>Nobody else carries it: what isn't moved is lost.</li>
+      </ul>
+      ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}
+      ${rows}
+    </div>`;
+}
+
 function renderTown(townId: string): void {
   const town = world.towns.get(townId)!;
+  if (town.industry) return renderIndustry(townId);
   const share = townShare(world, townId);
   const trips = tripsFrom(world, townId);
   const perDay = (n: number) => Math.round(n * SECONDS_PER_GAME_DAY);
@@ -1576,13 +1625,23 @@ function lorryReason(d: LorryDiagnosis, onePerDay: number): string {
 }
 
 // What goods leave and reach a town, and how much of each you deliver.
+/** "40 t/day of stone from Ilaro Quarry (35% delivered)", for a town a quarry ships to. */
+function inboundStone(townId: string): string {
+  const flows = industryFlows(world).filter((flow) => flow.to === townId);
+  if (flows.length === 0) return "";
+  const rate = flows.reduce((sum, flow) => sum + flow.rate, 0);
+  return `${Math.round(rate * SECONDS_PER_GAME_DAY)} t/day of stone from ${flows.map((flow) => townName(flow.from)).join(", ")} (${pct(stoneServed(world, townId))} delivered)`;
+}
+
 function goodsText(townId: string): string {
   const goods = townGoods(world, townId);
   if (goods.length === 0) return "";
   const out = goods.filter((g) => g.outgoing);
-  const inbound = goods.filter((g) => !g.outgoing);
+  const inbound = goods.filter((g) => !g.outgoing && !world.towns.get(g.other)?.industry);
   const parts: string[] = [];
   for (const g of out) parts.push(`${Math.round(g.perDay)} t/day of ${g.kind} to ${townName(g.other)} (${pct(g.delivered)} delivered)`);
+  const stone = inboundStone(townId);
+  if (stone) parts.push(stone);
   const into = inbound.reduce((sum, g) => sum + g.perDay, 0);
   if (into > 0) {
     const delivered = inbound.reduce((sum, g) => sum + g.perDay * g.delivered, 0) / into;

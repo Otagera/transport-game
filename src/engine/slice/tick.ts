@@ -1,15 +1,16 @@
 import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
-import { applyOperatingCosts, recordDeliveryRevenue, updateIncomeRateEMA } from "../economy/state";
+import { applyOperatingCosts, updateIncomeRateEMA } from "../economy/state";
 import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types";
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
+import { updateIndustries } from "./industries";
 import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
-import { legFare, passengerFares } from "./fares";
+import { goodsFares, legFare, passengerFares } from "./fares";
 import { allocationPerDay, remit, tollFor, type Takings } from "./budget";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
@@ -201,9 +202,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     }
     // Each leg pays a fare, on getting off (revenue on unload) -- per
     // rider, or per tonne for a lorry.
-    // Passengers pay by distance (fares.ts); goods by the tonne.
-    const revenue =
-      vehicle.carries === "goods" ? recordDeliveryRevenue(economy, vehicle.id, deliveries) : recordFares(world, vehicle.id, passengerFares(world, deliveries, world.railVehicles.has(vehicle.id)));
+    // Passengers pay by distance (fares.ts); goods by the tonne and the cell.
+    const rail = world.railVehicles.has(vehicle.id);
+    const revenue = recordFares(world, vehicle.id, vehicle.carries === "goods" ? goodsFares(world, deliveries, rail) : passengerFares(world, deliveries, rail));
     revenueThisTick += revenue;
     if (vehicle.carries === "passengers") world.budget.fares += revenue;
     else world.budget.goods += revenue;
@@ -302,7 +303,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
 
-  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor)];
+  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor), ...updateIndustries(world, dt)];
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
   if (recordDay(world)) sampleTowns(world);
   return events;

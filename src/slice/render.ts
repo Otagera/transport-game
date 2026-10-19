@@ -126,7 +126,10 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
   drawVehicles(ctx, world, view);
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
-  for (const town of world.towns.values()) drawTown(ctx, world, view, town, state);
+  for (const town of world.towns.values()) {
+    if (town.industry) drawIndustry(ctx, world, view, town, state);
+    else drawTown(ctx, world, view, town, state);
+  }
   drawWardens(ctx, world, view);
   drawStrikeLabels(ctx, world, view);
   drawTakenLabels(ctx, world, view);
@@ -909,6 +912,45 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
 
 // A town that emptied out stays on the map as a name on a bend in the
 // road -- the loss should read, not vanish.
+// An industrial site (industries.ts, brief Revision 2): a square, not a
+// circle -- a place goods come from, not people -- with a peak for a quarry,
+// its name and output, and "no road" while nothing reaches it.
+function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, town: SliceTown, state: DrawState): void {
+  const p = toScreen(view, town.x, town.y);
+  const half = 9;
+  const selected = state.selectedTown === town.id;
+  ctx.fillStyle = COLORS.goods;
+  ctx.strokeStyle = selected ? COLORS.selection : COLORS.townEdge;
+  ctx.lineWidth = selected ? 3 : 2;
+  ctx.beginPath();
+  ctx.rect(p.x - half, p.y - half, half * 2, half * 2);
+  ctx.fill();
+  ctx.stroke();
+  // A quarry's peak.
+  ctx.fillStyle = "#fffdf8";
+  ctx.beginPath();
+  ctx.moveTo(p.x - 6, p.y + 5);
+  ctx.lineTo(p.x - 1, p.y - 5);
+  ctx.lineTo(p.x + 2, p.y);
+  ctx.lineTo(p.x + 3.5, p.y - 2);
+  ctx.lineTo(p.x + 6, p.y + 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.textAlign = "center";
+  ctx.fillStyle = COLORS.label;
+  ctx.font = "600 12px system-ui, sans-serif";
+  ctx.fillText(town.name, p.x, p.y + half + 14);
+  ctx.fillStyle = COLORS.labelMuted;
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.fillText(`stone · ${world.tuning.quarryOutputPerDay} t/day`, p.x, p.y + half + 27);
+  if (isCutOff(world, town.id)) {
+    ctx.fillStyle = COLORS.ghostBad;
+    ctx.font = "600 11px system-ui, sans-serif";
+    ctx.fillText("no road", p.x, p.y + half + 40);
+  }
+  ctx.textAlign = "left";
+}
+
 function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: SliceTown): void {
   const p = toScreen(view, town.x, town.y);
   ctx.fillStyle = COLORS.home;
@@ -918,7 +960,7 @@ function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: SliceTown): v
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.labelMuted;
   ctx.font = "italic 11px system-ui, sans-serif";
-  ctx.fillText(`${town.name} (empty)`, p.x, p.y + 16);
+  ctx.fillText(`${town.name} (${town.industry ? "closed" : "empty"})`, p.x, p.y + 16);
   ctx.textAlign = "left";
 }
 

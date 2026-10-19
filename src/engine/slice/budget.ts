@@ -140,7 +140,7 @@ export function tollFor(world: SliceWorld, segmentIds: readonly string[], weight
 /** Thousands of people the towns have gained since day 1; a town founded since counts whole. */
 export function growthSinceStart(world: SliceWorld): number {
   let grown = 0;
-  for (const town of world.towns.values()) grown += Math.max(0, town.population - (world.startPopulation.get(town.id) ?? 0));
+  for (const town of world.towns.values()) if (!town.industry) grown += Math.max(0, town.population - (world.startPopulation.get(town.id) ?? 0));
   return grown;
 }
 

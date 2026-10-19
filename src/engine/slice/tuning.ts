@@ -38,7 +38,7 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // 7 since the post-5b baseline: at 5 the informal share still moved 6
   // points by day 10 (M7's limit is 5); at 7, about 2.
   warmUpDays: 7,
-  goodsEnabled: false,
+  goodsEnabled: true,
   // Rail returns as the ladder's top rung (brief, Revision 1, 2026-10-19).
   railEnabled: true,
   straightAlignmentEnabled: false,
@@ -294,6 +294,13 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   goodsSpoilSeconds: 60,
   produceFare: 4,
   suppliesFare: 4,
+  // Per tonne per cell (brief, Fares; Revision 2), replacing the flat ₦4 a
+  // tonne above (still in the fare table, unused by the slice). A lorry full
+  // one way earns about 1,125 x this a day whatever the distance (30 t a
+  // trip, 2.5 cells a second, empty back): at 0.1, ₦112 against ₦108 of
+  // running cost -- one way breaks even, both ways pays (principles.md §3,
+  // Demand: goods pay only where they go both ways).
+  goodsFarePerTonneCell: 0.1,
   lorryCapacity: 30,
   lorrySpeed: 2.5,
   lorryPurchaseCost: 550,
@@ -392,6 +399,28 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // tuned by the bots: a display line, to be played.
   corridorTakenShare: 0.4,
   corridorReleaseShare: 0.3,
+
+  // Industries (brief, Revision 2: industries that open and close, one kind
+  // first -- the quarry). Targets from the brief, first guesses to measure:
+  // one opens every 20-40 days from day 20, at most three at once; one
+  // nothing is moved from in its first 30 days closes, and a quarry works
+  // out after 90-180 days. A lorry (30 t, ₦108/day) filling every trip on a
+  // ~15-cell spur makes ~₦270/day at ₦4/t, so ~100 t/day pays a lorry one
+  // way. Stone feeds construction: a town getting all it wants can grow a
+  // quarter of the growth cap more.
+  industriesEnabled: true,
+  industryFirstDay: 20,
+  industryEveryMinDays: 20,
+  industryEveryMaxDays: 40,
+  industryMaxOpen: 3,
+  industryGraceDays: 30,
+  industryMinDeliveredPerDay: 5,
+  industryWorkers: 2,
+  quarryOutputPerDay: 100,
+  quarryLifeMinDays: 90,
+  quarryLifeMaxDays: 180,
+  quarryExportShare: 0.3,
+  stoneCapShare: 0.25,
 };
 
 /** Every system on: what the calibration probe and lever audit measure, and most tests. */

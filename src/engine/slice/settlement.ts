@@ -36,7 +36,10 @@ export type SliceEvent =
   | { kind: "milestone"; townId: string; name: string; index: number; from: number; to: number }
   // A corridor you've taken from the informal sector, or let go (corridors.ts).
   | { kind: "corridor-taken"; a: string; b: string; share: number }
-  | { kind: "corridor-released"; a: string; b: string; share: number };
+  | { kind: "corridor-released"; a: string; b: string; share: number }
+  // An industrial site opening near a town, or closing (industries.ts).
+  | { kind: "industry-opened"; townId: string; name: string; industry: "quarry"; near: string }
+  | { kind: "industry-closed"; townId: string; name: string; reason: "worked out" | "nothing moved" };
 
 export interface SettlementState {
   /** segmentId -> rolling riders per second passing a point on it. */
@@ -144,7 +147,7 @@ function driftPopulations(world: SliceWorld, dt: number): void {
   }
 }
 
-function refreshDemand(world: SliceWorld): void {
+export function refreshDemand(world: SliceWorld): void {
   world.simulation.demand = gravityDemand([...world.towns.values()], world.tuning.demandK);
   for (const pair of world.simulation.demand) {
     const key = pairKey(pair.from, pair.to);
@@ -345,8 +348,21 @@ export function insertIntoPath(vehicle: Vehicle, a: string, b: string, mid: stri
 // plain junction -- the road keeps its bend there -- and its name stays on
 // the map as a ruin, so the loss reads.
 function abandonTown(world: SliceWorld, townId: string): SliceEvent {
-  const { simulation, informal, settlement } = world;
   const town = world.towns.get(townId)!;
+  retireNode(world, townId);
+  return { kind: "abandoned", townId, name: town.name };
+}
+
+/**
+ * Takes a town or site off the map's demand: its node stays as a plain
+ * junction (roads keep their bend there), its name as a ruin, and every
+ * queue, pool and outcome that names it goes. Shared by an emptied town and
+ * a closed industry (industries.ts).
+ */
+export function retireNode(world: SliceWorld, townId: string): void {
+  const { simulation, informal, settlement } = world;
+  const town = world.towns.get(townId);
+  if (!town) return;
   world.towns.delete(townId);
   world.ruins.set(townId, town);
   settlement.emergent.delete(townId);
@@ -371,5 +387,4 @@ function abandonTown(world: SliceWorld, townId: string): SliceEvent {
     if (key.startsWith(`${townId}:`) || key.endsWith(`:${townId}`)) world.pairOutcomes.delete(key);
   }
   refreshDemand(world);
-  return { kind: "abandoned", townId, name: town.name };
 }

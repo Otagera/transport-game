@@ -242,6 +242,13 @@ terrain isn't applied: the map still draws shaded hills.
   "Save for it: ₦X" when the next rung is out of reach (`saveButton`); a named project shows
   at the top of the budget ("Saving for ... safe until day N", a progress bar of what's set
   aside against the price, "Drop it").
+- **Industries (Revision 2)** — a site draws as a brown square with a peak (`drawIndustry`),
+  its name, "stone · 100 t/day" and "no road" while cut off; a closed one is a ruin "(closed)".
+  Its card (`renderIndustry`): opened and works-out days, its buyers with tonnes a day and a
+  delivered bar, and the problem (no road -- from the nearest connected town; or nothing
+  moving and the day it closes). Opening and closing are toasts naming the buyers or the
+  reason. A town's goods line adds the stone it gets ("40 t/day of stone from Ilaro Quarry
+  (35% delivered)").
 - **Problems named (Revision 2, step 1)** — the town card's last problem line is
   `townNoSeat`: "212 of its trips a day find no seat, most toward Ikire on the Ikire–Ado road.
   **Add a bus to Ikire ↔ Ido (+)** · ₦500" (`moveText`: the move named and priced, never a

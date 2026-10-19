@@ -10,11 +10,12 @@ import { SIM_DT } from "@engine/loop";
 import { lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "@engine/slice/ledger";
 import { forecast } from "@engine/slice/forecast";
 import { allocationPerDay, remittanceDue, remittanceExpected } from "@engine/slice/budget";
-import { legFare, stageFare } from "@engine/slice/fares";
+import { goodsFares, legFare, stageFare } from "@engine/slice/fares";
 import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upkeep";
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
+import { industryFlows, openQuarry, stoneServed } from "@engine/slice/industries";
 import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, wornRoadAt } from "@engine/slice/problems";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
@@ -219,12 +220,12 @@ describe("slice: where people want to go", () => {
 });
 
 describe("slice zero: systems switched off", () => {
-  // Wear came back on by default (Revision 2); switched off it still behaves as slice zero had it.
-  const zero = () => createSliceWorld({ ...MAP, port: "big", rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, wearEnabled: false });
+  // Wear and goods came back on by default (Revision 2); switched off they still behave as slice zero had them.
+  const zero = () => createSliceWorld({ ...MAP, port: "big", rails: [{ a: "big", b: "far" }] }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, wearEnabled: false, goodsEnabled: false });
 
-  test("the default tuning: goods and the straight alignment off; rail back as the ladder's top rung (Revision 1); wear back (Revision 2)", () => {
+  test("the default tuning: the straight alignment off; rail back as the ladder's top rung (Revision 1); wear and goods back (Revision 2)", () => {
     expect(DEFAULT_SLICE_TUNING.wearEnabled).toBe(true);
-    expect(DEFAULT_SLICE_TUNING.goodsEnabled).toBe(false);
+    expect(DEFAULT_SLICE_TUNING.goodsEnabled).toBe(true);
     expect(DEFAULT_SLICE_TUNING.railEnabled).toBe(true);
     expect(DEFAULT_SLICE_TUNING.straightAlignmentEnabled).toBe(false);
   });
@@ -1398,7 +1399,7 @@ describe("slice: goods (step 4c)", () => {
   });
 
   test("a losing lorry route is in the debt advice, and selling it returns what was quoted", () => {
-    const w = goodsWorld({ produceFare: 0, suppliesFare: 0 }); // nothing it carries pays: it loses
+    const w = goodsWorld({ goodsFarePerTonneCell: 0 }); // nothing it carries pays: it loses
     addLorry(w, "big", "mid");
     run(w, 200);
     w.economy.funds = -100;
@@ -2559,6 +2560,71 @@ describe("Revision 2: wear returns, per corridor", () => {
     expect(kept.kept).toBe(true);
     expect(kept.condition).toBe(1);
     expect(kept.upkeepPerDay).toBeGreaterThan(0);
+  });
+});
+
+describe("Revision 2: industries that open and close -- the quarry", () => {
+  const quarryWorld = (overrides: Partial<SliceTuning> = {}) =>
+    createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, startingFunds: 1e6, maxEmergentTowns: 0, industryFirstDay: 1, ...overrides });
+
+  test("one opens when it's due, as a site off the network: a few workers, no growth, not in the people count", () => {
+    const w = quarryWorld();
+    const events: string[] = [];
+    for (let t = 0; t < 2 * SECONDS_PER_GAME_DAY; t += SIM_DT) for (const e of sliceTick(w, SIM_DT)) events.push(e.kind);
+    expect(events).toContain("industry-opened");
+    const [site] = [...w.industries.keys()];
+    const town = w.towns.get(site!)!;
+    expect(town.industry).toBe("quarry");
+    expect(town.population).toBe(w.tuning.industryWorkers);
+    expect(townGrowth(w, site!)).toBeNull();
+    expect(isCutOff(w, site!)).toBe(true); // nothing reaches it yet
+    const nearest = Math.min(...[...w.towns.values()].filter((t) => !t.industry).map((t) => Math.hypot(t.x - town.x, t.y - town.y)));
+    expect(nearest).toBeGreaterThanOrEqual(8);
+    expect(nearest).toBeLessThanOrEqual(20);
+  });
+
+  test("its stone goes to its three nearest towns by size and a share to the port, adding up to its output", () => {
+    const w = quarryWorld();
+    openQuarry(w);
+    const flows = industryFlows(w);
+    const total = flows.reduce((sum, f) => sum + f.rate, 0) * SECONDS_PER_GAME_DAY;
+    expect(total).toBeCloseTo(w.tuning.quarryOutputPerDay, 6);
+    const toPort = flows.filter((f) => f.to === "big").reduce((sum, f) => sum + f.rate, 0) * SECONDS_PER_GAME_DAY;
+    expect(toPort).toBeGreaterThanOrEqual(w.tuning.quarryOutputPerDay * w.tuning.quarryExportShare - 1e-6);
+    expect(new Set(flows.map((f) => f.to)).size).toBeLessThanOrEqual(4);
+  });
+
+  test("one nothing is moved from closes after its grace, and stays on the map as a ruin", () => {
+    const w = quarryWorld({ industryGraceDays: 3, industryEveryMinDays: 999, industryEveryMaxDays: 999 });
+    openQuarry(w);
+    const [site] = [...w.industries.keys()];
+    const events: string[] = [];
+    for (let t = 0; t < 4 * SECONDS_PER_GAME_DAY; t += SIM_DT) for (const e of sliceTick(w, SIM_DT)) events.push(e.kind);
+    expect(events).toContain("industry-closed");
+    expect(w.industries.size).toBe(0);
+    expect(w.towns.has(site!)).toBe(false);
+    expect(w.ruins.get(site!)?.industry).toBe("quarry");
+  });
+
+  test("served, its stone raises the towns it reaches: their cap grows by the share delivered", () => {
+    const w = quarryWorld({ industryEveryMinDays: 999, industryEveryMaxDays: 999 });
+    openQuarry(w);
+    const [site] = [...w.industries.keys()];
+    const buyer = [...industryFlows(w)].filter((f) => f.to !== "big").sort((p, q) => q.rate - p.rate)[0]!.to;
+    const capBefore = townGrowth(w, buyer)!.cap;
+    expect(buildRoad(w, site!, buyer).ok).toBe(true);
+    expect(addLorry(w, site!, buyer).ok).toBe(true);
+    run(w, 6 * SECONDS_PER_GAME_DAY);
+    expect(stoneServed(w, buyer)).toBeGreaterThan(0.2);
+    expect(townGrowth(w, buyer)!.cap).toBeGreaterThan(capBefore);
+  });
+
+  test("goods pay by the tonne and the cell: the same tonnes carried twice as far pay twice as much", () => {
+    const w = quarryWorld();
+    const near = { from: "big", to: "mid", kind: "supplies" as const, amount: 10 };
+    const deliveries = (entry: typeof near) => [{ entry, amount: entry.amount }] as never;
+    const one = goodsFares(w, deliveries(near));
+    expect(one).toBeCloseTo(10 * roadPath(w, "big", "mid")!.distance * w.tuning.goodsFarePerTonneCell, 6);
   });
 });
 

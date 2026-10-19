@@ -32,5 +32,7 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   world.startPopulation = new Map([...world.towns.values()].map((town) => [town.id, town.population]));
   world.milestones = new Map(); // growth during the warm-up isn't yours
   resetCorridors(world);
+  // Industries count their days from day 1, not from the warm-up.
+  world.industrySchedule.nextAtSeconds = world.startSeconds + tuning.industryFirstDay * SECONDS_PER_GAME_DAY;
   return world;
 }

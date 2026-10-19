@@ -3,6 +3,7 @@ import { chainOf, demandAlong, townShare } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { isDirt } from "./congestion";
 import { laneEncroachment } from "./pushback";
+import { stoneServed } from "./industries";
 
 // The original towns grow (docs/principles.md §6, step 4: depth, one at a
 // time -- growth second, after decay). Served well, a town draws people;
@@ -110,7 +111,11 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   const share = townShare(world, townId);
   const service = share.player + INFORMAL_SERVICE_WEIGHT * share.informal;
   const rung = bestRung(world, townId);
-  const cap = base * (1 + tuning.townGrowthCap * carriedShare(world, townId));
+  // Stone feeds construction (brief, Revision 2): the stone delivered from
+  // quarries raises the cap, by a share of it bounded by the town's start --
+  // never its current size (principles §3, Growth).
+  const stone = tuning.goodsEnabled && tuning.industriesEnabled && world.industries.size > 0 ? stoneServed(world, townId) : 0;
+  const cap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone));
   const developed = share.player >= tuning.growthMinPlayerShare
     ? smoothstep((service - tuning.growthServiceFloor) / (tuning.growthServiceFull - tuning.growthServiceFloor))
     : 0;

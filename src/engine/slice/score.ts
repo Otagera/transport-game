@@ -67,7 +67,7 @@ export function freshMilestone(world: SliceWorld, townId: string): string | null
  */
 export function peopleSinceStart(world: SliceWorld): number {
   let now = 0;
-  for (const town of world.towns.values()) now += town.population;
+  for (const town of world.towns.values()) if (!town.industry) now += town.population; // a site's workers aren't the region's growth
   let then = 0;
   for (const population of world.startPopulation.values()) then += population;
   return now - then;

@@ -825,6 +825,23 @@ default again; `problems.ts` `wornRoadAt` names a worn road your vehicles pay fo
 0.85, rough cost ≥ ₦1 a day) with "keep it up" as its move. The corridor probe keeps its
 corridor up once paved (`NO_KEEP=1` lets it wear).
 
+**Industries** (Revision 2; `industries.ts`): a site is a `SliceTown` with an `industry`
+kind and `industryWorkers` people, so roads, routing, yards and lorries treat it as a stop;
+it has no base population (no growth), and is kept out of markets and port supplies
+(`goods.ts`) and the people counts (`growthSinceStart`, `peopleSinceStart`).
+`updateIndustries` (end of `sliceTick`, goods and industries on) rolls each site's delivered
+stone, closes one with under `industryMinDeliveredPerDay` after `industryGraceDays` or past
+its life (`retireNode`, shared with an emptied town: the node becomes a junction, the site a
+ruin), and opens the next when `industrySchedule` says (a mulberry32 state kept as a number,
+seeded from the map, so the world stays plain data for clones). `openQuarry` samples dry
+spots 8-20 cells from the nearest town, 12 from other sites, preferring high ground.
+`industryFlows` is each quarry's stone (cargo kind `supplies`, told apart by its source):
+`quarryExportShare` to the port, the rest to its three nearest original towns by size.
+`stoneServed` is the share of a town's stone delivered; `townGrowth` adds `stoneCapShare` x
+that to the cap's share (bounded by the town's start). Goods fares are per tonne per cell
+(`fares.ts` `goodsFares`, `goodsFarePerTonneCell`), and `goodsLoader` loads every stop
+ahead in proportion to what waits for it.
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

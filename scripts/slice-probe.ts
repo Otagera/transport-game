@@ -13,6 +13,7 @@ import { setMaintained, upkeepPerDay, wearSpeed } from "../src/engine/slice/wear
 import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, goodsVehicleCostPerDay } from "../src/engine/slice/goods";
 import { addTrain, buildTrack, trackCost } from "../src/engine/slice/rail";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
+import { lorrySummaries } from "../src/engine/slice/goods";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
@@ -296,7 +297,7 @@ for (const strategy of strategies) {
   for (let i = 0; i < ticks; i += 1) {
     for (const event of sliceTick(world, SIM_DT)) {
       const day = Math.floor((i * SIM_DT) / SECONDS_PER_GAME_DAY) + 1;
-      townEvents.push(`day ${day} ${event.kind} ${event.name}`);
+      townEvents.push(`day ${day} ${event.kind} ${"name" in event ? event.name : "amount" in event ? Math.round(event.amount) : ""}`);
     }
   }
 
@@ -317,7 +318,7 @@ for (const strategy of strategies) {
   for (const route of world.lorryRoutes) {
     const d = diagnoseLorryRoute(world, route.id)!;
     const cost = route.vehicleIds.length * goodsVehicleCostPerDay(world, route.id);
-    const income = route.revenueRateEMA * SECONDS_PER_GAME_DAY;
+    const income = lorrySummaries(world).find((summary) => summary.id === route.id)?.incomePerDay ?? 0;
     console.log(
       `    ${route.id.padEnd(20)} lorries ${route.vehicleIds.length}  in ${fmt(income)}  cost ${fmt(cost)}  net ${fmt(income - cost)}/day  → ${d.verdict.padEnd(9)} ` +
         `t/day out ${d.outbound.toFixed(0)} in ${d.inbound.toFixed(0)}  delivered ${pct(d.delivered)} spoiled ${pct(d.spoiled)} load ${pct(d.loadFactor)}`,
