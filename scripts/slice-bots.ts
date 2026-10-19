@@ -10,7 +10,7 @@
 //   CHECKS=0 bun scripts/slice-bots.ts        # personas only
 //   SLICE_TUNING='{"fare":5}' ...             # tuning overrides, as in slice-probe.ts
 //   BOTS_WORKERS=6 ...                        # forecast threads (default 2: runs cool, ~3x slower)
-//   SEED=7 ...                                # a seeded variation of the map (variation.ts; default 0, the authored map)
+//   SEED=7 ...                                # a generated map (generate.ts; default 0, the hand-made map)
 //   BOTS_DAYS=3 BOTS_MOVES=1 ...              # a short run, logging each move bought (P8: the first three moves)
 //   OPENING_ONLY=1 ...                        # bots buy on day 1 only, then hold (P8 (b): an opening's worth)
 //   REPLAY='[{"kind":"bus",...}]' BOTS=replay  # buys these moves on day 1, in order, skipping refused ones (P8 (b))
@@ -20,7 +20,7 @@
 import { availableParallelism } from "node:os";
 import { SLICE_MAP } from "../src/slice/map";
 import { startSliceGame } from "../src/engine/slice/start";
-import { variedSliceMap } from "../src/engine/slice/variation";
+import { generatedSliceMap } from "../src/engine/slice/generate";
 import { addBus, buildRoad, chainOf, demandAlong, headline, routeSummaries, networkShare, paveRoad, roadChain, type Headline } from "../src/engine/slice/world";
 import { sliceTick } from "../src/engine/slice/tick";
 import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
@@ -41,7 +41,7 @@ const P8_DAY = 20;
 const tuning = { ...DEFAULT_SLICE_TUNING, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
 // Every persona and twin starts from the same warmed-up world (start.ts):
 // the game as the player meets it on day 1.
-const started = startSliceGame(variedSliceMap(SLICE_MAP, Number(process.env.SEED ?? 0)), tuning);
+const started = startSliceGame(generatedSliceMap(SLICE_MAP, Number(process.env.SEED ?? 0)), tuning);
 const newWorld = () => structuredClone(started);
 const log = (message: string) => process.stderr.write(`  ${message}\n`);
 

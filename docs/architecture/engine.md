@@ -479,7 +479,35 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   the other bank, is drawn again. Seed 0 returns the authored map unchanged: earlier
   measurements were taken on it, and probes and tests default to it. The page reads `?seed=N`,
   or draws one and writes it into the address so a reload replays the map ("Map N · New map"
-  on the controls line). The bots take `SEED=`.
+  on the controls line). The bots take `SEED=`. Superseded on the page and in the bots by
+  generated maps (below); kept for its `varyTownSizes`, which they share.
+- **Generated maps** (R1 7; `generate.ts`) — `generatedSliceMap(base, seed)` (and
+  `generatedMapInfo`, which also names the setting, the trunk and the draws rejected): seed 0
+  is the hand-made map; any other seed draws, on the hand-made map's 100×64:
+  - the dominant city's **setting** (coast, river or inland, once per seed) and bank, then the
+    city (coast: by a sea along its bank's edge, drawn as a very wide river off the map;
+    river: within 9 cells of the river; inland: 15+ from the river and the edge);
+  - a **river** from the top of the map to the bottom (x 38-62, meandering ±6, widths 2.5-5,
+    one ford of 1.2);
+  - eight more towns by **spacing** (15 cells apart, 6 from the edge, 3 from water; engine/map
+    `nodes.ts`'s rule), at least 3 on each bank;
+  - the **trunk**: the city, a middle town on its bank, the second city across the river, each
+    leg within 25% of the hand-made one's (25.5 and 38.1 cells) and running on, not back; the
+    hand-made sizes go to the trunk (120, 45, 70) and the rest shuffled, then varied by
+    `varyTownSizes` as the variation does (a draw where the city stops being the largest is
+    rejected);
+  - 2-3 **cut-off** towns off the trunk, and **spurs** joining the rest, shortest first, on
+    their own bank (only the trunk crosses the river), clear of other towns and of other roads;
+  - one **ridge** (two hills) on the line from the cut-off town with the widest gap to its
+    nearest joined town, a full radius clear of every town;
+  - the **old railway**, straight from the city to the farthest town across the river (not the
+    second city), clear of towns; the city is the port.
+  A guard failing rejects the draw and the next is drawn from the same stream (deterministic);
+  the last guard is reachability -- engine/map's `UnionFind` over the inherited roads and every
+  road `planCorridor` can plan from a town to its three nearest. 2,000 seeds: none falls back
+  (after 400 draws, to the variation), the slowest 102 ms. Town names come from a pool none of
+  the hand-made map's names are in. The corridor probe takes `SEED=` too, its corridor
+  defaulting to the trunk's first leg.
 - **Terrain and roads** (step 3; `terrain.ts`, `roads.ts`) — `buildSliceTerrain` turns the map
   def's authored rivers (centre line + width, or a width per point that varies between them) and hills (smooth bumps; elevation unbounded,
   since water is explicit) into the same `TerrainField` engine/map makes, and hard-fails a

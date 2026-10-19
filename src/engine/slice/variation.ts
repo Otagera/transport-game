@@ -52,17 +52,7 @@ export function variedSliceMap(base: SliceMapDef, seed: number): SliceMapDef {
   if (seed === 0) return map;
   const rng = createRng(seed);
 
-  const dominant = base.towns.reduce((big, town) => (town.population > big.population ? town : big));
-  const dominantPopulation = Math.round(dominant.population * between(rng, DOMINANT_RANGE));
-  for (const town of map.towns) {
-    if (town.id === dominant.id) {
-      town.population = dominantPopulation;
-      continue;
-    }
-    const range = base.roads.some((road) => road.a === town.id || road.b === town.id) ? TOWN_RANGE : CUT_OFF_RANGE;
-    const scale = Math.exp(between(rng, [Math.log(range[0]), Math.log(range[1])]));
-    town.population = Math.max(MIN_TOWN, Math.min(Math.round(VARIED_TOWN_CAP * dominantPopulation), Math.round(town.population * scale)));
-  }
+  varyTownSizes(map, rng);
 
   const rivers = map.terrain?.rivers ?? [];
   rivers.forEach((_, r) => {
@@ -76,6 +66,27 @@ export function variedSliceMap(base: SliceMapDef, seed: number): SliceMapDef {
     }
   });
   return map;
+}
+
+/**
+ * Varies every town's size in place, from its size now: the dominant city
+ * by DOMINANT_RANGE, staying the largest; a town no road in `map.roads`
+ * reaches by CUT_OFF_RANGE; the rest by TOWN_RANGE, never past
+ * VARIED_TOWN_CAP of the dominant city. Shared with generate.ts, which
+ * gives its towns the authored map's sizes first.
+ */
+export function varyTownSizes(map: SliceMapDef, rng: Rng): void {
+  const dominant = map.towns.reduce((big, town) => (town.population > big.population ? town : big));
+  const dominantPopulation = Math.round(dominant.population * between(rng, DOMINANT_RANGE));
+  for (const town of map.towns) {
+    if (town.id === dominant.id) {
+      town.population = dominantPopulation;
+      continue;
+    }
+    const range = map.roads.some((road) => road.a === town.id || road.b === town.id) ? TOWN_RANGE : CUT_OFF_RANGE;
+    const scale = Math.exp(between(rng, [Math.log(range[0]), Math.log(range[1])]));
+    town.population = Math.max(MIN_TOWN, Math.min(Math.round(VARIED_TOWN_CAP * dominantPopulation), Math.round(town.population * scale)));
+  }
 }
 
 function shiftedRiver(river: SliceRiverDef, rng: Rng): SliceRiverDef {

@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**527 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**530 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: slice zero
@@ -52,8 +52,42 @@ right after this file. Progress on that build order:
 | R1 5 | The score as visible as money: town-growth milestones, the trips-made trend (2) | Built 2026-10-19, **not yet played**: milestones (+25%, +50%, ×2, ×3) as a toast and a map tag; trips made with ▲/▼ over 10 days and a sparkline; "People, since day 1" in the strip |
 | R1 6 | Each corridor's informal share; "corridor taken" as a visible state, with its costs (3) | Built 2026-10-19, **not yet played**: a Corridors section (who carries each road's trips; "Taken, day N" at 40% of them, let go below 30%; levies lost; strike cost if laned), a toast, and a TAKEN tag on the map. **Finding:** the levies lost are ₦1–10 a day on a taken trunk, ~2% of its fares, against the brief's 20–40%: taking a corridor costs nothing you'd feel, and without a lane brings no pushback |
 | — | Your playtest of R1 4-6 (past day 300, map 3788) | Played 2026-10-19: treasury and growth messages seen; "I think I have played to its end"; seeds read as the same map; TAKEN clutter (principles.md §6) |
-| R1 7 | **Next: generated maps per seed, with guards; TAKEN only when it changes** (brief, After the ladder's playtest, 5) | To build (cloud session); then one corridor-probe run on 3 seeds, P8 re-measured, your playtest |
+| R1 7 | Generated maps per seed, with guards; TAKEN only when it changes (brief, After the ladder's playtest, 5) | Built 2026-10-19, **not yet played**: corridor probe on 3 seeds and P8 re-measured, below. **Next: your playtest** |
 | — | Proposed, not built: rail reshapes the map (station towns grow, new desire lines) (4); then wear | |
+
+**Revision 1, step 7: generated maps, 2026-10-19** (`generate.ts`, engine.md; the page and the
+bots use it, seed 0 the hand-made map).
+
+- **TAKEN only when it changes:** a corridor taken or lost is tagged on the map for 3 days
+  (TAKEN blue, LOST grey) and toasted; one that stays taken is in the panel only.
+- **The guards hold on every seed** (2,000 drawn: none falls back, slowest 102 ms); settings
+  spread evenly (coast 107, river 102, inland 91 of 300). The trunk guard checks each leg
+  against the hand-made one's, not their sum: with the sum alone, seed 1's first leg was 32.1
+  cells (+26%) and rail cost 48 days of surplus, unbuilt by day 160.
+- **Corridor probe, real money, 160 days** (`SEED=n REAL_MONEY=1 bun scripts/corridor-probe.ts
+  160`; the trunk's first leg). Seed 0 re-run alongside (its rail now reads 35.3 days, built day
+  122, against 27.8 when C2 was first measured: later steps moved it):
+
+| Seed | Lane built | Lane, days of surplus | Rail built | Rail, days of surplus |
+|---|---|---|---|---|
+| 0 (hand-made) | day 70 | 14.0 | day 122 | 35.3 |
+| 1 | day 87 | 13.8 | day 141 | 34.3 |
+| 2 | day 93 | 19.4 | day 156 | 38.6 |
+| 3 | day 93 | 18.8 | day 156 | 43.3 |
+
+  Lanes stay in C2's 10-20 days. Rail is reachable on every seed but **later than the
+  hand-made map**: two seeds at day 156, just past C4's 100-150, and seed 3 at 43 days of
+  surplus, just past C2's 40. Read: the generated trunks' middle towns come up smaller (38-44k
+  against Owode's 45k, before variation), so their corridors earn less. Not re-tuned (the
+  brief: no re-tuning; the playtest decides).
+- **P8, re-measured on generated seeds 1-3.** Seed 0's day-1 opening can't be replayed by name
+  (no town keeps its name), so it's replayed **by role**: city, middle town and second city to
+  the trunk's; the two cut-off towns to the generated cut-offs by size; the rest by size
+  (moves the map refuses are skipped). Trips made a day at day 20, trips-greedy / greedy /
+  replayed, and the replay's gap to the best: seed 1 541 / 374 / 460 (**15%, passes**, just);
+  seed 2 606 / 301 / 503 (**17%, passes**); seed 3 706 / 404 / 616 (13%, fails). **2 of 3 pass,
+  against 1 of 5 on the variation.** On your riders the gap is 26-32% on all three. (a)
+  passes on all three: trips-greedy's first three moves are new even matched by role.
 
 **Revision 1, step 3: the seeded variation, 2026-10-19.**
 
@@ -924,14 +958,13 @@ live-verified; each links to where its detail actually lives now.
 | 11b | Profiles applied to the map | Authored cross-sections drive real corridor rendering, decay, and cost | [architecture/render-and-ui.md](architecture/render-and-ui.md) §4, [architecture/content.md](architecture/content.md) |
 | 12 | Ambient private traffic | Prosperity → private cars → road friction, closing the growth/congestion loop | [architecture/engine.md](architecture/engine.md) §simulation/ |
 
-## Handoff: R1 4-6 built together (cloud session, 2026-10-19)
+## Handoff: R1 7 built (cloud session, 2026-10-19)
 
-On request, R1 4, 5 and 6 were built in one pass, each committed and pushed, without the
-playtest between them that the brief's order asks for. All three wait on one playtest now;
-bring back what each did (brief, After the ladder's playtest, 1-3). Open from R1 6: the
-levies lost by taking a corridor are ~2% of its fares (brief's calibration table), and a
-taken corridor without a lane draws no pushback -- whether "taken" should be a pushback
-trigger (the brief's ~40%) is a design call for after the playtest.
+R1 4-6 were played (principles.md §6); R1 7 is built and waits on your playtest: play two or
+three new maps (no `?seed=`, or "New map") and seed 0. Bring back: do the maps feel different,
+does the first move change, and does rail still arrive (two of three probe seeds reached it at
+day 156, past C4's 150: status.md, R1 7)? Open: whether taking a corridor should cost real
+money stays parked until rail reshapes the map is played (brief, After the ladder's playtest).
 
 ## Handoff (cloud session → laptop, 2026-10-16)
 

@@ -18,6 +18,7 @@ import { startSliceGame } from "@engine/slice/start";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
+import { generatedMapInfo, generatedSliceMap } from "@engine/slice/generate";
 import { buildSliceTerrain } from "@engine/slice/terrain";
 import { SLICE_MAP } from "../src/slice/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
@@ -2475,6 +2476,57 @@ describe("Revision 1: the named project the treasury leaves alone, for a while",
     expect(v.project).toBeNull();
   });
   const w0 = (w: SliceWorld) => (w.tuning.remittancePeriodDays + 0.5) * SECONDS_PER_GAME_DAY;
+});
+
+describe("generated maps per seed, with guards (brief, After the ladder's playtest, 5; P8)", () => {
+  test("seed 0 is the hand-made map; a seed always draws the same map, and another seed another", () => {
+    expect(generatedSliceMap(SLICE_MAP, 0)).toEqual(SLICE_MAP);
+    expect(generatedSliceMap(SLICE_MAP, 7)).toEqual(generatedSliceMap(SLICE_MAP, 7));
+    expect(generatedSliceMap(SLICE_MAP, 7)).not.toEqual(generatedSliceMap(SLICE_MAP, 8));
+  });
+
+  test("every seed passes the guards: trunk length, one dominant city, a river splitting it, 2-3 cut off, all reachable", () => {
+    const settings = new Set<string>();
+    for (let seed = 1; seed <= 60; seed += 1) {
+      const info = generatedMapInfo(SLICE_MAP, seed);
+      const { map } = info;
+      settings.add(info.setting);
+      expect(info.rejected).toBeLessThan(400); // never the fallback
+      expect(map.towns.length).toBe(9);
+      expect(new Set(map.towns.map((t) => t.id)).size).toBe(9);
+      // Not the hand-made positions nudged.
+      expect(map.towns.filter((t) => SLICE_MAP.towns.some((h) => Math.hypot(h.x - t.x, h.y - t.y) < 3)).length).toBeLessThan(5);
+      const town = (id: string) => map.towns.find((t) => t.id === id)!;
+      const [city, middle, second] = info.trunk.map(town);
+      const largest = map.towns.reduce((big, t) => (t.population > big.population ? t : big));
+      expect(largest.id).toBe(city!.id);
+      expect(map.port).toBe(city!.id);
+      expect(Math.abs(Math.hypot(city!.x - middle!.x, city!.y - middle!.y) - 25.5) / 25.5).toBeLessThanOrEqual(0.25);
+      expect(Math.abs(Math.hypot(middle!.x - second!.x, middle!.y - second!.y) - 38.1) / 38.1).toBeLessThanOrEqual(0.25);
+      const joined = (a: string, b: string) => map.roads.some((r) => (r.a === a && r.b === b) || (r.a === b && r.b === a));
+      expect(joined(city!.id, middle!.id) && joined(middle!.id, second!.id)).toBe(true);
+      const cutOff = map.towns.filter((t) => !map.roads.some((r) => r.a === t.id || r.b === t.id));
+      expect(cutOff.length).toBeGreaterThanOrEqual(2);
+      expect(cutOff.length).toBeLessThanOrEqual(3);
+      // The river splits the map: it runs off the top and the bottom.
+      const river = map.terrain!.rivers![0]!;
+      expect(river.points[0]![1]).toBeLessThan(0);
+      expect(river.points[river.points.length - 1]![1]).toBeGreaterThan(map.height);
+      // Every town dry (buildSliceTerrain throws otherwise), and every cut-off town reachable by a road you can build.
+      const w = createSliceWorld(map, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+      for (const t of cutOff) expect(map.towns.some((other) => other !== t && planRoad(w, t.id, other.id) !== null)).toBe(true);
+      expect(map.terrain!.hills!.length).toBe(2);
+    }
+    expect([...settings].sort()).toEqual(["coast", "inland", "river"]);
+  });
+
+  test("a generated map plays: the world starts, and a bus on the trunk carries riders", () => {
+    const info = generatedMapInfo(SLICE_MAP, 3);
+    const w = startSliceGame(info.map, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    expect(addBus(w, info.trunk[0], info.trunk[1]).ok).toBe(true);
+    run(w, 2 * SECONDS_PER_GAME_DAY);
+    expect(averageHeadline(w).yourRidersPerDay).toBeGreaterThan(0);
+  });
 });
 
 describe("seeded variation of the hand-made map (brief, Revision 1, the order, 3; P8)", () => {

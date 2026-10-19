@@ -587,6 +587,12 @@ for if eras return; they are not live in the slice.*
   It fell behind clearly only where a town no road reaches came up big enough to need a road
   on day 1 (status.md, P8). What makes a map play differently is its network (which towns are
   cut off, which corridor is the trunk), not its numbers.
+- **A generated network changes what a wrong opening costs; sizes alone didn't.** Generated
+  maps (R1 7: positions, trunk, cut-off towns, the river and the city's setting drawn per
+  seed) put seed 0's opening, replayed by role, 13-17% behind the best on day 20 on all three
+  seeds measured (2 of 3 past P8's 15%), where the size-only variation managed it on 1 of 5.
+  Guard what prices rely on at the grain they're priced at: a guard on the trunk's total
+  length let one leg run 26% long, and rail on it cost 48 days of surplus (status.md, R1 7).
 - **A bot's opening isn't the best opening.** Trips-greedy ranks by trips per naira, so it
   buys cheap openings; on your riders, a replayed opening beat it on 3 of 5 seeds. Compare
   openings against the best of several, never against one bot's.

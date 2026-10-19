@@ -22,7 +22,10 @@
 //   money averaged over those days: run once with NO_LANE=1 and once with
 //   the lane for a twin that never got it (deterministic up to the lane).
 //   SLICE_TUNING='{"...":...}' overrides tuning, as the bots do.
+//   SEED=n plays a generated map (generate.ts); the corridor defaults to its
+//   trunk's first leg (the dominant city to the middle town).
 import { SLICE_MAP } from "../src/slice/map";
+import { generatedMapInfo } from "../src/engine/slice/generate";
 import { startSliceGame } from "../src/engine/slice/start";
 import { sliceTick } from "../src/engine/slice/tick";
 import { addBrt, addBus, addBusLane, brtRouteId, findRoute, paveRoad, removeBus, roadChain, routeKey, routeSummaries } from "../src/engine/slice/world";
@@ -40,8 +43,9 @@ import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
 
 const DAYS = Number(process.argv[2] ?? 120);
-const A = process.argv[3] ?? "ilase";
-const B = process.argv[4] ?? "owode";
+const generated = generatedMapInfo(SLICE_MAP, Number(process.env.SEED ?? 0));
+const A = process.argv[3] ?? generated.trunk[0];
+const B = process.argv[4] ?? generated.trunk[1];
 const JAM_RISE = Number(process.env.JAM_RISE ?? 0.1);
 const JAM_FALL = Number(process.env.JAM_FALL ?? 0.05);
 const SETTLE_DAYS = 3;
@@ -49,7 +53,7 @@ const FULL = 0.85;
 const MAX_BUSES = Number(process.env.MAX_BUSES ?? 30);
 
 const tuning = { ...DEFAULT_SLICE_TUNING, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
-const world = startSliceGame(SLICE_MAP, tuning);
+const world = startSliceGame(generated.map, tuning);
 // REAL_MONEY=1 (C2): no top-ups, the treasury on, and the player saves for a
 // rung it can't afford -- a named project (project.ts), no other buying
 // while it saves -- then builds it. Prints what each rung cost in days of
