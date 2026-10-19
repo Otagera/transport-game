@@ -342,6 +342,13 @@ blow-by-blow; this section is the distilled rule.
   paving by trips per naira over days 6-10 (Ado-Ogbe) loses 39 trips a day over 60 days.
   The bots pave by that ranking, so their paving choices are suspect where the two disagree.
 
+- **Price a way out against what it saves, not against what's at stake** (Revision 2,
+  settlements). A settlement priced at a day of the corridor's income looked like "the
+  corridor's value", but a strike costs a small part of that (₦86-2,069 against quotes of
+  ₦2,376-6,814, twin-measured), so paying was never right and strikes were "let pass". A
+  choice exists only where the two prices cross: at 0.3 of a day's income, settling wins on
+  the strict bus trunk and loses where BRT rides out the strike.
+
 ### Balance numbers (from the first attempt — starting points, not gospel)
 
 - Fleet optimum was ~15 vehicles under static demand; revenue plateaued around the

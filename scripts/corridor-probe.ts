@@ -35,7 +35,7 @@ import { isDirt } from "../src/engine/slice/congestion";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { tollFor } from "../src/engine/slice/budget";
 import { informalSpec } from "../src/engine/slice/tick";
-import { setEnforcement } from "../src/engine/slice/pushback";
+import { setEnforcement, settlementPrice } from "../src/engine/slice/pushback";
 import { nameProject, rungPrice } from "../src/engine/slice/project";
 import { averageNet } from "../src/engine/slice/history";
 import { addTrain, buildTrack, railPath, railRouteId } from "../src/engine/slice/rail";
@@ -133,6 +133,8 @@ let strikeTwin: SliceWorld | null = null;
 let strikeTwinDays = 0;
 let strikeGain = { struck: 0, calm: 0 };
 const strikeMoney: Array<{ day: number; struck: number; calm: number }> = [];
+/** What settling each strike would have cost when it was called (C10: settling against taking it). */
+const settleQuotes: number[] = [];
 /** The game's own estimate of each strike's cost (pushback.ts), to set beside the twin's. */
 const estimates: number[] = [];
 let c3Start: { lane: number; twin: number } | null = null;
@@ -183,6 +185,8 @@ for (let day = 1; day <= DAYS; day += 1) {
   const now = world.economy.elapsedSeconds;
   const strikesToday = world.lanes.some((lane) => lane.strikeAt > now && lane.strikeAt <= now + SECONDS_PER_GAME_DAY);
   if (!strikeTwin && strikesToday) {
+    const lane = world.lanes.find((l) => l.strikeAt > now && l.strikeAt <= now + SECONDS_PER_GAME_DAY)!;
+    settleQuotes.push(settlementPrice(world, lane));
     strikeTwin = structuredClone(world);
     for (const lane of strikeTwin.lanes) {
       lane.strikeAt = 0;
@@ -339,7 +343,7 @@ if (laneDay) {
 for (const [i, s] of strikeMoney.entries()) {
   const diff = s.struck - s.calm;
   if (estimates[i] !== undefined) console.log(`  (the game's estimate of that strike: ${estimates[i]})`);
-  console.log(`Strike from day ${s.day}: your money over it (${world.tuning.strikeDays} days) and the day after ${Math.round(s.struck)} against ${Math.round(s.calm)} without it: ${diff < 0 ? `costs you ${Math.round(-diff)}` : `EARNS you ${Math.round(diff)}`}`);
+  console.log(`Strike from day ${s.day}: your money over it (${world.tuning.strikeDays} days) and the day after ${Math.round(s.struck)} against ${Math.round(s.calm)} without it: ${diff < 0 ? `costs you ${Math.round(-diff)}` : `EARNS you ${Math.round(diff)}`}${settleQuotes[i] !== undefined ? `; settling would have cost ${settleQuotes[i]}` : ""}`);
 }
 if (laneDay) {
   const kept = laneDay + ENFORCE_DAYS <= DAYS;

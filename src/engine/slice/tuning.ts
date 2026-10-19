@@ -201,9 +201,17 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   strikeNoticeDays: 4,
   // A named project's set-aside is safe from the remittance this long (brief, Revision 1).
   projectLapseDays: 30,
-  // Settling (the brief's pushback form (a)): half what the strike would
-  // cost you, at least ₦150 -- always cheaper than striking, never free.
-  settlementShare: 0.5,
+  // Settling (the brief's pushback form (a)), priced by the corridor's
+  // value: settlementShare x its income a day (your fares along it, its
+  // tolls and levies) x strikeDays, at least ₦150. At 0.5 (a day's income)
+  // settling cost 2.5-20x what each strike really cost against a twin
+  // (corridor probe, seed 0, 210 days: strict lane strikes ₦812-2,069 against
+  // quotes of ₦2,581-6,359; BRT ₦86-614 against ₦2,376-6,814), so letting it
+  // pass always won -- the playtest's "let pass, or paid once". At 0.15 (0.3
+  // of a day's income) each choice wins somewhere (brief C10): settling wins
+  // 3 of 5 strikes on the strict bus trunk, never with BRT on the lane, 1 of
+  // 2 on a lax one.
+  settlementShare: 0.15,
   settlementMin: 150,
   strikeEveryStrictDays: 24,
   strikeEveryLaxDays: 120,

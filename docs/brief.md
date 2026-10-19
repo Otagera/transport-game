@@ -377,17 +377,17 @@ The straight alignment and goods come back later, one per playtest, as before.
 
 The slice-zero checks that pass stay as regression checks. **Closing slice zero is a one-time, recorded exception** to "nothing moves on until every check passes": M5 is replaced by C3 (the tension it asked for comes from the bus lane and pushback); M2 stays a finding (principles.md §3: a lifeline road buys trips at a premium); day-60 M1 is re-measured under Revision 1. **For Revision 1, every check passes before moving on.**
 
-## Revision 2 (proposed 2026-10-19): a second economy
+## Revision 2 (agreed 2026-10-19): a second economy
 
-**Proposed; two parts agreed 2026-10-19 (step 1 first, and the informal hook in goods, truckers included). The late game has problems it doesn't show (step 1, built first), and a map that asks for a fixed amount of building has nothing to ask once it's built; a second economy -- industries that open and close, goods that must be moved, rail with a job of its own -- keeps new problems arriving after every town is connected.** Prompted by your playtest of R1 7 (principles.md §6, Played 2026-10-19, a generated map to day 210): *"I think I have gotten to its end"*, *"nothing more to build"*, and your read that stopping here makes it *Mini Metro with money*. On screen at day 210: 2,865 trips a day with no seat against 3,337 of your riders, three towns falling, and ₦72,385 in the bank. The map still had problems; none of them asked for a move.
+**Agreed 2026-10-19, all of it; built in the order below, without waiting on step 1's playtest (your call: "we've agreed on the goods et al."). The late game has problems it doesn't show (step 1, built first), and a map that asks for a fixed amount of building has nothing to ask once it's built; a second economy -- industries that open and close, goods that must be moved, rail with a job of its own -- keeps new problems arriving after every town is connected.** Prompted by your playtest of R1 7 (principles.md §6, Played 2026-10-19, a generated map to day 210): *"I think I have gotten to its end"*, *"nothing more to build"*, and your read that stopping here makes it *Mini Metro with money*. On screen at day 210: 2,865 trips a day with no seat against 3,337 of your riders, three towns falling, and ₦72,385 in the bank. The map still had problems; none of them asked for a move.
 
 What you should be able to say after an hour, revised again: "Ikire turned out to be the hub. The quarry opened on day 90 and its lorries jammed the Ikire road until I put a spur in; when it closed on day 160 I pulled the spur up and the track went to passengers. The truckers took the mill's loads until I undercut them."
 
-Two questions decide this draft, and they're yours: **does the informal answer for goods (truckers, market touts) feel like your game**, and **does "show the problems first" really come before any goods** (The order, below). Mark what you agree with in the Decisions log; nothing is built until you do.
+Both questions this draft turned on were answered yes (2026-10-19): the informal answer for goods (truckers, market touts) is your game, and step 1 came first.
 
 ### Step 1: show the problems the late game already has
 
-**Built first, alone, and played past day 150 before anything else in this revision.** If the late game comes alive once its problems are visible, the second economy may be smaller than drafted; if it still ends at "nothing more to build", the second economy has earned its place.
+**Built first** (2026-10-19). Its playtest was to size the rest; you agreed the rest outright instead, so the steps after it go ahead in order.
 
 What's missing today, from the code (`main.ts` `problemText`, `growthText`):
 
@@ -455,7 +455,7 @@ Proposed, each a line where the player already looks, each naming one move:
 
 ### Settlements priced by what the corridor is worth
 
-**Today a settlement is half a strike's estimated cost, at least ₦150** (`pushback.ts` `settlementPrice`), so on a busy corridor paying the union off is small change and never a decision. Proposed: price it in proportion to the corridor's value to you -- a share of the corridor's income over a few days (your fares along it, its tolls and levies), the same measure strikes are costed by -- so that settling is a real choice where it matters most: pay to keep the peace on the trunk, or take the strike. Calibrate so that settling and taking the strike each win somewhere (C3's shape).
+**Built 2026-10-19, and the draft's premise was backwards.** The price was already proportional to the corridor's value (half its income a day × the strike's two days, at least ₦150: `pushback.ts` `settlementPrice`) -- and far too dear, not too cheap. Measured against a twin without each strike (corridor probe, seed 0, 210 days): a strict lane's strikes cost ₦812–2,069 against quotes of ₦2,581–6,359; with BRT on the lane, ₦86–614 (one earned ₦542) against ₦2,376–6,814; lax, ₦313–835 against ₦2,429–2,586. Letting it pass always won, which is what you did. Now 0.3 of a day's income (`settlementShare` 0.15): settling wins 3 of 5 strikes on the strict bus trunk, never with BRT on the lane, 1 of 2 on a lax lane -- each choice wins somewhere (C10).
 
 ### The order
 
@@ -622,17 +622,17 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Forty decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; eleven are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Forty decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; sixteen are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
 | 2026-10-19 | Revision 2, step 1 first and alone: show the problems the late game already has (why a town is shrinking, where "no seat" is and the move that carries it, unserved trips drawn on the corridor), played past day 150 (C5) before any goods. Its playtest sizes the rest | Agreed 2026-10-19 |
-| 2026-10-19 | Revision 2: industries that open and close (quarry, mill, factory) as the second reason to build; goods back on; an industry's own ladder (dirt track, paved, your lorries, a rail spur); served industries grow the towns that trade with them | Proposed |
+| 2026-10-19 | Revision 2: industries that open and close (quarry, mill, factory) as the second reason to build; goods back on; an industry's own ladder (dirt track, paved, your lorries, a rail spur); served industries grow the towns that trade with them | Agreed 2026-10-19 |
 | 2026-10-19 | The informal hook in goods: lorries on the shared road (built), loading levies at markets and the port, and private truckers as the informal freight rival -- the last amends principles.md §3's "paratransit is passengers-only" in spirit (truckers aren't paratransit) | Agreed 2026-10-19 (the direction; built after step 1's playtest, as the order says) |
-| 2026-10-19 | Rail's own job: a train is passengers or freight on shared track slots; spurs to industries; station towns grow and new desire lines appear (absorbs "rail reshapes the map") | Proposed |
-| 2026-10-19 | Wear returns per corridor: a "Keep it up" switch with its cost a day, "Fix all on this corridor", the town card naming a worn road | Proposed |
-| 2026-10-19 | Retire a road (upkeep stops; access lost, consequences kept), and road to rail on the same alignment, cheaper for the earthworks | Proposed |
-| 2026-10-19 | Settlements priced by the corridor's value to you (a share of its income over a few days), not half a strike's estimated cost with a ₦150 minimum; settling and striking each win somewhere (C10) | Proposed |
+| 2026-10-19 | Rail's own job: a train is passengers or freight on shared track slots; spurs to industries; station towns grow and new desire lines appear (absorbs "rail reshapes the map") | Agreed 2026-10-19 |
+| 2026-10-19 | Wear returns per corridor: a "Keep it up" switch with its cost a day, "Fix all on this corridor", the town card naming a worn road | Agreed 2026-10-19 |
+| 2026-10-19 | Retire a road (upkeep stops; access lost, consequences kept), and road to rail on the same alignment, cheaper for the earthworks | Agreed 2026-10-19 |
+| 2026-10-19 | Settlements priced by the corridor's value to you (a share of its income over a few days), not half a strike's estimated cost with a ₦150 minimum; settling and striking each win somewhere (C10) | Agreed 2026-10-19 |
 | 2026-10-19 | Generated maps per seed with guards (town positions, the inherited trunk, cut-off towns, the old railway, the dominant city's setting; trunk length within ~±25% of today's; seed 0 the hand-made map), no re-tuning, one probe check; TAKEN shown only when it changes. Next, before (4) rail reshapes the map and wear. From the playtest: "I think I have played to its end" | Agreed 2026-10-19 |
 | 2026-10-19 | Rail reshapes the map: station towns grow, and new desire lines appear once rail opens, so the routes you know aren't the whole map any more. After (1)-(3) below, each played first. From the playtest: "I already know all the routes" | Proposed |
 | 2026-10-19 | After the ladder's playtest, in order, each played before the next, ahead of wear: (1) the treasury visible inside the existing budget breakdown, no new panel (a "Treasury took" line, a countdown "₦X over the reserve goes to the treasury in N days; spend it or set it aside", a set-aside progress bar, the 10-day remittance as a toast; a full treasury panel waits for the full game); (2) the score as visible as money (town-growth milestones, the trips-made trend); (3) each corridor's informal share and "corridor taken" as a visible state, with its costs | Agreed 2026-10-19 |
