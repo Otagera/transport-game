@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/slice/world";
 import { informalBudget, sliceTick } from "@engine/slice/tick";
+import { struckSegments } from "@engine/slice/pushback";
+import { addBusLane, checkLane, laneCost } from "@engine/slice/world";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
@@ -2067,5 +2069,58 @@ describe("Revision 1, 1a: a town's cap is set by its best corridor's rung", () =
     const w = world({ maxEmergentTowns: 0 });
     expect(bestRung(w, "cut")).toBe("none");
     expect(townGrowth(w, "cut")!.cap).toBe(20);
+  });
+});
+
+describe("Revision 1, 1b: the bus lane, and the strike it brings", () => {
+  test("a lane needs a paved road, costs money, and lifts its towns' cap", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    expect(checkLane(w, "big", "mid")).toEqual({ ok: false, reason: "pave it first" });
+    paveRoad(w, "big", "mid");
+    const capPaved = townGrowth(w, "mid")!.cap;
+    const funds = w.economy.funds;
+    const price = laneCost(w, "big", "mid");
+    expect(addBusLane(w, "big", "mid").ok).toBe(true);
+    expect(w.economy.funds).toBeCloseTo(funds - price);
+    expect(bestRung(w, "mid")).toBe("lane");
+    expect(townGrowth(w, "mid")!.cap).toBeGreaterThan(capPaved);
+    expect(checkLane(w, "big", "mid")).toEqual({ ok: false, reason: "it already has a bus lane" });
+  });
+
+  test("the danfos lose road space on it; your buses run free of the traffic", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6, informalRoadSpace: 30 });
+    paveRoad(w, "big", "mid");
+    const road = roadChain(w, "big", "mid")![0]!;
+    expect(informalBudget(w, road.id)).toBe(30);
+    addBusLane(w, "big", "mid");
+    expect(informalBudget(w, road.id)).toBe(w.tuning.informalRoadSpaceLane);
+    for (let i = 0; i < 12; i += 1) addBus(w, "big", "mid");
+    run(w, 120);
+    // Twelve of your buses on it, and general traffic isn't slowed by them.
+    const route = w.routes.find((r) => r.id === routeKey("big", "mid"))!;
+    expect(route.speedEMA).toBeGreaterThan(0.95);
+  });
+
+  test("the union strikes a few days after the lane: no danfo sets off along it that day", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    paveRoad(w, "big", "mid");
+    addBusLane(w, "big", "mid");
+    const events: string[] = [];
+    const step = (seconds: number) => {
+      for (let t = 0; t < seconds; t += SIM_DT) for (const e of sliceTick(w, SIM_DT)) events.push(e.kind);
+    };
+    step((w.tuning.strikeDelayDays - 0.5) * SECONDS_PER_GAME_DAY);
+    expect(events).not.toContain("strike");
+    step(SECONDS_PER_GAME_DAY);
+    expect(events).toContain("strike");
+    const struck = struckSegments(w);
+    expect(struck.size).toBeGreaterThan(0);
+    // Mid-strike: count danfos that set off along the corridor.
+    const before = new Set(w.informal.active.keys());
+    step(SECONDS_PER_GAME_DAY * 0.4);
+    const setOff = [...w.informal.active.entries()].filter(([id, trip]) => !before.has(id) && trip.mode === "danfo" && trip.segmentIds.some((s) => struck.has(s)));
+    expect(setOff).toHaveLength(0);
+    step(SECONDS_PER_GAME_DAY);
+    expect(events).toContain("strike-over");
   });
 });

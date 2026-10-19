@@ -34,7 +34,34 @@ right after this file. Progress on that build order:
 | — | Your playtest (brief P1-P6) | Played 2026-10-19: fun for minutes; one map; no story; no struggle (principles.md §6) |
 | R1 | Revision 1, the corridor's story (brief) | **Agreed 2026-10-19.** One change and one measurement at a time |
 | R1 1a | A town's growth cap set by its best road's rung | Done 2026-10-19, **C1 passes on the trunk**: below |
-| R1 1b | The bus lane and pushback (C3) | Next |
+| R1 1b | The bus lane and pushback: a strike (C3) | Done 2026-10-19, **C3 passes**; the lane's own C1 doesn't: below |
+
+**Revision 1, 1b: the bus lane and pushback, 2026-10-19** (`scripts/corridor-probe.ts`: the
+same trunk player climbs to a bus lane on the paved trunk's jam, day 41; a twin without the
+lane, the same buses bought in both, for 10 days). The lane: the Road tool on a paved road;
+priced as paving it again; your vehicles run free of the traffic on it and leave the shared
+road space; general traffic keeps 60% of the road; the danfos' road space on it falls. The
+pushback, one form: a strike -- 5 days after the lane, then every 20, for a day, no danfo sets
+off along the corridor (kekes and okadas still run); "STRIKE" on the road, and a toast.
+
+| Danfos' road space on a lane | Corridor's tolls + levies a day, lane against twin |
+|---|---|
+| 9 (dirt's) | 294 against 279 (**+5%**: your buses left the shared space, freeing it) |
+| 6 | 270 against 279 (−3%) |
+| **4 (set)** | **245 against 279 (−12%)** |
+
+- **C3 passes:** the lane lowers the corridor's takings 12%, and the first strike comes 6 days
+  after it (target: within 10), shown on the map where it happens.
+- **The lane's own C1 fails: it never jams again** (past day 110). On a lane your buses run
+  free, so a corridor can only jam there through "no seat", which more buses always fix. A
+  real lane fills too: proposed, the lane gets a capacity of its own (your buses' flow on it,
+  the same speed curve), so a busy lane slows and rail is the next rung. For a decision.
+- The tension is small in money: −₦34 a day over the lane's first 10 days, plus a strike
+  day's corridor takings every 20 days, against a strong network's ~₦5,000 a day. Its
+  weight in play (M5's question) is for the playtest.
+- Checked in Chrome with the developer start (`?dev=1&funds=20000`): paved Ilase-Owode,
+  a bus lane on it (a band of your colour under the road), six buses; on day 6 the strike
+  draws as a red dashed road with a "STRIKE" tag at its middle, and the toast says why.
 
 **Revision 1, 1a: growth tied to corridor capacity, 2026-10-19** (`scripts/corridor-probe.ts`,
 Ilase-Owode; a scripted player adds a bus while its buses run full, paves on the first jam;

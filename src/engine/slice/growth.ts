@@ -53,22 +53,23 @@ export interface TownGrowth {
 }
 
 /** The rungs of the ladder built so far (brief, Revision 1): a town with no road has none. */
-export type CorridorRung = "none" | "dirt" | "paved";
+export type CorridorRung = "none" | "dirt" | "paved" | "lane";
 
 /** The best rung among the roads at a town -- what its people can travel on. */
 export function bestRung(world: SliceWorld, townId: string): CorridorRung {
+  const order: CorridorRung[] = ["none", "dirt", "paved", "lane"];
   let best: CorridorRung = "none";
   for (const segment of world.simulation.map.segments) {
     if (segment.type !== "road" || (segment.fromNodeId !== townId && segment.toNodeId !== townId)) continue;
-    if (!isDirt(segment)) return "paved";
-    best = "dirt";
+    const rung: CorridorRung = segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
+    if (order.indexOf(rung) > order.indexOf(best)) best = rung;
   }
   return best;
 }
 
 /** How much of the growth cap (townGrowthCap) a rung allows. */
 function rungShare(world: SliceWorld, rung: CorridorRung): number {
-  return rung === "paved" ? 1 : rung === "dirt" ? world.tuning.growthCapDirtShare : 0;
+  return rung === "lane" ? world.tuning.growthCapLaneShare : rung === "paved" ? 1 : rung === "dirt" ? world.tuning.growthCapDirtShare : 0;
 }
 
 export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null {

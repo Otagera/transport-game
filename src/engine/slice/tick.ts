@@ -11,7 +11,8 @@ import { allocationPerDay, remit, tollFor, type Takings } from "./budget";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
-import { isDirt, updateRoadSpeeds } from "./congestion";
+import { isDirt, updateRoadSpeeds, yourSpeeds } from "./congestion";
+import { struckSegments, updatePushback } from "./pushback";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
@@ -171,6 +172,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
 
   // Worn roads slow everything on them (wear.ts), on top of traffic.
   const conditions = segmentConditions(world);
+  // Your road vehicles run free on a bus lane (Revision 1); everyone else sees the traffic.
+  const yourSpeed = yourSpeeds(world);
   let revenueThisTick = 0;
   for (const vehicle of simulation.vehicles) {
     const isDanfo = vehicle.lifecycle === "one-shot";
@@ -184,7 +187,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
       conditions,
       undefined,
       vehicle.carries === "goods" ? lorryLoader : isDanfo ? danfoLoader : busLoader,
-      world.segmentSpeed,
+      isDanfo ? world.segmentSpeed : yourSpeed,
     );
     if (deliveries.length === 0) continue;
     if (isDanfo) {
@@ -278,7 +281,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
 
-  const events = updateSettlements(world, dt);
+  const events = [...updateSettlements(world, dt), ...updatePushback(world)];
   recordDay(world);
   return events;
 }
@@ -399,6 +402,11 @@ function sendInformal(
   // trunk around your buses -- 8 trunk buses carried 180 riders a day
   // instead of 289, the trunk below half speed 94% of the time; counted,
   // 225 and 34%, and the danfos on Ilase-Owode fall as you add buses.
+  // On strike (pushback.ts): no danfo sets off along a struck corridor. Kekes and okadas aren't the union's.
+  if (mode === "danfo" && world.pushback.length > 0) {
+    const struck = struckSegments(world);
+    if (run.path.segmentIds.some((id) => struck.has(id))) return false;
+  }
   const space = run.path.segmentIds.map((id) => (informal.segmentSpace.get(id) ?? 0) + (yours.get(id) ?? 0));
   if (space.some((used, i) => used + spec.weight > informalBudget(world, run.path.segmentIds[i]!))) return false;
   // A real operator does not join a jam that pays nothing (principles §3).
@@ -445,7 +453,10 @@ function sendInformal(
  */
 export function informalBudget(world: SliceWorld, segmentId: string): number {
   const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
-  return segment && isDirt(segment) ? world.tuning.informalRoadSpaceDirt : world.tuning.informalRoadSpace;
+  if (!segment) return world.tuning.informalRoadSpace;
+  // A bus lane takes a lane from them (Revision 1).
+  if (segment.busLane) return world.tuning.informalRoadSpaceLane;
+  return isDirt(segment) ? world.tuning.informalRoadSpaceDirt : world.tuning.informalRoadSpace;
 }
 
 export function informalSpec(tuning: SliceTuning, mode: InformalMode): { capacity: number; speed: number; weight: number } {
@@ -481,11 +492,15 @@ function dispatchInformal(world: SliceWorld, dt: number, lost: Map<string, numbe
   const { tuning, informal } = world;
   const drift = emaAlpha(dt, tuning.patienceSeconds * PARK_PATIENCE_MULTIPLIER);
   // Road space your vehicles are using now, per segment.
+  // On a bus lane they're in their own lane: not the danfos' road space.
+  const laned = new Set(world.simulation.map.segments.filter((segment) => segment.busLane).map((segment) => segment.id));
   const yours = new Map<string, number>();
   for (const vehicle of world.simulation.vehicles) {
     if (informal.active.has(vehicle.id) || world.railVehicles.has(vehicle.id)) continue;
     const leg = world.vehicleSegment.get(vehicle.id);
-    if (leg) bump(yours, leg.slice(0, leg.lastIndexOf("#")), vehicle.congestionWeight);
+    if (!leg) continue;
+    const segmentId = leg.slice(0, leg.lastIndexOf("#"));
+    if (!laned.has(segmentId)) bump(yours, segmentId, vehicle.congestionWeight);
   }
 
   const danfoGroups = groupPool(world, informal.pool, drift, lost, (key, _trip, amount) => bump(informal.smallPool, key, amount));

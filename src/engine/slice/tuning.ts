@@ -146,6 +146,22 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   //     not road space, limits the danfos.
   informalRoadSpace: 15,
   informalRoadSpaceDirt: 9,
+  // Revision 1, 1b, the bus lane (scripts/corridor-probe.ts, C3): the
+  // danfos lose a lane. At dirt's 9 their road space didn't fall at all --
+  // your buses left the shared space, freeing it -- and the corridor's tolls
+  // and levies rose 5% against a twin without the lane; at 6, -3%; at 4,
+  // -12% (279 -> 245 a day over the lane's first 10 days): 4. General
+  // traffic keeps 60% of the road's capacity; a lane costs what paving that
+  // road did; its towns can grow 1.6x the paved cap's share (a first guess,
+  // C1 not yet met: below). The union strikes 5 days after a lane opens,
+  // then every 20, for a day.
+  informalRoadSpaceLane: 4,
+  laneGeneralCapacity: 0.6,
+  busLaneCostShare: 1,
+  growthCapLaneShare: 1.6,
+  strikeDelayDays: 5,
+  strikeEveryDays: 20,
+  strikeDays: 1,
   startingFunds: 2500,
   // Inside towns (docs/principles.md §5, answered "acknowledge it"): short
   // trips and the last mile, which kekes and okadas carry and nothing you

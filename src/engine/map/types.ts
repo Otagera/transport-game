@@ -60,6 +60,9 @@ export interface Segment {
   // A road's surface, where the game models one (the slice: dirt until
   // paved). Undefined in the original game, which never sets it.
   surface?: "dirt" | "paved";
+  // A lane only the player's vehicles use (the slice, Revision 1's bus
+  // lane): on a paved road; copied to both halves when a town splits it.
+  busLane?: boolean;
 }
 
 export interface TerrainField {

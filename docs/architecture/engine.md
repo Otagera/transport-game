@@ -507,7 +507,20 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   town's best road (`bestRung`: paved, dirt, or none): paved allows all of `townGrowthCap`
   (1.25), dirt `growthCapDirtShare` (0.4, i.e. the old +50%), a town no road reaches none.
   Paving a corridor lets its towns grow, and their growth jams it again
-  (`scripts/corridor-probe.ts`, brief C1). `growTowns` drifts each original town toward it every
+  (`scripts/corridor-probe.ts`, brief C1). A bus lane is the rung above paved
+  (`growthCapLaneShare`).
+- **The bus lane** (Revision 1, 1b; `world.ts` `addBusLane`/`checkLane`/`laneCost`) — a flag
+  on every piece of a paved road (`Segment.busLane`, copied when a town splits it), priced as
+  `busLaneCostShare` × paving it. On it: your vehicles' flow isn't general traffic's and they
+  run at free speed (`congestion.ts` `yourSpeeds`, passed to `tickVehicle` for everything but
+  informal vehicles); general capacity is `laneGeneralCapacity` of the road; your vehicles'
+  road space no longer counts against the danfos' budget, which falls to
+  `informalRoadSpaceLane` (`tick.ts` `informalBudget`).
+- **Pushback: a strike** (`pushback.ts`) — `addBusLane` starts the union's clock
+  (`answerBusLane`); `updatePushback`, every tick, begins a strike `strikeDelayDays` later and
+  then every `strikeEveryDays`, for `strikeDays`: `struckSegments` blocks danfo departures
+  along the corridor in `sendInformal` (kekes and okadas still go). Emits `strike` and
+  `strike-over` events for the page's toast; render.ts draws the struck road. `growTowns` drifts each original town toward it every
   tick (from `updateSettlements`, after the roadside towns' drift); demand follows at the
   daily `refreshDemand`. Emergent towns are not in `basePopulation` and keep growing from
   traffic.

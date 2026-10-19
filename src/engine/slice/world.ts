@@ -21,6 +21,7 @@ import { isRailRoute, railPath, rebuildNetworks, routingFor, vehicleCostPerDay }
 import { repairCost, roughCostPerDay, upkeepPerDay, wearSpeed } from "./wear";
 import { costRate, planRoad, segmentLength, type Alignment, type Point } from "./roads";
 import { paveStepCost } from "../pathing/cost";
+import { answerBusLane } from "./pushback";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -118,6 +119,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),
     segmentSpeed: new Map(),
+    pushback: [],
     ruins: new Map(),
     pathCache: new Map(),
     roadPlans: new Map(),
@@ -275,6 +277,43 @@ export function paveRoad(world: SliceWorld, a: string, b: string): ActionResult 
     // A new surface: paving renews the road as well as widening what it carries.
     road.condition = 1;
   }
+  return { ok: true };
+}
+
+/**
+ * A bus lane on a paved road (docs/brief.md, Revision 1: the third rung).
+ * Priced as a share of paving that road (the surface, not the repair):
+ * what a lane costs is road works on the same length.
+ */
+export function laneCost(world: SliceWorld, a: string, b: string): number {
+  const chain = roadChain(world, a, b);
+  if (!chain) return Infinity;
+  let cost = 0;
+  for (const road of chain.filter((piece) => !piece.busLane)) cost += paveStepCost(segmentLength(world, road)).base * costRate(world);
+  return Math.round(cost * world.tuning.busLaneCostShare);
+}
+
+export function checkLane(world: SliceWorld, a: string, b: string): ActionResult {
+  const chain = roadChain(world, a, b);
+  if (!chain) return { ok: false, reason: "no road joins them" };
+  if (chain.some(isDirt)) return { ok: false, reason: "pave it first" };
+  if (chain.every((piece) => piece.busLane)) return { ok: false, reason: "it already has a bus lane" };
+  if (!canAfford(world.economy, laneCost(world, a, b))) return { ok: false, reason: "can't afford it" };
+  return { ok: true };
+}
+
+/**
+ * Gives your vehicles a lane of their own along the whole road: congestion
+ * no longer slows them there, and the danfos lose that lane's road space
+ * (tick.ts informalBudget, congestion.ts) -- fewer of them, so fewer tolls
+ * and levies. The union answers (pushback.ts).
+ */
+export function addBusLane(world: SliceWorld, a: string, b: string): ActionResult {
+  const check = checkLane(world, a, b);
+  if (!check.ok) return check;
+  world.economy.funds -= laneCost(world, a, b);
+  for (const road of roadChain(world, a, b)!) road.busLane = true;
+  answerBusLane(world, a, b);
   return { ok: true };
 }
 

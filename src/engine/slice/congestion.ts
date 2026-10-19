@@ -46,10 +46,24 @@ export function isDirt(segment: Segment): boolean {
   return (segment.surface ?? (segment.provenance === "inherited" ? "dirt" : "paved")) === "dirt";
 }
 
+/** General traffic's capacity: a bus lane (Revision 1) takes a share of the road for your vehicles. */
 export function roadCapacity(world: SliceWorld, segmentId: string): number {
   const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
   if (!segment) return Infinity;
-  return world.tuning.roadFlowCapacity * (isDirt(segment) ? world.tuning.dirtRoadCapacity : 1);
+  const lane = segment.busLane ? world.tuning.laneGeneralCapacity : 1;
+  return world.tuning.roadFlowCapacity * (isDirt(segment) ? world.tuning.dirtRoadCapacity : 1) * lane;
+}
+
+/**
+ * The speeds your road vehicles see: general traffic's, except on a bus
+ * lane, where nothing else is in their way. The same map when there's no lane.
+ */
+export function yourSpeeds(world: SliceWorld): Map<string, number> {
+  const lanes = world.simulation.map.segments.filter((segment) => segment.busLane);
+  if (lanes.length === 0) return world.segmentSpeed;
+  const speeds = new Map(world.segmentSpeed);
+  for (const segment of lanes) speeds.set(segment.id, 1);
+  return speeds;
 }
 
 export function speedFactor(flow: number, capacity: number, floor: number): number {
@@ -82,11 +96,14 @@ export function updateRoadSpeeds(world: SliceWorld, dt: number): void {
   const entering = new Map<string, number>();
   const heavy = new Map<string, number>();
   const nowOn = new Map<string, string>();
+  // Your vehicles on a bus lane are out of general traffic's way.
+  const laned = new Set(simulation.map.segments.filter((segment) => segment.busLane).map((segment) => segment.id));
   for (const vehicle of simulation.vehicles) {
     const segmentId = currentSegment(world, vehicle);
     if (!segmentId) continue;
     const leg = `${segmentId}#${vehicle.pathIndex}`;
     nowOn.set(vehicle.id, leg);
+    if (laned.has(segmentId) && vehicle.lifecycle !== "one-shot") continue;
     if (world.vehicleSegment.get(vehicle.id) !== leg) {
       entering.set(segmentId, (entering.get(segmentId) ?? 0) + vehicle.congestionWeight);
       // Lorries counted apart too: they wear a road harder (wear.ts).

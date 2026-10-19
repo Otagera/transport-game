@@ -1,5 +1,5 @@
 import type { SliceWorld } from "./types";
-import { addBus, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
+import { addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
 import { addTrain, buildHalt, buildTrack } from "./rail";
 import { setRoadMaintained } from "./wear";
@@ -13,6 +13,7 @@ export type ActionSpec =
   | { kind: "bus" | "minibus" | "lorry" | "train" | "freight"; a: string; b: string }
   | { kind: "road"; a: string; b: string; alignment: Alignment }
   | { kind: "pave"; a: string; b: string }
+  | { kind: "lane"; a: string; b: string }
   | { kind: "track"; a: string; b: string; alignment: Alignment }
   | { kind: "halt"; town: string }
   | { kind: "fix"; segmentId: string; on: boolean }
@@ -41,6 +42,8 @@ export function applyAction(world: SliceWorld, spec: ActionSpec): ActionOutcome 
       return buildRoad(world, spec.a, spec.b, spec.alignment);
     case "pave":
       return paveRoad(world, spec.a, spec.b);
+    case "lane":
+      return addBusLane(world, spec.a, spec.b);
     case "track":
       return buildTrack(world, spec.a, spec.b, spec.alignment);
     case "halt":

@@ -216,6 +216,14 @@ terrain isn't applied: the map still draws shaded hills.
   the second click on a losing move, Results and receipt toasts, route rows' riders/load
   line, and the key. Without it none of that runs: no forecast workers, and `act()` skips
   `receipts.perform`, so no shadow world steps every frame.
+- **The bus lane and strikes** (Revision 1, 1b): the Road tool on a paved road offers a bus
+  lane (preview: price, "your vehicles skip the traffic · danfos lose a lane, and their union
+  will strike"); a lane draws as a band of your colour under the road (wider than a route
+  line, so it reads as the road's); a struck road as a red dashed line, with a "STRIKE" tag
+  drawn after the towns (`drawStrikeLabels`) so nothing covers it; strikes start and end
+  with a toast.
+- **Developer start:** `?dev=1&funds=20000` sets the starting funds, to reach a late rung in a
+  minute for checks and screenshots.
 - **Hints** (`hints.ts`, no DOM; `renderHint` every frame): the brief's six, one at a time,
   each latched by the game's state, shown lowest first, dismissed by doing the thing (a
   hover; a route of yours; a road; a vehicle added; funds back or a sale; a day passing for

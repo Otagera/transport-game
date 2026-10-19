@@ -6,6 +6,7 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/slice/growth";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 import { isDirt } from "@engine/slice/congestion";
+import { struckSegments } from "@engine/slice/pushback";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -42,6 +43,7 @@ export const COLORS = {
   selection: "#d9480f",
   ghostOk: "#2b2925",
   ghostBad: "#c92a2a",
+  strike: "#c92a2a",
 };
 
 const ROUTE_COLORS = ["#2f6fdb", "#0b8f6a", "#a33ea1", "#d9480f", "#1c7ed6", "#5f3dc4", "#c2255c", "#2b8a3e"];
@@ -121,6 +123,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   drawVehicles(ctx, world, view);
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   for (const town of world.towns.values()) drawTown(ctx, world, view, town, state);
+  drawStrikeLabels(ctx, world, view);
   // Last, so nothing on the map draws through the price.
   if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok, state.ghost.forecast);
   if (state.road) drawLabel(ctx, state.road.at, state.road.label, true, state.road.forecast);
@@ -231,6 +234,7 @@ function drawGround(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View
 
 function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
   ctx.lineCap = "round";
+  const struck = struckSegments(world);
   for (const segment of world.simulation.map.segments) {
     const line = segmentPolyline(world.simulation.map, segment);
     if (segment.type === "rail") {
@@ -272,10 +276,28 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
       strokeLine(ctx, view, line);
       ctx.globalAlpha = 1;
     }
+    // A bus lane (Revision 1): a band of your colour under the road, wider
+    // than a route line, so it reads as the road's, not a route's.
+    if (segment.busLane) {
+      ctx.strokeStyle = COLORS.player;
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 16;
+      ctx.setLineDash([]);
+      strokeLine(ctx, view, line);
+      ctx.globalAlpha = 1;
+    }
     ctx.strokeStyle = built ? COLORS.builtRoad : COLORS.dirtRoad;
     ctx.lineWidth = built ? 7 : 6;
     ctx.setLineDash(built ? [] : [10, 5]);
     strokeLine(ctx, view, line);
+    // A strike (pushback.ts): the road struck through in red, named where it happens.
+    if (struck.has(segment.id)) {
+      ctx.strokeStyle = COLORS.strike;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([3, 7]);
+      strokeLine(ctx, view, line);
+      ctx.setLineDash([]);
+    }
     // Wear: cracks across the road, closer together the worse it is.
     // Maintained roads get a centre line instead -- someone keeps them.
     ctx.setLineDash([]);
@@ -290,6 +312,30 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View)
     }
   }
   ctx.setLineDash([]);
+}
+
+// "STRIKE" over each struck corridor, once, at its middle: drawn after the
+// towns and routes, so nothing covers it (pushback.ts).
+function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
+  const now = world.economy.elapsedSeconds;
+  for (const strike of world.pushback) {
+    if (strike.strikeUntil <= now || strike.segmentIds.length === 0) continue;
+    const pieces = strike.segmentIds.map((id) => world.simulation.map.segments.find((s) => s.id === id)).filter((s) => s !== undefined);
+    const line = pieces.flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+    if (line.length === 0) continue;
+    const [, rest] = splitPolyline(line, polylineLength(line) / 2);
+    const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
+    ctx.font = "700 11px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const width = ctx.measureText("STRIKE").width + 10;
+    ctx.fillStyle = COLORS.strike;
+    ctx.beginPath();
+    ctx.roundRect(mid.x + 14, mid.y - 9, width, 18, 4);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillText("STRIKE", mid.x + 14 + width / 2, mid.y);
+  }
 }
 
 // Track: a dark rail line with sleepers across it -- width and surface, not

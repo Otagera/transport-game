@@ -11,6 +11,9 @@ import {
   demandAlong,
   diagnoseRoute,
   addMinibus,
+  addBusLane,
+  checkLane,
+  laneCost,
   checkMinibus,
   chainOf,
   findRoute,
@@ -52,6 +55,7 @@ import { vehicleMoves } from "@engine/slice/moves";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { startSliceGame } from "@engine/slice/start";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
+import { isDirt } from "@engine/slice/congestion";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
@@ -82,6 +86,10 @@ const dev = params.get("dev") === "1";
 document.body.dataset.dev = String(dev);
 // The world has already run five days when you arrive (start.ts).
 const world = startSliceGame(SLICE_MAP, { ...DEFAULT_SLICE_TUNING, ...(allSystems ? ALL_SYSTEMS_ON : {}) });
+// A developer start (?dev=1&funds=20000): enough money to reach a late rung
+// in a minute, for screenshots and checks. Ignored without ?dev=1.
+const devFunds = dev ? Number(params.get("funds")) : NaN;
+if (Number.isFinite(devFunds) && params.has("funds")) world.economy.funds = devFunds;
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
 const strip = document.querySelector<HTMLDivElement>("#strip")!;
@@ -227,8 +235,11 @@ function describeForecast(r: Receipt): ForecastLine {
 /** The action a tool would take between two towns -- what the preview forecasts and a click does. */
 function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
   switch (current) {
-    case "road":
-      return roadChain(world, a, b) ? { kind: "pave", a, b } : { kind: "road", a, b, alignment };
+    case "road": {
+      const chain = roadChain(world, a, b);
+      if (!chain) return { kind: "road", a, b, alignment };
+      return chain.some(isDirt) ? { kind: "pave", a, b } : { kind: "lane", a, b };
+    }
     case "track":
       return { kind: "track", a, b, alignment };
     case "bus":
@@ -361,7 +372,11 @@ function say(message: string, bad = false, seconds = 2.6): void {
 }
 
 function announce(event: SliceEvent): void {
-  if (event.kind === "founded") {
+  if (event.kind === "strike") {
+    say(`Danfo drivers on ${townName(event.a)} – ${townName(event.b)} are on strike today over your bus lane: no danfos, no levies there.`, true, 8);
+  } else if (event.kind === "strike-over") {
+    say(`The danfo strike on ${townName(event.a)} – ${townName(event.b)} is over.`, false, 4);
+  } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
   } else {
     say(`${event.name} has emptied out: not enough traffic passes any more.`, true, 6);
@@ -504,7 +519,12 @@ canvas.addEventListener("click", (event) => {
   }
   confirming = null;
   const towns = [from, town];
-  if (tool === "road" && roadChain(world, from, town)) {
+  if (tool === "road" && intended?.kind === "lane") {
+    const cost = laneCost(world, from, town);
+    const result = act({ label: `a bus lane on ${townName(from)} – ${townName(town)}`, towns }, (w) => addBusLane(w, from, town));
+    if (result.ok) say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic there. The danfos lost a lane.${later}`);
+    else say(`Can't add a bus lane (${naira(cost)}): ${result.reason}`, true);
+  } else if (tool === "road" && roadChain(world, from, town)) {
     const cost = paveCost(world, from, town);
     const result = act({ label: `paving ${townName(from)} – ${townName(town)}`, towns }, (w) => paveRoad(w, from, town));
     if (result.ok) say(`Paved ${townName(from)} – ${townName(town)} for ${naira(cost)}: it now carries ${paveGain()}× the traffic.${later}`);
@@ -658,6 +678,12 @@ function ghost(): Ghost | null {
   if (!to) return { from: selectedTown, to: end, ok: true, label: "" };
   // The trip's demand rides along on every preview: what you'd be building for.
   const riders = `${Math.round(pairDemand(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want this trip`;
+  if (tool === "road" && actionFor("road", selectedTown, to)?.kind === "lane") {
+    const check = checkLane(world, selectedTown, to);
+    const cost = naira(laneCost(world, selectedTown, to));
+    const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? `Bus lane ${cost} · your vehicles skip the traffic · danfos lose a lane, and their union will strike` : `Bus lane ${cost} · ${check.reason}` };
+    return withForecast(ghost, { kind: "lane", a: selectedTown, b: to }, { label: "a bus lane", towns: [selectedTown, to] });
+  }
   if (tool === "road" && roadChain(world, selectedTown, to)) {
     const check = checkPave(world, selectedTown, to);
     const cost = naira(paveCost(world, selectedTown, to));
