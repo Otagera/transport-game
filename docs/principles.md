@@ -877,6 +877,19 @@ Steps, each played before the next:
    corridor's informal share, and "corridor taken" as a visible state with its costs. Then,
    proposed: (4) rail reshaping the map.
 
+   **Played 2026-10-19, R1 4-6 (built together; past day 300, map 3788):** the treasury's
+   messages and the set-aside were seen ("I saw the treasury took messages"; "the treasury
+   button to stash money"), and so were the town-growth messages. *"With the current state, I
+   think I have played to its end."* Seeds still read as the same map ("the same map just the
+   names rearranged"). On screen: rail on four or five corridors, a bus or train on nearly every
+   pair, about 17 TAKEN tags (some over town names), Ipaja, Ado and Ogbe falling. Findings:
+   - **R1 4 and R1 5 land as events:** a message you read is noticed where a number that moves
+     wasn't.
+   - **A state that's everywhere isn't a state.** With nearly every corridor taken, TAKEN is
+     clutter; and taking costs ₦1-10 a day (status.md, R1 6), so it was never a decision.
+   - **The slice has an end, and it's when no new problem arrives.** Past rail, nothing the map
+     does asks for a move you haven't made.
+
 Rules for working this way:
 
 - **Every step is played before the next starts.** Every finding that mattered came from

@@ -343,7 +343,7 @@ Calendar eras stay paused (principles.md §6). Each corridor climbs at its own p
    - **1b. The bus lane and pushback** (one form, on the map). Measure C3.
    - Then the corridor card and its drawn history, and the named project the treasury leaves alone (C2); M10 and day-60 M1 again.
 2. **Rail returns as the top rung** (switched on; restore the old line, new track, halts, trains), priced for C2.
-3. **A seeded variation of the hand-made map:** the same geography, with town sizes and the river's crossing points varied by a seed, so a second game differs (P8). Full map generation waits until the variation has been played. **Proposed, not built:** if the playtest says the maps feel the same, the next step before full generation is to vary the inherited road network per seed (which towns start cut off, which corridor is the trunk): sizes alone change the game only when a cut-off town comes up big (principles.md §3, Maps).
+3. **A seeded variation of the hand-made map:** the same geography, with town sizes and the river's crossing points varied by a seed, so a second game differs (P8). Full map generation waits until the variation has been played. The playtest said the maps feel the same; generated maps with guards are next (After the ladder's playtest, 5): sizes alone change the game only when a cut-off town comes up big (principles.md §3, Maps).
 4. **Wear returns after rail** (Fix tool): keeping what you built against climbing further.
 
 ### After the ladder's playtest (2026-10-19)
@@ -354,6 +354,13 @@ Your playtest of the whole ladder (principles.md §6): rail after 100+ days with
 2. **The score as visible as money.** Town-growth milestones, and the trips-made trend.
 3. **Each corridor's informal share, and "corridor taken" as a visible state**, with what taking it costs (levies lost, pushback).
 4. **Proposed, not built: rail reshapes the map.** Towns with a station grow (beyond the rail cap's ceiling alone), and new desire lines appear (trips that didn't exist before rail: new pairs, a station town pulling from its neighbours), so the network you know stops being the whole map once rail opens. Prompted by "I already know all the routes".
+
+**Next, agreed 2026-10-19 after the playtest of R1 4-6 ("I think I have played to its end"; seeds read as "the same map just the names rearranged"):**
+
+5. **Generated maps, per seed, with guards.** A seed draws where about 9 towns sit (spacing rules, not the hand-made positions nudged), which corridor is the inherited trunk, which 2-3 towns start cut off, where the old railway runs, and where the dominant city sits (coast, river or inland). Kept: one dominant city, the largest town; a river that splits the map; one ridge; every town reachable by building roads; seed 0 is the hand-made map, unchanged. **Guards** reject a seed and draw again: the trunk's length within about ±25% of today's (Ilase-Owode-Ado), so the ladder's prices land as measured (a lane ~14 days of surplus, rail ~28: C2); one dominant city; the river splitting the map; 2-3 cut-off towns. Borrow `engine/map`'s placement and connectivity checks, not the whole generator. No re-tuning: the ladder's numbers are rules (caps as shares of capacity, prices per cell), so they carry over; check with one corridor-probe run on 3 seeds that rail is reachable around day 100-150, then your playtest. P8 re-measured on generated seeds.
+   - **Alongside: TAKEN only when it changes.** A toast and a map tag that fades after a few days when a corridor is taken or lost; a corridor that stays taken shows in the Corridors section, not on the map (playtest: about 17 tags, some over town names). Whether taking a corridor should cost real money stays parked until (4) is played (status.md, R1 6: ₦1-10 a day against the brief's 20-40%).
+6. **Then (4), once you agree it:** rail reshapes the map.
+7. **Then wear** (4 in the order above).
 
 The straight alignment and goods come back later, one per playtest, as before.
 
@@ -511,10 +518,11 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Thirty-two decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; eight are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Thirty-three decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; nine are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-19 | Generated maps per seed with guards (town positions, the inherited trunk, cut-off towns, the old railway, the dominant city's setting; trunk length within ~±25% of today's; seed 0 the hand-made map), no re-tuning, one probe check; TAKEN shown only when it changes. Next, before (4) rail reshapes the map and wear. From the playtest: "I think I have played to its end" | Agreed 2026-10-19 |
 | 2026-10-19 | Rail reshapes the map: station towns grow, and new desire lines appear once rail opens, so the routes you know aren't the whole map any more. After (1)-(3) below, each played first. From the playtest: "I already know all the routes" | Proposed |
 | 2026-10-19 | After the ladder's playtest, in order, each played before the next, ahead of wear: (1) the treasury visible inside the existing budget breakdown, no new panel (a "Treasury took" line, a countdown "₦X over the reserve goes to the treasury in N days; spend it or set it aside", a set-aside progress bar, the 10-day remittance as a toast; a full treasury panel waits for the full game); (2) the score as visible as money (town-growth milestones, the trips-made trend); (3) each corridor's informal share and "corridor taken" as a visible state, with its costs | Agreed 2026-10-19 |
 | 2026-10-19 | If the playtest says the maps feel the same, vary the inherited road network per seed (which towns start cut off, which corridor is the trunk) before full map generation. Varying town sizes and the river alone changes the game only when a cut-off town comes up big (P8 (b), status.md) | Proposed |
