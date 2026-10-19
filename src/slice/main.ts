@@ -42,7 +42,7 @@ import { planRoad, segmentPolyline, type Alignment, type RoadPlan } from "@engin
 import { roughCostPerDay, setRoadMaintained, upkeepPerDay, wearSpeed } from "@engine/slice/wear";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/slice/receipts";
 import type { SliceWorld } from "@engine/slice/types";
-import { growthTrend, townGrowth } from "@engine/slice/growth";
+import { growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
 import { addTrain, buildHalt, buildTrack, checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction } from "@engine/slice/rail";
 import { addFreightTrain, checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
 import { addLorry, checkLorry, diagnoseLorryRoute, goodsAlong, isLorryRoute, lorrySummaries, removeLorry, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
@@ -1012,10 +1012,17 @@ function renderTown(townId: string): void {
 }
 
 // The one problem here, named: no road reaches it, some of its trips have
-// none, or a road but no seat. Nothing when it's well served.
+// none, its road is full (it's grown to what its rung allows), or a road but
+// no seat. Nothing when it's well served.
 function problemText(townId: string): string {
   const stranded = reachNote(townId);
   if (stranded) return stranded;
+  const full = roadFull(world, townId);
+  if (full) {
+    const name = townName(townId);
+    const next = full.next === "paved" ? "Pave its road (R)" : "A bus lane on its road (R)";
+    return `<p class="callout hook"><span class="k">The problem here</span>${name} can't grow: its road is full. ${next} to grow further.</p>`;
+  }
   const share = townShare(world, townId);
   if (share.lost < 0.2) return "";
   return `<p class="callout hook"><span class="k">The problem here</span>${pct(share.lost)} of its trips have a road but no seat: nobody carried them.</p>`;

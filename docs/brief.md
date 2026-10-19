@@ -352,9 +352,9 @@ The straight alignment and goods come back later, one per playtest, as before.
 
 | # | Check | Passes when |
 | --- | --- | --- |
-| C1 | A rung buys time | For the strongest strategy's corridors, each rung holds 20–40 days before that corridor jams again (bots). *A jam is judged by its consequences, not speed (agreed 2026-10-19):* the corridor's "no seat" rises clearly above its low since the rung, or its towns fall from their peak |
+| C1 | A rung buys time | Each rung buys 20–40 days of growth: from the rung, its corridor's towns keep growing that long before they level off (agreed 2026-10-19; dirt and paved corridors never visibly jam -- their towns stop at the rung's cap, so the town card says "<Town> can't grow: its road is full. <Next step> to grow further."). A jam, where one is measured, is judged by its consequences, not speed: "no seat" rising clearly above its low since the rung, or the towns falling from their peak |
 | C2 | Money makes you wait | Trips-greedy waits on money for a rung on at least a quarter of days 20–60; a bus lane costs 10–20 days of its surplus, rail 20–40 |
-| C3 | The lane costs you the danfos | A bus lane lowers that corridor's tolls and levies, and pushback fires there within 10 days, shown on the map where it happens (never a dialog or meter). *Proposed (2026-10-19):* the cost must matter -- the lane's lost takings plus its pushback (strike days against a twin without them, and enforcement once it exists) come to at least 10% of the corridor's net; and a strike day costs you money against that twin, never earns it |
+| C3 | Each enforcement choice wins somewhere | A bus lane's enforcement is a real choice (agreed 2026-10-19, replacing "lowers takings" and the 10%-of-net bar): run strict against lax on the trunk and on a modest corridor; it passes if the better choice (your money over the lane's first 40 days) differs between them. Pushback still shows on the map where it happens, and a strike day costs you money against a twin without it |
 | C4 | Some corridors climb, not all | By day 100, at most half the strongest strategy's corridors have passed paved; and a good game gets at least one corridor to rail by day 100–150 |
 | P7 | A story to tell | After a session you can tell one corridor's story in a sentence, with days in it |
 | P8 | The second game differs | A new seed changes at least your first three moves |
@@ -502,11 +502,12 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Twenty-five decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Twenty-six decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; six are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
 | 2026-10-19 | Strikes follow enforcement, not a timer: strict enforcement keeps the lane fast and clear but raises strike frequency (the union's grievance builds faster); lax enforcement keeps the peace but lets encroachment wear the lane down. A strike blocks the lane: your buses fall back into general traffic and the corridor's "no seat" spikes | Proposed |
+| 2026-10-19 | C1 reads as days of growth a rung buys; the town card names a town that can't grow because its road is full, and the next rung. C3 becomes "each enforcement choice wins somewhere" (strict against lax, trunk and a modest corridor; the better choice must differ). Stop before rail: you playtest the ladder (dirt → paved → lane), checking P7 | Agreed 2026-10-19 |
 | 2026-10-19 | C1's jam is judged by consequences: "no seat" rising clearly above its low since the rung, or the corridor's towns falling from their peak; not a speed threshold | Agreed 2026-10-19 |
 | 2026-10-19 | Lane encroachment: danfos drive in a bus lane unless enforcement is paid for daily; the lane's speed advantage wears away with encroachment, shown on the map. A strike must cost the player (1b measured it earning ₦22–38). C3 requires the lane's cost to be at least 10% of the corridor's net | Proposed |
 | 2026-10-19 | Revision 1: the corridor's story. A corridor climbs dirt → paved → bus lane → rail as its towns outgrow each rung; each rung visibly changes it and buys about 20–40 days before the next jam; the bus lane takes road space from the danfos and brings pushback (M5); calendar eras stay paused. Order: pressure and the ladder, rail as the top rung, a seeded variation of the hand-made map, then wear. Prompted by your playtest (principles.md §6, 2026-10-19) | Agreed 2026-10-19 |

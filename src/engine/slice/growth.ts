@@ -86,6 +86,32 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   return { base, cap, rung, target: base + (cap - base) * developed, service, playerShare: share.player };
 }
 
+/**
+ * A town that has grown to all its best road allows at the service it gets
+ * (brief, Revision 1): it has reached its target, and that target is above
+ * its start -- your service is growing it -- so the rung's cap is what stops
+ * it: a better road raises the target. A dirt or paved corridor never
+ * visibly jams (its towns just stop), so the panel says so and names the
+ * next rung. Null while the town still has room, when nothing you run grows
+ * it, or when there's no rung above (rail is switched off).
+ */
+export function roadFull(world: SliceWorld, townId: string): { rung: CorridorRung; next: "paved" | "lane" } | null {
+  const growth = townGrowth(world, townId);
+  const town = world.towns.get(townId);
+  if (!growth || !town || growth.cap <= growth.base) return null;
+  const grown = growth.target > growth.base * (1 + ROAD_FULL_GROWN);
+  const levelled = town.population >= growth.target * ROAD_FULL_SHARE;
+  if (!grown || !levelled) return null;
+  if (growth.rung === "dirt") return { rung: "dirt", next: "paved" };
+  if (growth.rung === "paved") return { rung: "paved", next: "lane" };
+  return null;
+}
+
+/** How close to its target counts as "can't grow" (the drift toward it slows near the end). */
+const ROAD_FULL_SHARE = 0.97;
+/** Grown at least this share above its start: your service is what's growing it. */
+const ROAD_FULL_GROWN = 0.05;
+
 // How far a town's target must be from its size, as a share of its
 // *starting* size, before it reads as growing or shrinking. At 2% of its
 // current size, a town drifting 1-3k back to its start flashed a down arrow

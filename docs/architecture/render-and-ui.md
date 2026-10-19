@@ -211,7 +211,8 @@ terrain isn't applied: the map still draws shaded hills.
   the strip's net; then the treasury: its rule, what it last took and the day it next does.
 - **The town card** (`renderTown`): kicker (role, size, ▲/▼), name, three lines (biggest
   trip, who carried its trips, inside trips), "The problem here" (no road; no road to some
-  towns; or a road but no seat), growth, its top five trips, a pager through the towns.
+  towns; its road is full -- `roadFull`: grown to all its rung allows, naming the next rung;
+  or a road but no seat), growth, its top five trips, a pager through the towns.
 - **The developer view, `?dev=1`** (`dev`): Best next moves, forecast lines on previews,
   the second click on a losing move, Results and receipt toasts, route rows' riders/load
   line, and the key. Without it none of that runs: no forecast workers, and `act()` skips

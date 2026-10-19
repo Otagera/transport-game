@@ -817,6 +817,18 @@ Steps, each played before the next:
    takes road space from the danfos and brings pushback; saving for the next rung is the
    struggle; calendar eras stay paused; then a seeded variation of this map for replay.
 
+   **Played 2026-10-19, Revision 1's ladder (dirt → paved → lane, to day 43; P7):** *"I liked
+   the building of the road multiple times. And the enforcement. I guess we need more. Did a
+   strike land? I couldn't tell."* On screen at day 43: strict lanes on three corridors out of
+   Ilase, ₦29,395 in funds and +₦5,909 a day (money still loose), Ilase grown 120k -> 302k,
+   and "no seat" 871 against 1,792 trips made -- the lanes squeezing the danfos out, as the
+   corridor probe's C3 runs found. Findings:
+   - **The ladder lands:** building the same road up several times, and the enforcement
+     switch, were the parts you liked. More rungs wanted (rail next, per the order).
+   - **A strike you can't tell happened isn't pushback.** It lasts one game day (7.5 s at 4×),
+     shown by a toast and a red road; strict lanes strike every ~12 days, so several almost
+     certainly landed unseen. Pushback has to leave a mark that outlasts the day.
+
 Rules for working this way:
 
 - **Every step is played before the next starts.** Every finding that mattered came from

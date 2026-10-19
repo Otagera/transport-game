@@ -37,6 +37,35 @@ right after this file. Progress on that build order:
 | R1 1b | The bus lane and pushback: a strike (C3) | Done 2026-10-19: C3 passes on paper; the lane's cost is 0.4% of the corridor's net and strikes earn you money |
 | R1 1b+ | The lane's own capacity; C1 for the lane re-measured; strike money against a twin | Done 2026-10-19: lane C1 33 days (knife-edge); strikes earn ₦22-38; lane encroachment and a stronger C3 proposed in the brief: below |
 | R1 1c | Strikes block the lane; encroachment and enforcement, strikes by enforcement; C1 by consequences | Done 2026-10-19: strikes cost ₦630-904; lane capacity 2.0 off the knife edge; dirt and paved never jam by consequences, they level off: below |
+| R1 1d | "Road is full" on the town card; C1 read as growth days; C3 strict against lax | Done 2026-10-19: **C1 passes** (35/29/19-27 days); **C3 fails**: lax wins on both corridors |
+| — | **Next: your playtest of the ladder** (dirt → paved → lane), checking P7 | Rail waits until after it |
+
+**Revision 1, 1d: the road is full; C1 as growth; C3 as a choice, 2026-10-19**
+
+- **"Road is full"** (`growth.ts` `roadFull`): a town grown by your service to the target its
+  best road allows (within 3%, and at least 5% above its start) gets the town card's problem
+  line "<Town> can't grow: its road is full. Pave its road (R) / A bus lane on its road (R)
+  to grow further." Nothing at the lane (rail is off). On the trunk it fires from day 29, as
+  the dirt corridor's towns level off.
+- **C1 passes, read as days of growth:** dirt 35, paved 29, the lane 19 (strict) to 27 (lax).
+- **C3 fails: strict never wins.** Money over the lane's first 40 days, and trips a day along
+  the corridor (`scripts/corridor-probe.ts`, `LAX=1`):
+
+| Corridor | Strict | Lax |
+|---|---|---|
+| Ilase-Owode (trunk) | ₦195,216 · 928 trips | **₦211,057 · 1,049 trips** |
+| Ilase-Kuto (modest) | ₦1,061 · 37 trips | **₦2,262 · 37 trips** |
+
+- **Neither knob flips it.** Strikes every 20 or 30 days instead of 12: strict ₦197,265 and
+  ₦198,117. Lax encroaching 2x or 4x as fast: still ₦206,271 and ₦210,471 with more trips.
+- **Why: the lane carries fewer people than the danfos it squeezes out.** Strict holds the
+  danfos to 4 road space; your buses (added while full) don't replace what they carried, so
+  trips along the corridor fall (928 against 1,049) and so does money. A fully encroached
+  lane is a paved road again, and beats it. For the lane to be worth enforcing, it must
+  carry more than it displaces: e.g. your buses much faster or bigger in it, or the danfos'
+  loss smaller. For a decision after the playtest.
+- On the modest corridor the probe climbed to a lane by day 12 (its thin towns level off
+  fast): its numbers are small, and the result the same.
 
 **Revision 1, 1c: enforcement, encroachment, strikes that cost; C1 by consequences, 2026-10-19**
 (`scripts/corridor-probe.ts`; the player climbs a rung when the corridor jams *or* its end

@@ -25,7 +25,7 @@ import { roadCapacity, speedFactor } from "@engine/slice/congestion";
 import { costRate, planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
 import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
-import { bestRung, growthTrend, townGrowth } from "@engine/slice/growth";
+import { bestRung, growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
 import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, removeLorry, lorrySummaries } from "@engine/slice/goods";
 import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
 import { slowOrder } from "@engine/slice/wear";
@@ -2185,5 +2185,18 @@ describe("Revision 1, 1b+: enforcement, encroachment, and strikes that cost", ()
     expect(struckSegments(w).has(road.id)).toBe(true);
     run(w, 1);
     expect(w.laneSpeed.has(road.id)).toBe(false);
+  });
+});
+
+describe("Revision 1: a town at its rung's cap says its road is full", () => {
+  test("grown by your service to all its rung allows: the next rung is named; with room to grow, nothing", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    expect(roadFull(w, "mid")).toBeNull();
+    // Full service: every trip from Mid carried by you, and Mid grown to the target that allows.
+    for (const [key, rates] of w.pairOutcomes) if (key.includes("mid")) Object.assign(rates, { player: 1, poached: 0, gaveUp: 0, lost: 0 });
+    w.towns.get("mid")!.population = townGrowth(w, "mid")!.target;
+    expect(roadFull(w, "mid")).toEqual({ rung: "dirt", next: "paved" });
+    paveRoad(w, "big", "mid");
+    expect(roadFull(w, "mid")).toBeNull(); // paving raised the cap, and the target with it: room again
   });
 });

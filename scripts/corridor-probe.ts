@@ -21,7 +21,7 @@ import { SLICE_MAP } from "../src/slice/map";
 import { startSliceGame } from "../src/engine/slice/start";
 import { sliceTick } from "../src/engine/slice/tick";
 import { addBus, addBusLane, findRoute, paveRoad, roadChain, routeSummaries } from "../src/engine/slice/world";
-import { townGrowth } from "../src/engine/slice/growth";
+import { roadFull, townGrowth } from "../src/engine/slice/growth";
 import { isDirt } from "../src/engine/slice/congestion";
 import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { tollFor } from "../src/engine/slice/budget";
@@ -97,6 +97,11 @@ const chainOf = (w: SliceWorld) => roadChain(w, A, B) ?? [];
 const takings = (w: SliceWorld) => corridorTakings.get(w)?.total ?? 0;
 let c3: { lane: number; twin: number } | null = null;
 let corridorNet = 0;
+// C3 (2026-10-19: each enforcement choice wins somewhere): your money and
+// the trips along the corridor over the lane's first ENFORCE_DAYS days.
+const ENFORCE_DAYS = Number(process.env.ENFORCE_DAYS ?? 40);
+let laneMoney = 0;
+let laneTrips = 0;
 // Strike days: does a strike cost you money, or earn it (riders flood your
 // buses)? At each strike, a twin with the strike called off, the same buses
 // in both, for the strike day and the day after: your money in each.
@@ -187,11 +192,15 @@ for (let day = 1; day <= DAYS; day += 1) {
     })
     .join("");
   console.log(
-    `${String(day).padStart(3)}  ${rung().padEnd(6)} ${sizes}${String(route?.vehicleIds.length ?? 0).padStart(5)} ${load.toFixed(2)}  ${speed.toFixed(2)}  ${String(Math.round(made)).padStart(5)}  ${String(Math.round(noSeat)).padStart(6)}  ${(danfoSum / (ticks / 30)).toFixed(1).padStart(6)}${jammed ? "  JAM" : ""}`,
+    `${String(day).padStart(3)}  ${rung().padEnd(6)} ${sizes}${String(route?.vehicleIds.length ?? 0).padStart(5)} ${load.toFixed(2)}  ${speed.toFixed(2)}  ${String(Math.round(made)).padStart(5)}  ${String(Math.round(noSeat)).padStart(6)}  ${(danfoSum / (ticks / 30)).toFixed(1).padStart(6)}${jammed ? "  JAM" : ""}${roadFull(world, A) || roadFull(world, B) ? "  FULL" : ""}`,
   );
   if (jammed && !jammedYesterday) jams.push(day);
   jammedYesterday = jammed;
   // The scripted player: the next rung on a jam, else another bus while they run full.
+  if (laneDay && day > laneDay && day <= laneDay + ENFORCE_DAYS) {
+    laneMoney += world.economy.funds - fundsAtDayStart;
+    laneTrips += made / ENFORCE_DAYS;
+  }
   if (strikeTwin) {
     strikeGain.struck += world.economy.funds - fundsAtDayStart;
     strikeGain.calm += strikeTwin.economy.funds - 1e9;
@@ -242,4 +251,8 @@ if (laneDay) {
 for (const s of strikeMoney) {
   const diff = s.struck - s.calm;
   console.log(`Strike from day ${s.day}: your money over it and the day after ${Math.round(s.struck)} against ${Math.round(s.calm)} without it: ${diff < 0 ? `costs you ${Math.round(-diff)}` : `EARNS you ${Math.round(diff)}`}`);
+}
+if (laneDay) {
+  const kept = laneDay + ENFORCE_DAYS <= DAYS;
+  console.log(`Enforcement ${process.env.LAX === "1" ? "lax" : "strict"}: over the lane's first ${ENFORCE_DAYS} days, your money ${Math.round(laneMoney)}, trips along the corridor ${Math.round(laneTrips)} a day${kept ? "" : " (ran out of days)"}`);
 }
