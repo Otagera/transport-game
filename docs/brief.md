@@ -346,6 +346,15 @@ Calendar eras stay paused (principles.md §6). Each corridor climbs at its own p
 3. **A seeded variation of the hand-made map:** the same geography, with town sizes and the river's crossing points varied by a seed, so a second game differs (P8). Full map generation waits until the variation has been played. **Proposed, not built:** if the playtest says the maps feel the same, the next step before full generation is to vary the inherited road network per seed (which towns start cut off, which corridor is the trunk): sizes alone change the game only when a cut-off town comes up big (principles.md §3, Maps).
 4. **Wear returns after rail** (Fix tool): keeping what you built against climbing further.
 
+### After the ladder's playtest (2026-10-19)
+
+Your playtest of the whole ladder (principles.md §6): rail after 100+ days with idle waiting; played for money; the treasury unnoticed, felt as incidental loss; rail's payoff temporary ("I already know all the routes"); strikes let pass or paid once. Next, in order, each played before the next, ahead of wear (4 above):
+
+1. **The treasury visible.** An event every 10 days naming the amount taken; a countdown to the next with "spend it or set it aside"; a progress bar on a set-aside (the named project).
+2. **The score as visible as money.** Town-growth milestones, and the trips-made trend.
+3. **Each corridor's informal share, and "corridor taken" as a visible state**, with what taking it costs (levies lost, pushback).
+4. **Proposed, not built: rail reshapes the map.** Towns with a station grow (beyond the rail cap's ceiling alone), and new desire lines appear (trips that didn't exist before rail: new pairs, a station town pulling from its neighbours), so the network you know stops being the whole map once rail opens. Prompted by "I already know all the routes".
+
 The straight alignment and goods come back later, one per playtest, as before.
 
 ### Checks for Revision 1
@@ -502,10 +511,12 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Thirty decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; seven are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Thirty-two decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; eight are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-19 | Rail reshapes the map: station towns grow, and new desire lines appear once rail opens, so the routes you know aren't the whole map any more. After (1)-(3) below, each played first. From the playtest: "I already know all the routes" | Proposed |
+| 2026-10-19 | After the ladder's playtest, in order, each played before the next, ahead of wear: (1) the treasury visible (an event every 10 days with the amount, a countdown with "spend it or set it aside", a set-aside progress bar); (2) the score as visible as money (town-growth milestones, the trips-made trend); (3) each corridor's informal share and "corridor taken" as a visible state, with its costs | Agreed 2026-10-19 |
 | 2026-10-19 | If the playtest says the maps feel the same, vary the inherited road network per seed (which towns start cut off, which corridor is the trunk) before full map generation. Varying town sizes and the river alone changes the game only when a cut-off town comes up big (P8 (b), status.md) | Proposed |
 | 2026-10-19 | P8 read as (a) at least 2 of trips-greedy's first 3 moves new on a new seed, and (b) seed 0's opening replayed there makes at least 15% fewer trips by day 20 than the best of trips-greedy's, greedy's and the replayed opening, on all trips. Ilase stays the largest town, by design; the cut-off towns vary from a third to three times their size, the rest half to double. Your playtest is the real P8 | Agreed 2026-10-19 |
 | 2026-10-19 | A bus lane opens with no wardens (lax): strict enforcement is a choice you make (Road tool on the lane), not a default you inherit. The union answers a new lane with a strike within days regardless, each new lane a few days after the last. Every called strike has a way out on its route and town cards: "Settle with the union" (always; about half what the strike would cost you, at least ₦150 -- the settlement form of pushback, Open question 2) and "Relax enforcement" (if the lane was strict when it was called). A strike that cost you nothing says "no loss to you". From the playtest: "I can't tell what I can do in this case since I did not put restrictions" | Proposed |

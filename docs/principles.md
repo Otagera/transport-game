@@ -850,6 +850,33 @@ Steps, each played before the next:
      shown by a toast and a red road; strict lanes strike every ~12 days, so several almost
      certainly landed unseen. Pushback has to leave a mark that outlasts the day.
 
+   **Played 2026-10-19, Revision 1's whole ladder (dirt → paved → lane → rail, to day 138,
+   the authored map; P7):** rail after 100+ days, with idle waiting before it. Played for
+   money: *"how much I could build to get as much money as possible."* The treasury went
+   unnoticed, felt only as incidental loss. Rail's payoff was temporary: *"I already know all
+   the routes"*, and unsure whether paratransit can be eliminated. Strikes let pass, or paid
+   once. On screen at day 138: ₦43,657, +₦7,911 a day, the old line restored with one train,
+   1,231 trips a day with no seat against 1,507 of your riders; Ado, Ise, Ilaro and Ogbe
+   falling. Findings:
+   - **Money is the score you see, so money is the game you play.** Trips made and town
+     growth, the brief's score, sit in the strip but nothing marks them; money moves every
+     second on the budget.
+   - **The treasury is a rule you can't see working.** Every 10 days 80% above ₦3,000 goes,
+     and it read as money leaking, not as a deadline to spend or set aside.
+   - **Waiting with nothing to do isn't struggle.** Saving for rail was idle time, not a
+     choice.
+   - **Rail ended the story instead of starting one.** Once built, the map didn't change:
+     the same routes, the same towns.
+   - **The informal sector's ground isn't legible.** Whether paratransit can be pushed off a
+     corridor, and what that costs, isn't something the game shows.
+   - **Strikes were an expense, not a decision.** Let pass or paid once; nothing about them
+     asked for a choice.
+
+   Next, in order, each played before the next (brief, Revision 1, "After the ladder's
+   playtest"): (1) the treasury visible; (2) the score as visible as money; (3) each
+   corridor's informal share, and "corridor taken" as a visible state with its costs. Then,
+   proposed: (4) rail reshaping the map.
+
 Rules for working this way:
 
 - **Every step is played before the next starts.** Every finding that mattered came from
