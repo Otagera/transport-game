@@ -9,6 +9,7 @@ import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
 import type { MilestoneState } from "./score";
+import type { CorridorState } from "./corridors";
 import type { BudgetTally, RemittancePeriod } from "./budget";
 
 // The slice (docs/principles.md §6): the smallest loop that can be felt --
@@ -339,6 +340,10 @@ export interface SliceTuning {
   townPopulationTauSeconds: number;
   /** An emergent town that shrinks below this is abandoned. */
   abandonBelowPopulation: number;
+  /** A corridor is taken when you carry this share of the trips along it, judged daily (corridors.ts; brief: pushback at ~40%). */
+  corridorTakenShare: number;
+  /** ...and let go only below this, so one near the line doesn't flicker. */
+  corridorReleaseShare: number;
 }
 
 export interface SliceWorld {
@@ -358,6 +363,8 @@ export interface SliceWorld {
   startPopulation: Map<string, number>;
   /** Each town's growth milestones passed since day 1 (score.ts). */
   milestones: Map<string, MilestoneState>;
+  /** Each corridor's levies and whether you've taken it, keyed routeKey(a, b) of its end towns (corridors.ts). */
+  corridors: Map<string, CorridorState>;
   width: number;
   height: number;
   towns: Map<string, SliceTown>;

@@ -33,7 +33,10 @@ export type SliceEvent =
   // The treasury's remittance (budget.ts): what a period's end took, 0 included.
   | { kind: "remitted"; amount: number }
   // A town passing a quarter, a half, double or triple its day-1 size (score.ts).
-  | { kind: "milestone"; townId: string; name: string; index: number; from: number; to: number };
+  | { kind: "milestone"; townId: string; name: string; index: number; from: number; to: number }
+  // A corridor you've taken from the informal sector, or let go (corridors.ts).
+  | { kind: "corridor-taken"; a: string; b: string; share: number }
+  | { kind: "corridor-released"; a: string; b: string; share: number };
 
 export interface SettlementState {
   /** segmentId -> rolling riders per second passing a point on it. */

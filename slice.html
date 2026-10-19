@@ -114,6 +114,12 @@
       .strike-badge button:hover { background: #f08c00; color: #fff; }
       .strike-badge.past { background: color-mix(in srgb, var(--bad) 8%, transparent); color: var(--bad); }
       /* Budget */
+      .corridor { margin: 0 0 8px; font-size: 12px; }
+      .corridor .top { display: flex; justify-content: space-between; gap: 8px; }
+      .corridor .name { font-weight: 650; }
+      .corridor .taken { font: 600 11px var(--label-font); color: #fff; background: var(--player); border-radius: 999px; padding: 0 7px; }
+      .corridor .bar { height: 6px; margin: 4px 0 2px; }
+      #routes .corridor .hint { margin: 0; }
       .budget { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12px; }
       .budget .num { font-variant-numeric: tabular-nums; text-align: right; }
       .budget .total { border-top: 1px solid var(--line); padding-top: 3px; font-weight: 650; }

@@ -2,6 +2,7 @@ import type { SliceMapDef, SliceTuning, SliceWorld } from "./types";
 import { createSliceWorld } from "./world";
 import { createBudgetTally, createRemittancePeriod } from "./budget";
 import { createDayLedger } from "./ledger";
+import { resetCorridors } from "./corridors";
 import { sliceTick } from "./tick";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
 import { SIM_DT } from "../loop";
@@ -30,5 +31,6 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   world.remittance = createRemittancePeriod(world.economy.elapsedSeconds, tuning);
   world.startPopulation = new Map([...world.towns.values()].map((town) => [town.id, town.population]));
   world.milestones = new Map(); // growth during the warm-up isn't yours
+  resetCorridors(world);
   return world;
 }

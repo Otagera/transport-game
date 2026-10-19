@@ -64,6 +64,7 @@ import { isDirt } from "@engine/slice/congestion";
 import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
 import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
+import { corridorSummaries } from "@engine/slice/corridors";
 import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
@@ -443,6 +444,10 @@ function announce(event: SliceEvent): void {
     // The score as an event, like the treasury's (brief, After the ladder's playtest, 2).
     const grown = ["has grown by a quarter", "has grown by half", "has doubled", "has tripled"][event.index] ?? "has grown";
     say(`${event.name} ${grown} since day 1: ${Math.round(event.from)}k → ${Math.round(event.to)}k people.`, false, 6);
+  } else if (event.kind === "corridor-taken") {
+    say(`You've taken ${corridor} from the danfos: you carry ${pct(event.share)} of its trips. Their park levies there fall.`, false, 8);
+  } else if (event.kind === "corridor-released") {
+    say(`The danfos have ${corridor} back: you carry ${pct(event.share)} of its trips.`, true, 6);
   } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
   } else {
@@ -1371,6 +1376,34 @@ function budgetHtml(): string {
     ${t.remittanceEnabled ? `<p class="hint">Every ${t.remittancePeriodDays} days the treasury takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus. Money set aside for a project is safe.</p>` : ""}`;
 }
 
+// Each corridor you run along: who carries its trips, and whether you've
+// taken it from the informal sector, with what that cost (brief, After the
+// ladder's playtest, 3). Corridors you don't run along stay off the list:
+// the map's traffic already shows the danfos' roads.
+function corridorsHtml(): string {
+  const shown = corridorSummaries(world).filter((c) => c.takenSince !== null || c.you >= 0.005);
+  if (shown.length === 0) return "";
+  const target = world.tuning.corridorTakenShare;
+  const rows = shown
+    .map((c) => {
+      const costs: string[] = [];
+      if (c.leviesLostPerDay >= 1) costs.push(`levies ${naira(-c.leviesLostPerDay)}/day`);
+      if (c.lastStrikeCost !== null) costs.push(c.lastStrikeCost < 1 ? "last strike no loss" : `last strike ${naira(-c.lastStrikeCost)}`);
+      else if (c.takenSince !== null && !c.hasLane) costs.push("no pushback without a lane");
+      const state = c.takenSince !== null
+        ? `<span class="taken">Taken, day ${gameDay(world, c.takenSince)}</span>`
+        : `<span class="muted">Taken at ${pct(target)}</span>`;
+      return `
+        <div class="corridor">
+          <div class="top"><span class="name">${townName(c.a)} – ${townName(c.b)}</span>${state}</div>
+          <div class="bar" title="you / informal / stayed home"><i style="width:${pct(c.you)};background:var(--player)"></i><i style="width:${pct(c.informal)};background:var(--danfo)"></i><i style="width:${pct(c.lost)};background:var(--home)"></i></div>
+          <div class="hint">You ${pct(c.you)} · informal ${pct(c.informal)}${costs.length > 0 ? ` · ${costs.join(" · ")}` : ""}</div>
+        </div>`;
+    })
+    .join("");
+  return `<h2 class="section">Corridors</h2><p class="hint">Who carries the trips along each road you run on.</p>${rows}`;
+}
+
 // Your share of trips between towns: one click down, not the headline
 // (brief: as a headline it falls exactly when you grow towns).
 function shareHtml(): string {
@@ -1387,7 +1420,7 @@ function renderRoutes(): void {
   const routes = summaries.length === 0 && world.lorryRoutes.length === 0
     ? `${header}<p class="empty">No buses yet. Hover a town to see where its people want to go.</p>`
     : (summaries.length > 0 ? header + summaries.map(routeCard).join("") : "") + lorryRows(summaries.length > 0);
-  routesEl.innerHTML = moneyNote() + advice + routes + budgetHtml() + shareHtml();
+  routesEl.innerHTML = moneyNote() + advice + routes + corridorsHtml() + budgetHtml() + shareHtml();
 }
 
 // --- Results: what each action did --------------------------------------

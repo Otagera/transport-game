@@ -15,6 +15,7 @@ import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upk
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
+import { corridorSummaries, takenCorridors } from "@engine/slice/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
 import { buildSliceTerrain } from "@engine/slice/terrain";
@@ -148,7 +149,7 @@ describe("slice: buses and money", () => {
     // Diminishing: twelve buses earn far less than 4x three buses.
     expect(twelve.incomePerDay).toBeLessThan(three.incomePerDay * 2);
     expect(twelve.netPerDay).toBeLessThan(0);
-  });
+  }, 20_000); // several fleets run for days each: ~5-7 s, over bun's 5 s default on a loaded machine
 
   test("new buses spread out round the route instead of running as a convoy", () => {
     expect(largestGapMidpoint([])).toBe(0);
@@ -2067,6 +2068,44 @@ describe("R1 5: the score as visible as money", () => {
     expect(trend.change).toBeCloseTo(trend.now - trend.series[trend.series.length - 1 - TREND_DAYS]!, 6);
     // A bus on the best pair: more trips made than the warm-up's world.
     expect(trend.now).toBeGreaterThan(trend.series[0]!);
+  });
+});
+
+describe("R1 6: each corridor's informal share, and corridor taken", () => {
+  function runCollecting(w: SliceWorld, seconds: number): string[] {
+    const kinds: string[] = [];
+    for (let t = 0; t < seconds; t += SIM_DT) for (const event of sliceTick(w, SIM_DT)) kinds.push(event.kind);
+    return kinds;
+  }
+
+  test("a corridor's shares are of the trips along it; one nobody of yours runs on is the informal sector's", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    expect(takenCorridors(w)).toEqual([]);
+    run(w, SECONDS_PER_GAME_DAY);
+    const far = corridorSummaries(w).find((c) => c.key === routeKey("far", "mid"))!;
+    expect(far.you).toBe(0);
+    expect(far.informal).toBeGreaterThan(0.5);
+    expect(far.you + far.informal + far.lost).toBeCloseTo(1, 6);
+    expect(far.leviesLostPerDay).toBe(0); // you never ran along it
+  });
+
+  test("carry 40% of a corridor's trips and it's taken, with the day; sell out and the danfos have it back", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 20_000 });
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    const taking = runCollecting(w, 4 * SECONDS_PER_GAME_DAY);
+    expect(taking.filter((kind) => kind === "corridor-taken").length).toBe(1);
+    const trunk = corridorSummaries(w)[0]!; // taken ones first
+    expect(trunk.key).toBe(routeKey("big", "mid"));
+    expect(trunk.you).toBeGreaterThanOrEqual(DEFAULT_SLICE_TUNING.corridorReleaseShare);
+    expect(trunk.takenSince).not.toBeNull();
+    expect(gameDay(w, trunk.takenSince!)).toBeLessThanOrEqual(4);
+    expect(trunk.leviesLostPerDay).toBeGreaterThanOrEqual(0);
+    expect(trunk.hasLane).toBe(false);
+    const route = w.routes.find((r) => r.a === "big" || r.b === "big")!;
+    while (route.vehicleIds.length > 0) removeBus(w, route.id);
+    const losing = runCollecting(w, 4 * SECONDS_PER_GAME_DAY);
+    expect(losing).toContain("corridor-released");
+    expect(takenCorridors(w)).toEqual([]);
   });
 });
 

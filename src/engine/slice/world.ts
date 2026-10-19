@@ -117,6 +117,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     project: null,
     startPopulation: new Map(def.towns.map((town) => [town.id, town.population])),
     milestones: new Map(),
+    corridors: new Map(),
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),

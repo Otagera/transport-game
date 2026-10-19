@@ -762,6 +762,18 @@ keeps the 5-day-average trips made at each day's end (the last 120); `tripsTrend
 against `TREND_DAYS` ago, from the world as you found it on. `peopleSinceStart` is the net
 change in people (unlike the allocation's `growthSinceStart`, which only pays on growth).
 
+**Corridors** (`corridors.ts`, R1 6): a corridor is a `chainOf` road between two towns,
+keyed `routeKey` of its ends; a segment→corridor map is cached per world and rebuilt when
+the roads change (segment count, roadside towns, ruins). `sendInformal` credits each
+departure's levy (your part) to every corridor on its path once (`Takings.leviesByCorridor`);
+`updateCorridors`, at the end of `sliceTick`, rolls each corridor's levy rate over 3 game
+days and once a game day judges its share -- of the trips whose road path runs along it
+(`pairOutcomes` × `roadPath`), yours -- taking it at `corridorTakenShare` (0.4) and letting
+go below `corridorReleaseShare` (0.3), with `corridor-taken`/`-released` events. Levies lost
+are the levy rate on the first day you ran along it less now (against a peak, a day's lumpy
+departures read as ₦3-10 lost on corridors you'd never touched). `resetCorridors` at day 1.
+Not a pushback trigger: the union still answers lanes only (`pushback.ts`).
+
 ### The warm-up, and day numbers
 
 `start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,

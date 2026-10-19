@@ -6,7 +6,7 @@ for *why*, see [principles.md](principles.md); for detailed bug write-ups and de
 lessons, see the relevant architecture deep-dive — they're indexed by topic there, not
 buried in a chronological log here.
 
-**525 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**527 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Current direction: slice zero
@@ -50,7 +50,7 @@ right after this file. Progress on that build order:
 | — | Your playtest of the whole ladder (dirt → paved → lane → rail), seed 0 | Played 2026-10-19: rail after 100+ days of idle waiting; played for money; the treasury unnoticed; rail's payoff temporary; strikes let pass (principles.md §6) |
 | R1 4 | The treasury visible in the budget breakdown (no new panel): a "Treasury took" line, the countdown "₦X over the reserve goes to the treasury in N days; spend it or set it aside", a set-aside progress bar, the 10-day remittance as a toast (brief, After the ladder's playtest, 1) | Built 2026-10-19, **not yet played** (built with R1 5 and 6 on request, without the playtest between) |
 | R1 5 | The score as visible as money: town-growth milestones, the trips-made trend (2) | Built 2026-10-19, **not yet played**: milestones (+25%, +50%, ×2, ×3) as a toast and a map tag; trips made with ▲/▼ over 10 days and a sparkline; "People, since day 1" in the strip |
-| R1 6 | Each corridor's informal share; "corridor taken" as a visible state, with its costs (3) | After R1 5's playtest |
+| R1 6 | Each corridor's informal share; "corridor taken" as a visible state, with its costs (3) | Built 2026-10-19, **not yet played**: a Corridors section (who carries each road's trips; "Taken, day N" at 40% of them, let go below 30%; levies lost; strike cost if laned), a toast, and a TAKEN tag on the map. **Finding:** the levies lost are ₦1–10 a day on a taken trunk, ~2% of its fares, against the brief's 20–40%: taking a corridor costs nothing you'd feel, and without a lane brings no pushback |
 | — | Proposed, not built: rail reshapes the map (station towns grow, new desire lines) (4) | |
 
 **Revision 1, step 3: the seeded variation, 2026-10-19.**
@@ -921,6 +921,15 @@ live-verified; each links to where its detail actually lives now.
 | 11 | Dev studio + information architecture | Six-homes UI refactor, `?studio=1` (Tuning/Profile Studio/Asset Modder/Scenario Lab) | [architecture/render-and-ui.md](architecture/render-and-ui.md) §2, [architecture/dev-studio.md](architecture/dev-studio.md) §1 |
 | 11b | Profiles applied to the map | Authored cross-sections drive real corridor rendering, decay, and cost | [architecture/render-and-ui.md](architecture/render-and-ui.md) §4, [architecture/content.md](architecture/content.md) |
 | 12 | Ambient private traffic | Prosperity → private cars → road friction, closing the growth/congestion loop | [architecture/engine.md](architecture/engine.md) §simulation/ |
+
+## Handoff: R1 4-6 built together (cloud session, 2026-10-19)
+
+On request, R1 4, 5 and 6 were built in one pass, each committed and pushed, without the
+playtest between them that the brief's order asks for. All three wait on one playtest now;
+bring back what each did (brief, After the ladder's playtest, 1-3). Open from R1 6: the
+levies lost by taking a corridor are ~2% of its fares (brief's calibration table), and a
+taken corridor without a lane draws no pushback -- whether "taken" should be a pushback
+trigger (the brief's ~40%) is a design call for after the playtest.
 
 ## Handoff (cloud session → laptop, 2026-10-16)
 

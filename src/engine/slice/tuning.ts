@@ -375,6 +375,14 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   maxEmergentPopulation: 30,
   townPopulationTauSeconds: 300,
   abandonBelowPopulation: 2,
+
+  // "Corridor taken" (R1 6, corridors.ts): the brief's pushback threshold,
+  // your share of a corridor's trips at ~40% (The informal sector), used
+  // here as a visible state, not yet a trigger. Released at 30%, so a
+  // corridor near the line doesn't flip back and forth day to day. Not
+  // tuned by the bots: a display line, to be played.
+  corridorTakenShare: 0.4,
+  corridorReleaseShare: 0.3,
 };
 
 /** Every system on: what the calibration probe and lever audit measure, and most tests. */

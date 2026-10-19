@@ -5,6 +5,7 @@ import { gameDay, isCutOff, roadChain, townShare, tripsFrom, waitingAt } from "@
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/slice/growth";
 import { freshMilestone } from "@engine/slice/score";
+import { takenCorridors } from "@engine/slice/corridors";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
@@ -126,6 +127,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   for (const town of world.towns.values()) drawTown(ctx, world, view, town, state);
   drawWardens(ctx, world, view);
   drawStrikeLabels(ctx, world, view);
+  drawTakenLabels(ctx, world, view);
   // Last, so nothing on the map draws through the price.
   if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok, state.ghost.forecast);
   if (state.road) drawLabel(ctx, state.road.at, state.road.label, true, state.road.forecast);
@@ -357,6 +359,30 @@ function drawWardens(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
 // faint mark for a few days after with what it cost (playtest: "did a
 // strike land? I couldn't tell").
 const STRIKE_MARK_DAYS = 5;
+// A corridor you've taken from the danfos (corridors.ts): a blue tag a third
+// of the way along -- its middle is where a roadside town tends to sit, and
+// where a strike's tag goes.
+function drawTakenLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
+  for (const corridor of takenCorridors(world)) {
+    const line = (roadChain(world, corridor.a, corridor.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+    if (line.length === 0) continue;
+    const [, rest] = splitPolyline(line, polylineLength(line) / 3);
+    const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
+    const text = "TAKEN";
+    ctx.font = "700 11px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const width = ctx.measureText(text).width + 10;
+    ctx.fillStyle = COLORS.player;
+    ctx.beginPath();
+    ctx.roundRect(mid.x - 14 - width, mid.y - 9, width, 18, 4);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(text, mid.x - 14 - width / 2, mid.y);
+  }
+  ctx.textBaseline = "alphabetic";
+}
+
 function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
   const now = world.economy.elapsedSeconds;
   for (const lane of world.lanes) {

@@ -119,7 +119,7 @@ Calibration targets (probe, 40 days, today's map):
 | Road to a cut-off town plus one vehicle | ~64 days; the road alone ~140 | 30–60 days, counting tolls and the allocation from growth |
 | Paving the busiest road | ~9–15 days (lever audit) | 10–30 days including tolls; tolls must not make paving a no-brainer |
 | Allocation, day 40, well-connected network | None today | About a quarter to a third of income |
-| Levy lost by taking a corridor from danfos | None today | 20–40% of what your vehicles gain there: felt, never decisive |
+| Levy lost by taking a corridor from danfos | Measured 2026-10-19 (R1 6, `corridors.ts`): ₦1–10 a day on a taken trunk (3–4 buses), about 2% of the fares there -- your riders are mostly ones who'd have stayed home, so the danfos' departures barely fall | 20–40% of what your vehicles gain there: felt, never decisive |
 | The agberos' cut | None today | About half the levy, shown as its own line |
 | Routine upkeep, built and paved roads | None today | A busy toll road's tolls cover it several times; a road nobody uses costs its upkeep and earns nothing |
 | Money limits the score | Not before step 5: Greedy holds ₦38,590 by day 40 with wear off | Trips-greedy waits on money most days 15–60 (M10) |

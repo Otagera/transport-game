@@ -5,6 +5,7 @@ import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types"
 import { pairKey, roadPath } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { updateMilestones } from "./score";
+import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
 import { legFare, passengerFares } from "./fares";
@@ -225,7 +226,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   updateGoodsOutcomes(world, goodsDelivered, dt);
 
   // 4. The informal sector: danfos, then kekes and okadas.
-  const takings: Takings = { tolls: 0, levies: 0, agberos: 0 };
+  const takings: Takings = { tolls: 0, levies: 0, agberos: 0, leviesByCorridor: new Map() };
   dispatchInformal(world, dt, lost, gaveUp, takings);
   // The state's allocation: a base, plus a share of the growth you caused (budget.ts).
   const allocation = (allocationPerDay(world) * dt) / SECONDS_PER_GAME_DAY;
@@ -300,7 +301,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
 
-  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world)];
+  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor)];
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
   recordDay(world);
   return events;
@@ -461,6 +462,7 @@ function sendInformal(
   const levy = tuning.levyPerSeat * spec.capacity;
   takings.levies += levy * (1 - tuning.agberoCut);
   takings.agberos += levy * tuning.agberoCut;
+  for (const key of corridorsAlong(world, run.path.segmentIds)) bump(takings.leviesByCorridor, key, levy * (1 - tuning.agberoCut));
   if (world.lanes.length > 0) creditLanes(lanesBySegment(world), run.path.segmentIds, toll + levy * (1 - tuning.agberoCut));
   simulation.vehicles.push(vehicle);
   informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode, released: 0 });

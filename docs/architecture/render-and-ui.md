@@ -242,6 +242,12 @@ terrain isn't applied: the map still draws shaded hills.
   "Save for it: ₦X" when the next rung is out of reach (`saveButton`); a named project shows
   at the top of the budget ("Saving for ... safe until day N", a progress bar of what's set
   aside against the price, "Drop it").
+- **Corridors (R1 6)** — `corridorsHtml`, between the route cards and the budget: each
+  corridor you run along, taken ones first, with a you / informal / stayed home bar, "You N% ·
+  informal N%", the levies lost a day and, if laned, the last strike's cost (or "no pushback
+  without a lane" once taken); a blue "Taken, day N" pill, else "Taken at 40%". Taking and
+  losing one is a toast; a taken corridor carries a blue TAKEN tag a third of the way along
+  it on the map (`drawTakenLabels`; the middle is where roadside towns and strike tags sit).
 - **The treasury, visible (R1 4)** — inside the budget breakdown, no panel of its own:
   "Treasury took, day N" under the net (the last remittance; under it, like "Lost to
   strikes", since it isn't a running cost); then the countdown, "About ₦X over the reserve

@@ -21,6 +21,8 @@ export interface Takings {
   levies: number;
   /** The agberos' cut of the levies: never yours, kept to be shown. */
   agberos: number;
+  /** The levies reaching you, by the corridors the departure runs along (corridors.ts). */
+  leviesByCorridor: Map<string, number>;
 }
 
 /**
