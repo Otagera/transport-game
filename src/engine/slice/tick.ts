@@ -13,6 +13,7 @@ import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
 import { isDirt, updateRoadSpeeds, yourSpeeds } from "./congestion";
 import { creditLanes, laneEncroachment, lanesBySegment, struckSegments, updateLanes } from "./pushback";
+import { updateProject } from "./project";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
@@ -267,6 +268,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   world.budget.upkeep += roadUpkeep;
   world.budget.enforcement += lanes.cost;
   world.budget.struck += lanes.lost;
+  // A named project: done, or lapsed (project.ts) -- before the remittance reads what it holds.
+  const projectEvents = updateProject(world);
   // The treasury's share of a surplus, once a period (budget.ts). After the
   // ledger: a remittance is neither income nor running cost.
   remit(world, revenueThisTick - runningCost);
@@ -296,7 +299,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
 
-  const events = [...updateSettlements(world, dt), ...lanes.events];
+  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents];
   recordDay(world);
   return events;
 }

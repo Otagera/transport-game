@@ -114,6 +114,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     history: createDayHistory(),
     budget: createBudgetTally(),
     remittance: createRemittancePeriod(0, tuning),
+    project: null,
     startPopulation: new Map(def.towns.map((town) => [town.id, town.population])),
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),

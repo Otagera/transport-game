@@ -537,6 +537,11 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   and its takings in `sendInformal`) on up to 3 normal days before, into `lastStrike` and
   `world.budget.struck`. Emits `strike-announced`, `strike-called-off`, `strike`,
   `strike-over` (with the cost) for the page.
+- **The named project** (`project.ts`, `world.project`) — `nameProject(a, b, "lane" | "rail")`
+  at `rungPrice` (a lane's `laneCost`; rail's track plan plus a train); `remit` leaves
+  `heldForProject` alone (funds above the reserve, up to the price); `updateProject`, each tick
+  before the remittance, ends it when built (`project-done`) or after `projectLapseDays`, when
+  the treasury takes its share of what was held at once (`project-lapsed`).
 - **The BRT bus** (`world.ts` `addBrt`; route ids `brt:`) — a road vehicle kind with
   `brtCapacity` seats; `checkBus` refuses it unless every road on its path has a lane. `growTowns` drifts each original town toward it every
   tick (from `updateSettlements`, after the roadside towns' drift); demand follows at the

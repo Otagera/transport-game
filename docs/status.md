@@ -44,7 +44,38 @@ right after this file. Progress on that build order:
 | R1 2a+ | Lanes open lax; a way out of every called strike (Settle, Relax) on its card; "no loss to you"; staggered strike clocks | Done 2026-10-19; **C3 now fails on the trunk** (lax ahead by 2%): below |
 | R1 2a++ | C3 over longer windows | Done 2026-10-19: **still fails** -- lax wins on both corridors at 80 and 120 days: below |
 | R1 2a+++ | A lane's town size limit follows what it carries (slides to paved with encroachment); C3 re-measured without rail | Done 2026-10-19: **C3 passes** -- strict on the trunk, no lane on Ilase-Kuto: below |
-| R1 2b | Rail priced for C2 (20-40 days of surplus), the named project the treasury leaves alone | Next |
+| R1 2a++++ | "Road is full" diagnoses a thin corridor (no lane suggested under 240 trips a day along it) | Done 2026-10-19 |
+| R1 2b | The named project; lane and rail priced for C2 | Done 2026-10-19: **lane 14 days, rail 27.8 days** of surplus (corridor probe, real money): below |
+| — | **Next: your playtest of the whole ladder** (dirt → paved → lane → rail), strike warnings, the BRT; P7 and P8 | |
+
+**Revision 1, 2b: the named project, and rungs that cost, 2026-10-19.**
+
+- **"Road is full" diagnoses before it suggests** (`growth.ts` `roadFull`): a paved town at its
+  cap is told to add a bus lane only where the trips wanted along its busiest paved road could
+  fill three BRT loads a day (`laneMinTripsPerDay` 240: the trunk wants 700+ at its paved
+  plateau, Ilase-Kuto ~50-100); otherwise "<Town> is as big as this road supports; traffic here
+  is too thin for a bus lane."
+- **The named project** (`project.ts`): when a lane or rail is the next rung and you can't
+  afford it, the road-full line offers "Save for it: ₦X". What you hold toward it (above the
+  ₦3,000 reserve, up to its price) isn't remitted; built, it's done; unbuilt after 30 days it
+  lapses and the treasury takes its 80% of what was held. The budget panel shows "Saving for
+  ... ₦held of ₦price, safe until day N", with "Drop it". Not checked in the browser (a
+  plateau takes ~30 game days to reach).
+- **C2, corridor probe with real money** (`REAL_MONEY=1`: no top-ups, the treasury on; the
+  player names the next rung when it can't afford it and buys nothing else meanwhile; buses
+  swapped for BRTs as money allows):
+
+| Rung | Price, before -> now | Days of the surplus it was wanted in | Waited | Built |
+|---|---|---|---|---|
+| bus lane (30x paving) | ₦1,655 -> ₦49,639 | 0.5 -> **14.0** (₦3,538 a day) | 0 -> 5 days | day 70 |
+| rail (track ₦6,000 a cell, train ₦20,000) | ₦3,146 -> ₦172,735 | 0.5 -> **27.8** (₦6,207 a day) | 0 -> 18 days | day 123 |
+
+- **C2's prices pass** (lane 10-20, rail 20-40) and **C4's lower bound** (rail by day 100-150).
+  C1 still passes for every rung: dirt 35, paved 29, lane 35, rail 27 days of growth.
+- **Not measured: C2's waiting rule as written** ("trips-greedy waits on money for a rung on a
+  quarter of days 20-60"): the bots don't build lanes, BRTs or rail yet (`moves.ts`), so the
+  corridor probe's saving player stands in. Halts and restoring the old line scaled with rail
+  (₦30,000 + track, ₦1,500 a cell): restoring stays the cheap, wrong choice.
 
 **Revision 1, 2a+++: a lane grows towns only while it carries, 2026-10-19** (`growth.ts`
 `carriedShare`; principles.md §3, Geometry and pathing). A town's cap share is the best of its

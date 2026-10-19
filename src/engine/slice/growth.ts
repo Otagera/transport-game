@@ -1,5 +1,6 @@
 import type { SliceWorld } from "./types";
-import { townShare } from "./world";
+import { chainOf, demandAlong, townShare } from "./world";
+import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { isDirt } from "./congestion";
 import { laneEncroachment } from "./pushback";
 
@@ -125,17 +126,41 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
  * next rung. Null while the town still has room, when nothing you run grows
  * it, or when there's no rung above (rail is switched off).
  */
-export function roadFull(world: SliceWorld, townId: string): { rung: CorridorRung; next: "paved" | "lane" | "rail" } | null {
+export function roadFull(world: SliceWorld, townId: string): { rung: CorridorRung; next: "paved" | "lane" | "rail"; thin?: boolean; road?: { a: string; b: string } } | null {
   const growth = townGrowth(world, townId);
   const town = world.towns.get(townId);
   if (!growth || !town || growth.cap <= growth.base) return null;
   const grown = growth.target > growth.base * (1 + ROAD_FULL_GROWN);
   const levelled = town.population >= growth.target * ROAD_FULL_SHARE;
   if (!grown || !levelled) return null;
-  if (growth.rung === "dirt") return { rung: "dirt", next: "paved" };
-  if (growth.rung === "paved") return { rung: "paved", next: "lane" };
-  if (growth.rung === "lane" && world.tuning.railEnabled) return { rung: "lane", next: "rail" };
+  const road = busiestRoad(world, townId, growth.rung)?.road;
+  if (growth.rung === "dirt") return { rung: "dirt", next: "paved", road };
+  // A diagnosis, not a forecast: a lane only where the trips along the road
+  // could fill a few BRT buses a day (laneMinTripsPerDay). Corridor probe:
+  // the trunk carries 700-1,000 a day and a lane pays there; Ilase-Kuto 37,
+  // and a lane loses money there however it's run.
+  if (growth.rung === "paved") return { rung: "paved", next: "lane", thin: (busiestRoad(world, townId, "paved")?.trips ?? 0) < world.tuning.laneMinTripsPerDay, road };
+  if (growth.rung === "lane" && world.tuning.railEnabled) return { rung: "lane", next: "rail", road };
   return null;
+}
+
+/**
+ * The busiest whole road at a town on a given rung, by trips a day wanted
+ * along it (both ends on it, through any roadside towns): the road its next
+ * rung would go on.
+ */
+function busiestRoad(world: SliceWorld, townId: string, rung: CorridorRung): { road: { a: string; b: string }; trips: number } | null {
+  let best: { road: { a: string; b: string }; trips: number } | null = null;
+  for (const segment of world.simulation.map.segments) {
+    if (segment.type !== "road" || (segment.fromNodeId !== townId && segment.toNodeId !== townId)) continue;
+    const its: CorridorRung = segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
+    if (its !== rung) continue;
+    const chain = chainOf(world, segment.id);
+    if (!chain) continue;
+    const trips = demandAlong(world, chain.a, chain.b) * SECONDS_PER_GAME_DAY;
+    if (!best || trips > best.trips) best = { road: { a: chain.a, b: chain.b }, trips };
+  }
+  return best;
 }
 
 /** How close to its target counts as "can't grow" (the drift toward it slows near the end). */

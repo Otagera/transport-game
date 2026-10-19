@@ -179,17 +179,28 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // 18-23 days at any capacity from 1.3 to 3.0; below ~1.0 the buses crawl.
   // 2.0: the middle of that flat stretch.
   busLaneCapacity: 2.0,
-  busLaneCostShare: 1,
+  // C2 (Revision 1, stage 2): a bus lane costs 10-20 days of the surplus it's
+  // wanted in, rail 20-40. Corridor probe with real money (the player saves
+  // for a rung through a named project, buys nothing else meanwhile): at the
+  // old prices a lane (₦1,655) and rail (₦3,146) were each half a day's
+  // surplus. A lane at 30x paving, ₦49,639 on the trunk: 14 days of the
+  // ₦3,538 a day it was wanted in, 5 days' wait.
+  busLaneCostShare: 30,
   growthCapLaneShare: 1.6,
   // Rail, the top rung (Revision 1, stage 2): a town with a working station
   // (track in service, or a halt) can grow this share of townGrowthCap. A
   // first guess above the lane's 1.6, measured with the corridor probe (C1).
   growthCapRailShare: 2.4,
+  // Three BRT loads a day: between Ilase-Kuto's 37 (a lane loses there)
+  // and the trunk's 700+ (it pays) -- corridor probe, C3.
+  laneMinTripsPerDay: 240,
   // Strikes, made legible (playtest 2026-10-19, "did a strike land? I
   // couldn't tell"): announced 4 days ahead, two days long, half as often
   // (strict every ~24 days, lax ~120).
   strikeDelayDays: 5,
   strikeNoticeDays: 4,
+  // A named project's set-aside is safe from the remittance this long (brief, Revision 1).
+  projectLapseDays: 30,
   // Settling (the brief's pushback form (a)): half what the strike would
   // cost you, at least ₦150 -- always cheaper than striking, never free.
   settlementShare: 0.5,
@@ -221,9 +232,14 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   //   - a second train on Ilase-Owode: +204 -- one is enough there.
   // At 300/day and speed 5 a train lost to buses everywhere: one train
   // came round too rarely, and a third of its riders gave up between.
-  railCostPerCell: 45,
+  // Rail priced for C2: track ₦6,000 a cell and a ₦20,000 train -- the trunk's
+  // track and first train ₦172,735, 27.8 days of the ₦6,207 a day it was
+  // wanted in, 18 days' wait, built day 123 (C4: rail by day 100-150). At
+  // 4,000 a cell, 19.6 days. Restoring and halts scaled with it, so the
+  // wrong old line stays the cheap choice.
+  railCostPerCell: 6000,
   railGradientMultiplier: 3,
-  railRestoreCostPerCell: 11,
+  railRestoreCostPerCell: 1500,
   // Halts and the narrow-gauge line (rail.ts, wear.ts lineSpeed). Audit,
   // 20 days on: old line to Owode via a halt + train +₦249/day (~12 days),
   // new track Ilase-Owode + train +₦312 (~10), the whole old line to Ipaja
@@ -231,10 +247,10 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // to Ipaja barely paid.
   haltReachCells: 6,
   oldLineSpeed: 0.55,
-  haltCost: 300,
+  haltCost: 30000,
   trainCapacity: 80,
   trainSpeed: 8,
-  trainPurchaseCost: 2000,
+  trainPurchaseCost: 20000,
   trainOperatingCostPerSecond: 6,
   // Track wear (wear.ts). Probe "track wear:", one train, 40 days: kept up,
   // Ilase-Owode +265/day (upkeep 37) against +193 left alone; Ilase-Owode-

@@ -1,4 +1,5 @@
 import type { LaneState } from "./pushback";
+import type { NamedProject } from "./project";
 import type { PathResult, RoutingContext, SimulationState } from "../simulation/types";
 import type { EconomyState } from "../economy/types";
 import type { SettlementState } from "./settlement";
@@ -201,10 +202,14 @@ export interface SliceTuning {
   growthCapLaneShare: number;
   /** Of townGrowthCap, what a town with a working station (or halt) can reach. */
   growthCapRailShare: number;
+  /** "Road is full" suggests a bus lane only where this many trips a day are wanted along the road (a few BRT loads). */
+  laneMinTripsPerDay: number;
   /** Days after a lane opens before the first strike (strictly enforced); days between strikes, strict and lax; how long one lasts. */
   strikeDelayDays: number;
   /** The union announces a strike this many days ahead (Decisions log, proposed). */
   strikeNoticeDays: number;
+  /** A named project's set-aside lapses to the treasury after this many days unbuilt (project.ts). */
+  projectLapseDays: number;
   /** Settling an announced strike: this share of what it would cost you, at least settlementMin. */
   settlementShare: number;
   settlementMin: number;
@@ -344,6 +349,8 @@ export interface SliceWorld {
   budget: BudgetTally;
   /** The treasury remittance's current period (budget.ts). */
   remittance: RemittancePeriod;
+  /** The rung you're saving for, which the remittance leaves alone for a while (project.ts). */
+  project: NamedProject | null;
   /** Each town's population (thousands) on day 1: the allocation pays on growth since. */
   startPopulation: Map<string, number>;
   width: number;

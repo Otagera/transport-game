@@ -232,6 +232,9 @@ terrain isn't applied: the map still draws shaded hills.
   that cost nothing reads "no loss to you"); "Lost to strikes
   (estimated)" under the budget's net; at 4× the game pauses when one is called or begins
   (P, `pauseOnStrike`). The BRT tool (X) appears once a lane exists; BRT buses draw longer.
+  The town card's "road is full" line says when a corridor is too thin for a lane, and offers
+  "Save for it: ₦X" when the next rung is out of reach (`saveButton`); a named project shows
+  at the top of the budget ("Saving for ... safe until day N", "Drop it").
 - **Developer start:** `?dev=1&funds=20000` sets the starting funds, to reach a late rung in a
   minute for checks and screenshots.
 - **Hints** (`hints.ts`, no DOM; `renderHint` every frame): the brief's six, one at a time,

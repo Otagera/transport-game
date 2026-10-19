@@ -60,6 +60,7 @@ import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import { startSliceGame } from "@engine/slice/start";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
+import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
 import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
@@ -404,6 +405,10 @@ function announce(event: SliceEvent): void {
     const relax = lane?.enforcement === "strict" ? " Relax its enforcement, or settle with the union, to call it off: buttons on its route card." : " Settle with the union to call it off: the button is on its route card.";
     say(`The danfo union calls a strike on ${corridor} from day ${gameDay(world, event.atSeconds)} over your bus lane.${relax}`, true, 10);
     pauseForStrike();
+  } else if (event.kind === "project-done") {
+    say(`Your project is built: the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}. The treasury goes back to its usual share.`, false, 6);
+  } else if (event.kind === "project-lapsed") {
+    say(`Your project on ${corridor} lapsed unbuilt: the treasury took ${naira(event.taken)} of what you'd set aside.`, true, 8);
   } else if (event.kind === "strike-called-off") {
     say(`The union called off the strike on ${corridor}: you relaxed the lane.`, false, 6);
   } else if (event.kind === "strike") {
@@ -1065,6 +1070,18 @@ function renderTown(townId: string): void {
     </div>`;
 }
 
+// A rung you can't afford yet: name it as your project, and the treasury
+// leaves what you hold toward it alone for a while (project.ts).
+function saveButton(full: { next: string; road?: { a: string; b: string } }): string {
+  if ((full.next !== "lane" && full.next !== "rail") || !full.road) return "";
+  const rung = full.next as ProjectRung;
+  const price = rungPrice(world, full.road.a, full.road.b, rung);
+  const p = world.project;
+  if (p && p.a === full.road.a && p.b === full.road.b && p.rung === rung) return "";
+  if (!Number.isFinite(price) || price <= world.economy.funds) return "";
+  return `<span class="actions"><button data-project="${full.road.a}|${full.road.b}|${rung}" title="The treasury leaves what you hold toward it alone for ${world.tuning.projectLapseDays} days">Save for it: ${naira(price)}</button></span>`;
+}
+
 // The one problem here, named: no road reaches it, some of its trips have
 // none, its road is full (it's grown to what its rung allows), or a road but
 // no seat. Nothing when it's well served.
@@ -1072,10 +1089,13 @@ function problemText(townId: string): string {
   const stranded = reachNote(townId);
   if (stranded) return stranded;
   const full = roadFull(world, townId);
+  if (full?.thin) {
+    return `<p class="callout hook"><span class="k">The problem here</span>${townName(townId)} is as big as this road supports; traffic here is too thin for a bus lane.</p>`;
+  }
   if (full) {
     const name = townName(townId);
     const next = full.next === "paved" ? "Pave its road (R)" : full.next === "lane" ? "A bus lane on its road (R)" : "Rail (K: restore the old line or lay track, then T for trains)";
-    return `<p class="callout hook"><span class="k">The problem here</span>${name} can't grow: its road is full. ${next} to grow further.</p>`;
+    return `<p class="callout hook"><span class="k">The problem here</span>${name} can't grow: its road is full. ${next} to grow further.${saveButton(full)}</p>`;
   }
   const share = townShare(world, townId);
   if (share.lost < 0.2) return "";
@@ -1272,7 +1292,11 @@ function budgetHtml(): string {
   const treasury = t.remittanceEnabled
     ? `<p class="hint">Treasury: every ${t.remittancePeriodDays} days it takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus.${r.last ? ` Last took ${naira(r.last.amount)} on day ${gameDay(world, r.last.atSeconds)}.` : ""} Next on day ${gameDay(world, r.endsAtSeconds)}.</p>`
     : "";
-  return `<h2 class="section">Budget, a day</h2><p class="hint">5-day average.</p>
+  const project = world.project;
+  const saving = project
+    ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(heldForProject(world))} of ${naira(project.price)} set aside, safe from the treasury until day ${gameDay(world, projectLapsesAt(world, project))}. <span class="actions"><button data-drop-project="1">Drop it</button></span></p>`
+    : "";
+  return `${saving}<h2 class="section">Budget, a day</h2><p class="hint">5-day average.</p>
     <div class="budget">${lines.map(([label, x]) => `<span>${label}</span><span class="num ${x < 0 ? "bad" : ""}">${signed(x)}</span>`).join("")}
       <span class="total">Net</span><span class="total num ${net < 0 ? "bad" : "good"}">${signed(net)}</span>
       ${struck}
@@ -1452,6 +1476,20 @@ function moneyNote(): string {
 
 routesEl.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
+  // The named project: name it from a town's road-full line, or drop it.
+  if (target.dataset.project) {
+    const [a, b, rung] = target.dataset.project.split("|") as [string, string, ProjectRung];
+    const result = act({ label: `saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, (w) => nameProject(w, a, b, rung));
+    say(result.ok ? `Saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone for ${world.tuning.projectLapseDays} days. Build it before then, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.dropProject) {
+    dropProject(world);
+    say("Project dropped: the treasury takes its usual share again.");
+    renderPanel();
+    return;
+  }
   // A called strike's way out, from its badge.
   const settleKey = target.dataset.settle ?? target.dataset.relax;
   if (settleKey) {

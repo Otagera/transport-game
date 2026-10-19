@@ -3,6 +3,7 @@ import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, 
 import { informalBudget, sliceTick } from "@engine/slice/tick";
 import { laneOn, setEnforcement, settleStrike, settlementPrice, struckSegments } from "@engine/slice/pushback";
 import { addBrt, addBusLane, brtRouteId, checkBrt, checkLane, laneCost } from "@engine/slice/world";
+import { heldForProject, nameProject } from "@engine/slice/project";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
@@ -2216,7 +2217,7 @@ describe("Revision 1: a town at its rung's cap says its road is full", () => {
     // Full service: every trip from Mid carried by you, and Mid grown to the target that allows.
     for (const [key, rates] of w.pairOutcomes) if (key.includes("mid")) Object.assign(rates, { player: 1, poached: 0, gaveUp: 0, lost: 0 });
     w.towns.get("mid")!.population = townGrowth(w, "mid")!.target;
-    expect(roadFull(w, "mid")).toEqual({ rung: "dirt", next: "paved" });
+    expect(roadFull(w, "mid")).toMatchObject({ rung: "dirt", next: "paved" });
     paveRoad(w, "big", "mid");
     expect(roadFull(w, "mid")).toBeNull(); // paving raised the cap, and the target with it: room again
   });
@@ -2281,4 +2282,54 @@ describe("Revision 1: a lane's town size limit follows what it carries", () => {
     laneOn(w, "big", "mid")!.encroachment = 1;
     expect(townGrowth(w, "mid")!.cap).toBeCloseTo(paved);
   });
+});
+
+describe("Revision 1: the road-full line suggests a lane only where traffic could fill one", () => {
+  test("a paved road at its cap: a lane on a busy road, 'too thin' on a quiet one", () => {
+    const setUp = (laneMinTripsPerDay: number) => {
+      const w = world({ maxEmergentTowns: 0, startingFunds: 1e6, laneMinTripsPerDay });
+      paveRoad(w, "big", "mid");
+      for (const [key, rates] of w.pairOutcomes) if (key.includes("mid")) Object.assign(rates, { player: 1, poached: 0, gaveUp: 0, lost: 0 });
+      w.towns.get("mid")!.population = townGrowth(w, "mid")!.target;
+      return roadFull(w, "mid");
+    };
+    expect(setUp(0)).toMatchObject({ rung: "paved", next: "lane", thin: false });
+    expect(setUp(1e9)).toMatchObject({ rung: "paved", next: "lane", thin: true });
+  });
+});
+
+describe("Revision 1: the named project the treasury leaves alone, for a while", () => {
+  const setUp = () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6, remittanceEnabled: true, remittanceReserve: 3000, remittanceShare: 0.8 });
+    paveRoad(w, "big", "mid");
+    return w;
+  };
+  test("what you hold toward it isn't remitted", () => {
+    const named = setUp();
+    nameProject(named, "big", "mid", "lane");
+    const plain = setUp();
+    // The same surplus this period in both, so the treasury takes something.
+    named.remittance.net = 1e6;
+    plain.remittance.net = 1e6;
+    expect(heldForProject(named)).toBeGreaterThan(0);
+    run(named, w0(named));
+    run(plain, w0(plain));
+    expect(named.budget.remitted).toBeLessThan(plain.budget.remitted);
+  });
+  test("built in time, it's done; left unbuilt, it lapses to the treasury", () => {
+    const w = setUp();
+    nameProject(w, "big", "mid", "lane");
+    addBusLane(w, "big", "mid");
+    run(w, 1);
+    expect(w.project).toBeNull();
+    const v = setUp();
+    v.tuning.remittanceEnabled = false; // isolate the lapse
+    nameProject(v, "big", "mid", "lane");
+    v.tuning.remittanceEnabled = true;
+    const events: string[] = [];
+    for (let t = 0; t < (v.tuning.projectLapseDays + 1) * SECONDS_PER_GAME_DAY; t += SIM_DT) for (const e of sliceTick(v, SIM_DT)) events.push(e.kind);
+    expect(events).toContain("project-lapsed");
+    expect(v.project).toBeNull();
+  });
+  const w0 = (w: SliceWorld) => (w.tuning.remittancePeriodDays + 0.5) * SECONDS_PER_GAME_DAY;
 });

@@ -32,6 +32,8 @@ import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
 import { tollFor } from "../src/engine/slice/budget";
 import { informalSpec } from "../src/engine/slice/tick";
 import { setEnforcement } from "../src/engine/slice/pushback";
+import { nameProject, rungPrice } from "../src/engine/slice/project";
+import { averageNet } from "../src/engine/slice/history";
 import { addTrain, buildTrack, railPath, railRouteId } from "../src/engine/slice/rail";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { SIM_DT } from "../src/engine/loop";
@@ -48,7 +50,13 @@ const MAX_BUSES = Number(process.env.MAX_BUSES ?? 30);
 
 const tuning = { ...DEFAULT_SLICE_TUNING, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
 const world = startSliceGame(SLICE_MAP, tuning);
-world.tuning.remittanceEnabled = false;
+// REAL_MONEY=1 (C2): no top-ups, the treasury on, and the player saves for a
+// rung it can't afford -- a named project (project.ts), no other buying
+// while it saves -- then builds it. Prints what each rung cost in days of
+// the surplus it was wanted in, and how long the player waited.
+const REAL = process.env.REAL_MONEY === "1";
+if (!REAL) world.tuning.remittanceEnabled = false;
+const wanted: Record<string, { day: number; net: number; price: number; built?: number }> = {};
 
 const chain = () => roadChain(world, A, B) ?? [];
 const corridorTowns = (): Set<string> => {
@@ -124,6 +132,11 @@ const strikeMoney: Array<{ day: number; struck: number; calm: number }> = [];
 const estimates: number[] = [];
 let c3Start: { lane: number; twin: number } | null = null;
 const ticks = Math.round(SECONDS_PER_GAME_DAY / SIM_DT);
+/** The town card's road-full line, for either end town: FULL (next rung named), THIN (too thin for a lane). */
+const fullFlag = () => {
+  const full = roadFull(world, A) ?? roadFull(world, B);
+  return full ? (full.thin ? "  THIN" : `  FULL->${full.next}`) : "";
+};
 const rungs: Array<{ day: number; rung: string }> = [{ day: 1, rung: rung() }];
 function newRung(day: number, name: string): void {
   rungs.push({ day, rung: name });
@@ -150,7 +163,7 @@ const plateaus: Array<{ rung: string; day: number }> = [];
 console.log(`Corridor ${A}-${B}: jam = no-seat share ${JAM_RISE * 100}pp over its low since the rung for 2 days, or the end towns ${JAM_FALL * 100}% below their peak`);
 console.log("day  rung   " + [...corridorTowns()].map((t) => `${t.padEnd(9)} cap  `).join("") + "buses load  speed  along  noSeat  danfos");
 for (let day = 1; day <= DAYS; day += 1) {
-  world.economy.funds = 1e9;
+  if (!REAL) world.economy.funds = 1e9;
   let slowSum = 0;
   let danfoSum = 0;
   // A strike begins within this day: twin the world with it called off.
@@ -211,7 +224,7 @@ for (let day = 1; day <= DAYS; day += 1) {
     })
     .join("");
   console.log(
-    `${String(day).padStart(3)}  ${rung().padEnd(6)} ${sizes}${String(route?.vehicleIds.length ?? 0).padStart(5)} ${load.toFixed(2)}  ${speed.toFixed(2)}  ${String(Math.round(made)).padStart(5)}  ${String(Math.round(noSeat)).padStart(6)}  ${(danfoSum / (ticks / 30)).toFixed(1).padStart(6)}${jammed ? "  JAM" : ""}${roadFull(world, A) || roadFull(world, B) ? "  FULL" : ""}`,
+    `${String(day).padStart(3)}  ${rung().padEnd(6)} ${sizes}${String(route?.vehicleIds.length ?? 0).padStart(5)} ${load.toFixed(2)}  ${speed.toFixed(2)}  ${String(Math.round(made)).padStart(5)}  ${String(Math.round(noSeat)).padStart(6)}  ${(danfoSum / (ticks / 30)).toFixed(1).padStart(6)}${jammed ? "  JAM" : ""}${fullFlag()}`,
   );
   if (jammed && !jammedYesterday) jams.push(day);
   jammedYesterday = jammed;
@@ -243,6 +256,16 @@ for (let day = 1; day <= DAYS; day += 1) {
     twin = null;
   }
   const climb = jammed || plateau;
+  // Saving (REAL_MONEY): the next rung wanted and not yet affordable -> name it, buy nothing else.
+  const nextRung = rung() === "paved" && process.env.NO_LANE !== "1" && !laneDay ? "lane" : rung() === "lane" && process.env.NO_RAIL !== "1" && !railDay ? "rail" : null;
+  if (REAL && nextRung && (climb || wanted[nextRung])) {
+    const price = rungPrice(world, A, B, nextRung);
+    wanted[nextRung] ??= { day, net: averageNet(world), price };
+    if (price > world.economy.funds) {
+      if (!world.project) nameProject(world, A, B, nextRung);
+      continue;
+    }
+  }
   if (climb && rung() === "dirt" && process.env.NO_PAVE !== "1") {
     if (paveRoad(world, A, B).ok) newRung(day, "paved");
   } else if (climb && rung() === "paved" && process.env.NO_LANE !== "1" && !laneDay) {
@@ -251,10 +274,11 @@ for (let day = 1; day <= DAYS; day += 1) {
     countTakings(before);
     if (addBusLane(world, A, B).ok) {
       newRung(day, "lane");
+      if (wanted.lane) wanted.lane.built = day;
       // Lanes open lax; the probe's default player enforces strictly (LAX=1 leaves it).
       setEnforcement(world, A, B, process.env.LAX === "1" ? "lax" : "strict");
       // BRT=1: the corridor's buses are sold and BRT buses bought with as many seats.
-      if (process.env.BRT === "1") {
+      if (process.env.BRT === "1" && !REAL) {
         const buses = findRoute(world, A, B)?.vehicleIds.length ?? 0;
         while (removeBus(world, routeKey(A, B)) > 0) {}
         for (let i = 0; i < Math.ceil((buses * world.tuning.busCapacity) / world.tuning.brtCapacity); i += 1) addBrt(world, A, B);
@@ -267,6 +291,7 @@ for (let day = 1; day <= DAYS; day += 1) {
     if (buildTrack(world, A, B, "cheapest").ok && railPath(world, A, B) && addTrain(world, A, B).ok) {
       railDay = day;
       newRung(day, "rail");
+      if (wanted.rail) wanted.rail.built = day;
     }
   } else if (railDay && (world.routes.find((r) => r.id === railRouteId(A, B))?.loadFactorEMA ?? 0) > FULL) {
     const trains = world.routes.find((r) => r.id === railRouteId(A, B))?.vehicleIds.length ?? 0;
@@ -274,7 +299,13 @@ for (let day = 1; day <= DAYS; day += 1) {
   } else if (process.env.BRT === "1" && laneDay) {
     // BRT buses, while they run full (the buses already bought stay).
     const brt = world.routes.find((r) => r.id === brtRouteId(A, B));
-    if ((!brt || brt.loadFactorEMA > FULL) && (brt?.vehicleIds.length ?? 0) < MAX_BUSES) addBrt(world, A, B);
+    const buses = findRoute(world, A, B)?.vehicleIds.length ?? 0;
+    if (REAL && buses > 0) {
+      // With real money the buses go as BRTs come: one BRT for as many buses' seats, when it can be paid for.
+      if (world.economy.funds >= world.tuning.brtPurchaseCost && addBrt(world, A, B).ok) {
+        for (let i = 0; i < Math.round(world.tuning.brtCapacity / world.tuning.busCapacity) && removeBus(world, routeKey(A, B)) > 0; i += 1) {}
+      }
+    } else if ((!brt || brt.loadFactorEMA > FULL) && (brt?.vehicleIds.length ?? 0) < MAX_BUSES) addBrt(world, A, B);
   } else if ((load > FULL || !route) && (route?.vehicleIds.length ?? 0) < MAX_BUSES) {
     addBus(world, A, B);
     if (twin && day < laneDay + C3_DAYS) addBus(twin, A, B);
@@ -306,4 +337,8 @@ if (windowStats.days > 0) {
   console.log(`Window days ${windowFrom}-${windowTo}: trips made along the corridor ${Math.round(windowStats.made / n)} a day, no seat ${Math.round(windowStats.noSeat / n)} a day, your money ${Math.round(windowStats.money / n)} a day`);
   const brt = world.routes.find((r) => r.id === brtRouteId(A, B));
   console.log(`  at the end: ${findRoute(world, A, B)?.vehicleIds.length ?? 0} buses${brt ? `, ${brt.vehicleIds.length} BRT buses (${Math.round(brt.loadFactorEMA * 100)}% full)` : ""}`);
+}
+for (const [name, w] of Object.entries(wanted)) {
+  const days = w.net > 0 ? w.price / w.net : Infinity;
+  console.log(`C2: ${name} wanted day ${w.day}, ${w.built ? `built day ${w.built} (waited ${w.built - w.day} days)` : "not built"}; price ₦${Math.round(w.price).toLocaleString()} = ${days.toFixed(1)} days of the surplus then (₦${Math.round(w.net).toLocaleString()} a day)`);
 }

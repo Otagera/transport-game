@@ -1,5 +1,6 @@
 import type { SliceWorld } from "./types";
 import { isYourRoad } from "./upkeep";
+import { heldForProject } from "./project";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 // The budget's other income lines (docs/brief.md, Money: a budget, not a
@@ -84,7 +85,8 @@ export function remit(world: SliceWorld, netThisTick: number): number {
   const period = world.remittance;
   period.net += netThisTick;
   if (world.economy.elapsedSeconds < period.endsAtSeconds - 1e-6) return 0;
-  const above = world.economy.funds - tuning.remittanceReserve;
+  // Money held toward a named project (project.ts) is left alone.
+  const above = world.economy.funds - tuning.remittanceReserve - heldForProject(world);
   const taken = Math.max(0, tuning.remittanceShare * Math.min(above, period.net));
   world.economy.funds -= taken;
   world.budget.remitted += taken;
