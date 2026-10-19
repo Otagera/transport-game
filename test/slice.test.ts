@@ -23,7 +23,7 @@ import { roadCapacity, speedFactor } from "@engine/slice/congestion";
 import { costRate, planRoad, polylineLength, segmentLength, segmentPolyline } from "@engine/slice/roads";
 import { bridgeCellsOn, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
-import { growthTrend, townGrowth } from "@engine/slice/growth";
+import { bestRung, growthTrend, townGrowth } from "@engine/slice/growth";
 import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, removeLorry, lorrySummaries } from "@engine/slice/goods";
 import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
 import { slowOrder } from "@engine/slice/wear";
@@ -2042,5 +2042,30 @@ describe("slice zero step 8: route verdicts and hints", () => {
     expect(["mid", "cut"]).toContain(hint!.town!);
     run(w, SECONDS_PER_GAME_DAY + 1);
     expect(updateHints(hints, w, null)?.id).not.toBe(6);
+  });
+});
+
+describe("Revision 1, 1a: a town's cap is set by its best corridor's rung", () => {
+  test("paving a town's road raises its cap; dirt allows the share it always did", () => {
+    const w = world({ maxEmergentTowns: 0, startingFunds: 1e6 });
+    const t = w.tuning;
+    expect(bestRung(w, "mid")).toBe("dirt");
+    expect(townGrowth(w, "mid")!.cap).toBeCloseTo(50 * (1 + t.townGrowthCap * t.growthCapDirtShare));
+    paveRoad(w, "big", "mid");
+    expect(bestRung(w, "mid")).toBe("paved");
+    expect(townGrowth(w, "mid")!.cap).toBeCloseTo(50 * (1 + t.townGrowthCap));
+  });
+
+  test("the cap never follows the town's current size (principles §3, Growth)", () => {
+    const w = world({ maxEmergentTowns: 0 });
+    const before = townGrowth(w, "mid")!.cap;
+    w.towns.get("mid")!.population *= 1.4;
+    expect(townGrowth(w, "mid")!.cap).toBe(before);
+  });
+
+  test("a town no road reaches has no rung and no room to grow", () => {
+    const w = world({ maxEmergentTowns: 0 });
+    expect(bestRung(w, "cut")).toBe("none");
+    expect(townGrowth(w, "cut")!.cap).toBe(20);
   });
 });

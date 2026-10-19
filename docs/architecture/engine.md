@@ -503,7 +503,11 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   share (`townShare`: trips leaving it), service = player + 0.5 × informal, and gives a target
   `base × (1 + townGrowthCap × smoothstep((service − floor) / (full − floor)))`, zero growth
   below `growthMinPlayerShare`; `base` is `world.basePopulation` (the def's sizes), so the
-  cap never chases the population. `growTowns` drifts each original town toward it every
+  cap never chases the population. Since Revision 1 (1a) the cap's share is set by the
+  town's best road (`bestRung`: paved, dirt, or none): paved allows all of `townGrowthCap`
+  (1.25), dirt `growthCapDirtShare` (0.4, i.e. the old +50%), a town no road reaches none.
+  Paving a corridor lets its towns grow, and their growth jams it again
+  (`scripts/corridor-probe.ts`, brief C1). `growTowns` drifts each original town toward it every
   tick (from `updateSettlements`, after the roadside towns' drift); demand follows at the
   daily `refreshDemand`. Emergent towns are not in `basePopulation` and keep growing from
   traffic.

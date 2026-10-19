@@ -32,7 +32,31 @@ right after this file. Progress on that build order:
 | 7 | The new headline (5-day averages, chips) and the panel's budget breakdown | Done 2026-10-19: below |
 | 8 | Best next moves, forecasts and receipts to `?dev=1`; the six hints | Done 2026-10-19: below |
 | — | Your playtest (brief P1-P6) | Played 2026-10-19: fun for minutes; one map; no story; no struggle (principles.md §6) |
-| — | **Next: Revision 1, the corridor's story** (brief) | Drafted 2026-10-19, **Proposed**: nothing is built until you mark it Agreed. Then, one change and one measurement at a time: 1a growth tied to corridor capacity alone (C1 and the 20–40-day guard), then 1b the bus lane and pushback (C3) |
+| R1 | Revision 1, the corridor's story (brief) | **Agreed 2026-10-19.** One change and one measurement at a time |
+| R1 1a | A town's growth cap set by its best road's rung | Done 2026-10-19, **C1 passes on the trunk**: below |
+| R1 1b | The bus lane and pushback (C3) | Next |
+
+**Revision 1, 1a: growth tied to corridor capacity, 2026-10-19** (`scripts/corridor-probe.ts`,
+Ilase-Owode; a scripted player adds a bus while its buses run full, paves on the first jam;
+money no object). A jam: the corridor's slowest piece under 0.7 of free speed for a day, or
+"no seat" over 25% of the trips along it.
+
+| Paved cap (× start) | Paving held, days to the next jam |
+|---|---|
+| 1.5 (fixed, before 1a) | never, through day 90 |
+| 1.0 | 49 |
+| 1.15 | 34 |
+| **1.25 (set)** | **26** (27 with buses held to 8) |
+| 1.5 | 16 |
+| 2.0 | 13 |
+
+- **C1 passes for paving on the trunk: 26 days** (target 20-40). Dirt allows 40% of the cap:
+  +50%, the old cap, so dirt corridors behave as before.
+- **The dirt rung holds ~15 days** on the trunk (inherited, jams on day 15): under C1's 20.
+  It's the opening rung; whether it counts for C1 is for a decision.
+- Not measured yet: what bigger towns do to money (more trips, more fares: M10, C2 later),
+  and C1 on other corridors and with the bots. After a jam the towns shrink back a little
+  as service falls (Ilase 240k -> 215k by day 120).
 
 **Steps 7 and 8, 2026-10-19** (render-and-ui.md §7). Styled from the design lab's "The
 brief, step 8" preset: no exported picks were found, so the preset stands in until you

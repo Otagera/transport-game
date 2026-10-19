@@ -232,7 +232,16 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // 15->19k too. tau = 10 game days: a day of good service moves a town a
   // few percent. It moves the fleet optimum: 4 trunk buses net +263/day
   // with growth against +61 without.
-  townGrowthCap: 0.5,
+  //
+  // Revision 1, 1a (docs/brief.md; growth.ts bestRung): the cap is set by a
+  // town's best road. Paved allows townGrowthCap, dirt 40% of it -- 1.25 x
+  // 0.4 = +50%, exactly the old cap, so dirt corridors behave as before.
+  // Corridor probe (scripts/corridor-probe.ts, Ilase-Owode, a player adding
+  // buses while they run full): the dirt trunk jams on day ~15; paved, at a
+  // paved cap of 1.0 it held 49 days before jamming again, 1.15 34 days,
+  // 1.25 26 (27 with buses held to 8), 1.5 16, 2.0 13. Brief C1 wants 20-40.
+  townGrowthCap: 1.25,
+  growthCapDirtShare: 0.4,
   growthMinPlayerShare: 0.1,
   growthServiceFloor: 0.25,
   growthServiceFull: 0.75,

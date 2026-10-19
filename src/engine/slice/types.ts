@@ -236,6 +236,8 @@ export interface SliceTuning {
   // Growth of the original towns (step 4, growth.ts).
   /** A town can grow to this much above its starting size (0.5 = +50%). */
   townGrowthCap: number;
+  /** Revision 1: the share of townGrowthCap a town whose best road is dirt can reach (paved: all of it). */
+  growthCapDirtShare: number;
   /** Below this share of a town's trips carried by you, it doesn't grow. */
   growthMinPlayerShare: number;
   /** Service (yours + half the informal share) where growth starts, and where it's full. */

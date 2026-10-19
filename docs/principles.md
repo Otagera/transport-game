@@ -374,6 +374,14 @@ blow-by-blow; this section is the distilled rule.
   buses on the trunk net +₦263/day with growth against +₦61 without, and a paved trunk
   with 6 buses +₦522. Intended — a served place develops and needs more service — but it
   undoes some of 2b's tightening by the mid-game. Watch it in play.
+- **A fixed cap ends the story at the first upgrade; a cap set by the corridor keeps it
+  going** (Revision 1, 1a). With the cap a fixed multiple of a town's start, the Ilase-Owode
+  trunk jammed on dirt by day 15 and, once paved, never jammed again through day 90: its
+  towns stalled under the cap. With the cap set by the town's best road (dirt +50% as
+  before, paved +125%), the paved trunk's towns grow into the room and it jams again 26
+  days later (27 with buses held to 8: the jam comes from danfos and growth, not only
+  over-busing). The probe: `scripts/corridor-probe.ts`. Paved caps of 1.0, 1.5, 2.0 bought
+  49, 16 and 13 days: breathing room is steep in the cap.
 - Growth **must be visible without reading a number**, or it reads as a treadmill —
   queues rising faster than you can add vehicles — rather than as a place developing.
 
