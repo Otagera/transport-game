@@ -272,7 +272,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   const projectEvents = updateProject(world);
   // The treasury's share of a surplus, once a period (budget.ts). After the
   // ledger: a remittance is neither income nor running cost.
-  remit(world, revenueThisTick - runningCost);
+  const remitted = remit(world, revenueThisTick - runningCost);
 
   // Rolling rates, each updated exactly once per tick (architecture hard
   // rule 7).
@@ -300,6 +300,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   }
 
   const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents];
+  if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
   recordDay(world);
   return events;
 }

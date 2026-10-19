@@ -9,7 +9,7 @@ import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
 import { lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "@engine/slice/ledger";
 import { forecast } from "@engine/slice/forecast";
-import { allocationPerDay } from "@engine/slice/budget";
+import { allocationPerDay, remittanceDue, remittanceExpected } from "@engine/slice/budget";
 import { legFare, stageFare } from "@engine/slice/fares";
 import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upkeep";
 import { paveStepCost } from "@engine/pathing/cost";
@@ -1972,6 +1972,49 @@ describe("slice zero step 7: the budget breakdown", () => {
     run(w, DEFAULT_SLICE_TUNING.remittancePeriodDays * SECONDS_PER_GAME_DAY + 1);
     expect(w.remittance.last).not.toBeNull();
     expect(w.remittance.last!.amount).toBeCloseTo(w.budget.remitted, 6);
+  });
+
+  test("the treasury visible: the countdown names what it takes, and its day comes as an event naming the amount", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 10_000 });
+    addBus(w, "big", "mid");
+    const events: Array<{ kind: string; amount?: number }> = [];
+    let dueBefore = 0;
+    const end = w.remittance.endsAtSeconds;
+    while (w.economy.elapsedSeconds < end - 1e-6) {
+      dueBefore = remittanceDue(w);
+      events.push(...sliceTick(w, SIM_DT));
+    }
+    const remitted = events.filter((event) => event.kind === "remitted");
+    expect(remitted.length).toBe(1);
+    expect(remitted[0]!.amount!).toBeGreaterThan(0);
+    expect(remitted[0]!.amount!).toBeCloseTo(w.budget.remitted, 6);
+    // The countdown a tick before named (to within a tick's money) what it took.
+    expect(Math.abs(dueBefore - remitted[0]!.amount!)).toBeLessThan(5);
+  });
+
+  test("the countdown, read mid-period, expects about what the period's end takes", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 10_000 });
+    addBus(w, "big", "mid");
+    // Past the first period, so the 5-day net is a settled network's.
+    run(w, w.remittance.endsAtSeconds - w.economy.elapsedSeconds + 1);
+    run(w, 5 * SECONDS_PER_GAME_DAY);
+    const expected = remittanceExpected(w, averageNet(w));
+    const before = w.budget.remitted;
+    run(w, w.remittance.endsAtSeconds - w.economy.elapsedSeconds + 1);
+    const taken = w.budget.remitted - before;
+    expect(taken).toBeGreaterThan(0);
+    // Halfway through, the amount so far is about half; the expectation is within a fifth.
+    expect(Math.abs(expected - taken) / taken).toBeLessThan(0.2);
+  });
+
+  test("money set aside for a named project is left out of what the countdown says goes", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 10_000 });
+    addBus(w, "big", "mid");
+    run(w, 5 * SECONDS_PER_GAME_DAY);
+    const due = remittanceDue(w);
+    expect(due).toBeGreaterThan(0);
+    w.project = { a: "big", b: "mid", rung: "lane", price: 1_000_000, namedAt: w.economy.elapsedSeconds };
+    expect(remittanceDue(w)).toBe(0);
   });
 });
 

@@ -29,7 +29,9 @@ export type SliceEvent =
   | { kind: "strike-over"; a: string; b: string; cost: number | null }
   // The named project (project.ts): built, or lapsed to the treasury.
   | { kind: "project-done"; a: string; b: string; rung: "lane" | "rail" }
-  | { kind: "project-lapsed"; a: string; b: string; rung: "lane" | "rail"; taken: number };
+  | { kind: "project-lapsed"; a: string; b: string; rung: "lane" | "rail"; taken: number }
+  // The treasury's remittance (budget.ts): what a period's end took, 0 included.
+  | { kind: "remitted"; amount: number };
 
 export interface SettlementState {
   /** segmentId -> rolling riders per second passing a point on it. */

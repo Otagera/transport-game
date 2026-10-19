@@ -103,6 +103,7 @@
       .strike-badge.on { background: var(--bad); color: #fff; }
       .strike-badge.called { background: color-mix(in srgb, #f08c00 18%, transparent); color: #9a4f00; border: 1px solid #f08c00; }
       #routes .callout .actions { display: flex; gap: 6px; margin-top: 6px; }
+      #routes .callout .project-bar { height: 6px; margin: 6px 0 0; }
       #routes .callout button { font: 600 11px var(--label-font); border: 1px solid var(--player); background: #fff; color: var(--player); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
       #routes .callout button:hover { background: var(--player); color: #fff; }
       .strike-badge .actions { display: flex; gap: 6px; margin-top: 4px; }
@@ -113,7 +114,8 @@
       .budget { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12px; }
       .budget .num { font-variant-numeric: tabular-nums; text-align: right; }
       .budget .total { border-top: 1px solid var(--line); padding-top: 3px; font-weight: 650; }
-      #routes .budget + .hint { margin-top: 8px; }
+      #routes .budget + .hint, #routes .budget + .callout { margin-top: 8px; }
+      #routes .budget + .callout + .hint { margin-top: 0; }
       .share-bar { height: 8px; margin: 2px 0 4px; }
       #routes .callout kbd { font: 11px ui-monospace, monospace; }
       #routes .townshare { margin: 0 0 6px; font-size: 12px; }

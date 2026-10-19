@@ -234,7 +234,15 @@ terrain isn't applied: the map still draws shaded hills.
   (P, `pauseOnStrike`). The BRT tool (X) appears once a lane exists; BRT buses draw longer.
   The town card's "road is full" line says when a corridor is too thin for a lane, and offers
   "Save for it: ₦X" when the next rung is out of reach (`saveButton`); a named project shows
-  at the top of the budget ("Saving for ... safe until day N", "Drop it").
+  at the top of the budget ("Saving for ... safe until day N", a progress bar of what's set
+  aside against the price, "Drop it").
+- **The treasury, visible (R1 4)** — inside the budget breakdown, no panel of its own:
+  "Treasury took, day N" under the net (the last remittance; under it, like "Lost to
+  strikes", since it isn't a running cost); then the countdown, "About ₦X over the reserve
+  goes to the treasury in N days; spend it or set it aside" (`remittanceExpected`: the period
+  carried to its end at the strip's 5-day net -- the amount so far named ₦17 on day 11 of a
+  period that took ₦8,383); then the rule in one line. Each period's end is a toast naming
+  the amount (the `remitted` event; "took nothing" when there was no surplus).
 - **Developer start:** `?dev=1&funds=20000` sets the starting funds, to reach a late rung in a
   minute for checks and screenshots.
 - **Hints** (`hints.ts`, no DOM; `renderHint` every frame): the brief's six, one at a time,

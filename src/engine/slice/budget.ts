@@ -77,21 +77,52 @@ export function createRemittancePeriod(nowSeconds: number, tuning: { remittanceP
  * project bigger than one period's surplus stays possible (it's the funds
  * above the reserve that are taxed, not each period's whole surplus), and
  * a fleet that pays for itself can't compound without limit -- the
- * snowball M10 measured. Returns what was taken this tick.
+ * snowball M10 measured. Returns what was taken when a period ends this
+ * tick (0 included: the treasury came and found nothing), null otherwise.
  */
-export function remit(world: SliceWorld, netThisTick: number): number {
+export function remit(world: SliceWorld, netThisTick: number): number | null {
   const { tuning } = world;
-  if (!tuning.remittanceEnabled) return 0;
+  if (!tuning.remittanceEnabled) return null;
   const period = world.remittance;
   period.net += netThisTick;
-  if (world.economy.elapsedSeconds < period.endsAtSeconds - 1e-6) return 0;
-  // Money held toward a named project (project.ts) is left alone.
-  const above = world.economy.funds - tuning.remittanceReserve - heldForProject(world);
-  const taken = Math.max(0, tuning.remittanceShare * Math.min(above, period.net));
+  if (world.economy.elapsedSeconds < period.endsAtSeconds - 1e-6) return null;
+  const taken = remittanceDue(world);
   world.economy.funds -= taken;
   world.budget.remitted += taken;
   world.remittance = { ...createRemittancePeriod(period.endsAtSeconds, tuning), last: { amount: taken, atSeconds: world.economy.elapsedSeconds } };
   return taken;
+}
+
+/**
+ * What the treasury would take if the period ended now: its share of the
+ * funds above the reserve, never more than the period's net so far, and
+ * never money held toward a named project (project.ts). The countdown in
+ * the panel shows it (brief, After the ladder's playtest: "the treasury
+ * visible").
+ */
+export function remittanceDue(world: SliceWorld): number {
+  const { tuning } = world;
+  if (!tuning.remittanceEnabled) return 0;
+  const above = world.economy.funds - tuning.remittanceReserve - heldForProject(world);
+  return Math.max(0, tuning.remittanceShare * Math.min(above, world.remittance.net));
+}
+
+/**
+ * What the period's end will take if the money keeps coming as it does:
+ * remittanceDue with the funds and the period's net carried forward to the
+ * end at `netPerDay` (the strip's 5-day net). Read in the middle of a period,
+ * remittanceDue alone named a fraction of what went -- ₦17 on day 11, then
+ * ₦8,383 taken on day 20 (browser check) -- so the countdown says this.
+ */
+export function remittanceExpected(world: SliceWorld, netPerDay: number): number {
+  const { tuning } = world;
+  if (!tuning.remittanceEnabled) return 0;
+  const days = Math.max(0, (world.remittance.endsAtSeconds - world.economy.elapsedSeconds) / SECONDS_PER_GAME_DAY);
+  const gain = netPerDay * days;
+  const funds = world.economy.funds + gain;
+  // What a project holds at the end: as much of its price as the funds above the reserve will cover then.
+  const held = world.project ? Math.max(0, Math.min(world.project.price, funds - tuning.remittanceReserve)) : 0;
+  return Math.max(0, tuning.remittanceShare * Math.min(funds - tuning.remittanceReserve - held, world.remittance.net + gain));
 }
 
 /** The toll an informal vehicle of road space `weight` pays for a path: each road of yours on it. */

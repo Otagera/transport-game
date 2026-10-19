@@ -743,6 +743,10 @@ of the funds above `remittanceReserve` (₦3,000), never more than the period's 
 deficit pays nothing. Called last in `sliceTick`, after the ledger: a remittance is neither
 income nor running cost; `world.budget.remitted` keeps it, and the period carries `last`
 (what the previous period's end took, and when) for the panel. Day 1 starts a fresh period.
+`remit` returns what a period's end took (0 included) and `sliceTick` emits it as a
+`remitted` event; `remittanceDue` is what would go if the period ended now, and
+`remittanceExpected(world, netPerDay)` what will go at its end if the net keeps coming at
+that rate (the panel's countdown, R1 4).
 
 The tally also keeps money out (step 7): `running` (your vehicles' running costs, rough
 roads included) and `upkeep` (routine, plus wear repairs when wear is on), split in

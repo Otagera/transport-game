@@ -62,6 +62,7 @@ import { variedSliceMap } from "@engine/slice/variation";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
 import { dropProject, heldForProject, nameProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
+import { remittanceExpected } from "@engine/slice/budget";
 import { enforcementPerDay, laneOn, lanesBySegment, setEnforcement, settleStrike, settlementPrice, type LaneState } from "@engine/slice/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
 import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
@@ -426,6 +427,10 @@ function announce(event: SliceEvent): void {
     say(`Your project is built: the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}. The treasury goes back to its usual share.`, false, 6);
   } else if (event.kind === "project-lapsed") {
     say(`Your project on ${corridor} lapsed unbuilt: the treasury took ${naira(event.taken)} of what you'd set aside.`, true, 8);
+  } else if (event.kind === "remitted") {
+    // The treasury as an event, not a leak (playtest: "the treasury unnoticed, felt as incidental loss").
+    const next = `Next in ${world.tuning.remittancePeriodDays} days.`;
+    say(event.amount >= 1 ? `The treasury took ${naira(event.amount)} of your surplus. ${next}` : `The treasury took nothing: no surplus over the reserve. ${next}`, event.amount >= 1, 6);
   } else if (event.kind === "strike-called-off") {
     say(`The union called off the strike on ${corridor}: you relaxed the lane.`, false, 6);
   } else if (event.kind === "strike") {
@@ -1306,18 +1311,35 @@ function budgetHtml(): string {
   const net = lines.reduce((sum, [, x]) => sum + x, 0);
   const t = world.tuning;
   const r = world.remittance;
-  const treasury = t.remittanceEnabled
-    ? `<p class="hint">Treasury: every ${t.remittancePeriodDays} days it takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus.${r.last ? ` Last took ${naira(r.last.amount)} on day ${gameDay(world, r.last.atSeconds)}.` : ""} Next on day ${gameDay(world, r.endsAtSeconds)}.</p>`
+  // The treasury inside the breakdown, no panel of its own (brief, After the
+  // ladder's playtest, 1): what it last took, under the net (it isn't a
+  // running cost), and what goes next unless you spend it or set it aside.
+  const took = t.remittanceEnabled
+    ? `<span class="muted">Treasury took${r.last ? `, day ${gameDay(world, r.last.atSeconds)}` : ""}</span><span class="num ${r.last && r.last.amount >= 1 ? "bad" : ""}">${r.last && r.last.amount >= 1 ? signed(-r.last.amount) : "₦0"}</span>`
+    : "";
+  const due = remittanceExpected(world, averageNet(world));
+  const days = Math.max(0, Math.ceil((r.endsAtSeconds - world.economy.elapsedSeconds) / SECONDS_PER_GAME_DAY));
+  const when = days <= 1 ? "tomorrow" : `in ${days} days`;
+  const countdown = t.remittanceEnabled
+    ? due >= 1
+      ? `<p class="callout hook treasury"><span class="k">Treasury</span>About ${naira(due)} over the reserve goes to the treasury ${when}; spend it or set it aside.</p>`
+      : `<p class="hint">Treasury: nothing over the ${naira(t.remittanceReserve)} reserve to take ${when}.</p>`
     : "";
   const project = world.project;
+  const held = project ? heldForProject(world) : 0;
   const saving = project
-    ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(heldForProject(world))} of ${naira(project.price)} set aside, safe from the treasury until day ${gameDay(world, projectLapsesAt(world, project))}. <span class="actions"><button data-drop-project="1">Drop it</button></span></p>`
+    ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside, safe from the treasury until day ${gameDay(world, projectLapsesAt(world, project))}.
+        <span class="bar project-bar" title="${pct(held / project.price)} set aside"><i style="width:${pct(Math.min(1, held / project.price))};background:var(--player)"></i></span>
+        <span class="actions"><button data-drop-project="1">Drop it</button></span></p>`
     : "";
   return `${saving}<h2 class="section">Budget, a day</h2><p class="hint">5-day average.</p>
     <div class="budget">${lines.map(([label, x]) => `<span>${label}</span><span class="num ${x < 0 ? "bad" : ""}">${signed(x)}</span>`).join("")}
       <span class="total">Net</span><span class="total num ${net < 0 ? "bad" : "good"}">${signed(net)}</span>
+      ${took}
       ${struck}
-    </div>${treasury}`;
+    </div>
+    ${countdown}
+    ${t.remittanceEnabled ? `<p class="hint">Every ${t.remittancePeriodDays} days the treasury takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus. Money set aside for a project is safe.</p>` : ""}`;
 }
 
 // Your share of trips between towns: one click down, not the headline
