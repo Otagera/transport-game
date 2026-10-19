@@ -52,7 +52,8 @@ right after this file. Progress on that build order:
 | R1 5 | The score as visible as money: town-growth milestones, the trips-made trend (2) | Built 2026-10-19, **not yet played**: milestones (+25%, +50%, ×2, ×3) as a toast and a map tag; trips made with ▲/▼ over 10 days and a sparkline; "People, since day 1" in the strip |
 | R1 6 | Each corridor's informal share; "corridor taken" as a visible state, with its costs (3) | Built 2026-10-19, **not yet played**: a Corridors section (who carries each road's trips; "Taken, day N" at 40% of them, let go below 30%; levies lost; strike cost if laned), a toast, and a TAKEN tag on the map. **Finding:** the levies lost are ₦1–10 a day on a taken trunk, ~2% of its fares, against the brief's 20–40%: taking a corridor costs nothing you'd feel, and without a lane brings no pushback |
 | — | Your playtest of R1 4-6 (past day 300, map 3788) | Played 2026-10-19: treasury and growth messages seen; "I think I have played to its end"; seeds read as the same map; TAKEN clutter (principles.md §6) |
-| R1 7 | Generated maps per seed, with guards; TAKEN only when it changes (brief, After the ladder's playtest, 5) | Built 2026-10-19, **not yet played**: corridor probe on 3 seeds and P8 re-measured, below. **Next: your playtest** |
+| R1 7 | Generated maps per seed, with guards; TAKEN only when it changes (brief, After the ladder's playtest, 5) | Built 2026-10-19; **played 2026-10-19** (to day 210): felt different (P8); ended at "nothing more to build" (principles.md §6) |
+| R2 | **Next: draft brief Revision 2, "a second economy", as Proposed** (cloud session; the user agrees before anything is built) | To draft: see below |
 | — | Proposed, not built: rail reshapes the map (station towns grow, new desire lines) (4); then wear | |
 
 **Revision 1, step 7: generated maps, 2026-10-19** (`generate.ts`, engine.md; the page and the
@@ -957,6 +958,34 @@ live-verified; each links to where its detail actually lives now.
 | 11 | Dev studio + information architecture | Six-homes UI refactor, `?studio=1` (Tuning/Profile Studio/Asset Modder/Scenario Lab) | [architecture/render-and-ui.md](architecture/render-and-ui.md) §2, [architecture/dev-studio.md](architecture/dev-studio.md) §1 |
 | 11b | Profiles applied to the map | Authored cross-sections drive real corridor rendering, decay, and cost | [architecture/render-and-ui.md](architecture/render-and-ui.md) §4, [architecture/content.md](architecture/content.md) |
 | 12 | Ambient private traffic | Prosperity → private cars → road friction, closing the growth/congestion loop | [architecture/engine.md](architecture/engine.md) §simulation/ |
+
+## Next: draft Revision 2, "a second economy" (agreed to draft 2026-10-19)
+
+From the R1 7 playtest (principles.md §6): the slice ends at "nothing more to build", and
+stopping here makes it "Mini Metro with money". Draft brief Revision 2 as **Proposed**, in the
+brief's own form (what changes, the order, checks like C1-C4, decisions-log rows). Build nothing
+until the user marks it Agreed. What it should cover:
+
+- **Goods and industries: a second reason to build.** Industries that open and close (quarry,
+  mill, factory...), wanting inputs in and output to the port or towns; when one closes, its line
+  goes quiet. Goods return from slice zero's step 4 (lorries, freight trains, the port;
+  `goods.ts`, switched off). New problems keep arriving after every town is connected, without
+  flooding the map with towns (user taste: towns appear over time, not a flood).
+- **Rail gets a job of its own:** freight is heavy and long, so rail lines become a choice
+  (this corridor carries ore, that one people), not a faster bus everywhere. Absorbs the
+  proposed (4), rail reshaping the map (station towns grow, new desire lines).
+- **A second ladder:** an industry's dirt track → paved → lorries → a rail spur.
+- **Wear, made easy to do:** per corridor, never per piece -- a "Keep it up" switch with its
+  cost a day; off, the road visibly wears and slows and the town card says why; one "Fix all on
+  this corridor". The parts exist in `wear.ts`.
+- **Removing what you built (user's ask):** routes can already go (selling a route's last
+  vehicle closes it, `removeBus`); roads can't. Propose a verb to retire a road -- its upkeep
+  stops, towns that relied on it lose access, the danfos lose ground (brownfield: removal has
+  consequences) -- and replacing a road with rail on the same alignment (the road retired, the
+  track laid cheaper along its earthworks).
+- **Checks:** how the playtest knows it worked: the game still asks for a move after every
+  town is connected (e.g. day 150+); a rail line is a choice (passenger vs freight); upkeep
+  takes a decision per corridor, not clicks per piece.
 
 ## Handoff: R1 7 built (cloud session, 2026-10-19)
 

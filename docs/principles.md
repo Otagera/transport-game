@@ -896,6 +896,27 @@ Steps, each played before the next:
    - **The slice has an end, and it's when no new problem arrives.** Past rail, nothing the map
      does asks for a move you haven't made.
 
+   **Played 2026-10-19, R1 7 (a generated map, to day 210):** *"I think I have gotten to its
+   end."* P8 by your account: *"it did feel different."* The map's story (P7, of a map rather
+   than one corridor): *"Ido started as the largest but Ikire turned out to be the connecting
+   hub. Ejigbo was just in its corner."* Money bound at the top rung: you waited and used "Save
+   for it" for the last track. Why it ended: *"it felt like no need to wait for the money to
+   build up when I had somewhat connected everywhere"*; *"nothing more to build."* How you
+   played: *"connected everywhere by road and put buses, then upgraded the roads so I can get
+   the money up as fast as possible."* On screen at day 210: ₦72,385, +₦21,833 a day, 5,220
+   trips made (▼14, flat), 2,865 with no seat against 3,337 of your riders, rail on about eight
+   lines, Erin, Ilugun and Oyan falling. Findings:
+   - **Generated maps work:** a different place, and a story of its own (the hub that wasn't
+     the biggest town).
+   - **The end is "nothing more to build".** The map asks for a fixed amount of building;
+     once it's built, nothing new is asked. Not a balance problem: money bound where it should.
+   - **Still played for money**: money buys the next thing, so it stays the goal even with
+     growth and trips shown.
+   - **Stopping here makes it Mini Metro with money** (your read). A transport-infrastructure
+     game needs a second reason to build: goods and industries (Revision 2, to draft).
+   - **Upkeep should be easy to do**: per corridor, not per piece. And you asked to remove
+     things: a road you no longer want, or a road replaced by rail.
+
 Rules for working this way:
 
 - **Every step is played before the next starts.** Every finding that mattered came from
