@@ -82,19 +82,24 @@ export interface RunFile {
   days: RunDay[];
 }
 
-/** The tuning a run's switches give: the page's rule, kept in one place so a replay can't disagree. */
-export function runTuning(switches: RunSwitches): SliceTuning {
+/**
+ * The tuning a run's switches give: the page's rule, kept in one place so a
+ * replay can't disagree. `overrides`: a what-if (a script replaying your
+ * actions under other numbers); the page never passes any.
+ */
+export function runTuning(switches: RunSwitches, overrides: Partial<SliceTuning> = {}): SliceTuning {
   return {
     ...DEFAULT_SLICE_TUNING,
     ...(switches.all ? ALL_SYSTEMS_ON : {}),
     ...(switches.goodsOff ? { goodsEnabled: false } : {}),
     ...(switches.wearOff ? { wearEnabled: false } : {}),
+    ...overrides,
   };
 }
 
 /** A new game as the page starts it: the seed's map, the switches, the warm-up, any dev funds. */
-export function startRun(base: SliceMapDef, seed: number, switches: RunSwitches, devFunds: number | null): SliceWorld {
-  const world = startSliceGame(generatedSliceMap(base, seed), runTuning(switches));
+export function startRun(base: SliceMapDef, seed: number, switches: RunSwitches, devFunds: number | null, overrides: Partial<SliceTuning> = {}): SliceWorld {
+  const world = startSliceGame(generatedSliceMap(base, seed), runTuning(switches, overrides));
   if (devFunds !== null) world.economy.funds = devFunds;
   return world;
 }
@@ -165,10 +170,17 @@ export function daySummary(world: SliceWorld, day: number, events: SliceEvent[])
  * Rebuilds a run's world after `untilTick` ticks (all of it by default):
  * the same start, every recorded action after the same tick, the same
  * ticks. `onTick` sees the world after each tick, for a script that wants
- * to look along the way.
+ * to look along the way; `overrides` replays the same actions under other
+ * tuning (what-if: an action the other numbers refuse is simply refused).
  */
-export function replayRun(base: SliceMapDef, file: RunFile, untilTick = file.ticks, onTick?: (world: SliceWorld, tick: number) => void): SliceWorld {
-  const world = startRun(base, file.seed, file.switches, file.devFunds);
+export function replayRun(
+  base: SliceMapDef,
+  file: RunFile,
+  untilTick = file.ticks,
+  onTick?: (world: SliceWorld, tick: number) => void,
+  overrides: Partial<SliceTuning> = {},
+): SliceWorld {
+  const world = startRun(base, file.seed, file.switches, file.devFunds, overrides);
   let next = 0;
   for (let tick = 0; ; tick += 1) {
     while (next < file.actions.length && file.actions[next]!.tick === tick) {
