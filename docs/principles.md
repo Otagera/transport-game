@@ -258,6 +258,10 @@ blow-by-blow; this section is the distilled rule.
   carrying freight.
 - Paratransit **counts toward service at a discount** (~0.5) for growth purposes:
   informal service *sustains* a place, player service *develops* it.
+- **Freight that every town depends on must not ride the danfos' road budget** (slice,
+  Revision 3, fuel). Held to it, tankers sat behind a busy dirt trunk with 350 t at the tank
+  farm; counted against it, their long slow hauls crowded danfos off and cut trips made by
+  27%. A tanker congests the road like anything else, and that's all.
 
 ### Congestion
 
@@ -311,6 +315,14 @@ blow-by-blow; this section is the distilled rule.
   fleet at an era boundary is an unsurvivable cliff. This is graceful obsolescence.
 - **Rising maintenance on obsolete stock** is the other half — without it nothing
   pressures replacement and era turnover never happens.
+- **A scarcity must build with success, not be there on day 1** (slice, Revision 3, fuel).
+  Imports at 40% of day 1's fuel, then 70%: replayed, shortages from distance alone cost 37%
+  of net by day 30, before the player could do anything about them — the early tax already
+  removed twice (wear, savings). At 100%, towns start supplied and run short as your
+  service grows them, like a jam. Same rule for a second source: **it must only add**.
+  Allocating by one share, or the new source first, made restoring the refinery lower
+  supply (its fuel crossed the map to towns beside the tank farm); the old source first,
+  the new one filling what's short, nearest it, it can only help.
 
 ### Decay (slice, §6 step 4)
 

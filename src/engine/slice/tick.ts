@@ -1,3 +1,4 @@
+import { chargeFuelPremium, shortageAt, updateFuelShortage } from "./fuel";
 import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
 import { applyOperatingCosts, updateIncomeRateEMA } from "../economy/state";
@@ -113,9 +114,12 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // 2. Giving up.
   const leaveFraction = emaAlpha(dt, tuning.patienceSeconds);
   for (const [at, queue] of simulation.queues) {
+    // Where fuel is short, danfos are dear and few: riders wait longer for you (fuel.ts).
+    const short = shortageAt(world, at);
+    const leaveFractionHere = short > 0 ? emaAlpha(dt, tuning.patienceSeconds * (1 + tuning.fuelPatience * short)) : leaveFraction;
     for (const [key, amount] of queue) {
       if (amount <= 0) continue;
-      const leaving = amount * leaveFraction;
+      const leaving = amount * leaveFractionHere;
       queue.set(key, amount - leaving);
       const { destination, origin } = parseQueueKey(key);
       bump(informal.pool, poolKey(at, origin, destination), leaving);
@@ -236,6 +240,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   }
 
   updateGoodsOutcomes(world, goodsDelivered, dt, goodsTrucked);
+  updateFuelShortage(world);
 
   // 4. The informal sector: danfos, then kekes and okadas.
   const takings: Takings = { tolls: 0, levies: 0, agberos: 0, leviesByCorridor: new Map(), loading: 0, touts: 0 };
@@ -272,6 +277,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   const upkeep = roadUpkeep + lanes.cost;
   // ...and your road vehicles pay more to run on worn roads (wear.ts).
   const rough = tuning.wearEnabled ? chargeRoughRoads(world, dt, routeOf) : { total: 0, byRoute: new Map<string, number>() };
+  // ...and above the pump price where towns are short of fuel (fuel.ts).
+  const fuelPremium = chargeFuelPremium(world, dt, routeOf);
+  for (const [routeId, extra] of fuelPremium.byRoute) rough.byRoute.set(routeId, (rough.byRoute.get(routeId) ?? 0) + extra);
 
   // Money. Running cost is whatever left the funds this tick that fares
   // didn't bring in -- buses, lorries, trains and road upkeep alike --
@@ -280,7 +288,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   updateIncomeRateEMA(economy, revenueThisTick, dt);
   const runningCost = revenueThisTick - (economy.funds - fundsAtStart);
   recordMoney(world.ledger, revenueThisTick, runningCost, routeRevenue, dt, rough.byRoute);
-  world.budget.running += runningCost - upkeep;
+  world.budget.running += runningCost - upkeep - fuelPremium.total;
+  world.budget.fuel += fuelPremium.total;
   world.budget.upkeep += roadUpkeep;
   world.budget.enforcement += lanes.cost;
   world.budget.struck += lanes.lost;
@@ -462,7 +471,9 @@ function sendInformal(
   const toll = tollFor(world, run.path.segmentIds, spec.weight);
   const riders = aboard.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0) * share, 0);
   const meanFare = riders > 0 ? aboard.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0) * share * legFare(world, group.at, rider.destination), 0) / riders : 1;
-  const stayHome = riders > 0 && toll > 0 ? Math.min(MAX_PRICED_OUT, tuning.priceElasticity * (toll / riders / meanFare)) : 0;
+  // Where fuel is short, the danfo charges more too (fuel.ts), and that prices riders out the same way.
+  const dearer = riders > 0 ? (toll > 0 ? toll / riders / meanFare : 0) + (mode === "danfo" ? tuning.fuelFarePremium * shortageAt(world, group.at) : 0) : 0;
+  const stayHome = dearer > 0 ? Math.min(MAX_PRICED_OUT, tuning.priceElasticity * dearer) : 0;
   vehicle.cargo = aboard.map((rider) => {
     const pooled = pool.get(rider.key) ?? 0;
     pool.set(rider.key, pooled * (1 - share));
@@ -497,7 +508,10 @@ export function informalBudget(world: SliceWorld, segmentId: string): number {
     const taken = laneEncroachment(world).get(segmentId) ?? 0;
     return world.tuning.informalRoadSpaceLane + (world.tuning.informalRoadSpace - world.tuning.informalRoadSpaceLane) * taken;
   }
-  return isDirt(segment) ? world.tuning.informalRoadSpaceDirt : world.tuning.informalRoadSpace;
+  const surface = isDirt(segment) ? world.tuning.informalRoadSpaceDirt : world.tuning.informalRoadSpace;
+  // Where fuel is short, some danfos are parked (fuel.ts): less of the road is theirs.
+  const short = Math.max(shortageAt(world, segment.fromNodeId), shortageAt(world, segment.toNodeId));
+  return short > 0 ? surface * (1 - world.tuning.fuelParked * short) : surface;
 }
 
 export function informalSpec(tuning: SliceTuning, mode: InformalMode): { capacity: number; speed: number; weight: number } {

@@ -918,7 +918,7 @@ route type (`mini:a~b`, `minibusRouteId`, `isMinibusRoute`), like trains are, so
 transfers, diagnosis, debt advice, receipts and forecasts treat it as any passenger route.
 `vehicleCostPerDay` knows its running cost; `actions.ts` has a `minibus` action.
 
-### The fuel chain (Revision 3, step 1a)
+### The fuel chain (Revision 3, steps 1a–1b)
 
 - **`fuel.ts`** — three sites placed when a game starts (`placeFuelSites`, from `start.ts`,
   before the warm-up): a **tank farm** 7–9 cells from the port with an old road to it, an
@@ -928,22 +928,39 @@ transfers, diagnosis, debt advice, receipts and forecasts treat it as any passen
   terminal elsewhere. They're towns with an `industry` kind, not entries in
   `world.industries`, so the quarry's open-and-close logic never touches them.
 - **Flows** (`fuelFlows`, added to `goodsFlows`): every town burns
-  `fuelPerThousandPerDay` × its size; the tank farm imports `fuelImportShare` of day 1's
-  need, split over the towns by need; a restored refinery adds what it makes —
-  `min(refineryShare × day 1's need, crude delivered to it)`, nothing without crude — and
-  wants `crudeShare × day 1's need` of crude from the source. Cargo is named by the site it
+  `fuelPerThousandPerDay` × its size; the tank farm imports `fuelImportShare` (1.0) of day
+  1's need; a restored refinery makes `min(refineryShare × day 1's need, crude delivered
+  to it)`, nothing without crude, and wants `crudeShare × day 1's need` of crude from the
+  source. **Imports go first**, to towns nearest the tank farm by road; the refinery then
+  fills what's still short, nearest it first, and only to towns a road from it reaches.
+  Splitting by one share everywhere, or refinery first, made restoring it *lower* supply
+  (90% → 72%, then 80%: refinery fuel crossed the map to towns beside the tank farm).
+  Imports-first, it can only add: 90% → 90% on day-1 towns, 65% → 85% once they've grown
+  (demand ×1.6). Cargo is named by the site it
   leaves (`cargoName`: crude, fuel, stone), never a new `CargoKind`, so the engine's types
   stay the original game's.
 - **Who carries it:** fuel goes by road tanker — the truckers (`truckers.ts`) reach
-  `tankerMaxHaulCells` (90) for fuel against 40 for other goods, and a tanker isn't held
-  back by the danfos' road budget (it still takes road space): on a busy dirt trunk the
-  budget had stopped 350 t of fuel leaving the tank farm. Crude is never trucked: getting
+  `tankerMaxHaulCells` (200) for fuel against 40 for other goods, and a tanker neither
+  waits for nor uses the danfos' road budget (it still congests the road): waiting, 350 t
+  of fuel sat at the tank farm behind a busy dirt trunk; counted against the budget, the
+  long slow hauls crowded danfos off and cut trips made by 27%. Crude is never trucked: getting
   it to the refinery is yours. Fuel waiting at a yard is lost over `fuelLossSeconds` (about
   a week), not produce's two days. Tank farms and refineries charge the loading levy.
 - **`fuelSupply(world, town)`** — fuel delivered (yours and tankers') over need, and the
   share from each source: the town card's Fuel line. `restoreRefinery` (`ActionSpec`
   `restoreRefinery`) costs `refineryRestoreCost`.
-- Measured (map 543, 40 days): with no player, towns by the tank farm 66–82% supplied,
-  remote and cut-off ones 0; three lorries on the 58-cell crude leg feed the refinery 37 t
-  a day and lose ₦297 a day, one freight train feeds it 161 t and nets +₦694; with a road
-  out of the refinery, supply across the region (by people) rises from 35% to 46%.
+- **What a shortage does** (step 1b). A town's shortage is `1 − fuel supplied`, rolling,
+  recomputed each tick (`updateFuelShortage`, after goods outcomes); a cut-off town counts
+  none. At a total shortage: its danfo fares rise `fuelFarePremium` (50%), which feeds the
+  price-response rule riders already have (`sendInformal`: priced out, they stay home); the
+  informal road budget on roads into it shrinks by `fuelParked` (35% parked); riders there
+  wait up to `1 + fuelPatience` (2×) as long for your vehicles; and your vehicles pay
+  `fuelCostPremium` (30%) more to run, by the mean shortage of the towns their route stops
+  at (`chargeFuelPremium`; `budget.fuel`, its own budget line, "Fuel above the pump
+  price", and in each route's net). The map shows jerrycan sellers beside a town at a
+  shortage of 35% or more; the town card lists the effects.
+- Measured (map 543, 40 days): with no player 90% of people supplied, cut-off towns none;
+  three lorries on the 58-cell crude leg feed the refinery 37 t a day and lose ₦297 a day,
+  one freight train feeds it 161 t and nets +₦694 (the refinery needs a road out). A
+  played run (map 543) replayed with fuel on: net −15% and trips −17% by day 30, against
+  −37% before imports went to 1.0 and the effects were softened.

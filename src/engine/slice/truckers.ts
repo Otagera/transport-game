@@ -100,6 +100,10 @@ export function dispatchTrucks(world: SliceWorld, takings: Takings, fits: (segme
       takings.touts += levy * tuning.agberoCut;
     }
     simulation.vehicles.push(vehicle);
+    // A tanker shares the road (its traffic congests it), not the danfos'
+    // share of it: counted against their budget, the fuel's long slow hauls
+    // crowded danfos off the roads and cut trips made by a quarter.
+    if (tanker) continue;
     informal.active.set(id, { segmentIds: path.segmentIds, weight: tuning.lorryRoadSpace, mode: "truck", released: 0 });
     for (const segmentId of path.segmentIds) informal.segmentSpace.set(segmentId, (informal.segmentSpace.get(segmentId) ?? 0) + tuning.lorryRoadSpace);
   }

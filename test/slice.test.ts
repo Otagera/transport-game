@@ -18,7 +18,7 @@ import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed } from "@engine/slice/industries";
 import { lineSlots, onRoadCost, stationTowns, trackCost } from "@engine/slice/rail";
 import { haulShare, truckersPickUp } from "@engine/slice/truckers";
-import { cargoName, fuelFlows, refineryOutput } from "@engine/slice/fuel";
+import { cargoName, chargeFuelPremium, fuelFlows, refineryOutput } from "@engine/slice/fuel";
 import { flowKey } from "@engine/slice/goods";
 import { restoreRoad, retireRoad } from "@engine/slice/retire";
 import { isYourRoad } from "@engine/slice/upkeep";
@@ -2929,7 +2929,7 @@ describe("Revision 3, step 1: the fuel chain (fuel.ts)", () => {
     expect(startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 }).towns.get("fuel-source")!.industry).toBe("terminal");
   });
 
-  test("the refinery makes nothing until it's restored and crude reaches it; then fuel flows from it to every town", () => {
+  test("the refinery makes nothing until it's restored and crude reaches it; then its fuel fills what imports don't", () => {
     const w = game();
     const fuel = w.fuel!;
     const crudeKey = flowKey({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies" });
@@ -2940,8 +2940,17 @@ describe("Revision 3, step 1: the fuel chain (fuel.ts)", () => {
     expect(refineryOutput(w)).toBe(0); // restored, but no crude yet
     w.goods.outcomes.set(crudeKey, { delivered: 0.5 * fuel.baseDemand, spoiled: 0 });
     expect(refineryOutput(w)).toBeCloseTo(0.5 * fuel.baseDemand, 9);
+    // Imports go first: while they cover every town, the refinery's fuel isn't sent across the map.
+    expect(fuelFlows(w).some((f) => f.from === fuel.refineryId)).toBe(false);
+    // Once imports fall short, and a road leaves it, its fuel goes to towns, never more than it makes.
+    w.tuning = { ...w.tuning, fuelImportShare: 0.5 };
+    expect(fuelFlows(w).some((f) => f.from === fuel.refineryId)).toBe(false); // no road out yet
+    const r = w.towns.get(fuel.refineryId)!;
+    const near = [...w.basePopulation.keys()].map((id) => w.towns.get(id)!).sort((p, q) => Math.hypot(p.x - r.x, p.y - r.y) - Math.hypot(q.x - r.x, q.y - r.y))[0]!;
+    expect(applyAction(w, { kind: "road", a: fuel.refineryId, b: near.id, alignment: "cheapest" }).ok).toBe(true);
     const refined = fuelFlows(w).filter((f) => f.from === fuel.refineryId);
-    expect(refined.length).toBe([...w.towns.values()].filter((t) => !t.industry).length);
+    expect(refined.length).toBeGreaterThan(0);
+    expect(refined.reduce((sum, f) => sum + f.rate, 0)).toBeLessThanOrEqual(refineryOutput(w) + 1e-12);
     // Never more than its capacity, however much crude arrives.
     w.goods.outcomes.set(crudeKey, { delivered: 10 * fuel.baseDemand, spoiled: 0 });
     expect(refineryOutput(w)).toBeCloseTo(w.tuning.refineryShare * fuel.baseDemand, 9);
@@ -2960,5 +2969,33 @@ describe("Revision 3, step 1: the fuel chain (fuel.ts)", () => {
     for (let i = 0; i < 300; i += 1) truckersPickUp(w, SIM_DT);
     expect(w.goods.yards.get(fuel.sourceId)!.get(`${fuel.refineryId}|supplies`)).toBe(500);
     expect(w.goods.yards.get(fuel.depotId)!.get(`${w.port}|supplies`)!).toBeLessThan(500);
+  });
+});
+
+describe("Revision 3, step 1b: what a fuel shortage does (fuel.ts)", () => {
+  const game = () => startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+
+  test("a short town parks danfos: less of the road into it is theirs", () => {
+    const w = game();
+    const town = [...w.towns.values()].find((t) => !t.industry && !isCutOff(w, t.id))!;
+    const road = w.simulation.map.segments.find((s) => s.type === "road" && (s.fromNodeId === town.id || s.toNodeId === town.id))!;
+    w.fuel!.shortage.clear();
+    const full = informalBudget(w, road.id);
+    w.fuel!.shortage.set(town.id, 1);
+    expect(informalBudget(w, road.id)).toBeCloseTo(full * (1 - w.tuning.fuelParked), 9);
+  });
+
+  test("your vehicles pay above the pump price on routes through short towns, and nothing where fuel is plentiful", () => {
+    const w = game();
+    w.economy.funds = 1e6;
+    const [a, b] = [...w.towns.values()].filter((t) => !t.industry && !isCutOff(w, t.id)).sort((p, q) => q.population - p.population);
+    expect(addBus(w, a!.id, b!.id).ok).toBe(true);
+    const routeOf = new Map(w.routes.flatMap((route) => route.vehicleIds.map((id) => [id, route.id] as [string, string])));
+    w.fuel!.shortage.clear();
+    expect(chargeFuelPremium(w, 1, routeOf).total).toBe(0);
+    w.fuel!.shortage.set(a!.id, 1);
+    w.fuel!.shortage.set(b!.id, 1);
+    const cost = w.economy.vehicleEconomics.get(w.routes[0]!.vehicleIds[0]!)!.operatingCostPerSecond;
+    expect(chargeFuelPremium(w, 1, routeOf).total).toBeCloseTo(cost * w.tuning.fuelCostPremium, 6);
   });
 });

@@ -441,21 +441,35 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // port imports fuel, an idle refinery waits to be restored, and crude
   // comes from an oilfield (south-south) or a pipeline terminal. A town
   // burns a tonne a day per thousand people: on a ~600k map, ~600 t a day,
-  // the volumes freight rail is for. Imports cover 40% of the need at the
-  // start (see below), so the towns far from the tank farm run short until the refinery
-  // runs; it can make 90%, from crude delivered to it. First guesses: to
+  // the volumes freight rail is for. Imports cover day 1's need (see
+  // below), less what's lost on the long hauls, so the towns far from the
+  // tank farm run short until the refinery runs; it can make 90%, from
+  // crude delivered to it, and fills what imports don't. First guesses: to
   // be measured (C11, goods 20-40% of income by day 100). Imports 0.4 ->
-  // 0.7 at once: at 0.4 every town was short from day 1, an early tax like
-  // wear's; scarcity should bite the far towns first, as it does here.
+  // 0.7 -> 1.0 of day 1's need: replaying a played run, shortages from day 1
+  // cost 37% of net by day 30, the early tax we've removed twice (wear,
+  // savings). At 1.0 the towns tankers reach start supplied; as your service
+  // grows them they burn more than the imports bring, so scarcity builds
+  // with success, like a jam, and the refinery becomes the mid-game project.
   fuelEnabled: true,
   fuelPerThousandPerDay: 1,
-  fuelImportShare: 0.7,
+  fuelImportShare: 1,
   refineryShare: 0.9,
   crudeShare: 1,
   refineryRestoreCost: 60000,
   // About a week, against produce's two days: at two days the port city got
   // half its fuel with the tank farm next door.
   fuelLossSeconds: 180,
+  // What a shortage does (fuel.ts, step 1b), at a total shortage: danfo
+  // fares up 60% (in a scarcity fares here roughly double), half the danfos
+  // parked, riders waiting twice as long for your vehicles, your running
+  // costs up 30% (less than the danfos': the state buys fuel in bulk).
+  // 0.6 / 0.5 -> 0.5 / 0.35: replayed to day 30, the shortages distance alone
+  // makes cost 20% of trips before you could do anything about them.
+  fuelFarePremium: 0.5,
+  fuelParked: 0.35,
+  fuelPatience: 1,
+  fuelCostPremium: 0.3,
 
   // Rail's own job (brief, Revision 2). A line carries `trackSlots` trains,
   // passenger and freight together: a freight train takes a passenger one's
@@ -472,8 +486,10 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   truckerPickupSeconds: 15,
   truckerMaxHaulCells: 40,
   // Fuel goes by road tanker, and far: nearly all of it does here (fuel.ts).
-  // At truckers' 40 cells, only the towns by the tank farm got any fuel.
-  tankerMaxHaulCells: 90,
+  // At truckers' 40 cells, only the towns by the tank farm got any fuel; at
+  // 90, a map with its port in a corner (6517) left its far third dry for
+  // good. At 200 the far towns get less, never none.
+  tankerMaxHaulCells: 200,
   truckLoad: 20,
   truckSpeed: 2.2,
   truckerFareShare: 0.8,

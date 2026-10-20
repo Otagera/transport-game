@@ -56,7 +56,7 @@ import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
-import { cargoName, fuelSupply, isFuelSite, refineryOutput } from "@engine/slice/fuel";
+import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { isYourRoad } from "@engine/slice/upkeep";
 import { goneAt, restoreCost as restoreRoadCost } from "@engine/slice/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/slice/problems";
@@ -1261,7 +1261,13 @@ function fuelText(townId: string): string {
     : supply.supplied < 0.6
       ? world.fuel.restored ? " Short: carry fuel to it, or get more crude to the refinery." : " Short: the tankers barely reach it. A working refinery would make up the rest."
       : "";
-  return `<p class="townshare"><b>Fuel:</b> ${pct(supply.supplied)} supplied (${sources}).${why}</p>`;
+  // What the shortage is doing here (fuel.ts, step 1b).
+  const short = shortageAt(world, townId);
+  const t = world.tuning;
+  const effects = short >= 0.1
+    ? ` Danfo fares here +${pct(t.fuelFarePremium * short)}, ${pct(t.fuelParked * short)} of their road space parked; your vehicles pay +${pct(t.fuelCostPremium * short)} to run here, and riders wait longer for you.${short >= 0.35 ? " Roadside sellers sell fuel at a premium." : ""}`
+    : "";
+  return `<p class="townshare"><b>Fuel:</b> ${pct(supply.supplied)} supplied (${sources}).${why}${effects}</p>`;
 }
 
 function renderTown(townId: string): void {
@@ -1542,6 +1548,7 @@ function budgetHtml(): string {
     ...(world.tuning.truckersEnabled && world.tuning.goodsEnabled ? [[`Loading levies <span class="muted">(touts kept ${naira(b.touts)})</span>`, b.loading] as [string, number]] : []),
     ["State allocation", b.allocation],
     ["Running costs", -b.running],
+    ...(world.fuel && world.tuning.fuelEnabled ? [["Fuel above the pump price", -b.fuel] as [string, number]] : []),
     ["Road upkeep", -b.upkeep],
     ...(world.lanes.length > 0 ? [["Lane enforcement", -b.enforcement] as [string, number]] : []),
   ];

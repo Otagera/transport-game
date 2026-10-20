@@ -45,6 +45,8 @@ export interface BudgetTally {
   allocation: number;
   /** Your vehicles' running costs, rough roads included. */
   running: number;
+  /** Fuel above the pump price where towns are short (fuel.ts): part of running, kept apart to be shown. */
+  fuel: number;
   /** Road upkeep: routine on the roads you built or paved, plus wear repairs when wear is on. */
   upkeep: number;
   /** Wardens keeping your bus lanes clear (pushback.ts, strict enforcement). */
@@ -61,7 +63,7 @@ export interface BudgetTally {
 }
 
 export function createBudgetTally(): BudgetTally {
-  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, upkeep: 0, enforcement: 0, settlements: 0, struck: 0, remitted: 0, loading: 0, touts: 0 };
+  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, fuel: 0, upkeep: 0, enforcement: 0, settlements: 0, struck: 0, remitted: 0, loading: 0, touts: 0 };
 }
 
 /** The current remittance period: when it ends, and its net so far (income minus running costs). */

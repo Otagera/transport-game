@@ -10,7 +10,7 @@ import { NO_SEAT_MIN_PER_DAY, corridorNoSeat } from "@engine/slice/problems";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
-import { refineryOutput } from "@engine/slice/fuel";
+import { refineryOutput, shortageAt } from "@engine/slice/fuel";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -909,6 +909,23 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
     ctx.textAlign = "left";
     ctx.fillText(trend.trim(), p.x - 5 + w / 2 + 3, p.y + ringR + 29);
     ctx.textAlign = "center";
+  }
+  // Short of fuel (fuel.ts): roadside sellers with jerrycans beside the town, more the worse it is.
+  const short = shortageAt(world, town.id);
+  if (short >= 0.35) {
+    const cans = short >= 0.75 ? 3 : short >= 0.55 ? 2 : 1;
+    for (let i = 0; i < cans; i += 1) {
+      const x = p.x - ringR - 14 - i * 8;
+      const y = p.y + 4 - (i % 2) * 6;
+      ctx.fillStyle = "#e0901c";
+      ctx.strokeStyle = "#7a4a0c";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(x - 3, y - 4, 6, 8, 1.5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillRect(x - 1, y - 6, 2, 2); // the spout
+    }
   }
   // A milestone just passed (score.ts): a green tag above the town for a few days.
   const milestone = freshMilestone(world, town.id);

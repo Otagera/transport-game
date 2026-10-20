@@ -388,6 +388,15 @@ export interface SliceTuning {
   refineryRestoreCost: number;
   /** Fuel and crude waiting at a yard are lost far slower than produce spoils (seconds, the time constant). */
   fuelLossSeconds: number;
+  /**
+   * What a shortage does (fuel.ts, step 1b), each at a total shortage: danfo fares rise by this
+   * share; this share of the danfos' road space on roads into the town is parked; riders wait this
+   * much longer for your vehicles (1: twice as long); your vehicles pay this much more to run.
+   */
+  fuelFarePremium: number;
+  fuelParked: number;
+  fuelPatience: number;
+  fuelCostPremium: number;
   /** Private truckers (truckers.ts, brief Revision 2): on, how fast they take waiting goods, the longest haul they take, their trucks, their cut of the fare, the loading levy. */
   truckersEnabled: boolean;
   truckerPickupSeconds: number;
