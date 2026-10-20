@@ -239,6 +239,39 @@
       #lab-toolbar kbd { font: 10px var(--font-mono); opacity: 0.6; margin-left: 4px; }
       #stage[data-headline="bar"] #lab-toolbar { left: auto; right: calc(var(--map-right) + 8px); transform: none; }
 
+      /* The Treasury (brief, Revision 3, Money, 5): inline in the routes panel, its own left wing, a drawer, or a pop from the strip. */
+      #stage:not([data-treasury="inline"]) .inline-budget { display: none; }
+      #wing-treasury { left: 16px; --side: -1; transform-origin: left center; display: none; }
+      #stage[data-treasury="wing"] #wing-treasury { display: block; }
+      #stage[data-treasury="wing"] { --map-left: calc(var(--wing-w) + 32px); }
+      #stage[data-treasury="wing"][data-dock="tucked"] { --map-left: 64px; }
+      #stage[data-treasury="wing"][data-layout="wings"] #wing-left { top: 50%; }
+      #stage[data-treasury="wing"][data-layout="wings"] #wing-treasury { bottom: 50%; }
+      #wing-treasury .spine { right: 0; border-left: 1px solid var(--line); transform: rotate(180deg); }
+      #treasury-drawer {
+        display: none; position: absolute; left: 50%; bottom: 64px; width: min(1180px, calc(100% - 48px)); transform: translateX(-50%);
+        box-sizing: border-box; z-index: 4; overflow: hidden; max-height: 34px; transition: max-height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s;
+      }
+      #stage[data-treasury="drawer"] #treasury-drawer { display: block; }
+      #treasury-drawer:hover, #treasury-drawer:focus-within { max-height: 420px; transition-delay: 0s; }
+      #treasury-drawer .tab { height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 14px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+      #treasury-drawer .drawer-body { padding: 4px 16px 14px; border-top: 1px solid var(--line); }
+      #stage[data-treasury="drawer"] #lab-hint { display: none; }
+      .budget-stat { position: relative; }
+      #treasury-pop { display: none; position: absolute; top: calc(100% + 10px); left: -12px; width: 360px; max-height: 70vh; overflow-y: auto; padding: 14px 16px; z-index: 6; text-align: left; }
+      #stage[data-treasury="pop"] .budget-stat { cursor: pointer; }
+      #stage[data-treasury="pop"] .budget-stat:hover #treasury-pop, #stage[data-treasury="pop"] .budget-stat:focus-within #treasury-pop { display: block; }
+      .tgrid { display: grid; gap: 10px 18px; }
+      .tgrid.cols { grid-template-columns: 1.15fr 1fr 1.1fr 1.25fr; }
+      .tcol h3 { margin: 6px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+      #treasury-pop h2, #treasury-drawer h2, #wing-treasury h2 { margin: 0 0 2px; font-size: 14px; font-family: var(--font-display); font-weight: var(--title-weight); }
+      #treasury-pop .hint, #treasury-drawer .hint { margin: 2px 0 6px; color: var(--muted); font-size: 12px; }
+      .chain { margin: 0 0 6px; font-size: 12px; padding-left: 8px; border-left: 3px solid var(--line); }
+      .chain.bad { border-color: var(--bad); }
+      .chain.warn { border-color: var(--informal); }
+      .chain.good { border-color: var(--good, #2e8b57); }
+      #treasury-drawer .tab .chain { margin: 0; }
+
       #lab-hint { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; font-size: 11px; color: var(--muted); white-space: nowrap; }
       #stage[data-hint="off"] #lab-hint { display: none; }
     </style>
@@ -256,6 +289,11 @@
         <div class="spine"></div>
         <div class="wing-body"></div>
       </section>
+      <section class="wing panel" id="wing-treasury" tabindex="0" aria-label="Treasury">
+        <div class="spine"></div>
+        <div class="wing-body"></div>
+      </section>
+      <section id="treasury-drawer" class="panel" tabindex="0" aria-label="Treasury"></section>
       <div id="lab-key" class="panel">
         <b style="background: var(--you)"></b>you <b style="background: var(--informal)"></b>informal <b style="background: var(--home)"></b>stayed home<br />
         Town: ring = where people went · Road: dashed = dirt, solid = paved

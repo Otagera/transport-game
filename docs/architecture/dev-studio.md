@@ -113,7 +113,8 @@ A mock of the slice's screen where every look is a token, for picking the step 8
 ([brief.md](../brief.md), Information design) by trying it. `design-lab.html` holds the
 CSS; `src/design-lab/main.ts` holds the option groups (theme, your colour, panel
 material, panel pose and tilt angle, docking, one panel or two wings, headline, town
-panel, route rows, type, corners, terrain, map plate, control hint) and the presets
+panel, route rows, type, corners, terrain, map plate, the Treasury -- inline, its own left
+wing, a drawer above the toolbar, or a drop from the strip's budget -- and control hint) and the presets
 (today's slice, the brief's step 8, the video-inspired daylight and night looks).
 
 - **Tokens compose.** An option is a set of CSS custom properties set on `#stage`, or a

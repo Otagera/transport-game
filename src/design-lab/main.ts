@@ -236,6 +236,17 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: "treasury",
+    label: "Treasury",
+    why: "Playtest, map 2791, day 209: 'the economy/treasury panel is needed now... that side panel has outgrown its use' (brief, Revision 3, Money, 5).",
+    options: [
+      { id: "inline", label: "Inside the routes panel", note: "Today's: the budget under your routes" },
+      { id: "wing", label: "Its own wing, docked left", note: "Tilts and tucks like the others; pairs with One panel" },
+      { id: "drawer", label: "A drawer above the toolbar", note: "A one-line tab; out on hover, four columns" },
+      { id: "pop", label: "Drops from Budget in the strip", note: "Hover or click the budget figure" },
+    ],
+  },
+  {
     id: "hint",
     label: "Control hint",
     why: "Brief, hints: find the controls without a tutorial.",
@@ -683,11 +694,59 @@ function routesPanel(): string {
   return `<h2>Your routes</h2>
     <p class="hint">Worst first. Net over the last 5 days.</p>
     ${rows}
-    <h2 class="section">Budget, 5-day average</h2>
-    <div class="budget">${budget.map(([label, n]) => `<span>${label}</span><span class="num ${n < 0 ? "neg" : ""}">${signedNaira(n)}</span>`).join("")}
+    <h2 class="section inline-budget">Budget, 5-day average</h2>
+    <div class="budget inline-budget">${budget.map(([label, n]) => `<span>${label}</span><span class="num ${n < 0 ? "neg" : ""}">${signedNaira(n)}</span>`).join("")}
       <span class="total">Net</span><span class="total num ${total < 0 ? "neg" : "pos"}">${signedNaira(total)}/day</span>
     </div>
     <p class="hint" style="margin-top:8px">Routes net ${signedNaira(net)}; tolls, levies and the allocation make up the rest.</p>`;
+}
+
+// The Treasury (brief, Revision 3, Money, 5): every line of money, what the
+// treasury and the bonds take, what you're saving for, and each chain in a
+// line. Numbers from the map 2791 playtest at day 209, under the new rules
+// (the levy, a refinery bond): a late game, where the side panel outgrew it.
+const TREASURY = {
+  // Goods at ₦0.25 a tonne a cell: 2.5x the run's ₦1,748.
+  income: [["Fares", 8440], ["Goods", 4370], ["Tolls", 1180], ["Park levies (agberos kept ₦180)", 180], ["Loading levies", 25], ["State allocation", 1350]] as Array<[string, number]>,
+  spending: [["Running costs", -9035], ["Fuel above the pump price", -1531], ["Road upkeep", -2207]] as Array<[string, number]>,
+  /** 10% of everything earned but the allocation. */
+  levy: -0.1 * (8440 + 4370 + 1180 + 180 + 25),
+  bonds: [{ label: "Restoring Igbo-Ukwu Refinery", left: 48000, perDay: 1200, days: 40 }],
+  saving: { label: "Rail, Abiriba – Ozubulu", held: 31000, price: 112000 },
+  chains: [
+    { name: "Fuel", state: "bad", line: "Agulu 6%, Ozubulu 5%, Igbo-Ukwu 14% supplied: ₦1,531/day above the pump price" },
+    { name: "Cement", state: "warn", line: "Works at 121 of 121 t/day; Abiriba holds 24k people of growth back" },
+    { name: "Workers", state: "good", line: "Every working site fully staffed" },
+  ],
+};
+
+/** What you keep a day, after spending, the levy and the bonds. */
+function treasuryKept(): number {
+  const t = TREASURY;
+  return t.income.reduce((sum, [, n]) => sum + n, 0) + t.spending.reduce((sum, [, n]) => sum + n, 0) + t.levy - t.bonds.reduce((sum, bond) => sum + bond.perDay, 0);
+}
+
+function treasuryHtml(columns: boolean): string {
+  const row = ([label, n]: [string, number]) => `<span>${label}</span><span class="num ${n < 0 ? "neg" : ""}">${signedNaira(n)}</span>`;
+  const t = TREASURY;
+  const earned = t.income.reduce((sum, [, n]) => sum + n, 0);
+  const spent = t.spending.reduce((sum, [, n]) => sum + n, 0);
+  const bonds = t.bonds.reduce((sum, bond) => sum - bond.perDay, 0);
+  const kept = earned + spent + t.levy + bonds;
+  const income = `<div class="tcol"><h3>Income, a day</h3><div class="budget">${t.income.map(row).join("")}<span class="total">In</span><span class="total num">${signedNaira(earned)}</span></div></div>`;
+  const spending = `<div class="tcol"><h3>Spending, a day</h3><div class="budget">${t.spending.map(row).join("")}<span class="total">Out</span><span class="total num neg">${signedNaira(spent)}</span></div></div>`;
+  const treasury = `<div class="tcol"><h3>Treasury and bonds</h3><div class="budget">${row(["Levy, 10% of earnings", t.levy])}${row(["Bond repayments", bonds])}<span class="total">You keep</span><span class="total num ${kept < 0 ? "neg" : "pos"}">${signedNaira(kept)}/day</span></div>
+    ${t.bonds.map((bond) => `<p class="hint">${bond.label}: ${naira(bond.left)} left, ${naira(bond.perDay)}/day for ${bond.days} more days</p>`).join("")}
+    <p class="hint">Saving for ${t.saving.label}: ${naira(t.saving.held)} of ${naira(t.saving.price)}</p><div class="tripbar"><i style="width:${pct(t.saving.held / t.saving.price)};background:var(--you)"></i></div></div>`;
+  const chains = `<div class="tcol"><h3>Chains</h3>${t.chains.map((chain) => `<p class="chain ${chain.state}"><b>${chain.name}</b> ${chain.line}</p>`).join("")}</div>`;
+  return `<h2>Treasury</h2><p class="hint">Day 209, 5-day average. Where the money comes from and goes, and what each chain is costing you.</p>
+    <div class="tgrid ${columns ? "cols" : ""}">${income}${spending}${treasury}${chains}</div>`;
+}
+
+/** The drawer's closed tab, and the strip pop's anchor: the money in one line. */
+function treasuryTab(): string {
+  const kept = treasuryKept();
+  return `<span class="label">Treasury</span> <span class="num ${kept < 0 ? "neg" : "pos"}">${signedNaira(kept)}/day kept</span> · levy <span class="num neg">${signedNaira(TREASURY.levy)}</span> · bonds <span class="num neg">${signedNaira(-TREASURY.bonds.reduce((sum, bond) => sum + bond.perDay, 0))}</span> · <span class="chain bad"><b>Fuel</b> short in 3 towns</span>`;
 }
 
 function strip(): string {
@@ -695,7 +754,7 @@ function strip(): string {
   const total = made + headline.noRoad + headline.noSeat;
   return `
     <div class="stat"><span class="label">Day</span><span class="v num">23</span></div>
-    <div class="stat"><span class="label h-bar">Funds</span><span class="label h-chips">Budget</span><span class="v num">₦4,180</span></div>
+    <div class="stat budget-stat" tabindex="0"><span class="label h-bar">Funds</span><span class="label h-chips">Budget</span><span class="v num">₦4,180</span><div id="treasury-pop" class="panel">${treasuryHtml(false)}</div></div>
     <div class="stat h-bar"><span class="label">Net, last day</span><span class="v num good">₦96</span></div>
     <div class="stat h-chips"><span class="label">Net, 5-day average</span><span class="v num good">+₦142</span></div>
     <div class="share h-bar">
@@ -816,6 +875,8 @@ const map = document.querySelector<SVGSVGElement>("#lab-map")!;
 const stripEl = document.querySelector<HTMLElement>("#lab-strip")!;
 const leftWing = document.querySelector<HTMLElement>("#wing-left")!;
 const rightWing = document.querySelector<HTMLElement>("#wing-right")!;
+const treasuryWing = document.querySelector<HTMLElement>("#wing-treasury")!;
+const treasuryDrawer = document.querySelector<HTMLElement>("#treasury-drawer")!;
 const dialog = document.querySelector<HTMLDialogElement>("#export")!;
 
 const state = loadState();
@@ -841,6 +902,9 @@ function renderStage(): void {
   rightWing.querySelector(".spine")!.innerHTML =
     !wings && hoverTown ? `<span class="label">${name(hoverTown)}</span>` : `<span class="label">Your routes</span><span class="num">${signedNaira(net)}</span>`;
   leftWing.querySelector(".spine")!.innerHTML = `<span class="label">${name(townId)}</span><span class="num">${towns.get(townId)!.population}k</span>`;
+  treasuryWing.querySelector(".wing-body")!.innerHTML = treasuryHtml(false);
+  treasuryWing.querySelector(".spine")!.innerHTML = `<span class="label">Treasury</span><span class="num">${signedNaira(treasuryKept())}/day</span>`;
+  treasuryDrawer.innerHTML = `<div class="tab">${treasuryTab()}</div><div class="drawer-body">${treasuryHtml(true)}</div>`;
   // A town hovered on the map brings its panel out, even when tucked.
   (wings ? leftWing : rightWing).classList.toggle("out", hoverTown !== null);
   (wings ? rightWing : leftWing).classList.remove("out");
