@@ -104,6 +104,26 @@ export function remit(world: SliceWorld, netThisTick: number): number | null {
 }
 
 /**
+ * The treasury's levy (brief, Revision 3, money, from the step 2 playtest):
+ * a steady share of what you earn -- fares, goods, tolls, park and loading
+ * levies; not the state's own allocation -- taken as you earn it, in place
+ * of the remittance's 80% of the surplus. The remittance took nearly every
+ * naira above the reserve, so a project bigger than a period's surplus
+ * could never be saved for (map 2791: ₦31,861 the most held, the refinery
+ * ₦60,000). A share of income still holds the snowball (M10) -- it grows
+ * with the network -- and it's on every naira, so it's read, not suffered.
+ * Returns what it took this tick.
+ */
+export function treasuryLevy(world: SliceWorld, earned: number): number {
+  const { tuning } = world;
+  if (!tuning.levyEnabled || earned <= 0) return 0;
+  const taken = tuning.levyShare * earned;
+  world.economy.funds -= taken;
+  world.budget.remitted += taken;
+  return taken;
+}
+
+/**
  * What the treasury would take if the period ended now: its share of the
  * funds above the reserve, never more than the period's net so far, and
  * never money held toward a named project (project.ts). The countdown in

@@ -83,6 +83,10 @@ From your two games and the day-136 run file (principles §6):
 - **Step 2a built** (the building chain, `cement.ts`): limestone quarries → a cement works
   (working or idle by the map's seed) → towns; cement holds a town's growth back past +40% of
   its start.
+- **Money, from the step 2 playtest** (brief, Revision 3, Money): goods pay ₦0.25 a tonne a
+  cell; the lorry tool's preview says what another lorry would carry and earn; the treasury
+  takes a 10% levy on earnings instead of 80% of the surplus (named projects no longer lapse).
+  Next: bonds, then the Treasury panel (design-lab variants first).
 - **Steps 2b–2c built** (`workers.ts`): sites employ people who commute from nearby towns; a
   site makes less when they can't get there; jobs give nearby towns room to grow, and a
   long-working refinery or works grows a camp at its gate. Next: your playtest of step 2 on a

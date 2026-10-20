@@ -76,6 +76,14 @@ export function updateProject(world: SliceWorld): SliceEvent[] {
     return [{ kind: "project-done", a: project.a, b: project.b, rung: project.rung }];
   }
   const now = world.economy.elapsedSeconds;
+  // Under the levy there's no remittance to shelter from, so nothing to
+  // lapse (budget.ts treasuryLevy): a named project is what you're saving
+  // for, and a bond's purpose.
+  if (!world.tuning.remittanceEnabled) {
+    if (project.affordableAt !== null || heldForProject(world) < project.price) return [];
+    project.affordableAt = now;
+    return [{ kind: "project-affordable", a: project.a, b: project.b, rung: project.rung, lapsesAt: Infinity }];
+  }
   if (project.affordableAt === null) {
     if (heldForProject(world) < project.price) return [];
     project.affordableAt = now;

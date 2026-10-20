@@ -15,7 +15,7 @@ import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
 import { goodsFares, legFare, passengerFares } from "./fares";
-import { allocationPerDay, remit, tollFor, type Takings } from "./budget";
+import { allocationPerDay, remit, tollFor, treasuryLevy, type Takings } from "./budget";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
@@ -314,6 +314,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // The treasury's share of a surplus, once a period (budget.ts). After the
   // ledger: a remittance is neither income nor running cost.
   const remitted = remit(world, revenueThisTick - runningCost);
+  // Or its levy, on what you earned this tick (budget.ts): the state's own allocation isn't taxed.
+  treasuryLevy(world, revenueThisTick - allocation);
 
   // Rolling rates, each updated exactly once per tick (architecture hard
   // rule 7).

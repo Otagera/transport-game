@@ -463,7 +463,9 @@ function announce(event: SliceEvent): void {
   } else if (event.kind === "project-done") {
     say(`Your project is built: the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}. The treasury goes back to its usual share.`, false, 6);
   } else if (event.kind === "project-affordable") {
-    say(`You can afford the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}: build it by day ${gameDay(world, event.lapsesAt)}, or the savings lapse to the treasury.`, false, 9);
+    say(Number.isFinite(event.lapsesAt)
+      ? `You can afford the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}: build it by day ${gameDay(world, event.lapsesAt)}, or the savings lapse to the treasury.`
+      : `You can afford the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor} now.`, false, 9);
   } else if (event.kind === "project-lapse-warning") {
     say(`Your ${event.rung === "lane" ? "bus lane" : "rail"} savings for ${corridor} lapse on day ${gameDay(world, event.lapsesAt)}: build it before then, or the treasury takes them.`, true, 9);
     pauseForStrike();
@@ -1453,7 +1455,7 @@ function saveButton(full: { next: string; road?: { a: string; b: string } }): st
   const p = world.project;
   if (p && p.a === full.road.a && p.b === full.road.b && p.rung === rung) return "";
   if (!Number.isFinite(price) || price <= world.economy.funds) return "";
-  return `<span class="actions"><button data-project="${full.road.a}|${full.road.b}|${rung}" title="The treasury leaves what you hold toward it alone for ${world.tuning.projectLapseDays} days">Save for it: ${naira(price)}</button></span>`;
+  return `<span class="actions"><button data-project="${full.road.a}|${full.road.b}|${rung}" title="${world.tuning.remittanceEnabled ? `The treasury leaves what you hold toward it alone for ${world.tuning.projectLapseDays} days` : "Name it as what you're saving for"}">Save for it: ${naira(price)}</button></span>`;
 }
 
 // The one problem here, named: no road reaches it, some of its trips have
@@ -1684,7 +1686,9 @@ function budgetHtml(): string {
   // The treasury inside the breakdown, no panel of its own (brief, After the
   // ladder's playtest, 1): what it last took, under the net (it isn't a
   // running cost), and what goes next unless you spend it or set it aside.
-  const took = t.remittanceEnabled
+  const took = t.levyEnabled
+    ? `<span class="muted">Treasury levy, ${pct(t.levyShare)} of earnings</span><span class="num ${b.remitted >= 0.5 ? "bad" : ""}">${b.remitted >= 0.5 ? signed(-b.remitted) : "₦0"}</span>`
+    : t.remittanceEnabled
     ? `<span class="muted">Treasury took${r.last ? `, day ${gameDay(world, r.last.atSeconds)}` : ""}</span><span class="num ${r.last && r.last.amount >= 1 ? "bad" : ""}">${r.last && r.last.amount >= 1 ? signed(-r.last.amount) : "₦0"}</span>`
     : "";
   const due = remittanceExpected(world, averageNet(world));
@@ -1698,7 +1702,7 @@ function budgetHtml(): string {
   const project = world.project;
   const held = project ? heldForProject(world) : 0;
   const saving = project
-    ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside, safe from the treasury${project.affordableAt === null ? ` while you save. Once you can afford it, you have ${world.tuning.projectLapseDays} days to build it` : `: you can afford it, so build it by day ${gameDay(world, projectLapsesAt(world, project))} or the savings lapse`}.
+    ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside${!world.tuning.remittanceEnabled ? `${project.affordableAt === null ? "." : ": you can afford it now."}` : `, safe from the treasury`}${!world.tuning.remittanceEnabled ? "" : project.affordableAt === null ? ` while you save. Once you can afford it, you have ${world.tuning.projectLapseDays} days to build it` : `: you can afford it, so build it by day ${gameDay(world, projectLapsesAt(world, project))} or the savings lapse`}.
         <span class="bar project-bar" title="${pct(held / project.price)} set aside"><i style="width:${pct(Math.min(1, held / project.price))};background:var(--player)"></i></span>
         <span class="actions"><button data-drop-project="1">Drop it</button></span></p>`
     : "";
@@ -1709,6 +1713,7 @@ function budgetHtml(): string {
       ${struck}
     </div>
     ${countdown}
+    ${t.levyEnabled ? `<p class="hint">The treasury takes ${pct(t.levyShare)} of what you earn, as you earn it: fares, goods, tolls and levies, not the state's allocation. What you keep, you keep.</p>` : ""}
     ${t.remittanceEnabled ? `<p class="hint">Every ${t.remittancePeriodDays} days the treasury takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus. Money set aside for a project is safe.</p>` : ""}`;
 }
 

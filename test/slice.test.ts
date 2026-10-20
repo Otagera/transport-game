@@ -77,7 +77,9 @@ function run(world: SliceWorld, seconds: number): void {
 }
 
 /** No tolls, levies or allocation: for tests about fares or costs alone. */
-const noBudget: Partial<SliceTuning> = { tollPerRoad: 0, levyPerSeat: 0, allocationBase: 0, allocationPerThousand: 0, remittanceEnabled: false };
+const noBudget: Partial<SliceTuning> = { tollPerRoad: 0, levyPerSeat: 0, allocationBase: 0, allocationPerThousand: 0, remittanceEnabled: false, levyEnabled: false };
+/** The remittance as it was (budget.ts remit), for the tests of it: the levy off. */
+const REMITTANCE: Partial<SliceTuning> = { remittanceEnabled: true, levyEnabled: false };
 
 function world(overrides: Partial<SliceTuning> = {}): SliceWorld {
   return createSliceWorld(MAP, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, ...overrides });
@@ -2021,8 +2023,20 @@ describe("slice zero step 7: the budget breakdown", () => {
     expect(b.fares).toBe(0);
   });
 
-  test("the remittance remembers what it last took, and when", () => {
+  test("the levy: the treasury takes its share of what you earn as you earn it, never the state's allocation", () => {
     const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 10_000 });
+    expect(w.tuning.levyEnabled).toBe(true);
+    expect(w.tuning.remittanceEnabled).toBe(false);
+    addBus(w, "big", "mid");
+    run(w, 3 * SECONDS_PER_GAME_DAY);
+    const b = w.budget;
+    const earned = b.fares + b.goods + b.tolls + b.levies + b.loading;
+    expect(b.remitted).toBeCloseTo(w.tuning.levyShare * earned, 3);
+    expect(b.remitted).toBeGreaterThan(0);
+  });
+
+  test("the remittance remembers what it last took, and when", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, ...REMITTANCE, maxEmergentTowns: 0, startingFunds: 10_000 });
     expect(w.remittance.last).toBeNull();
     run(w, DEFAULT_SLICE_TUNING.remittancePeriodDays * SECONDS_PER_GAME_DAY + 1);
     expect(w.remittance.last).not.toBeNull();
@@ -2030,7 +2044,7 @@ describe("slice zero step 7: the budget breakdown", () => {
   });
 
   test("the treasury visible: the countdown names what it takes, and its day comes as an event naming the amount", () => {
-    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 10_000 });
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, ...REMITTANCE, maxEmergentTowns: 0, startingFunds: 10_000 });
     addBus(w, "big", "mid");
     const events: Array<{ kind: string; amount?: number }> = [];
     let dueBefore = 0;
@@ -2048,7 +2062,7 @@ describe("slice zero step 7: the budget breakdown", () => {
   });
 
   test("the countdown, read mid-period, expects about what the period's end takes", () => {
-    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 10_000 });
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, ...REMITTANCE, maxEmergentTowns: 0, startingFunds: 10_000 });
     addBus(w, "big", "mid");
     // Past the first period, so the 5-day net is a settled network's.
     run(w, w.remittance.endsAtSeconds - w.economy.elapsedSeconds + 1);
@@ -2063,7 +2077,7 @@ describe("slice zero step 7: the budget breakdown", () => {
   });
 
   test("money set aside for a named project is left out of what the countdown says goes", () => {
-    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, startingFunds: 10_000 });
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, ...REMITTANCE, maxEmergentTowns: 0, startingFunds: 10_000 });
     addBus(w, "big", "mid");
     run(w, 5 * SECONDS_PER_GAME_DAY);
     const due = remittanceDue(w);
@@ -2073,7 +2087,7 @@ describe("slice zero step 7: the budget breakdown", () => {
   });
 
   test("a named project's clock starts when you can afford it, not when you name it (playtest: rail lapsed twice)", () => {
-    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, ...REMITTANCE, maxEmergentTowns: 0 });
     w.project = { a: "big", b: "mid", rung: "lane", price: 50_000, namedAt: w.economy.elapsedSeconds, affordableAt: null, warned: false };
     // Saving for longer than the lapse time: still yours, nothing taken.
     w.economy.funds = 20_000;

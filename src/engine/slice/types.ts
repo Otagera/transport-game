@@ -144,6 +144,9 @@ export interface SliceTuning {
   allocationBase: number;
   allocationPerThousand: number;
   /** The treasury remittance (budget.ts): on, the share taken, the reserve kept, and the period. */
+  /** The treasury's levy (budget.ts treasuryLevy): on, and its share of what you earn, taken as you earn it. */
+  levyEnabled: boolean;
+  levyShare: number;
   remittanceEnabled: boolean;
   remittanceShare: number;
   remittanceReserve: number;

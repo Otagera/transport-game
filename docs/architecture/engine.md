@@ -774,6 +774,13 @@ ledger. `world.startPopulation` is set at day 1 (`start.ts`), which also resets 
 ledger: levies and allocation flow during the warm-up and aren't yours. Not yet built: riders
 waiting for your cheaper vehicle waiting longer before giving up.
 
+The **treasury levy** (`budget.ts` `treasuryLevy`, Revision 3, money; the default since
+2026-10-20): every tick the state takes `levyShare` (0.1) of what you earned that tick --
+fares, goods, tolls, park and loading levies, not its own allocation -- into
+`budget.remitted`. With it on, a named project never lapses (`project.ts`): there's no
+remittance to shelter from. The remittance below stays behind `remittanceEnabled` (off) for
+runs played with it; a run file's recorded tuning brings it back on replay.
+
 The **treasury remittance** (`budget.ts` `remit`, step 6 pass 2): `world.remittance` is the
 current period (`remittancePeriodDays`, 10) and its net -- income minus running costs, so
 purchases are never a deficit. At the period's end the state takes `remittanceShare` (0.8)

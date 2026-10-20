@@ -69,7 +69,16 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // Treasury remittance (step 6 pass 2, budget.ts): every 10 game days, 80%
   // of funds above a ₦3,000 reserve, never more than the period's surplus.
   // The reserve rises when rail returns (bigger projects to save for).
-  remittanceEnabled: true,
+  // The treasury's levy (budget.ts treasuryLevy; brief, Revision 3, money):
+  // 10% of what you earn, as you earn it, in place of the remittance below.
+  // Replayed with goods at ₦0.25, the first day ₦60,000 (the refinery) is
+  // held: map 2791 day 93 (remittance: 139), 6517 day 145 (177), 543 never
+  // (never) -- a strong network can save for its next step, a weak one
+  // stays tight. At 5% 2791 held ₦406k by day 209, at 15% 6517 never got
+  // there. The remittance stays, switched off, for the runs played with it.
+  levyEnabled: true,
+  levyShare: 0.1,
+  remittanceEnabled: false,
   remittanceShare: 0.8,
   remittanceReserve: 3000,
   remittancePeriodDays: 10,
