@@ -176,11 +176,35 @@
       body:not([data-dev="true"]) #toolbar { right: auto; left: calc((100% - 300px) / 2); transform: translateX(-50%); }
       body:not([data-dev="true"]) #key { display: none; }
       /* A hint: beside the town it's about, else over the control line. */
-      #hint { position: fixed; left: calc((100% - 300px) / 2); bottom: 124px; transform: translateX(-50%); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--player); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(60, 45, 20, 0.18); font-size: 13px; line-height: 1.35; }
+      #hint { position: fixed; left: calc((100% - 300px) / 2); bottom: 160px; transform: translateX(-50%); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--player); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(60, 45, 20, 0.18); font-size: 13px; line-height: 1.35; }
       #hint.anchored { bottom: auto; transform: none; }
       #hint[hidden] { display: none; }
       #hint button { flex: none; border: 1px solid var(--line); background: none; border-radius: 6px; padding: 1px 6px; cursor: pointer; font: 11px var(--label-font); color: var(--muted); }
       #hint button:hover { color: var(--ink); border-color: var(--ink); }
+      /* The Treasury drawer (brief, Revision 3, Money, 5; the design lab's pick): a tab over the
+         control line, out on hover or focus into four columns; a click pins it open. */
+      #treasury {
+        position: fixed; left: calc((100% - 300px) / 2); bottom: 116px; transform: translateX(-50%);
+        width: min(1100px, calc(100% - 348px)); box-sizing: border-box; z-index: 5; overflow: hidden;
+        max-height: 34px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+        box-shadow: 0 6px 20px rgba(60, 45, 20, 0.12); transition: max-height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s;
+      }
+      #treasury:hover, #treasury:focus-within, #treasury.pinned { max-height: min(460px, calc(100vh - 220px)); overflow-y: auto; transition-delay: 0s; }
+      #treasury .tab { height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 14px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+      #treasury .tab .k { font: 600 10px var(--label-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      #treasury .tab .more { margin-left: auto; color: var(--muted); }
+      #treasury .drawer-body { padding: 2px 16px 14px; border-top: 1px solid var(--line); }
+      #treasury .tgrid { display: grid; grid-template-columns: 1.15fr 1fr 1.15fr 1.25fr; gap: 10px 18px; }
+      #treasury .tcol h3 { margin: 6px 0 4px; font: 600 10px var(--label-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      #treasury .budget { font-size: 12px; }
+      #treasury .callout, #treasury .hint { font-size: 12px; margin: 4px 0; color: var(--muted); }
+      #treasury .callout { color: inherit; }
+      .chain { margin: 0 0 6px; font-size: 12px; padding-left: 8px; border-left: 3px solid var(--line); }
+      .chain.bad { border-color: var(--bad); }
+      .chain.warn { border-color: var(--danfo); }
+      .chain.good { border-color: var(--good); }
+      #treasury .tab .chain { margin: 0; }
+      @media (max-width: 900px) { #treasury { left: 50%; width: calc(100% - 32px); } #treasury .tgrid { grid-template-columns: 1fr 1fr; } }
       #toast {
         position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%);
         background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 8px; font-size: 13px;
@@ -212,6 +236,7 @@
     </details>
     <div id="controls">Hover a town: where its people want to go · B bus · M minibus · X BRT (in a lane) · R road · Space pause · H hints · P pause on strikes · <span id="map-seed"></span></div>
     <div id="hint" hidden></div>
+    <section id="treasury" tabindex="0" aria-label="Treasury"></section>
     <div id="toolbar"></div>
     <div id="toast"></div>
     <script type="module" src="/src/slice/main.ts"></script>

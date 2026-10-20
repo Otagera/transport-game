@@ -119,6 +119,7 @@ const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
 const strip = document.querySelector<HTMLDivElement>("#strip")!;
 const routesEl = document.querySelector<HTMLDivElement>("#routes")!;
+const treasuryEl = document.querySelector<HTMLElement>("#treasury")!;
 const toolbar = document.querySelector<HTMLDivElement>("#toolbar")!;
 const toast = document.querySelector<HTMLDivElement>("#toast")!;
 const hintEl = document.querySelector<HTMLDivElement>("#hint")!;
@@ -1096,6 +1097,11 @@ function renderPanel(): void {
   const town = focusTown();
   if (town) renderTown(town);
   else renderRoutes();
+  renderTreasury();
+}
+
+function renderTreasury(): void {
+  treasuryEl.innerHTML = treasuryHtml();
 }
 
 function changingText(townId: string): string {
@@ -1673,10 +1679,7 @@ function laneAtTown(townId: string): LaneState | undefined {
   return undefined;
 }
 
-// The budget breakdown (docs/brief.md, Information design): each line a
-// day, over the same 5 days as the strip's net, so the lines sum to it. Then
-// the treasury, which takes its share every 10 days and isn't a running cost.
-function budgetHtml(): string {
+function budgetParts() {
   const b = averageBudget(world);
   const signed = (x: number) => `${x < 0 ? "−" : "+"}₦${Math.abs(Math.round(x)).toLocaleString()}`;
   const lines: Array<[string, number]> = [
@@ -1719,17 +1722,68 @@ function budgetHtml(): string {
         <span class="bar project-bar" title="${pct(held / project.price)} set aside"><i style="width:${pct(Math.min(1, held / project.price))};background:var(--player)"></i></span>
         <span class="actions">${bondButton("project")}<button data-drop-project="1">Drop it</button></span></p>`
     : "";
-  return `${saving}<h2 class="section">Budget, a day</h2><p class="hint">5-day average.</p>
-    <div class="budget">${lines.map(([label, x]) => `<span>${label}</span><span class="num ${x < 0 ? "bad" : ""}">${signed(x)}</span>`).join("")}
-      <span class="total">Net</span><span class="total num ${net < 0 ? "bad" : "good"}">${signed(net)}</span>
-      ${took}
-      ${b.bonds >= 0.5 ? `<span class="muted">Bond repayments</span><span class="num bad">${signed(-b.bonds)}</span>` : ""}
-      ${struck}
-    </div>
-    ${countdown}
-    ${bondsHtml(b.bonds)}
-    ${t.levyEnabled ? `<p class="hint">The treasury takes ${pct(t.levyShare)} of what you earn, as you earn it: fares, goods, tolls and levies, not the state's allocation. What you keep, you keep.</p>` : ""}
-    ${t.remittanceEnabled ? `<p class="hint">Every ${t.remittancePeriodDays} days the treasury takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus. Money set aside for a project is safe.</p>` : ""}`;
+  const costs = ["Running costs", "Fuel above the pump price", "Road upkeep", "Lane enforcement"];
+  const income = lines.filter(([label]) => !costs.includes(label));
+  const spending = lines.filter(([label]) => costs.includes(label));
+  const row = ([label, x]: [string, number]) => `<span>${label}</span><span class="num ${x < 0 ? "bad" : ""}">${signed(x)}</span>`;
+  const bondsLine = b.bonds >= 0.5 ? `<span class="muted">Bond repayments</span><span class="num bad">${signed(-b.bonds)}</span>` : "";
+  const kept = net - b.remitted - b.bonds;
+  const levyHint = t.levyEnabled ? `<p class="hint">The treasury takes ${pct(t.levyShare)} of what you earn, as you earn it: fares, goods, tolls and levies, not the state's allocation. What you keep, you keep.</p>` : "";
+  const remitHint = t.remittanceEnabled ? `<p class="hint">Every ${t.remittancePeriodDays} days the treasury takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus. Money set aside for a project is safe.</p>` : "";
+  return { b, signed, lines, income, spending, row, net, kept, took, bondsLine, struck, countdown, saving, levyHint, remitHint };
+}
+
+// The Treasury drawer (brief, Revision 3, Money, 5; the design lab pick,
+// 2026-10-20: "treasury=drawer"): a one-line tab above the toolbar, out on
+// hover into four columns -- where money comes from, where it goes, what
+// the treasury and your bonds take and what you keep, and each chain in a
+// line -- so the side panel is your routes and towns again.
+function treasuryHtml(): string {
+  const p = budgetParts();
+  const chains = chainLines();
+  const worst = chains.find((chain) => chain.state === "bad") ?? chains.find((chain) => chain.state === "warn");
+  const tab = `<div class="tab"><span class="k">Treasury</span> <span class="num ${p.kept < 0 ? "bad" : "good"}">${p.signed(p.kept)}/day kept</span>${p.b.remitted >= 0.5 ? ` · levy <span class="num bad">${p.signed(-p.b.remitted)}</span>` : ""}${p.b.bonds >= 0.5 ? ` · bonds <span class="num bad">${p.signed(-p.b.bonds)}</span>` : ""}${worst ? ` · <span class="chain ${worst.state}"><b>${worst.name}</b> ${worst.short}</span>` : ""}<span class="more">▴</span></div>`;
+  const income = p.income.reduce((sum, [, x]) => sum + x, 0);
+  const spent = p.spending.reduce((sum, [, x]) => sum + x, 0);
+  const col = (title: string, inner: string) => `<div class="tcol"><h3>${title}</h3>${inner}</div>`;
+  return `${tab}<div class="drawer-body">
+    <p class="hint">A day, 5-day average.</p>
+    <div class="tgrid">
+      ${col("Income", `<div class="budget">${p.income.map(p.row).join("")}<span class="total">In</span><span class="total num">${p.signed(income)}</span></div>`)}
+      ${col("Spending", `<div class="budget">${p.spending.map(p.row).join("")}<span class="total">Out</span><span class="total num bad">${p.signed(spent)}</span>${p.struck}</div>`)}
+      ${col("Treasury and bonds", `<div class="budget"><span class="muted">Net</span><span class="num ${p.net < 0 ? "bad" : ""}">${p.signed(p.net)}</span>${p.took}${p.bondsLine}<span class="total">You keep</span><span class="total num ${p.kept < 0 ? "bad" : "good"}">${p.signed(p.kept)}</span></div>${p.countdown}${bondsHtml(p.b.bonds)}${p.saving}${p.levyHint}${p.remitHint}`)}
+      ${col("Chains", chains.length > 0 ? chains.map((chain) => `<p class="chain ${chain.state}"><b>${chain.name}</b> ${chain.line}</p>`).join("") : `<p class="hint">No chains on this map.</p>`)}
+    </div></div>`;
+}
+
+/** Each chain in a line (fuel.ts, cement.ts, workers.ts): how it stands, and what it's costing you. */
+function chainLines(): Array<{ name: string; state: "good" | "warn" | "bad"; line: string; short: string }> {
+  const out: Array<{ name: string; state: "good" | "warn" | "bad"; line: string; short: string }> = [];
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  if (world.fuel && world.tuning.fuelEnabled && world.tuning.goodsEnabled) {
+    const towns = [...world.towns.values()].filter((town) => !town.industry && !isCutOff(world, town.id));
+    const short = towns.map((town) => ({ town, s: fuelSupply(world, town.id)?.supplied ?? 1 })).filter((x) => x.s < 0.6).sort((p, q) => p.s - q.s);
+    const premium = averageBudget(world).fuel;
+    const refinery = world.fuel.restored ? `the refinery makes ${perDay(refineryOutput(world))} t/day` : "the refinery is idle";
+    out.push(short.length === 0
+      ? { name: "Fuel", state: "good", line: `Every town supplied; ${refinery}.`, short: "supplied" }
+      : { name: "Fuel", state: short.length >= 3 ? "bad" : "warn", line: `${short.slice(0, 3).map((x) => `${x.town.name} ${pct(x.s)}`).join(", ")}${short.length > 3 ? ` and ${short.length - 3} more` : ""} supplied: ${naira(premium)}/day above the pump price; ${refinery}.`, short: `short in ${short.length} town${short.length === 1 ? "" : "s"}` });
+  }
+  if (world.cement && cementActive(world)) {
+    const held = [...world.basePopulation.keys()].map((id) => ({ id, held: townGrowth(world, id)?.cementHeld ?? 0 })).filter((x) => x.held > 1).sort((p, q) => q.held - p.held);
+    const works = world.cement.working ? `Works at ${perDay(worksOutput(world))} of ${perDay(worksCapacity(world))} t/day` : "The works is idle";
+    out.push(held.length === 0
+      ? { name: "Cement", state: world.cement.working ? "good" : "warn", line: `${works}; no town held back.`, short: "enough" }
+      : { name: "Cement", state: held.length >= 3 ? "bad" : "warn", line: `${works}; ${held.slice(0, 2).map((x) => `${townName(x.id)} held back ${Math.round(x.held)}k`).join(", ")}${held.length > 2 ? ` and ${held.length - 2} more` : ""}.`, short: `${held.length} town${held.length === 1 ? "" : "s"} held back` });
+  }
+  if (world.tuning.workersEnabled) {
+    const sites = [...world.towns.values()].filter((site) => site.industry && siteJobs(world, site) > world.tuning.jobsIdle + 1e-9);
+    const short = sites.filter((site) => staffing(world, site.id) < 0.8);
+    if (sites.length > 0) out.push(short.length === 0
+      ? { name: "Workers", state: "good", line: "Every working site fully staffed.", short: "staffed" }
+      : { name: "Workers", state: "warn", line: `${short.map((site) => `${site.name} ${pct(staffing(world, site.id))}`).join(", ")} of a full shift.`, short: `${short.length} site${short.length === 1 ? "" : "s"} short` });
+  }
+  return out;
 }
 
 // The bonds you owe on (bonds.ts): what for, what's left, what it costs a day.
@@ -1819,7 +1873,8 @@ function renderRoutes(): void {
   const routes = summaries.length === 0 && world.lorryRoutes.length === 0
     ? `${header}<p class="empty">No buses yet. Hover a town to see where its people want to go.</p>`
     : (summaries.length > 0 ? header + summaries.map(routeCard).join("") : "") + lorryRows(summaries.length > 0);
-  routesEl.innerHTML = moneyNote() + advice + routes + corridorsHtml() + budgetHtml() + shareHtml();
+  // The budget lives in the Treasury drawer now (renderTreasury), not under the routes.
+  routesEl.innerHTML = moneyNote() + advice + routes + corridorsHtml() + shareHtml();
 }
 
 // --- Results: what each action did --------------------------------------
@@ -1984,8 +2039,16 @@ function moneyNote(): string {
   return `<p class="callout">${situation}${mend} ${exit}</p>`;
 }
 
-routesEl.addEventListener("click", (event) => {
+// The Treasury drawer's buttons (bonds, a project dropped) are the panel's: one handler.
+treasuryEl.addEventListener("click", (event) => onPanelClick(event));
+routesEl.addEventListener("click", (event) => onPanelClick(event));
+function onPanelClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
+  // The drawer's tab pins it open (and unpins it): hover alone is no good on touch.
+  if (target.closest("#treasury .tab")) {
+    treasuryEl.classList.toggle("pinned");
+    return;
+  }
   // The named project: name it from a town's road-full line, or drop it.
   if (target.dataset.project) {
     const [a, b, rung] = target.dataset.project.split("|") as [string, string, ProjectRung];
@@ -2124,7 +2187,8 @@ routesEl.addEventListener("click", (event) => {
     sell(removeId, isRailRoute(removeId) ? "train" : isMinibusRoute(removeId) ? "minibus" : isBrtRoute(removeId) ? "BRT bus" : "bus");
   }
   renderRoutes();
-});
+}
+
 
 // --- Hints ---------------------------------------------------------------
 // The six hints (hints.ts): one at a time, beside the town it's about, or

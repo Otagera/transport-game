@@ -212,9 +212,14 @@ terrain isn't applied: the map still draws shaded hills.
 - **Route cards** (`routeCard`): vehicles, in, cost and net a day; the pair with +/−; one
   verdict of at most 12 words naming one lever (`verdicts.ts` `shortVerdict`, tested), the
   long `reasonText` on the card's hover; the riders bar.
-- **The budget** (`budgetHtml`): fares, tolls, park levies (the agberos' cut beside them),
-  allocation, running costs, upkeep, a day over the last 5 days (`averageBudget`), summing to
-  the strip's net; then the treasury (below).
+- **The Treasury drawer** (`treasuryHtml`, `#treasury` in `slice.html`; Revision 3, Money, 5,
+  the design lab's pick): a one-line tab above the control line (kept a day, levy, bond
+  repayments, the worst chain), out on hover or focus, pinned by a click on the tab, into four
+  columns built from `budgetParts`: income and spending lines a day over the last 5 days
+  (`averageBudget`, summing to the strip's net); net, the treasury's take, bond repayments
+  and what you keep, the bonds owed and the project saved for; and `chainLines` (fuel,
+  cement, workers). Re-rendered with the side panel (`renderPanel`); its buttons share the
+  panel's click handler (`onPanelClick`). The budget is no longer in the side panel.
 - **The town card** (`renderTown`): kicker (role, size, ▲/▼), name, three lines (biggest
   trip, who carried its trips, inside trips), "The problem here" (no road; no road to some
   towns; its road is full -- `roadFull`: grown to all its rung allows, naming the next rung;
