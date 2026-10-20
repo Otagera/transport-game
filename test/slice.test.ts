@@ -3367,3 +3367,19 @@ describe("site production: what a site makes, and what holds it back (production
     expect(["capacity", "workers"]).toContain(full.limit);
   });
 });
+
+describe("farm towns keep farming as they grow (food.ts, farmsByStart)", () => {
+  test("a farm town grown past market size still farms its start's land, and is a market too", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 2791), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const farm = farmTowns(w)[0]!;
+    const base = w.basePopulation.get(farm.id)!;
+    farm.population = w.tuning.marketPopulation + 20;
+    expect(farmTowns(w).some((town) => town.id === farm.id)).toBe(true);
+    expect(marketTowns(w).some((town) => town.id === farm.id)).toBe(true);
+    const staple = goodsFlows(w).find((flow) => flow.from === farm.id && flow.to === w.food!.millId)!;
+    expect(staple.rate).toBeCloseTo((w.tuning.producePerThousandPerDay * base) / SECONDS_PER_GAME_DAY, 9);
+    // A run file from before the rule replays as played: by size now.
+    w.tuning = { ...w.tuning, farmsByStart: false };
+    expect(farmTowns(w).some((town) => town.id === farm.id)).toBe(false);
+  });
+});

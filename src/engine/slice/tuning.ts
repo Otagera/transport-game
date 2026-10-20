@@ -102,6 +102,8 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // day 1's need, 1.3 t a tonne of flour; the mill at the port makes up to
   // 1.2 times day 1's want. Flour is 40% of a market's food basket: a map's
   // markets near the port eat well from day 1, the far ones wait for you.
+  flourEnabled: true,
+  farmsByStart: true,
   flourPerThousandPerDay: 0.2,
   wheatImportShare: 1,
   wheatPerFlour: 1.3,

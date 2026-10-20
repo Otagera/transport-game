@@ -69,9 +69,21 @@ export function foodActive(world: SliceWorld): boolean {
   return !!world.food && world.tuning.foodEnabled && world.tuning.goodsEnabled;
 }
 
-/** Original towns below market size, not the port: they farm. */
+/**
+ * Original towns that started below market size, not the port: they farm,
+ * and keep farming as they grow -- a town of 60k still farms its hinterland,
+ * and a grown one can be a market too. Judged by their size now (before
+ * `farmsByStart`), the region farmed less the more you grew it: map 2411's
+ * mill made nothing by day 122, five of its eight farm towns grown past 40k.
+ */
 export function farmTowns(world: SliceWorld): SliceTown[] {
-  return [...world.towns.values()].filter((town) => !town.industry && world.basePopulation.has(town.id) && town.population < world.tuning.marketPopulation && town.id !== world.port);
+  const size = (town: SliceTown) => (world.tuning.farmsByStart ? world.basePopulation.get(town.id)! : town.population);
+  return [...world.towns.values()].filter((town) => !town.industry && world.basePopulation.has(town.id) && size(town) < world.tuning.marketPopulation && town.id !== world.port);
+}
+
+/** Thousands of people a farm town's land feeds: its start (its farmland doesn't grow with it), or its size before `farmsByStart`. */
+export function farmland(world: SliceWorld, town: SliceTown): number {
+  return world.tuning.farmsByStart ? (world.basePopulation.get(town.id) ?? town.population) : town.population;
 }
 
 /** Original towns at market size: they eat what the mill makes, and draw market trade. */
@@ -123,8 +135,8 @@ export function foodFlows(world: SliceWorld): GoodsFlow[] {
   const perSecond = (perThousandPerDay: number, population: number) => (perThousandPerDay * population) / SECONDS_PER_GAME_DAY;
   const flows: GoodsFlow[] = [];
   for (const town of farmTowns(world)) {
-    flows.push({ from: town.id, to: food.millId, kind: "produce", rate: perSecond(t.producePerThousandPerDay, town.population) });
-    if (world.port && world.towns.has(world.port)) flows.push({ from: town.id, to: world.port, kind: "produce", rate: perSecond(t.cashCropPerThousandPerDay, town.population) });
+    flows.push({ from: town.id, to: food.millId, kind: "produce", rate: perSecond(t.producePerThousandPerDay, farmland(world, town)) });
+    if (world.port && world.towns.has(world.port)) flows.push({ from: town.id, to: world.port, kind: "produce", rate: perSecond(t.cashCropPerThousandPerDay, farmland(world, town)) });
   }
   const split = (from: string, made: number, want: (id: string) => number) => {
     const takers = marketTowns(world).filter((town) => roadPath(world, from, town.id));
@@ -244,7 +256,7 @@ export function placeMill(world: SliceWorld, region: string | undefined): void {
   // The flour mill (3c): 6-9 cells from the port, as clear of the other sites as it can be, with
   // its old road there; imported wheat comes that way (Apapa's mills sit on the docks).
   const port = world.port ? world.towns.get(world.port) : undefined;
-  const flourAt = port ? ringSpot(world, port.x, port.y, 6, 9, 5, (x, y) => nearestDistance(world, x, y)) : null;
+  const flourAt = port && world.tuning.flourEnabled ? ringSpot(world, port.x, port.y, 6, 9, 5, (x, y) => nearestDistance(world, x, y)) : null;
   if (port && flourAt) {
     addSite(world, "flour-mill", `${port.name} Flour Mills`, "flourmill", flourAt);
     inheritedRoad(world, "flour-mill-road", "flour-mill", port.id);

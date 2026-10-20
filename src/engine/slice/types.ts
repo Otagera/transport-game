@@ -171,6 +171,10 @@ export interface SliceTuning {
    * flour takes; the flour mill's capacity, a share of day 1's want; its jobs (thousands); flour's
    * share of a market's food basket.
    */
+  /** Flour on (a run file without it replays without, as played). */
+  flourEnabled: boolean;
+  /** Farm towns are those that started below market size, and farm their start's land (food.ts); a run file without it replays as played. */
+  farmsByStart: boolean;
   flourPerThousandPerDay: number;
   wheatImportShare: number;
   wheatPerFlour: number;

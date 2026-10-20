@@ -59,7 +59,7 @@ import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/slice/bonds";
 import { siteProduction, type SiteLimit } from "@engine/slice/production";
-import { exportsArriving, farmTowns, flourCapacity, flourOutput, flourServed, flourWant, foodActive, foodServed, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/slice/food";
+import { exportsArriving, farmland, farmTowns, flourCapacity, flourOutput, flourServed, flourWant, foodActive, foodServed, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/slice/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { isYourRoad } from "@engine/slice/upkeep";
@@ -1509,6 +1509,7 @@ function foodText(townId: string): string {
   const food = world.food;
   if (!food || !foodActive(world) || !world.basePopulation.has(townId)) return "";
   const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  let out = "";
   if (foodWant(world, townId) > 0) {
     // The basket: the region's food, and flour from the port's mill where there is one.
     const served = marketFed(world, townId);
@@ -1517,13 +1518,14 @@ function foodText(townId: string): string {
     const state = served >= 0.8 ? `Its market is busy: trade draws ${pct(world.tuning.marketTripBoost * served)} more trips to it.`
       : served >= 0.2 ? `Its market is ${served >= 0.5 ? "short" : "half empty"}: trade draws ${pct(world.tuning.marketTripBoost * served)} more trips to it, of a possible ${extra}%.`
       : `Its market is empty: fed, its trade would draw up to ${extra}% more trips. Carry ${food.crops.food} from ${townName(food.millId)}.`;
-    return `<p class="townshare"><b>Food:</b> ${pct(foodServed(world, townId))} of the ${perDay(foodWant(world, townId))} t of ${food.crops.food} it wants a day${flour}. ${state}</p>`;
+    out += `<p class="townshare"><b>Food:</b> ${pct(foodServed(world, townId))} of the ${perDay(foodWant(world, townId))} t of ${food.crops.food} it wants a day${flour}. ${state}</p>`;
   }
   if (farmTowns(world).some((town) => town.id === townId)) {
     const town = world.towns.get(townId)!;
-    return `<p class="townshare"><b>Farms:</b> ${Math.round(world.tuning.producePerThousandPerDay * town.population)} t of ${food.crops.staple} a day for ${townName(food.millId)}, and ${Math.round(world.tuning.cashCropPerThousandPerDay * town.population)} t of ${food.crops.cash} for export through the port.</p>`;
+    const land = farmland(world, town);
+    out += `<p class="townshare"><b>Farms:</b> ${Math.round(world.tuning.producePerThousandPerDay * land)} t of ${food.crops.staple} a day for ${townName(food.millId)}, and ${Math.round(world.tuning.cashCropPerThousandPerDay * land)} t of ${food.crops.cash} for export through the port.</p>`;
   }
-  return "";
+  return out;
 }
 
 // A town's cement (cement.ts): how well supplied, and what that's holding back.
