@@ -303,8 +303,12 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // one way earns about 1,125 x this a day whatever the distance (30 t a
   // trip, 2.5 cells a second, empty back): at 0.1, ₦112 against ₦108 of
   // running cost -- one way breaks even, both ways pays (principles.md §3,
-  // Demand: goods pay only where they go both ways).
-  goodsFarePerTonneCell: 0.1,
+  // Demand: goods pay only where they go both ways). 0.1 -> 0.25 (the step 2
+  // playtest, map 2791): chains are one-way, and at 0.1 21 of 25 lorry
+  // routes lost, ₦4,500 a day. At 0.25 one way full earns ~₦280, half full
+  // breaks even, both ways twice that: the gap kept as a ratio. Replayed:
+  // 7 of 15 lorry routes pay by day 100 (3 at 0.1); goods ~29% of income.
+  goodsFarePerTonneCell: 0.25,
   lorryCapacity: 30,
   lorrySpeed: 2.5,
   lorryPurchaseCost: 550,

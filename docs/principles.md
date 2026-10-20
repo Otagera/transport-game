@@ -170,6 +170,12 @@ blow-by-blow; this section is the distilled rule.
   ₦4/t: Ilase–Kuto (produce in, supplies out) +₦66/day, Ilase–Ise +₦26; supplies-only
   Ilase–Owode +₦5, produce-only Ado–Ogbe −₦49, long one-way Ilase–Ado −₦72. At ₦3/t no lorry
   paid at all. That gap *is* the decision — keep it when retuning.
+  *Amended (Revision 3, the step 2 playtest, 2026-10-20):* chains are one-way by nature
+  (crude to the refinery, limestone to the works, fuel and cement out to the towns), so at
+  ₦0.1 a tonne a cell every chain leg lost: on map 2791, 21 of 25 lorry routes, ₦4,500 a
+  day, more than the treasury took. At ₦0.25 a full one-way lorry pays modestly (~₦280 a
+  day against ₦108) and half full breaks even; both ways still earns about twice one-way.
+  The gap is kept as a ratio, not as one-way losing.
 - **With truckers, short hauls are theirs and long ones yours** (Revision 2, private
   truckers; goods per tonne per cell). Truckers pick up what waits at a yard, keenest on the
   shortest runs and not at all past 40 cells. Measured, one lorry, 20 days: Ilase–Kuto (29
