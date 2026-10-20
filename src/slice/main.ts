@@ -58,7 +58,7 @@ import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/slice/bonds";
-import { exportsArriving, farmTowns, foodActive, foodServed, foodWant, millCapacity, millOutput, stapleArriving } from "@engine/slice/food";
+import { exportsArriving, farmTowns, flourCapacity, flourOutput, flourServed, flourWant, foodActive, foodServed, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/slice/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { isYourRoad } from "@engine/slice/upkeep";
@@ -1170,6 +1170,7 @@ function renderIndustry(townId: string): void {
   if (isFuelSite(world.towns.get(townId))) return renderFuelSite(townId);
   if (isCementSite(world.towns.get(townId))) return renderCementSite(townId);
   if (world.towns.get(townId)?.industry === "mill") return renderMillSite(townId);
+  if (world.towns.get(townId)?.industry === "flourmill") return renderFlourMillSite(townId);
   const limestone = cementActive(world);
   const cargo = limestone ? "limestone" : "stone";
   const site = world.towns.get(townId)!;
@@ -1418,18 +1419,56 @@ function renderMillSite(townId: string): void {
     </div>`;
 }
 
+// The flour mill's card (food.ts, step 3c): imported wheat in from the port, flour out to the markets.
+function renderFlourMillSite(townId: string): void {
+  const site = world.towns.get(townId)!;
+  const t = world.tuning;
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const flows = goodsFlows(world).filter((flow) => flow.from === townId || flow.to === townId).sort((p, q) => q.rate - p.rate);
+  const rows = flows
+    .map((flow) => {
+      const outcome = world.goods.outcomes.get(flowKey(flow));
+      const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
+      const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
+      const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
+      const other = flow.from === townId ? flow.to : flow.from;
+      return `<div class="trip"><span class="name">${flow.from === townId ? "→" : "←"} ${townName(other)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+    })
+    .join("");
+  const out = perDay(flourOutput(world));
+  const cap = perDay(flourCapacity(world));
+  let problem = "";
+  if (isCutOff(world, townId) || !roadPath(world, townId, world.port ?? townId)) problem = "No road to the port: the wheat can't come in. Build one (<kbd>R</kbd>).";
+  else if (wheatArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = "No wheat arriving from the port yet: truckers bring it on its short road, or run a lorry (<kbd>L</kbd>).";
+  if (!problem) problem = workersProblem(townId);
+  routesEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">Flour mill · ${out} of ${cap} t of flour a day</div>
+      <div class="title">${site.name}</div>
+      <ul>
+        <li>Mills imported wheat into flour: ${t.wheatPerFlour} t makes a tonne. ${perDay(wheatArriving(world))} t a day is reaching it from the port.</li>
+        <li>Its flour goes to the market towns, split by what they want: ${pct(t.flourWeight)} of a market's food. Truckers take short hauls; the far markets' share waits for your lorries or freight trains.</li>
+        ${workersItem(townId)}
+      </ul>
+      ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}
+      ${rows}
+    </div>`;
+}
+
 // A town's food (food.ts): a market's supply and its market days; a farm town's crops.
 function foodText(townId: string): string {
   const food = world.food;
   if (!food || !foodActive(world) || !world.basePopulation.has(townId)) return "";
   const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
   if (foodWant(world, townId) > 0) {
-    const served = foodServed(world, townId);
+    // The basket: the region's food, and flour from the port's mill where there is one.
+    const served = marketFed(world, townId);
+    const flour = food.flourMillId ? `, ${pct(flourServed(world, townId))} of its ${perDay(flourWant(world, townId))} t of flour` : "";
     const extra = Math.round(world.tuning.marketTripBoost * 100);
     const state = served >= 0.8 ? `Its market days are busy: trips to it up ${pct(world.tuning.marketTripBoost * served)}.`
       : served >= 0.2 ? `Its market is ${served >= 0.5 ? "short" : "half empty"}: trips to it up ${pct(world.tuning.marketTripBoost * served)} of a possible ${extra}%.`
       : `Its market is empty: fed, its market days would draw up to ${extra}% more trips. Carry ${food.crops.food} from ${townName(food.millId)}.`;
-    return `<p class="townshare"><b>Food:</b> ${pct(served)} of the ${perDay(foodWant(world, townId))} t of ${food.crops.food} it wants a day. ${state}</p>`;
+    return `<p class="townshare"><b>Food:</b> ${pct(foodServed(world, townId))} of the ${perDay(foodWant(world, townId))} t of ${food.crops.food} it wants a day${flour}. ${state}</p>`;
   }
   if (farmTowns(world).some((town) => town.id === townId)) {
     const town = world.towns.get(townId)!;
@@ -1840,10 +1879,10 @@ function chainLines(): Array<{ name: string; state: "good" | "warn" | "bad"; lin
   }
   if (world.food && foodActive(world)) {
     const food = world.food;
-    const markets = [...world.basePopulation.keys()].filter((id) => foodWant(world, id) > 0).map((id) => ({ id, s: foodServed(world, id) })).sort((p, q) => p.s - q.s);
+    const markets = [...world.basePopulation.keys()].filter((id) => foodWant(world, id) > 0).map((id) => ({ id, s: marketFed(world, id) })).sort((p, q) => p.s - q.s);
     const short = markets.filter((x) => x.s < 0.5);
     const exports = perDay(exportsArriving(world));
-    const mill = `the mill makes ${perDay(millOutput(world))} of ${perDay(millCapacity(world))} t/day`;
+    const mill = `the mill makes ${perDay(millOutput(world))} of ${perDay(millCapacity(world))} t/day${food.flourMillId ? `, the flour mill ${perDay(flourOutput(world))} of ${perDay(flourCapacity(world))}` : ""}`;
     const exportLine = `${exports} t/day of ${food.crops.cash} exported`;
     out.push(short.length === 0
       ? { name: "Food", state: "good", line: `Every market fed; ${mill}; ${exportLine}.`, short: "markets fed" }

@@ -17,7 +17,7 @@ import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/slice/industries";
 import { bondAmount, repayBonds } from "@engine/slice/bonds";
-import { cropsFor, farmTowns, foodGrowth, foodServed, foodWant, marketTowns, millOutput, payExports } from "@engine/slice/food";
+import { cropsFor, farmTowns, flourCapacity, flourOutput, flourWant, foodGrowth, foodServed, foodWant, marketFed, marketTowns, millOutput, payExports } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, updateSites, workforceShares } from "@engine/slice/workers";
 import { foundGateTown, refreshDemand } from "@engine/slice/settlement";
 import { cementDemand, cementFlows, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
@@ -3287,13 +3287,18 @@ describe("Revision 3, step 3: the food chain (food.ts)", () => {
     const market = marketTowns(w)[0]!;
     const key = flowKey({ from: food.millId, to: market.id, kind: "supplies" });
     const tripsTo = () => w.simulation.demand.filter((pair) => pair.to === market.id).reduce((sum, pair) => sum + pair.rate, 0);
+    // Its whole basket: the region's food and, where there's a flour mill, flour.
+    const flourKey = food.flourMillId ? flowKey({ from: food.flourMillId, to: market.id, kind: "supplies" }) : null;
     w.goods.outcomes.set(key, { delivered: 0, spoiled: 0 });
+    if (flourKey) w.goods.outcomes.set(flourKey, { delivered: 0, spoiled: 0 });
     refreshDemand(w);
     const hungry = tripsTo();
     expect(foodGrowth(w, market.id)).toBe(0);
     w.goods.outcomes.set(key, { delivered: foodWant(w, market.id), spoiled: 0 });
+    if (flourKey) w.goods.outcomes.set(flourKey, { delivered: flourWant(w, market.id), spoiled: 0 });
     refreshDemand(w);
     expect(foodServed(w, market.id)).toBe(1);
+    expect(marketFed(w, market.id)).toBeCloseTo(1, 9);
     // Every trip to it grows by the boost, except where the other end is a fed market too (the larger boost applies once).
     expect(tripsTo()).toBeGreaterThan(hungry * (1 + w.tuning.marketTripBoost) * 0.9);
     expect(foodGrowth(w, market.id)).toBeCloseTo(w.basePopulation.get(market.id)! * w.tuning.foodCapShare, 6);
@@ -3307,5 +3312,35 @@ describe("Revision 3, step 3: the food chain (food.ts)", () => {
     expect(payExports(w, 1)).toBeCloseTo(2 * w.tuning.exportPayPerTonne, 9);
     expect(w.economy.funds).toBeCloseTo(funds + 2 * w.tuning.exportPayPerTonne, 9);
     expect(w.budget.exports).toBeCloseTo(2 * w.tuning.exportPayPerTonne, 9);
+  });
+});
+
+describe("Revision 3, step 3c: flour from imported wheat at the port (food.ts)", () => {
+  const game = (seed = 2791) => startSliceGame(generatedSliceMap(SLICE_MAP, seed), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+
+  test("a flour mill by the port on an old road to it; the north mills sorghum into meal, not wheat into flour", () => {
+    const w = game();
+    const food = w.food!;
+    expect(w.towns.get(food.flourMillId!)!.industry).toBe("flourmill");
+    expect(roadPath(w, food.flourMillId!, w.port!)).not.toBeNull();
+    expect(cargoName(w, w.port!, "supplies", food.flourMillId!)).toBe("wheat");
+    expect(cargoName(w, food.flourMillId!, "supplies")).toBe("flour");
+    expect(cropsFor("north")).toEqual({ staple: "sorghum", food: "grain meal", mill: "Grain Mill", cash: "groundnuts" });
+  });
+
+  test("imported wheat makes flour, by what arrives, up to capacity; a market's basket is its food and its flour", () => {
+    const w = game();
+    const food = w.food!;
+    const wheat = flowKey({ from: w.port!, to: food.flourMillId!, kind: "supplies" });
+    w.goods.outcomes.set(wheat, { delivered: 0, spoiled: 0 });
+    expect(flourOutput(w)).toBe(0);
+    w.goods.outcomes.set(wheat, { delivered: 1e3, spoiled: 0 });
+    expect(flourOutput(w)).toBeCloseTo(flourCapacity(w) * staffFactor(w, food.flourMillId!), 9);
+    const market = marketTowns(w)[0]!;
+    w.goods.outcomes.set(flowKey({ from: food.millId, to: market.id, kind: "supplies" }), { delivered: foodWant(w, market.id), spoiled: 0 });
+    w.goods.outcomes.set(flowKey({ from: food.flourMillId!, to: market.id, kind: "supplies" }), { delivered: 0, spoiled: 0 });
+    expect(marketFed(w, market.id)).toBeCloseTo(1 - w.tuning.flourWeight, 9);
+    w.goods.outcomes.set(flowKey({ from: food.flourMillId!, to: market.id, kind: "supplies" }), { delivered: flourWant(w, market.id), spoiled: 0 });
+    expect(marketFed(w, market.id)).toBeCloseTo(1, 9);
   });
 });

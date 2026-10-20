@@ -3,7 +3,7 @@ import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
 import { isCutOff, roadPath } from "./world";
 import { rebuildNetworks } from "./rail";
-import { addSite, dry, nearestDistance } from "./fuel";
+import { addSite, dry, nearestDistance, ringSpot } from "./fuel";
 import { inheritedRoad } from "./cement";
 import { staffFactor } from "./workers";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
@@ -19,6 +19,11 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 //
 //   farm towns --staple--> mill --food--> market towns
 //   farm towns --cash crop--> the port (export)
+//   the port --imported wheat--> flour mill --flour--> market towns (3c)
+//
+// A market's food basket is the region's food and flour together
+// (`flourWeight` of it flour): market days and room to grow read the basket
+// (`marketFed`).
 //
 // Replaces, with food on, the produce each farm town sent its nearest
 // market and the share markets sent on to the port (goods.ts). Cargo is
@@ -38,8 +43,11 @@ const CROPS: Record<string, Crops> = {
   southSouth: { staple: "cassava", food: "garri", mill: "Garri Mill", cash: "palm oil" },
   southeast: { staple: "cassava", food: "garri", mill: "Garri Mill", cash: "palm oil" },
   middleBelt: { staple: "rice", food: "milled rice", mill: "Rice Mill", cash: "sesame" },
-  north: { staple: "grain", food: "flour", mill: "Flour Mill", cash: "groundnuts" },
-  northeast: { staple: "grain", food: "flour", mill: "Flour Mill", cash: "groundnuts" },
+  // Sorghum and millet, milled into meal where they're grown. Wheat flour
+  // isn't the north's: Nigeria's flour mills are at the ports, on imported
+  // wheat (the flour mill, below, on every map).
+  north: { staple: "sorghum", food: "grain meal", mill: "Grain Mill", cash: "groundnuts" },
+  northeast: { staple: "sorghum", food: "grain meal", mill: "Grain Mill", cash: "groundnuts" },
 };
 
 export interface FoodState {
@@ -47,6 +55,10 @@ export interface FoodState {
   crops: Crops;
   /** Tonnes a second of food the markets wanted at the start: the mill is sized from it. */
   baseWant: number;
+  /** The flour mill by the port, on imported wheat (step 3c); null where no port, or it wouldn't fit. */
+  flourMillId: string | null;
+  /** Tonnes a second of flour the markets wanted at the start: the wheat imports and the flour mill are sized from it. */
+  baseFlourWant: number;
 }
 
 export function cropsFor(region: string | undefined): Crops {
@@ -114,14 +126,59 @@ export function foodFlows(world: SliceWorld): GoodsFlow[] {
     flows.push({ from: town.id, to: food.millId, kind: "produce", rate: perSecond(t.producePerThousandPerDay, town.population) });
     if (world.port && world.towns.has(world.port)) flows.push({ from: town.id, to: world.port, kind: "produce", rate: perSecond(t.cashCropPerThousandPerDay, town.population) });
   }
-  const takers = marketTowns(world).filter((town) => roadPath(world, food.millId, town.id));
-  const wanted = takers.reduce((sum, town) => sum + foodWant(world, town.id), 0);
-  const made = millOutput(world);
-  if (made > 0 && wanted > 0) {
+  const split = (from: string, made: number, want: (id: string) => number) => {
+    const takers = marketTowns(world).filter((town) => roadPath(world, from, town.id));
+    const wanted = takers.reduce((sum, town) => sum + want(town.id), 0);
+    if (made <= 0 || wanted <= 0) return;
     const share = Math.min(1, made / wanted);
-    for (const town of takers) flows.push({ from: food.millId, to: town.id, kind: "supplies", rate: foodWant(world, town.id) * share });
+    for (const town of takers) flows.push({ from, to: town.id, kind: "supplies", rate: want(town.id) * share });
+  };
+  split(food.millId, millOutput(world), (id) => foodWant(world, id));
+  // The flour chain (3c): imported wheat from the port to the flour mill, its flour to the markets.
+  if (food.flourMillId && world.port && world.towns.has(world.port)) {
+    flows.push({ from: world.port, to: food.flourMillId, kind: "supplies", rate: t.wheatImportShare * t.wheatPerFlour * food.baseFlourWant });
+    split(food.flourMillId, flourOutput(world), (id) => flourWant(world, id));
   }
   return flows;
+}
+
+/** Tonnes a second of flour a market town wants. */
+export function flourWant(world: SliceWorld, townId: string): number {
+  return foodWant(world, townId) > 0 ? (world.tuning.flourPerThousandPerDay * world.towns.get(townId)!.population) / SECONDS_PER_GAME_DAY : 0;
+}
+
+/** Imported wheat reaching the flour mill now, tonnes a second (anyone's). */
+export function wheatArriving(world: SliceWorld): number {
+  const food = world.food;
+  if (!food?.flourMillId || !world.port) return 0;
+  const outcome = world.goods.outcomes.get(flowKey({ from: world.port, to: food.flourMillId, kind: "supplies" }));
+  return (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+}
+
+export function flourCapacity(world: SliceWorld): number {
+  return world.food?.flourMillId ? world.tuning.flourMillShare * world.food.baseFlourWant : 0;
+}
+
+/** What the flour mill makes now: its capacity, or what the wheat arriving makes, by its staffing. */
+export function flourOutput(world: SliceWorld): number {
+  const food = world.food;
+  if (!food?.flourMillId) return 0;
+  return Math.min(flourCapacity(world), wheatArriving(world) / world.tuning.wheatPerFlour) * staffFactor(world, food.flourMillId);
+}
+
+/** Of the flour a market town wants, the share delivered, 0..1. */
+export function flourServed(world: SliceWorld, townId: string): number {
+  const food = world.food;
+  const want = flourWant(world, townId);
+  if (!food?.flourMillId || want <= 0) return 0;
+  const outcome = world.goods.outcomes.get(flowKey({ from: food.flourMillId, to: townId, kind: "supplies" }));
+  return Math.min(1, ((outcome?.delivered ?? 0) + (outcome?.trucked ?? 0)) / want);
+}
+
+/** A market's food basket, 0..1: the region's food and, `flourWeight` of it, flour (none where there's no flour mill). */
+export function marketFed(world: SliceWorld, townId: string): number {
+  const weight = world.food?.flourMillId ? world.tuning.flourWeight : 0;
+  return (1 - weight) * foodServed(world, townId) + weight * flourServed(world, townId);
 }
 
 /** Of the food a market town wants, the share delivered (yours and the truckers'), 0..1. */
@@ -183,7 +240,16 @@ export function placeMill(world: SliceWorld, region: string | undefined): void {
   const baseWant = marketTowns(world).reduce((sum, town) => sum + foodWant(world, town.id), 0);
   addSite(world, "food-mill", `${near.name} ${crops.mill}`, "mill", best);
   inheritedRoad(world, "food-mill-road", "food-mill", near.id);
-  world.food = { millId: "food-mill", crops, baseWant };
+  world.food = { millId: "food-mill", crops, baseWant, flourMillId: null, baseFlourWant: marketTowns(world).reduce((sum, town) => sum + flourWant(world, town.id), 0) };
+  // The flour mill (3c): 6-9 cells from the port, as clear of the other sites as it can be, with
+  // its old road there; imported wheat comes that way (Apapa's mills sit on the docks).
+  const port = world.port ? world.towns.get(world.port) : undefined;
+  const flourAt = port ? ringSpot(world, port.x, port.y, 6, 9, 5, (x, y) => nearestDistance(world, x, y)) : null;
+  if (port && flourAt) {
+    addSite(world, "flour-mill", `${port.name} Flour Mills`, "flourmill", flourAt);
+    inheritedRoad(world, "flour-mill-road", "flour-mill", port.id);
+    world.food.flourMillId = "flour-mill";
+  }
   world.plans = null;
   rebuildNetworks(world);
   refreshDemand(world);
@@ -199,7 +265,7 @@ export function placeMill(world: SliceWorld, region: string | undefined): void {
  */
 export function applyMarketDays(world: SliceWorld): void {
   if (!foodActive(world) || world.tuning.marketTripBoost <= 0) return;
-  const boost = new Map(marketTowns(world).map((town) => [town.id, world.tuning.marketTripBoost * foodServed(world, town.id)]));
+  const boost = new Map(marketTowns(world).map((town) => [town.id, world.tuning.marketTripBoost * marketFed(world, town.id)]));
   for (const pair of world.simulation.demand) {
     const extra = Math.max(boost.get(pair.from) ?? 0, boost.get(pair.to) ?? 0);
     if (extra > 0) pair.rate *= 1 + extra;
@@ -210,5 +276,5 @@ export function applyMarketDays(world: SliceWorld): void {
 export function foodGrowth(world: SliceWorld, townId: string): number {
   const base = world.basePopulation.get(townId);
   if (!foodActive(world) || base === undefined || foodWant(world, townId) <= 0) return 0;
-  return base * world.tuning.foodCapShare * foodServed(world, townId);
+  return base * world.tuning.foodCapShare * marketFed(world, townId);
 }

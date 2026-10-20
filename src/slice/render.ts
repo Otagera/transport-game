@@ -12,7 +12,7 @@ import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
 import { refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { cementActive, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
-import { millCapacity, millOutput } from "@engine/slice/food";
+import { flourCapacity, flourOutput, millCapacity, millOutput } from "@engine/slice/food";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -1000,6 +1000,16 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     ctx.lineTo(p.x + 5, p.y + 6);
     ctx.closePath();
     ctx.fill();
+  } else if (town.industry === "flourmill") {
+    // A wheat ear: a stalk and its grains.
+    ctx.fillRect(p.x - 0.75, p.y - 2, 1.5, 8);
+    for (const dy of [-5, -2, 1]) {
+      ctx.moveTo(p.x - 3.5, p.y + dy);
+      ctx.arc(p.x - 2, p.y + dy, 1.5, 0, Math.PI * 2);
+      ctx.moveTo(p.x + 3.5, p.y + dy);
+      ctx.arc(p.x + 2, p.y + dy, 1.5, 0, Math.PI * 2);
+    }
+    ctx.fill();
   } else if (town.industry === "silo") {
     // Two tall silos.
     ctx.rect(p.x - 5, p.y - 5, 4, 10);
@@ -1037,6 +1047,7 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     : town.industry === "works" ? (world.cement?.working ? `cement · ${perDay(worksOutput(world))} of ${perDay(worksCapacity(world))} t/day` : "idle · restore it")
     : town.industry === "silo" ? `cement imports · ${perDay(cementImports(world))} t/day`
     : town.industry === "mill" && world.food ? `${world.food.crops.food} · ${perDay(millOutput(world))} of ${perDay(millCapacity(world))} t/day`
+    : town.industry === "flourmill" ? `flour · ${perDay(flourOutput(world))} of ${perDay(flourCapacity(world))} t/day`
     : `${cementActive(world) ? "limestone" : "stone"} · ${world.tuning.quarryOutputPerDay} t/day`;
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.label;

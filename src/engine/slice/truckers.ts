@@ -65,7 +65,7 @@ export function truckersPickUp(world: SliceWorld, dt: number): void {
 function levied(world: SliceWorld, townId: string): boolean {
   if (townId === world.port) return true;
   const site = world.towns.get(townId)?.industry;
-  if (site === "depot" || site === "refinery" || site === "works" || site === "silo" || site === "mill") return true;
+  if (site === "depot" || site === "refinery" || site === "works" || site === "silo" || site === "mill" || site === "flourmill") return true;
   const town = world.towns.get(townId);
   return !!town && world.basePopulation.has(townId) && town.population >= world.tuning.marketPopulation;
 }

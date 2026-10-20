@@ -1051,5 +1051,12 @@ transfers, diagnosis, debt advice, receipts and forecasts treat it as any passen
 - **Market days** (`applyMarketDays`, from `settlement.ts refreshDemand`, after rail): every
   demand pair touching a market town grows by `marketTripBoost` × `foodServed` (the larger
   end's); `foodGrowth` adds `foodCapShare` × start × served to a market's room (`growth.ts`).
-- **On screen**: the mill's card (`renderMillSite`), a Food or Farms line on town cards
+- **Flour** (3c): `placeMill` also places a **flour mill** (`flourmill`) 6–9 cells from the
+  port, as clear of the sites as it can be, on an old road to it (`food.flourMillId`). The
+  port sends it `wheatImportShare × wheatPerFlour ×` day 1's flour want; `flourOutput` =
+  `min(flourMillShare × day 1's want, wheat arriving / wheatPerFlour) × staffFactor`, split over
+  the markets by `flourWant`. `marketFed` -- `(1 − flourWeight) × foodServed + flourWeight ×
+  flourServed` -- is what market days and `foodGrowth` read. The north's crops are sorghum
+  milled into grain meal.
+- **On screen**: the mill's card (`renderMillSite`), the flour mill's (`renderFlourMillSite`, a wheat ear on the map), a Food or Farms line on town cards
   (`foodText`), Export payments in the budget, Food in the Treasury's chains; a sack glyph.

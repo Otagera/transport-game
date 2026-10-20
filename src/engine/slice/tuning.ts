@@ -96,6 +96,18 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   jobsMill: 1,
   marketTripBoost: 0.3,
   foodCapShare: 0.25,
+  // Flour (step 3c): a market town wants 0.2 t a day per thousand people
+  // (Nigeria mills ~5 Mt of imported wheat a year: about 0.06 t a day per
+  // thousand everyone; markets eat it all here, so more). Wheat comes in at
+  // day 1's need, 1.3 t a tonne of flour; the mill at the port makes up to
+  // 1.2 times day 1's want. Flour is 40% of a market's food basket: a map's
+  // markets near the port eat well from day 1, the far ones wait for you.
+  flourPerThousandPerDay: 0.2,
+  wheatImportShare: 1,
+  wheatPerFlour: 1.3,
+  flourMillShare: 1.2,
+  jobsFlourMill: 0.5,
+  flourWeight: 0.4,
   // Bonds (bonds.ts; brief, Revision 3, money): repaid over 60 days with 20%
   // interest, the same each day; all repayments at most 30% of a day's
   // income. A ₦60,000 refinery bond is ₦1,200 a day: on map 2791 around day

@@ -144,7 +144,7 @@ export function produceAndSpoil(world: SliceWorld, dt: number): void {
     const waiting = (yard.get(key) ?? 0) + flow.rate * dt;
     // Bagged cement keeps, as fuel does (a week, not two days).
     const from = world.towns.get(flow.from);
-    const lost = waiting * (isFuelSite(from) || isCementSite(from) || from?.industry === "mill" ? leak : spoil);
+    const lost = waiting * (isFuelSite(from) || isCementSite(from) || from?.industry === "mill" || from?.industry === "flourmill" ? leak : spoil);
     yard.set(key, waiting - lost);
     spoiled.set(flowKey(flow), lost);
   }

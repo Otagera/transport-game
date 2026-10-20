@@ -39,7 +39,7 @@ export interface SliceTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "oilfield" | "terminal" | "works" | "silo" | "mill";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill";
 
 export interface SliceRoadDef {
   a: string;
@@ -165,6 +165,18 @@ export interface SliceTuning {
   jobsMill: number;
   marketTripBoost: number;
   foodCapShare: number;
+  /**
+   * Flour (food.ts, step 3c): flour a market town wants, tonnes per thousand people a day; wheat
+   * imported through the port, a share of the wheat day 1's flour takes; tonnes of wheat a tonne of
+   * flour takes; the flour mill's capacity, a share of day 1's want; its jobs (thousands); flour's
+   * share of a market's food basket.
+   */
+  flourPerThousandPerDay: number;
+  wheatImportShare: number;
+  wheatPerFlour: number;
+  flourMillShare: number;
+  jobsFlourMill: number;
+  flourWeight: number;
   /** Bonds (bonds.ts): on; interest over the whole term, a share of what was lent; the term, days; all repayments at most this share of a day's income. */
   bondsEnabled: boolean;
   bondInterest: number;
