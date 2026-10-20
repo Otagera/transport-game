@@ -62,9 +62,9 @@ export interface View {
   offsetY: number;
 }
 
-export function fitView(world: SliceWorld, width: number, height: number, padding: number, topInset: number, bottomInset = 0): View {
+export function fitView(world: SliceWorld, width: number, height: number, padding: number, topInset: number, bottomInset = 0, sideInset = 0): View {
   const usableH = height - topInset - bottomInset - padding * 2;
-  const usableW = width - padding * 2;
+  const usableW = width - padding * 2 - sideInset * 2;
   const scale = Math.min(usableW / world.width, usableH / world.height);
   return {
     scale,
@@ -218,16 +218,113 @@ function terrainLayer(world: SliceWorld, view: View, width: number, height: numb
         ctx.fillStyle = COLORS.water;
         ctx.fillRect(s.x, s.y, cell + 0.5, cell + 0.5);
       } else if (peak > 0 && terrain.elevation[i]! > 0.05) {
-        // Hills: shaded by height, so a ridge reads as something a road climbs.
+        // Hills: a light wash by height under the contours (the lab's pick, 2026-10-20).
         ctx.fillStyle = COLORS.hill;
-        ctx.globalAlpha = 0.45 * (terrain.elevation[i]! / peak);
+        ctx.globalAlpha = 0.16 * (terrain.elevation[i]! / peak);
         ctx.fillRect(s.x, s.y, cell + 0.5, cell + 0.5);
         ctx.globalAlpha = 1;
       }
     }
   }
+  if (peak > 0) drawContours(ctx, world, view, peak);
+  drawGroundNames(ctx, world, view, peak);
   terrainCache = { key, canvas };
   return canvas;
+}
+
+// Contour lines (the design lab's "contours, with names on the ground",
+// picked 2026-10-20): marching squares on the terrain's own elevation, seven
+// levels up to its peak, every other one heavier, so the ridge reads as a
+// climb the way a survey map draws it.
+function drawContours(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, peak: number): void {
+  const { terrain } = world.simulation.map;
+  const { width, height } = terrain;
+  const at = (x: number, y: number) => (terrain.water[y * width + x] === 1 ? 0 : terrain.elevation[y * width + x] ?? 0);
+  // Corners: top-left 8, top-right 4, bottom-right 2, bottom-left 1. Edges: 0 top, 1 right, 2 bottom, 3 left.
+  const CASES: number[][] = [[], [3, 2], [2, 1], [3, 1], [0, 1], [3, 0, 2, 1], [0, 2], [3, 0], [3, 0], [0, 2], [3, 2, 0, 1], [0, 1], [3, 1], [2, 1], [3, 2], []];
+  ctx.save();
+  ctx.strokeStyle = "rgba(120, 90, 50, 0.45)";
+  for (let k = 1; k <= 7; k += 1) {
+    const level = (peak * k) / 8;
+    ctx.lineWidth = k % 2 === 0 ? 1.6 : 1;
+    ctx.beginPath();
+    for (let y = 0; y < height - 1; y += 1) {
+      for (let x = 0; x < width - 1; x += 1) {
+        const a = at(x, y), b = at(x + 1, y), c = at(x + 1, y + 1), e = at(x, y + 1);
+        const edges = CASES[(a > level ? 8 : 0) | (b > level ? 4 : 0) | (c > level ? 2 : 0) | (e > level ? 1 : 0)]!;
+        const t = (p: number, q: number) => (level - p) / (q - p);
+        const point = (edge: number) => {
+          const [px, py] = edge === 0 ? [x + t(a, b), y] : edge === 1 ? [x + 1, y + t(b, c)] : edge === 2 ? [x + t(e, c), y + 1] : [x, y + t(a, e)];
+          return toScreen(view, px, py);
+        };
+        for (let j = 0; j < edges.length; j += 2) {
+          const p = point(edges[j]!);
+          const q = point(edges[j + 1]!);
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+        }
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Names on the ground: "THE RIDGE" at the high point, "THE RIVER" along the
+// water at its middle, turned to run with it (the video's "HAN RIVER").
+function drawGroundNames(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, peak: number): void {
+  const { terrain } = world.simulation.map;
+  const { width, height } = terrain;
+  ctx.save();
+  ctx.fillStyle = "rgba(122, 115, 104, 0.85)";
+  ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.textAlign = "center";
+  const spaced = (text: string) => text.split("").join("\u2009");
+  // Clear of every town and site, and of each other: a name on the ground, not on a label.
+  const places = [...world.towns.values()].map((town) => ({ x: town.x, y: town.y }));
+  const clearance = (x: number, y: number) => Math.min(...places.map((p) => Math.hypot(p.x - x, p.y - y)));
+  let ridge: { x: number; y: number } | null = null;
+  if (peak > 0) {
+    // High ground, 6+ cells from anything: the highest such cell.
+    let best = -1;
+    for (let i = 0; i < terrain.elevation.length; i += 1) {
+      const x = i % width, y = Math.floor(i / width);
+      if (terrain.water[i] === 1 || x < 4 || y < 3 || x > width - 5 || y > height - 4 || terrain.elevation[i]! < 0.4 * peak) continue;
+      if (clearance(x, y) < 6) continue;
+      if (best < 0 || terrain.elevation[i]! > terrain.elevation[best]!) best = i;
+    }
+    if (best >= 0) {
+      ridge = { x: best % width, y: Math.floor(best / width) };
+      const p = toScreen(view, ridge.x, ridge.y);
+      ctx.fillText(spaced("THE RIDGE"), p.x, p.y + 4);
+      places.push(ridge);
+    }
+  }
+  // The water cell with the most room around it, nearer the middle the better, and the way the water runs there.
+  let mid = -1;
+  let score = -Infinity;
+  for (let y = 3; y < height - 3; y += 1) for (let x = 3; x < width - 3; x += 1) {
+    if (terrain.water[y * width + x] !== 1) continue;
+    const s = Math.min(clearance(x, y), 10) - 0.15 * Math.hypot(x - width / 2, y - height / 2);
+    if (s > score) { score = s; mid = y * width + x; }
+  }
+  if (mid >= 0) {
+    const mx = mid % width, my = Math.floor(mid / width);
+    let sxx = 0, syy = 0, sxy = 0, n = 0;
+    for (let y = Math.max(0, my - 8); y < Math.min(height, my + 9); y += 1) for (let x = Math.max(0, mx - 8); x < Math.min(width, mx + 9); x += 1) {
+      if (terrain.water[y * width + x] !== 1) continue;
+      sxx += (x - mx) ** 2; syy += (y - my) ** 2; sxy += (x - mx) * (y - my); n += 1;
+    }
+    let angle = n > 2 ? 0.5 * Math.atan2(2 * sxy, sxx - syy) : 0;
+    if (angle > Math.PI / 2) angle -= Math.PI;
+    if (angle < -Math.PI / 2) angle += Math.PI;
+    const p = toScreen(view, mx, my);
+    ctx.translate(p.x, p.y);
+    ctx.rotate(angle);
+    ctx.fillStyle = "rgba(60, 100, 130, 0.75)";
+    ctx.fillText(spaced("THE RIVER"), 0, 4);
+  }
+  ctx.restore();
 }
 
 function drawGround(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
@@ -562,36 +659,80 @@ const SLOW_ROAD_SPEED = 0.9;
 
 // Each route is drawn as a coloured line over the roads it runs on, offset
 // a little per route so two routes sharing a road both stay visible.
+// Route lines, Mini Metro's way (the restyle, 2026-10-20; playtest, map
+// 2411: lines piled into one thick bundle at Gusau): every road keeps a slot
+// for each route on it, side by side across the road, and each route draws
+// parallel to the road in its slot, road by road. Slots are counted in the
+// road's own direction, so a route keeps its side whichever way it runs.
 function drawRouteLines(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View): void {
-  // Lorry routes: brown, dashed, beside the buses' lines.
+  const SPACING = 4;
+  const lines: Array<{ edges: Array<{ from: string; to: string; routing: RoutingContext }>; color: string; dashed: boolean }> = [];
+  world.routes.forEach((route, index) => {
+    const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
+    if (!vehicle) return;
+    const half = halfPath(vehicle.path, route.a, route.b);
+    const routing = routingFor(world, vehicle);
+    lines.push({ edges: half.slice(1).map((to, i) => ({ from: half[i]!, to, routing })), color: routeColor(index), dashed: false });
+  });
   for (const route of world.lorryRoutes) {
     const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
     if (!vehicle) continue;
     const half = halfPath(vehicle.path, route.a, route.b);
-    const line: Point[] = [];
-    for (let i = 1; i < half.length; i += 1) line.push(...edgeLine(world, half[i - 1]!, half[i]!, routingFor(world, vehicle)));
-    ctx.strokeStyle = COLORS.goods;
-    ctx.lineWidth = 3;
-    ctx.setLineDash([8, 5]);
-    ctx.globalAlpha = 0.85;
-    strokeLine(ctx, view, line, 5);
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-  }
-  world.routes.forEach((route, index) => {
-    const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
-    if (!vehicle) return;
-    const offset = (index % 4) * 2.5 - 3.75;
-    ctx.strokeStyle = routeColor(index);
-    ctx.lineWidth = 3;
-    ctx.globalAlpha = 0.85;
-    const half = halfPath(vehicle.path, route.a, route.b);
     const routing = routingFor(world, vehicle);
-    const line: Point[] = [];
-    for (let i = 1; i < half.length; i += 1) line.push(...edgeLine(world, half[i - 1]!, half[i]!, routing));
-    strokeLine(ctx, view, line, offset);
-    ctx.globalAlpha = 1;
+    lines.push({ edges: half.slice(1).map((to, i) => ({ from: half[i]!, to, routing })), color: COLORS.goods, dashed: true });
+  }
+  // Each road's routes, in the order they're drawn: their slots across it.
+  const segmentOf = (from: string, to: string, routing: RoutingContext) => routing.graph.get(from)?.find((edge) => edge.to === to)?.segmentId ?? `${from}>${to}`;
+  const onSegment = new Map<string, number[]>();
+  lines.forEach((line, k) => {
+    for (const edge of line.edges) {
+      const id = segmentOf(edge.from, edge.to, edge.routing);
+      const list = onSegment.get(id) ?? [];
+      if (!list.includes(k)) list.push(k);
+      onSegment.set(id, list);
+    }
   });
+  ctx.lineWidth = 3;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  lines.forEach((line, k) => {
+    ctx.strokeStyle = line.color;
+    ctx.globalAlpha = 0.85;
+    ctx.setLineDash(line.dashed ? [8, 5] : []);
+    for (const edge of line.edges) {
+      const id = segmentOf(edge.from, edge.to, edge.routing);
+      const slots = onSegment.get(id)!;
+      const offset = (slots.indexOf(k) - (slots.length - 1) / 2) * SPACING;
+      const points = edgeLine(world, edge.from, edge.to, edge.routing).map((p) => toScreen(view, p.x, p.y));
+      // Slots in the road's own direction: flip for a route running it the other way.
+      const segment = world.simulation.map.segments.find((candidate) => candidate.id === id);
+      const sign = segment && segment.fromNodeId !== edge.from ? -1 : 1;
+      strokeParallel(ctx, points, offset * sign);
+    }
+  });
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  ctx.lineCap = "butt";
+}
+
+/** A polyline drawn `offset` px to its left (screen space), each point moved along its corner's mean normal. */
+function strokeParallel(ctx: CanvasRenderingContext2D, points: Array<{ x: number; y: number }>, offset: number): void {
+  if (points.length < 2) return;
+  const normal = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: -dy / len, y: dx / len };
+  };
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const before = i > 0 ? normal(points[i - 1]!, p) : null;
+    const after = i < points.length - 1 ? normal(p, points[i + 1]!) : null;
+    const n = before && after ? { x: (before.x + after.x) / 2, y: (before.y + after.y) / 2 } : (before ?? after)!;
+    const x = p.x + n.x * offset, y = p.y + n.y * offset;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
 }
 
 // Desire lines: straight from the focused town to every town its people

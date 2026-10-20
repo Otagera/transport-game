@@ -122,10 +122,13 @@ const ctx = canvas.getContext("2d")!;
 const strip = document.querySelector<HTMLDivElement>("#strip")!;
 const routesEl = document.querySelector<HTMLDivElement>("#routes")!;
 const treasuryEl = document.querySelector<HTMLElement>("#treasury")!;
+// The two wings (the design lab's pick): the town card left, your routes right.
+const townEl = document.querySelector<HTMLDivElement>("#town")!;
+const townWing = document.querySelector<HTMLElement>("#wing-town")!;
+const routesWing = document.querySelector<HTMLElement>("#wing-routes")!;
 const toolbar = document.querySelector<HTMLDivElement>("#toolbar")!;
 const toast = document.querySelector<HTMLDivElement>("#toast")!;
 const hintEl = document.querySelector<HTMLDivElement>("#hint")!;
-const controlsEl = document.querySelector<HTMLDivElement>("#controls")!;
 // Which map this is, and a new one: the same address without its seed draws another.
 {
   const fresh = new URLSearchParams(params);
@@ -169,7 +172,8 @@ function resize(): void {
   canvas.height = Math.round(window.innerHeight * dpr);
   canvas.style.width = `${window.innerWidth}px`;
   canvas.style.height = `${window.innerHeight}px`;
-  const sidePanel = window.innerWidth > 900 ? 300 : 0;
+  // The wings tuck to a spine at each edge: the map takes the width between them.
+  const spines = window.innerWidth > 900 ? 64 : 0;
   // Keep the map clear of the strip above and of whatever sits below it --
   // the toolbar, and the key when it's open -- measured, not guessed: a
   // fixed inset left the open key over the map's corner (playtest).
@@ -183,8 +187,9 @@ function resize(): void {
       keyEl.style.bottom = `${below(toolbar) + 8}px`;
     }
   }
-  const bottomInset = Math.max(56, below(toolbar), below(keyEl), below(controlsEl)) + 8;
-  view = fitView(world, window.innerWidth - sidePanel, window.innerHeight, 24, 64, bottomInset);
+  const treasury = document.querySelector<HTMLElement>("#treasury");
+  const bottomInset = Math.max(56, below(toolbar), below(keyEl), below(treasury)) + 8;
+  view = fitView(world, window.innerWidth, window.innerHeight, 24, 64, bottomInset, spines);
 }
 window.addEventListener("resize", resize);
 
@@ -1096,11 +1101,24 @@ function sparkline(series: number[]): string {
 // The panel shows the focused town's trips when there is one, otherwise
 // your routes -- one home at a time, not both stacked.
 function renderPanel(): void {
+  // Your routes always, in the right wing; the town you point at, or last pointed at, in the left.
+  renderRoutes();
   const town = focusTown();
-  if (town) renderTown(town);
-  else renderRoutes();
+  if (town) {
+    renderTown(town);
+    shownTown = town;
+  } else if (!townEl.innerHTML) {
+    townEl.innerHTML = `<p class="hint">Hover a town on the map to see it here: where its people want to go, and what it needs.</p>`;
+  }
+  // A town pointed at brings its wing out, tucked again when you look away (unless you're in it).
+  townWing.classList.toggle("out", town !== null);
+  const shown = shownTown ? world.towns.get(shownTown) ?? world.ruins.get(shownTown) : undefined;
+  townWing.querySelector(".spine")!.innerHTML = shown ? `<span class="k">${shown.industry ? "Site" : "Town"}</span> <b>${shown.name}</b>${shown.industry ? "" : ` <span class="num">${Math.round(shown.population)}k</span>`}` : `<span class="k">Towns</span>`;
+  const net = routeSummaries(world).reduce((sum, route) => sum + route.netPerDay, 0) + lorrySummaries(world).reduce((sum, route) => sum + route.netPerDay, 0);
+  routesWing.querySelector(".spine")!.innerHTML = `<span class="k">Your routes</span> <span class="num ${net < 0 ? "bad" : "good"}">${net < 0 ? "−" : "+"}₦${Math.abs(Math.round(net)).toLocaleString()}/day</span>`;
   renderTreasury();
 }
+let shownTown: string | null = null;
 
 function renderTreasury(): void {
   treasuryEl.innerHTML = treasuryHtml();
@@ -1200,7 +1218,7 @@ function renderIndustry(townId: string): void {
     const closes = industry.openedAtSeconds + world.tuning.industryGraceDays * SECONDS_PER_GAME_DAY;
     problem = siteProblem(townId) || `Nothing is moving its ${cargo}${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
   }
-  routesEl.innerHTML = `
+  townEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
@@ -1347,7 +1365,7 @@ function renderFuelSite(townId: string): void {
     else if (!railPath(world, townId, fuel.refineryId) && !roadPath(world, townId, fuel.refineryId)) problem = `No way to ${refinery.name}: lay track (<kbd>K</kbd>) or build a road (<kbd>R</kbd>) to it.`;
   }
   if (!problem) problem = siteProblem(townId);
-  routesEl.innerHTML = `
+  townEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
@@ -1409,7 +1427,7 @@ function renderCementSite(townId: string): void {
     }
   }
   if (!problem) problem = siteProblem(townId);
-  routesEl.innerHTML = `
+  townEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
@@ -1451,7 +1469,7 @@ function renderMillSite(townId: string): void {
   if (stapleArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = `No ${food.crops.staple} arriving. Carry it in from the farm towns: lorries (<kbd>L</kbd>), or truckers will on the short hauls once a road joins them.`;
   else if (out < cap * 0.6) problem = `Short of ${food.crops.staple}: ${perDay(stapleArriving(world))} of ${Math.round(cap * t.staplePerFood)} t a day. Carry more in from the farm towns further off.`;
   if (!problem) problem = siteProblem(townId);
-  routesEl.innerHTML = `
+  townEl.innerHTML = `
     <div class="town-card">
       <div class="k">Mill · ${out} of ${cap} t of ${food.crops.food} a day</div>
       <div class="title">${site.name}</div>
@@ -1489,7 +1507,7 @@ function renderFlourMillSite(townId: string): void {
   if (isCutOff(world, townId) || !roadPath(world, townId, world.port ?? townId)) problem = "No road to the port: the wheat can't come in. Build one (<kbd>R</kbd>).";
   else if (wheatArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = "No wheat arriving from the port yet: truckers bring it on its short road, or run a lorry (<kbd>L</kbd>).";
   if (!problem) problem = siteProblem(townId);
-  routesEl.innerHTML = `
+  townEl.innerHTML = `
     <div class="town-card">
       <div class="k">Flour mill · ${out} of ${cap} t of flour a day</div>
       <div class="title">${site.name}</div>
@@ -1589,7 +1607,7 @@ function renderTown(townId: string): void {
   const index = pagerTowns.indexOf(townId);
   const prev = pagerTowns[(index - 1 + pagerTowns.length) % pagerTowns.length]!;
   const next = pagerTowns[(index + 1) % pagerTowns.length]!;
-  routesEl.innerHTML = `
+  townEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${town.name}</div>
@@ -2204,6 +2222,9 @@ function moneyNote(): string {
 
 // The Treasury drawer's buttons (bonds, a project dropped) are the panel's: one handler.
 treasuryEl.addEventListener("click", (event) => onPanelClick(event));
+townEl.addEventListener("click", (event) => onPanelClick(event));
+// A click on a wing's spine pins it out (and again unpins it): hover alone is no good on touch.
+for (const wing of [townWing, routesWing]) wing.querySelector(".spine")!.addEventListener("click", () => wing.classList.toggle("pinned"));
 routesEl.addEventListener("click", (event) => onPanelClick(event));
 function onPanelClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;

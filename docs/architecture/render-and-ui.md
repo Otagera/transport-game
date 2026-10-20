@@ -212,6 +212,18 @@ terrain isn't applied: the map still draws shaded hills.
 - **Route cards** (`routeCard`): vehicles, in, cost and net a day; the pair with +/−; one
   verdict of at most 12 words naming one lever (`verdicts.ts` `shortVerdict`, tested), the
   long `reasonText` on the card's hover; the riders bar.
+- **The look** (the design lab's pick, applied 2026-10-20): two **wings** in `slice.html` --
+  `#wing-town` left (the town or site card, `townEl`: every card renders there) and
+  `#wing-routes` right (`#routes`: advice, routes, corridors, who carried trips) -- glass
+  (68% panel, 20px blur, a blue glow), leaning 7° at rest and flat when used, tucked to a
+  44px spine (its name, and your routes' net) and out on hover, focus, a town hovered or
+  selected (`.out`), or a click on the spine (`.pinned`). The map fits between the spines
+  (`fitView`'s `sideInset`). Round corners (16px), glass on the toolbar and the Treasury;
+  the control hint line is gone, the map's number and its links sit top-right. Terrain:
+  contour lines (marching squares on the terrain's elevation, seven levels to its peak) over
+  a light hill wash, and "THE RIDGE" and "THE RIVER" on the ground where there's room.
+  Route lines Mini Metro's way: a slot per route on every road, each drawn parallel to the
+  road in its slot (`drawRouteLines`, `strokeParallel`).
 - **Site production** (`production.ts siteProduction`; `main.ts productionHtml`,
   `siteProblem`): every site card opens with what it makes against capacity, each input
   against what full output takes, its shift, and the share carried away, a gauge each, the
