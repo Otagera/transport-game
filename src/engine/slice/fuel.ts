@@ -8,6 +8,7 @@ import { canAfford } from "../economy/state";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { staffFactor } from "./workers";
+import { siteScale } from "./expand";
 
 // The fuel chain (docs/brief.md, Revision 3, step 1): goods that feel real,
 // in chains. One site's output is another's input, and a site makes nothing
@@ -85,11 +86,17 @@ export function crudeArriving(world: SliceWorld): number {
   return (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
 }
 
+/** The most the refinery can make, tonnes a second, as built and expanded (expand.ts). */
+export function refineryCapacity(world: SliceWorld): number {
+  const fuel = world.fuel;
+  return fuel ? world.tuning.refineryShare * fuel.baseDemand * siteScale(world, fuel.refineryId) : 0;
+}
+
 /** What the refinery makes now, tonnes a second: its capacity, or the crude it gets, whichever is less. */
 export function refineryOutput(world: SliceWorld): number {
   const fuel = world.fuel;
   if (!fuel?.restored) return 0;
-  return Math.min(world.tuning.refineryShare * fuel.baseDemand, crudeArriving(world)) * staffFactor(world, fuel.refineryId);
+  return Math.min(refineryCapacity(world), crudeArriving(world)) * staffFactor(world, fuel.refineryId);
 }
 
 /**
@@ -142,7 +149,7 @@ export function fuelFlows(world: SliceWorld): GoodsFlow[] {
     if (x.fromRefinery > 0) flows.push({ from: fuel.refineryId, to: x.town.id, kind: "supplies", rate: x.fromRefinery });
     if (x.fromDepot > 0) flows.push({ from: fuel.depotId, to: x.town.id, kind: "supplies", rate: x.fromDepot });
   }
-  if (fuel.restored) flows.push({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies", rate: world.tuning.crudeShare * fuel.baseDemand * staffFactor(world, fuel.sourceId) });
+  if (fuel.restored) flows.push({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies", rate: world.tuning.crudeShare * fuel.baseDemand * siteScale(world, fuel.refineryId) * staffFactor(world, fuel.sourceId) });
   return flows;
 }
 

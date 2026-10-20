@@ -182,6 +182,17 @@ export interface SliceTuning {
   flourMillShare: number;
   jobsFlourMill: number;
   flourWeight: number;
+  /**
+   * Expanding a site (expand.ts): on; capacity added a time, a share of what it was built with;
+   * how many times; a first expansion's cost, a share of the site's restore cost (the mills' own
+   * base), each next one dearer by this factor.
+   */
+  expandEnabled: boolean;
+  expandStep: number;
+  expandMaxLevel: number;
+  expandCostShare: number;
+  expandCostGrowth: number;
+  millExpandCost: number;
   /** Bonds (bonds.ts): on; interest over the whole term, a share of what was lent; the term, days; all repayments at most this share of a day's income. */
   bondsEnabled: boolean;
   bondInterest: number;
@@ -535,6 +546,8 @@ export interface SliceWorld {
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */
   bonds: Bond[];
+  /** Times each site has been expanded (expand.ts), by its id. */
+  expansions: Map<string, number>;
   /** The food chain's mill and crops (food.ts); null until placed, or with food off. */
   food: FoodState | null;
   /** Goods truckers hold at yards, filling a truck (truckers.ts). */

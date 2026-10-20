@@ -18,6 +18,7 @@ import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/slice/industries";
 import { bondAmount, repayBonds } from "@engine/slice/bonds";
 import { siteProduction } from "@engine/slice/production";
+import { expandCost } from "@engine/slice/expand";
 import { cropsFor, farmTowns, flourCapacity, flourOutput, flourWant, foodGrowth, foodServed, foodWant, marketFed, marketTowns, millOutput, payExports } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, updateSites, workforceShares } from "@engine/slice/workers";
 import { foundGateTown, refreshDemand } from "@engine/slice/settlement";
@@ -3381,5 +3382,24 @@ describe("farm towns keep farming as they grow (food.ts, farmsByStart)", () => {
     // A run file from before the rule replays as played: by size now.
     w.tuning = { ...w.tuning, farmsByStart: false };
     expect(farmTowns(w).some((town) => town.id === farm.id)).toBe(false);
+  });
+});
+
+describe("expanding a site (expand.ts)", () => {
+  test("a line adds half the capacity, more input wanted and more jobs, twice at most, each dearer; an idle site can't", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const works = w.cement!.worksId;
+    w.economy.funds = 1e6;
+    const capacity = worksCapacity(w);
+    const jobs = siteJobs(w, w.towns.get(works)!);
+    const first = expandCost(w, works)!;
+    expect(applyAction(w, { kind: "expand", siteId: works }).ok).toBe(true);
+    expect(worksCapacity(w)).toBeCloseTo(capacity * (1 + w.tuning.expandStep), 9);
+    expect(siteJobs(w, w.towns.get(works)!)).toBeCloseTo(jobs * (1 + w.tuning.expandStep), 9);
+    expect(expandCost(w, works)!).toBeGreaterThan(first);
+    expect(applyAction(w, { kind: "expand", siteId: works }).ok).toBe(true);
+    expect(applyAction(w, { kind: "expand", siteId: works }).ok).toBe(false); // as big as it gets
+    // The refinery starts idle: restore it first.
+    expect(applyAction(w, { kind: "expand", siteId: w.fuel!.refineryId }).ok).toBe(false);
   });
 });

@@ -89,6 +89,9 @@ From your two games and the day-136 run file (principles §6):
   Bonds (`bonds.ts`) for the refinery, the works or a named project: 60 days at 20%, capped
   at 30% of income. The Treasury drawer above the toolbar (your lab pick), the budget out of
   the side panel. Your full lab look is recorded in the brief, not yet applied.
+- **Built in a worktree while you played (2026-10-20), merged on your word:** the sim 40% faster
+  (outcomes indexed once a tick; replays exact), your lab look (wings, glass, contours, ground
+  names, Mini Metro route lines), and expanding a site (refinery, works, mills: two lines more).
 - **Step 3 built** (the food chain, `food.ts`): farm towns' staple to one mill, its food to the
   market towns; cash crops to the port with an export payment; the trade a fed market draws
   (more trips) and room to grow. Next: your playtest of step 3, then the restyle to your lab

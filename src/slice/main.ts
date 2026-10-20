@@ -56,7 +56,8 @@ import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
-import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
+import { cargoName, fuelSupply, isFuelSite, refineryCapacity, refineryOutput, shortageAt } from "@engine/slice/fuel";
+import { checkExpand, expandCost, expandLevel, siteScale } from "@engine/slice/expand";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/slice/bonds";
 import { siteProduction, type SiteLimit } from "@engine/slice/production";
 import { exportsArriving, farmland, farmTowns, flourCapacity, flourOutput, flourServed, flourWant, foodActive, foodServed, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/slice/food";
@@ -1278,7 +1279,19 @@ function productionHtml(siteId: string): string {
     ...(p.staffing === null ? [] : [`<div class="prow"><span>Workers: ${pct(p.staffing)} of a full shift${held("workers")}</span><span class="num">${pct(p.staffing)}</span>${gauge(p.staffing)}</div>`]),
     ...(p.made * SECONDS_PER_GAME_DAY >= 1 ? [`<div class="prow"><span>Carried away: ${pct(p.shipped)} of it${p.shipped < 0.5 ? ` <span class="held">the rest waits</span>` : ""}</span><span class="num">${pct(p.shipped)}</span>${gauge(p.shipped)}</div>`] : []),
   ];
-  return `<div class="production">${rows.join("")}</div>`;
+  return `<div class="production">${rows.join("")}${expandHtml(siteId)}</div>`;
+}
+
+// Expanding it (expand.ts): another line, more capacity -- offered once it's working, said why not when it can't.
+function expandHtml(siteId: string): string {
+  const cost = expandCost(world, siteId);
+  const level = expandLevel(world, siteId);
+  const t = world.tuning;
+  if (!t.expandEnabled || (cost === null && level === 0)) return "";
+  const done = level > 0 ? `Expanded ${level === 1 ? "once" : `${level} times`}: ${pct(siteScale(world, siteId))} of what it was built to make. ` : "";
+  if (cost === null) return `<p class="hint">${done}As big as it gets.</p>`;
+  const check = checkExpand(world, siteId);
+  return `<p class="hint">${done}<span class="actions"><button data-expand="${siteId}" ${check.ok ? "" : `disabled title="${check.reason}"`}>Expand it: +${pct(t.expandStep)} capacity · ${naira(cost)}</button></span>${check.ok ? "" : ` <span class="muted">${check.reason}</span>`}</p>`;
 }
 
 /** The problem a site's production names, when nothing more pressing does: its short input, its shift, or its goods waiting. */
@@ -1327,8 +1340,8 @@ function renderFuelSite(townId: string): void {
     })
     .join("");
   const nearestTown = [...world.towns.values()].filter((other) => !other.industry && !isCutOff(world, other.id)).sort((p, q) => Math.hypot(p.x - site.x, p.y - site.y) - Math.hypot(q.x - site.x, q.y - site.y))[0];
-  const capacity = perDay(t.refineryShare * fuel.baseDemand);
-  const crude = perDay(t.crudeShare * fuel.baseDemand);
+  const capacity = perDay(refineryCapacity(world));
+  const crude = perDay(t.crudeShare * fuel.baseDemand * siteScale(world, fuel.refineryId));
   let kicker = "";
   let lines: string[] = [];
   let problem = "";
@@ -1941,7 +1954,8 @@ function chainLines(): Array<{ name: string; state: "good" | "warn" | "bad"; lin
   }
   if (world.cement && cementActive(world)) {
     const held = [...world.basePopulation.keys()].map((id) => ({ id, held: townGrowth(world, id)?.cementHeld ?? 0 })).filter((x) => x.held > 1).sort((p, q) => q.held - p.held);
-    const works = world.cement.working ? `Works at ${perDay(worksOutput(world))} of ${perDay(worksCapacity(world))} t/day` : "The works is idle";
+    const full = world.cement.working && worksOutput(world) >= 0.95 * worksCapacity(world) && expandCost(world, world.cement.worksId) !== null;
+    const works = world.cement.working ? `Works at ${perDay(worksOutput(world))} of ${perDay(worksCapacity(world))} t/day${full ? ` -- at capacity: expand it (${naira(expandCost(world, world.cement.worksId)!)})` : ""}` : "The works is idle";
     out.push(held.length === 0
       ? { name: "Cement", state: world.cement.working ? "good" : "warn", line: `${works}; no town held back.`, short: "enough" }
       : { name: "Cement", state: held.length >= 3 ? "bad" : "warn", line: `${works}; ${held.slice(0, 2).map((x) => `${townName(x.id)} held back ${Math.round(x.held)}k`).join(", ")}${held.length > 2 ? ` and ${held.length - 2} more` : ""}.`, short: `${held.length} town${held.length === 1 ? "" : "s"} held back` });
@@ -2255,6 +2269,13 @@ function onPanelClick(event: MouseEvent): void {
     say(result.ok
       ? `Borrowed ${naira(lent)}${purpose === "project" ? " toward your project: build it" : ", and it's restored"}. You repay ${naira(bondPerDay(world, lent))} a day for ${world.tuning.bondTermDays} days.`
       : `Can't borrow: ${result.reason}`, !result.ok, 9);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.expand) {
+    const siteId = target.dataset.expand;
+    const result = act({ label: `expanding ${townName(siteId)}`, towns: [siteId] }, { kind: "expand", siteId });
+    say(result.ok ? `${townName(siteId)} expanded for ${naira(result.amount ?? 0)}: it can make ${pct(siteScale(world, siteId))} of what it was built to, if its input and workers keep up.` : `Can't expand it: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

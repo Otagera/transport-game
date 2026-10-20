@@ -1,6 +1,7 @@
 import type { SliceWorld } from "./types";
 import { flowKey, goodsFlows, type GoodsFlow } from "./goods";
-import { crudeArriving, refineryOutput } from "./fuel";
+import { crudeArriving, refineryCapacity, refineryOutput } from "./fuel";
+import { siteScale } from "./expand";
 import { cementImports, limestoneArriving, worksCapacity, worksOutput } from "./cement";
 import { flourCapacity, flourOutput, millCapacity, millOutput, stapleArriving, wheatArriving } from "./food";
 import { siteJobs, staffFactor, staffing } from "./workers";
@@ -53,7 +54,7 @@ export function siteProduction(world: SliceWorld, siteId: string, flows: GoodsFl
   switch (site.industry) {
     case "refinery":
       product = "fuel";
-      capacity = fuel ? t.refineryShare * fuel.baseDemand : 0;
+      capacity = refineryCapacity(world);
       made = refineryOutput(world);
       inputs = [{ name: "crude", arriving: crudeArriving(world), needed: capacity }];
       idle = !fuel?.restored;
@@ -95,7 +96,7 @@ export function siteProduction(world: SliceWorld, siteId: string, flows: GoodsFl
     case "oilfield":
     case "terminal":
       product = "crude";
-      capacity = fuel ? t.crudeShare * fuel.baseDemand : 0;
+      capacity = fuel ? t.crudeShare * fuel.baseDemand * siteScale(world, fuel.refineryId) : 0;
       made = fuel?.restored ? capacity : 0;
       idle = !fuel?.restored;
       break;

@@ -6,6 +6,7 @@ import { isWater } from "../pathing/terrainAStar";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { cementActive } from "./cement";
 import { staffFactor } from "./workers";
+import { expandLevel } from "./expand";
 
 // Industries that open and close (docs/brief.md, Revision 2: the second
 // economy). A site, not a town: a few workers of its own, and goods it wants
@@ -141,7 +142,9 @@ export function updateIndustries(world: SliceWorld, dt: number): SliceEvent[] {
     const gap = tuning.industryEveryMinDays + draw(world) * (tuning.industryEveryMaxDays - tuning.industryEveryMinDays);
     world.industrySchedule.nextAtSeconds = now + gap * SECONDS_PER_GAME_DAY;
     // An idle works wants no limestone: no quarry opens for it until it runs (cement.ts).
-    if (world.industries.size < tuning.industryMaxOpen && (!cementActive(world) || world.cement!.working)) {
+    // An expanded works lets one more quarry open for it at a time (expand.ts).
+    const maxOpen = tuning.industryMaxOpen + (cementActive(world) ? expandLevel(world, world.cement!.worksId) : 0);
+    if (world.industries.size < maxOpen && (!cementActive(world) || world.cement!.working)) {
       const opened = openQuarry(world);
       if (opened) events.push(opened);
     }

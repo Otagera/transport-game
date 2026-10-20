@@ -2,6 +2,7 @@ import type { DemandPair } from "../simulation/types";
 import type { SliceTown, SliceWorld } from "./types";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { SliceEvent } from "./settlement";
+import { siteScale } from "./expand";
 
 // Sites need people (docs/brief.md, Revision 3, step 2b; asked for in the
 // step 1 playtest: "people have to go to the refinery too"). A working site
@@ -29,7 +30,7 @@ export function siteJobs(world: SliceWorld, town: SliceTown): number {
   const idle = t.jobsIdle;
   switch (town.industry) {
     case "refinery":
-      return world.fuel?.restored ? t.jobsRefinery : idle;
+      return world.fuel?.restored ? t.jobsRefinery * siteScale(world, town.id) : idle;
     case "oilfield":
     case "terminal":
       // Oil workers live at the wells, in camps, brought in by boat or air;
@@ -37,7 +38,7 @@ export function siteJobs(world: SliceWorld, town: SliceTown): number {
       // crude source on track and no road starved the refinery to a quarter.
       return 0;
     case "works":
-      return world.cement?.working ? t.jobsWorks : idle;
+      return world.cement?.working ? t.jobsWorks * siteScale(world, town.id) : idle;
     case "quarry":
       return t.jobsQuarry;
     case "depot":
@@ -45,9 +46,9 @@ export function siteJobs(world: SliceWorld, town: SliceTown): number {
     case "silo":
       return t.jobsSilo;
     case "mill":
-      return t.jobsMill;
+      return t.jobsMill * siteScale(world, town.id);
     case "flourmill":
-      return t.jobsFlourMill;
+      return t.jobsFlourMill * siteScale(world, town.id);
     default:
       return 0;
   }

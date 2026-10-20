@@ -614,6 +614,8 @@ Your run (map 2791, to day 241; file to day 209) found the game stuck in a bind.
 
 **Your look, picked in the lab 2026-10-20** (applied 2026-10-20: wings, glass, tilt, tucking, round corners, contours with names, no control hint; plus Mini Metro-style parallel route lines at shared roads): glass panels, leaning at rest and flat when used (7°), tucked at the edge and out on hover, two wings (town left, routes right), headline chips, the town card, route cards, mono type, round corners, contours with labels, a flat map plate, no control hint. `/design-lab.html#theme=paper&you=blue&material=glass&pose=rest&dock=tucked&layout=wings&headline=chips&town=card&routes=cards&type=mono&shape=round&terrain=contours-labels&plate=flat&treasury=drawer&hint=off&angle=7`
 
+**Expanding a site (built 2026-10-20, from the map 2411 playtest: day 216, ₦193,748 held, "Cement: 8 towns held back" by a works at capacity).** The refinery, the cement works, the mill and the flour mill each take up to two more lines (`expand.ts`): +50% of their first capacity a time, wanting that much more input and employing that many more people; an expanded works lets one more limestone quarry open at a time. The first line costs 0.8 of the site's restore cost (the refinery ₦48,000, the works ₦36,000, a mill ₦20,000), the second 1.5 times that. An "Expand it" button on the site card; the Treasury's cement line says when the works is at capacity. Replayed on the map 2411 run, a works expansion at day 105 lifted its output 115 → 172 t a day at once (limestone was there); the towns it holds back stay held until the extra cement is carried to them -- expanding is a step, not the answer.
+
 ### Checks for Revision 3
 
 | # | Check | Passes when |

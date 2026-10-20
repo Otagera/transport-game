@@ -6,6 +6,7 @@ import { rebuildNetworks } from "./rail";
 import { addSite, dry, nearestDistance, ringSpot } from "./fuel";
 import { inheritedRoad } from "./cement";
 import { staffFactor } from "./workers";
+import { siteScale } from "./expand";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 // The food chain (docs/brief.md, Revision 3, step 3). Farm towns -- every
@@ -111,7 +112,7 @@ export function stapleArriving(world: SliceWorld): number {
 }
 
 export function millCapacity(world: SliceWorld): number {
-  return world.food ? world.tuning.millShare * world.food.baseWant : 0;
+  return world.food ? world.tuning.millShare * world.food.baseWant * siteScale(world, world.food.millId) : 0;
 }
 
 /** What the mill makes now: its capacity, or what the staple arriving makes, whichever is less, by its staffing. */
@@ -148,7 +149,7 @@ export function foodFlows(world: SliceWorld): GoodsFlow[] {
   split(food.millId, millOutput(world), (id) => foodWant(world, id));
   // The flour chain (3c): imported wheat from the port to the flour mill, its flour to the markets.
   if (food.flourMillId && world.port && world.towns.has(world.port)) {
-    flows.push({ from: world.port, to: food.flourMillId, kind: "supplies", rate: t.wheatImportShare * t.wheatPerFlour * food.baseFlourWant });
+    flows.push({ from: world.port, to: food.flourMillId, kind: "supplies", rate: t.wheatImportShare * t.wheatPerFlour * food.baseFlourWant * siteScale(world, food.flourMillId) });
     split(food.flourMillId, flourOutput(world), (id) => flourWant(world, id));
   }
   return flows;
@@ -168,7 +169,7 @@ export function wheatArriving(world: SliceWorld): number {
 }
 
 export function flourCapacity(world: SliceWorld): number {
-  return world.food?.flourMillId ? world.tuning.flourMillShare * world.food.baseFlourWant : 0;
+  return world.food?.flourMillId ? world.tuning.flourMillShare * world.food.baseFlourWant * siteScale(world, world.food.flourMillId) : 0;
 }
 
 /** What the flour mill makes now: its capacity, or what the wheat arriving makes, by its staffing. */

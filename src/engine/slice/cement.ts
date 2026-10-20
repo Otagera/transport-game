@@ -8,6 +8,7 @@ import { canAfford, SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { planRoad } from "./roads";
 import { staffFactor } from "./workers";
+import { siteScale } from "./expand";
 
 // The building chain (docs/brief.md, Revision 3, step 2a): limestone ->
 // cement -> the towns that grow. It replaces stone's growth bonus with a
@@ -78,7 +79,7 @@ export function limestoneArriving(world: SliceWorld): number {
 
 /** The most the works can make, tonnes a second. */
 export function worksCapacity(world: SliceWorld): number {
-  return world.cement ? world.tuning.cementWorksShare * world.cement.baseDemand : 0;
+  return world.cement ? world.tuning.cementWorksShare * world.cement.baseDemand * siteScale(world, world.cement.worksId) : 0;
 }
 
 /** What the works makes now, tonnes a second: its capacity, or what the limestone arriving makes, whichever is less. */

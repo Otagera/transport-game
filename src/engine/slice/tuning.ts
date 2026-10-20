@@ -110,6 +110,17 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   flourMillShare: 1.2,
   jobsFlourMill: 0.5,
   flourWeight: 0.4,
+  // Expanding a site (expand.ts; the map 2411 playtest, day 216: ₦193,748
+  // held, 8 towns short of cement from a works at capacity). Each line adds
+  // half the site's first capacity, twice at most; the first costs 0.8 of
+  // its restore (refinery ₦48,000, works ₦36,000, a mill ₦20,000), the
+  // second 1.5 times that. First guesses, to measure on a late game.
+  expandEnabled: true,
+  expandStep: 0.5,
+  expandMaxLevel: 2,
+  expandCostShare: 0.8,
+  expandCostGrowth: 1.5,
+  millExpandCost: 25000,
   // Bonds (bonds.ts; brief, Revision 3, money): repaid over 60 days with 20%
   // interest, the same each day; all repayments at most 30% of a day's
   // income. A ₦60,000 refinery bond is ₦1,200 a day: on map 2791 around day

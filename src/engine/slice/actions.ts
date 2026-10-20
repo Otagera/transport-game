@@ -9,6 +9,7 @@ import { dropProject, nameProject, type ProjectRung } from "./project";
 import { restoreRoad, retireRoad } from "./retire";
 import { restoreRefinery } from "./fuel";
 import { restoreWorks } from "./cement";
+import { expandSite } from "./expand";
 import { issueBond, type BondPurpose } from "./bonds";
 
 // Every player action as plain data. Data, not a closure, so it can be
@@ -31,6 +32,7 @@ export type ActionSpec =
   | { kind: "dropProject" }
   | { kind: "restoreRefinery" }
   | { kind: "restoreWorks" }
+  | { kind: "expand"; siteId: string }
   | { kind: "bond"; purpose: BondPurpose }
   | { kind: "sell"; routeId: string };
 
@@ -90,6 +92,10 @@ export function applyAction(world: SliceWorld, spec: ActionSpec): ActionOutcome 
       return { ok: true };
     case "restoreRefinery": {
       const result = restoreRefinery(world);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
+    case "expand": {
+      const result = expandSite(world, spec.siteId);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
     }
     case "restoreWorks": {
