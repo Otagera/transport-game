@@ -1410,7 +1410,7 @@ function renderMillSite(townId: string): void {
       <div class="title">${site.name}</div>
       <ul>
         <li>Makes ${food.crops.food} from the farm towns' ${food.crops.staple}: ${t.staplePerFood} t makes a tonne. ${perDay(stapleArriving(world))} t a day is reaching it.</li>
-        <li>Its ${food.crops.food} is split between the market towns by what they want. A fed market draws market days: more trips, and room to grow.</li>
+        <li>Its ${food.crops.food} is split between the market towns by what they want. A fed market draws trade: more trips, and room to grow.</li>
         <li>Truckers take short hauls (yellow on each bar); the far markets' share waits for your lorries or freight trains.</li>
         ${workersItem(townId)}
       </ul>
@@ -1455,7 +1455,7 @@ function renderFlourMillSite(townId: string): void {
     </div>`;
 }
 
-// A town's food (food.ts): a market's supply and its market days; a farm town's crops.
+// A town's food (food.ts): a market's supply and the trade it draws; a farm town's crops.
 function foodText(townId: string): string {
   const food = world.food;
   if (!food || !foodActive(world) || !world.basePopulation.has(townId)) return "";
@@ -1465,9 +1465,9 @@ function foodText(townId: string): string {
     const served = marketFed(world, townId);
     const flour = food.flourMillId ? `, ${pct(flourServed(world, townId))} of its ${perDay(flourWant(world, townId))} t of flour` : "";
     const extra = Math.round(world.tuning.marketTripBoost * 100);
-    const state = served >= 0.8 ? `Its market days are busy: trips to it up ${pct(world.tuning.marketTripBoost * served)}.`
-      : served >= 0.2 ? `Its market is ${served >= 0.5 ? "short" : "half empty"}: trips to it up ${pct(world.tuning.marketTripBoost * served)} of a possible ${extra}%.`
-      : `Its market is empty: fed, its market days would draw up to ${extra}% more trips. Carry ${food.crops.food} from ${townName(food.millId)}.`;
+    const state = served >= 0.8 ? `Its market is busy: trade draws ${pct(world.tuning.marketTripBoost * served)} more trips to it.`
+      : served >= 0.2 ? `Its market is ${served >= 0.5 ? "short" : "half empty"}: trade draws ${pct(world.tuning.marketTripBoost * served)} more trips to it, of a possible ${extra}%.`
+      : `Its market is empty: fed, its trade would draw up to ${extra}% more trips. Carry ${food.crops.food} from ${townName(food.millId)}.`;
     return `<p class="townshare"><b>Food:</b> ${pct(foodServed(world, townId))} of the ${perDay(foodWant(world, townId))} t of ${food.crops.food} it wants a day${flour}. ${state}</p>`;
   }
   if (farmTowns(world).some((town) => town.id === townId)) {
@@ -1886,7 +1886,7 @@ function chainLines(): Array<{ name: string; state: "good" | "warn" | "bad"; lin
     const exportLine = `${exports} t/day of ${food.crops.cash} exported`;
     out.push(short.length === 0
       ? { name: "Food", state: "good", line: `Every market fed; ${mill}; ${exportLine}.`, short: "markets fed" }
-      : { name: "Food", state: short.length === markets.length ? "bad" : "warn", line: `${short.slice(0, 3).map((x) => `${townName(x.id)} ${pct(x.s)}`).join(", ")} fed: market days thin; ${mill}; ${exportLine}.`, short: `${short.length} market${short.length === 1 ? "" : "s"} short` });
+      : { name: "Food", state: short.length === markets.length ? "bad" : "warn", line: `${short.slice(0, 3).map((x) => `${townName(x.id)} ${pct(x.s)}`).join(", ")} fed: market trade thin; ${mill}; ${exportLine}.`, short: `${short.length} market${short.length === 1 ? "" : "s"} short` });
   }
   if (world.tuning.workersEnabled) {
     const sites = [...world.towns.values()].filter((site) => site.industry && siteJobs(world, site) > world.tuning.jobsIdle + 1e-9);

@@ -14,7 +14,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 // farm towns, which makes the region's food from it (none without it) for
 // the market towns. The cash crop goes straight to the port, for export:
 // you earn its freight and, from the state, an export payment a tonne
-// (tick.ts). A market town's food draws its market days (3b, settlement.ts
+// (tick.ts). A market town's food draws market trade (3b, settlement.ts
 // refreshDemand: more trips to it) and some room to grow (growth.ts).
 //
 //   farm towns --staple--> mill --food--> market towns
@@ -22,7 +22,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 //   the port --imported wheat--> flour mill --flour--> market towns (3c)
 //
 // A market's food basket is the region's food and flour together
-// (`flourWeight` of it flour): market days and room to grow read the basket
+// (`flourWeight` of it flour): market trade and room to grow read the basket
 // (`marketFed`).
 //
 // Replaces, with food on, the produce each farm town sent its nearest
@@ -74,7 +74,7 @@ export function farmTowns(world: SliceWorld): SliceTown[] {
   return [...world.towns.values()].filter((town) => !town.industry && world.basePopulation.has(town.id) && town.population < world.tuning.marketPopulation && town.id !== world.port);
 }
 
-/** Original towns at market size: they eat what the mill makes, and hold the market days. */
+/** Original towns at market size: they eat what the mill makes, and draw market trade. */
 export function marketTowns(world: SliceWorld): SliceTown[] {
   return [...world.towns.values()].filter((town) => !town.industry && world.basePopulation.has(town.id) && town.population >= world.tuning.marketPopulation);
 }
@@ -256,14 +256,14 @@ export function placeMill(world: SliceWorld, region: string | undefined): void {
 }
 
 /**
- * Market days (brief, Revision 3, step 3b): a market town with food draws
- * market trips from the towns around it -- every trip to or from it grows by
+ * Market trade (brief, Revision 3, step 3b): a market town with food draws
+ * trade from the towns around it -- every trip to or from it grows by
  * `marketTripBoost` at full food, less as it runs short (both ways: trips
  * are reciprocal, principles §3). Riders for you and the danfos: short of
  * food, a market's trips shrink, and you see it in its fares. Called from
  * refreshDemand, once a day, after the rail's induced trips.
  */
-export function applyMarketDays(world: SliceWorld): void {
+export function applyMarketTrade(world: SliceWorld): void {
   if (!foodActive(world) || world.tuning.marketTripBoost <= 0) return;
   const boost = new Map(marketTowns(world).map((town) => [town.id, world.tuning.marketTripBoost * marketFed(world, town.id)]));
   for (const pair of world.simulation.demand) {

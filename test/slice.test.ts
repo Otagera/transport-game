@@ -3281,7 +3281,7 @@ describe("Revision 3, step 3: the food chain (food.ts)", () => {
     for (const flow of out) expect(flow.rate / foodWant(w, flow.to)).toBeCloseTo(out[0]!.rate / foodWant(w, out[0]!.to), 9);
   });
 
-  test("market days: a fed market draws more trips, by the share of its food it gets; and room to grow", () => {
+  test("market trade: a fed market draws more trips, by the share of its food it gets; and room to grow", () => {
     const w = game();
     const food = w.food!;
     const market = marketTowns(w)[0]!;

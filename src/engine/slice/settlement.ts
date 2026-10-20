@@ -1,5 +1,5 @@
 import { commuteDemand } from "./workers";
-import { applyMarketDays } from "./food";
+import { applyMarketTrade } from "./food";
 import type { Vehicle } from "../simulation/types";
 import type { SliceTown, SliceWorld } from "./types";
 import { emptyOutcome, gravityDemand, pairKey } from "./world";
@@ -162,7 +162,7 @@ export function refreshDemand(world: SliceWorld): void {
     ...commuteDemand(world),
   ];
   applyRailDemand(world); // trips a passenger line makes that weren't made before
-  applyMarketDays(world); // trips a fed market draws (food.ts)
+  applyMarketTrade(world); // trips a fed market draws (food.ts)
   for (const pair of world.simulation.demand) {
     const key = pairKey(pair.from, pair.to);
     if (!world.pairOutcomes.has(key)) world.pairOutcomes.set(key, emptyOutcome());

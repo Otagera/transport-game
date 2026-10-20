@@ -90,7 +90,7 @@ From your two games and the day-136 run file (principles §6):
   at 30% of income. The Treasury drawer above the toolbar (your lab pick), the budget out of
   the side panel. Your full lab look is recorded in the brief, not yet applied.
 - **Step 3 built** (the food chain, `food.ts`): farm towns' staple to one mill, its food to the
-  market towns; cash crops to the port with an export payment; a fed market's market days
+  market towns; cash crops to the port with an export payment; the trade a fed market draws
   (more trips) and room to grow. Next: your playtest of step 3, then the restyle to your lab
   look.
 - **Steps 2b–2c built** (`workers.ts`): sites employ people who commute from nearby towns; a

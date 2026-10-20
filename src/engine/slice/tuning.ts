@@ -85,7 +85,7 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // the markets' day-1 want: on map 2791, 268 t of staple from 134k farm
   // people makes 134 t, against 135 t wanted by 270k in the markets. The
   // state pays ₦4 a tonne of cash crop reaching the port (exports: ~₦270 a
-  // day there at full). A fed market draws 30% more trips (market days) and
+  // day there at full). A fed market draws 30% more trips (market trade) and
   // grows up to a quarter of its start more. First guesses, to be measured.
   foodEnabled: true,
   foodPerThousandPerDay: 0.5,
