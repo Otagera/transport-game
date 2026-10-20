@@ -993,3 +993,27 @@ transfers, diagnosis, debt advice, receipts and forecasts treat it as any passen
 - **On screen** (`main.ts`): the works' and terminal's cards (`renderCementSite`, with the
   Restore button), a Cement line on the town card (`cementText`), "can't grow: no cement" as
   the town's problem, the map footer saying how the works started; glyphs in `render.ts`.
+
+### Sites need people (Revision 3, steps 2b–2c)
+
+- **`workers.ts`** — `siteJobs` (thousands, by kind: `jobsRefinery`, `jobsWorks`,
+  `jobsQuarry`, `jobsDepot`, `jobsSilo`; an idle refinery or works `jobsIdle`; crude sources
+  0). With `workersEnabled`, sites are out of the towns' gravity demand and their trips are
+  `commuteDemand` (added in `settlement.ts refreshDemand`): `commutePerThousandJobs` a day
+  each way per thousand jobs, split over `workforceShares` — towns within
+  `commuteReachCells`, by population over distance. Restoring the refinery or works
+  refreshes demand (its workers come back).
+- **Staffing** (`staffing`): of the commutes to a site, the share made (yours, poached,
+  gave up) over `staffFullShare`, capped at 1; full while nothing's measured. `staffFactor`
+  = `staffFloor` + the rest × staffing, and scales the tank farm's imports, the refinery's and
+  works' output, a quarry's output and the terminal's imports. A site with no jobs runs at 1.
+- **Growth around sites** (`jobsGrowth`, in `growth.ts townGrowth` before the cement limit):
+  a town's room gains `peoplePerJob` per staffed job its people hold, at most `jobsCapShare`
+  of its start. **Gate camps** (`updateSites`, every tick, `world.sites`): a site with at
+  least `gateTownMinJobs` counts days staffed at half or better; at `gateTownDays` it calls
+  `settlement.ts foundGateTown`, which splits the site's busiest road at its middle (if it
+  carries enough people to keep a town) with an emergent town ("Refinery Camp", "Cement
+  Camp"), outside `maxEmergentTowns`; one per site, again only if it empties out.
+- **On screen** (`main.ts`): an Employs line on every site card (`workersItem`) and its
+  problem when short (`workersProblem`), a Jobs line on town cards (`jobsText`), the camp's
+  founding message.

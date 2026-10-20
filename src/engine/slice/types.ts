@@ -12,6 +12,7 @@ import type { MilestoneState } from "./score";
 import type { CorridorState } from "./corridors";
 import type { FuelState } from "./fuel";
 import type { CementState } from "./cement";
+import type { SitesState } from "./workers";
 import type { IndustryState } from "./industries";
 import type { TruckerHeld } from "./truckers";
 import type { BudgetTally, RemittancePeriod } from "./budget";
@@ -414,6 +415,32 @@ export interface SliceTuning {
   cementIdleChance: number;
   quarryAfterRestoreDays: number;
   cementFreeShare: number;
+  /**
+   * Sites need people (workers.ts, brief Revision 3, step 2b): on; jobs at each kind of site,
+   * thousands, working (an idle one keeps `jobsIdle`); commute trips a day each way per thousand
+   * jobs, from towns within `commuteReachCells`; a site's output at nobody arriving
+   * (`staffFloor`), and the share of its commutes made that's a full shift (`staffFullShare`).
+   */
+  workersEnabled: boolean;
+  jobsRefinery: number;
+  jobsWorks: number;
+  jobsQuarry: number;
+  jobsDepot: number;
+  jobsSilo: number;
+  jobsIdle: number;
+  commutePerThousandJobs: number;
+  commuteReachCells: number;
+  staffFloor: number;
+  staffFullShare: number;
+  /**
+   * Towns grow around sites (workers.ts, step 2c): people a town's room to grow gains per job its
+   * people hold at a site they reach, at most `jobsCapShare` of its start; a site with at least
+   * `gateTownMinJobs` (thousands) that has worked staffed for `gateTownDays` grows a camp at its gate.
+   */
+  peoplePerJob: number;
+  jobsCapShare: number;
+  gateTownMinJobs: number;
+  gateTownDays: number;
   /** Private truckers (truckers.ts, brief Revision 2): on, how fast they take waiting goods, the longest haul they take, their trucks, their cut of the fare, the loading levy. */
   truckersEnabled: boolean;
   truckerPickupSeconds: number;
@@ -461,6 +488,8 @@ export interface SliceWorld {
   fuel: FuelState | null;
   /** The building chain's works and state (cement.ts); null until placed, or with it off. */
   cement: CementState | null;
+  /** Each site's staffed days and the camp at its gate (workers.ts). */
+  sites: SitesState;
   /** Goods truckers hold at yards, filling a truck (truckers.ts). */
   truckers: TruckerHeld;
   width: number;

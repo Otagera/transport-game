@@ -82,8 +82,13 @@ From your two games and the day-136 run file (principles §6):
   Step 1's playtest was cut short (a code change reloaded the page); moved on at your word.
 - **Step 2a built** (the building chain, `cement.ts`): limestone quarries → a cement works
   (working or idle by the map's seed) → towns; cement holds a town's growth back past +40% of
-  its start. Next: 2b, workers commuting to sites, then 2c, towns growing around them; then a
-  playtest of step 2.
+  its start.
+- **Steps 2b–2c built** (`workers.ts`): sites employ people who commute from nearby towns; a
+  site makes less when they can't get there; jobs give nearby towns room to grow, and a
+  long-working refinery or works grows a camp at its gate. Next: your playtest of step 2 on a
+  generated map, past day 150, saving the run (`?seed=0` has a working works, `?seed=1` an
+  idle one). Seen in probes, not fixed: one freight train's crude to the refinery peaks at
+  ~160 t a day around day 40 and falls to ~57 by day 80, workers or not.
 - **Named projects:** the 30-day clock now starts when you can afford the project, with a
   warning before it lapses. **Run files** record the build and the full tuning.
 

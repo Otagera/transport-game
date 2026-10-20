@@ -329,6 +329,12 @@ blow-by-blow; this section is the distilled rule.
   nothing to carry and the player couldn't help. Split, every town's share waits at the
   works; truckers take the near ones, and the far ones are yours. (Fuel's imports cover the
   map, so nearest first there only decides who's short at the edges.)
+- **An input the informal sector already supplies must be calibrated to it** (slice,
+  Revision 3, workers). Danfos carry 46–89% of commutes to a connected site on day 1;
+  staffing reads full at half of them made, so the dependency bites where it's true (no
+  road, a jam, danfos parked by a fuel shortage) and not as a day-1 tax. And a site whose
+  workers can't commute by road at all — a crude source fed by your freight line — mustn't
+  depend on them: measured, it starved the refinery to a quarter.
 
 ### Decay (slice, §6 step 4)
 

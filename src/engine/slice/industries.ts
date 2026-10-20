@@ -5,6 +5,7 @@ import { flowKey, type GoodsFlow } from "./goods";
 import { isWater } from "../pathing/terrainAStar";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { cementActive } from "./cement";
+import { staffFactor } from "./workers";
 
 // Industries that open and close (docs/brief.md, Revision 2: the second
 // economy). A site, not a town: a few workers of its own, and goods it wants
@@ -79,14 +80,14 @@ export function industryFlows(world: SliceWorld): GoodsFlow[] {
     const cement = world.cement!;
     if (!cement.working) return flows;
     for (const industry of world.industries.values()) {
-      if (world.towns.has(industry.id)) flows.push({ from: industry.id, to: cement.worksId, kind: "supplies", rate: tuning.quarryOutputPerDay / SECONDS_PER_GAME_DAY });
+      if (world.towns.has(industry.id)) flows.push({ from: industry.id, to: cement.worksId, kind: "supplies", rate: (tuning.quarryOutputPerDay * staffFactor(world, industry.id)) / SECONDS_PER_GAME_DAY });
     }
     return flows;
   }
   for (const industry of world.industries.values()) {
     const site = world.towns.get(industry.id);
     if (!site) continue;
-    const output = tuning.quarryOutputPerDay / SECONDS_PER_GAME_DAY;
+    const output = (tuning.quarryOutputPerDay * staffFactor(world, industry.id)) / SECONDS_PER_GAME_DAY;
     const port = world.port && world.port !== site.id && world.towns.has(world.port) ? world.port : null;
     const toTowns = port ? 1 - tuning.quarryExportShare : 1;
     const nearest = originalTowns(world)

@@ -23,6 +23,7 @@ import { repairCost, roughCostPerDay, upkeepPerDay, wearSpeed } from "./wear";
 import { costRate, planRoad, segmentLength, type Alignment, type Point } from "./roads";
 import { paveStepCost } from "../pathing/cost";
 import { openLane } from "./pushback";
+import { createSitesState } from "./workers";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -125,6 +126,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     industrySchedule: createIndustrySchedule(tuning, def.towns.reduce((sum, town) => sum * 31 + Math.round(town.x * 7 + town.y * 13 + town.population), 17)),
     fuel: null,
     cement: null,
+    sites: createSitesState(),
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),

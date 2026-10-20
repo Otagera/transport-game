@@ -7,6 +7,7 @@ import { addSite, dry, nearestDistance, ringSpot } from "./fuel";
 import { canAfford, SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { planRoad } from "./roads";
+import { staffFactor } from "./workers";
 
 // The building chain (docs/brief.md, Revision 3, step 2a): limestone ->
 // cement -> the towns that grow. It replaces stone's growth bonus with a
@@ -83,12 +84,12 @@ export function worksCapacity(world: SliceWorld): number {
 /** What the works makes now, tonnes a second: its capacity, or what the limestone arriving makes, whichever is less. */
 export function worksOutput(world: SliceWorld): number {
   if (!world.cement?.working) return 0;
-  return Math.min(worksCapacity(world), limestoneArriving(world) / world.tuning.limestonePerCement);
+  return Math.min(worksCapacity(world), limestoneArriving(world) / world.tuning.limestonePerCement) * staffFactor(world, world.cement.worksId);
 }
 
 /** Imported cement through the terminal, tonnes a second (idle-works maps only). */
 export function cementImports(world: SliceWorld): number {
-  return world.cement?.siloId ? world.tuning.cementImportShare * world.cement.baseDemand : 0;
+  return world.cement?.siloId ? world.tuning.cementImportShare * world.cement.baseDemand * staffFactor(world, world.cement.siloId) : 0;
 }
 
 /**
@@ -145,6 +146,7 @@ export function restoreWorks(world: SliceWorld): ActionResult & { charged?: numb
   if (!canAfford(world.economy, cost)) return { ok: false, reason: "can't afford it" };
   world.economy.funds -= cost;
   cement.working = true;
+  refreshDemand(world); // its workers come back (workers.ts)
   // The first quarry for it opens within a few days.
   const soon = world.economy.elapsedSeconds + world.tuning.quarryAfterRestoreDays * SECONDS_PER_GAME_DAY;
   world.industrySchedule.nextAtSeconds = Math.min(world.industrySchedule.nextAtSeconds, soon);

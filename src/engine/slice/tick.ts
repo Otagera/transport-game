@@ -4,7 +4,8 @@ import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehi
 import { applyOperatingCosts, updateIncomeRateEMA } from "../economy/state";
 import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types";
 import { pairKey, roadPath, takeShortestRoad } from "./world";
-import { updateSettlements, type SliceEvent } from "./settlement";
+import { foundGateTown, updateSettlements, type SliceEvent } from "./settlement";
+import { updateSites } from "./workers";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
 import { dispatchTrucks, truckersPickUp } from "./truckers";
@@ -339,7 +340,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
 
-  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor), ...updateIndustries(world, dt), ...updateRetired(world, dt)];
+  const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor), ...updateIndustries(world, dt), ...updateSites(world, dt, foundGateTown), ...updateRetired(world, dt)];
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
   if (recordDay(world)) sampleTowns(world);
   return events;

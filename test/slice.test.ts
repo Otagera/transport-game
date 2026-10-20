@@ -16,6 +16,8 @@ import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/slice/industries";
+import { jobsGrowth, siteJobs, staffFactor, updateSites, workforceShares } from "@engine/slice/workers";
+import { foundGateTown } from "@engine/slice/settlement";
 import { cementDemand, cementFlows, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { lineSlots, onRoadCost, stationTowns, trackCost } from "@engine/slice/rail";
 import { haulShare, truckersPickUp } from "@engine/slice/truckers";
@@ -3097,5 +3099,78 @@ describe("Revision 3, step 2a: the building chain (cement.ts)", () => {
     // With the chain off, no limit.
     w.tuning = { ...w.tuning, cementEnabled: false };
     expect(townGrowth(w, town)!.cap).toBeCloseTo(full.cap, 6);
+  });
+});
+
+describe("Revision 3, steps 2b-2c: sites need people, and towns grow around them (workers.ts)", () => {
+  const game = () => startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+  const into = (w: SliceWorld, siteId: string, made: number, lost: number) => {
+    for (const key of [...w.pairOutcomes.keys()]) if (key.endsWith(`:${siteId}`)) w.pairOutcomes.delete(key);
+    w.pairOutcomes.set(`somewhere:${siteId}`, { player: 0, poached: made, gaveUp: 0, lost });
+  };
+
+  test("a site's trips are its workers' commutes, both ways, sized by its jobs; it's out of the towns' gravity", () => {
+    const w = game();
+    const works = w.towns.get(w.cement!.worksId)!;
+    const to = w.simulation.demand.filter((pair) => pair.to === works.id).reduce((sum, pair) => sum + pair.rate, 0);
+    const from = w.simulation.demand.filter((pair) => pair.from === works.id).reduce((sum, pair) => sum + pair.rate, 0);
+    const expected = (w.tuning.commutePerThousandJobs * siteJobs(w, works)) / SECONDS_PER_GAME_DAY;
+    expect(to).toBeCloseTo(expected, 9);
+    expect(from).toBeCloseTo(expected, 9);
+    // Between two sites, no trips: they're workplaces, not towns.
+    const depot = w.fuel!.depotId;
+    expect(w.simulation.demand.some((pair) => pair.from === depot && pair.to === works.id)).toBe(false);
+    // Crude sources have no commuters and run regardless.
+    expect(siteJobs(w, w.towns.get(w.fuel!.sourceId)!)).toBe(0);
+    expect(staffFactor(w, w.fuel!.sourceId)).toBe(1);
+  });
+
+  test("a site short of workers makes less: a quarter with nobody arriving, all from half its commutes made", () => {
+    const w = game();
+    const id = w.cement!.worksId;
+    into(w, id, 0, 10);
+    expect(staffFactor(w, id)).toBeCloseTo(w.tuning.staffFloor, 9);
+    const [quarry] = [...w.industries.keys()];
+    w.goods.outcomes.set(flowKey({ from: quarry!, to: id, kind: "supplies" }), { delivered: 100 * w.cement!.baseDemand, spoiled: 0 });
+    expect(worksOutput(w)).toBeCloseTo(worksCapacity(w) * w.tuning.staffFloor, 9);
+    into(w, id, 5, 5);
+    expect(staffFactor(w, id)).toBe(1);
+    expect(worksOutput(w)).toBeCloseTo(worksCapacity(w), 9);
+    // Switched off, nobody's counted.
+    w.tuning = { ...w.tuning, workersEnabled: false };
+    into(w, id, 0, 10);
+    expect(staffFactor(w, id)).toBe(1);
+  });
+
+  test("jobs its people reach give a town room to grow, bounded by its start; jobs nobody reaches give none", () => {
+    const w = game();
+    const id = w.cement!.worksId;
+    const works = w.towns.get(id)!;
+    const [town, share] = [...workforceShares(w, works)].sort((p, q) => q[1] - p[1])[0]!;
+    for (const site of [...w.towns.values()].filter((s) => s.industry && s.id !== id)) into(w, site.id, 0, 10);
+    into(w, id, 5, 5);
+    const base = w.basePopulation.get(town)!;
+    expect(jobsGrowth(w, town)).toBeCloseTo(Math.min(base * w.tuning.jobsCapShare, siteJobs(w, works) * share * w.tuning.peoplePerJob), 6);
+    into(w, id, 0, 10);
+    expect(jobsGrowth(w, town)).toBeCloseTo(0, 9);
+  });
+
+  test("a big site that has worked staffed long enough grows one camp at its gate, on its road", () => {
+    const w = game();
+    const id = w.cement!.worksId;
+    into(w, id, 5, 5);
+    w.sites.workedDays.set(id, w.tuning.gateTownDays);
+    const road = w.simulation.map.segments.find((s) => s.type === "road" && (s.fromNodeId === id || s.toNodeId === id))!;
+    w.settlement.segmentFlowEMA.set(road.id, 10);
+    const events = updateSites(w, SIM_DT, foundGateTown);
+    const founded = events.find((e) => e.kind === "founded");
+    expect(founded && founded.kind === "founded" && founded.site).toBe(id);
+    const camp = w.sites.gates.get(id)!;
+    expect(w.towns.get(camp)!.name).toBe("Cement Camp");
+    expect(w.settlement.emergent.has(camp)).toBe(true);
+    expect(roadPath(w, id, camp)!.nodeIds.length).toBe(2); // on its road, next to it
+    // Only one.
+    w.sites.workedDays.set(id, 2 * w.tuning.gateTownDays);
+    expect(updateSites(w, SIM_DT, foundGateTown).some((e) => e.kind === "founded")).toBe(false);
   });
 });

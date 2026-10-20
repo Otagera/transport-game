@@ -57,6 +57,7 @@ import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
+import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/slice/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { isYourRoad } from "@engine/slice/upkeep";
 import { goneAt, restoreCost as restoreRoadCost } from "@engine/slice/retire";
@@ -497,6 +498,8 @@ function announce(event: SliceEvent): void {
       : `A quarry has opened near ${townName(event.near)}: ${world.tuning.quarryOutputPerDay} t of stone a day for ${[...new Set(buyers)].join(", ")}. Nothing moves it until you do.`, false, 9);
   } else if (event.kind === "industry-closed") {
     say(`${event.name} has closed: ${event.reason === "worked out" ? "it's worked out" : "nothing was moved from it"}.`, true, 7);
+  } else if (event.kind === "founded" && event.site) {
+    say(`${event.name} has grown at the gate of ${townName(event.site)}: its workers live there now, and your buses on its road stop at it.`, false, 7);
   } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
   } else {
@@ -1166,7 +1169,8 @@ function renderIndustry(townId: string): void {
     })
     .join("");
   const now = world.economy.elapsedSeconds;
-  const kicker = industry ? `Quarry · opened day ${gameDay(world, industry.openedAtSeconds)} · works out about day ${gameDay(world, industry.closesAtSeconds)}` : "Quarry";
+  const opened = industry && industry.openedAtSeconds >= world.startSeconds ? `opened day ${gameDay(world, industry.openedAtSeconds)}` : "working before you came";
+  const kicker = industry ? `Quarry · ${opened} · works out about day ${gameDay(world, industry.closesAtSeconds)}` : "Quarry";
   const biggest = [...flows].sort((p, q) => q.rate - p.rate)[0];
   let problem = "";
   if (isCutOff(world, townId)) {
@@ -1175,7 +1179,7 @@ function renderIndustry(townId: string): void {
     problem = `No road reaches it. Build one (<kbd>R</kbd>)${near ? ` from ${townName(near.id)}` : ""} and its ${cargo} can move.`;
   } else if (industry && industry.deliveredEMA * SECONDS_PER_GAME_DAY < world.tuning.industryMinDeliveredPerDay) {
     const closes = industry.openedAtSeconds + world.tuning.industryGraceDays * SECONDS_PER_GAME_DAY;
-    problem = `Nothing is moving its ${cargo}${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
+    problem = workersProblem(townId) || `Nothing is moving its ${cargo}${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
   }
   routesEl.innerHTML = `
     <div class="town-card">
@@ -1186,10 +1190,28 @@ function renderIndustry(townId: string): void {
           ? `${world.tuning.quarryOutputPerDay} t of limestone a day for ${townName(world.cement!.worksId)}: ${world.tuning.limestonePerCement} t makes a tonne of cement, and towns past their first growth need cement to grow.`
           : `${world.tuning.quarryOutputPerDay} t of stone a day. Stone feeds construction: a town that gets the stone it wants can grow more.`}</li>
         <li>${world.tuning.truckersEnabled ? "Truckers take what you don't on short hauls (yellow on each bar); the rest is lost." : "Nobody else carries it: what isn't moved is lost."}</li>
+        ${workersItem(townId)}
       </ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}
       ${rows}
     </div>`;
+}
+
+// A site's workers (workers.ts, step 2b): how many, where from, how many
+// get there -- and, short, the problem: a site short of workers makes less.
+function workersItem(siteId: string): string {
+  const site = world.towns.get(siteId)!;
+  const jobs = siteJobs(world, site);
+  if (!world.tuning.workersEnabled || jobs <= 0) return "";
+  const from = [...workforceShares(world, site)].sort((p, q) => q[1] - p[1]).slice(0, 3).map(([id, share]) => `${townName(id)} ${pct(share)}`).join(", ");
+  return `<li>Employs ${Math.round(jobs * 1000).toLocaleString()}, from ${from}; ${pct(staffing(world, siteId))} of a full shift gets here, so it makes ${pct(staffFactor(world, siteId))} of what it could.</li>`;
+}
+
+function workersProblem(siteId: string): string {
+  const site = world.towns.get(siteId)!;
+  if (!world.tuning.workersEnabled || siteJobs(world, site) < 0.2 || staffing(world, siteId) >= 0.8) return "";
+  const why = isCutOff(world, siteId) ? "no road reaches it" : "the danfos don't carry enough of them";
+  return `Its workers can't get here: ${why}, so it makes ${pct(staffFactor(world, siteId))} of what it could. ${isCutOff(world, siteId) ? "Build a road (<kbd>R</kbd>) to it." : "Run a bus (<kbd>B</kbd>) from the town most of them live in."}`;
 }
 
 // A fuel site's card (brief, Revision 3, the fuel chain): what it does, what
@@ -1249,11 +1271,12 @@ function renderFuelSite(townId: string): void {
     if (!fuel.restored) problem = `Waiting on ${refinery.name}: until it's restored, nobody wants this crude.`;
     else if (!railPath(world, townId, fuel.refineryId) && !roadPath(world, townId, fuel.refineryId)) problem = `No way to ${refinery.name}: lay track (<kbd>K</kbd>) or build a road (<kbd>R</kbd>) to it.`;
   }
+  if (!problem) problem = workersProblem(townId);
   routesEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
-      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}</ul>
+      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}${workersItem(townId)}</ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
       ${rows}
     </div>`;
@@ -1309,14 +1332,23 @@ function renderCementSite(townId: string): void {
       problem = `Short of limestone: ${perDay(limestoneArriving(world))} of ${Math.round(capacity * t.limestonePerCement)} t a day. Carry more from a quarry, or connect another when one opens.`;
     }
   }
+  if (!problem) problem = workersProblem(townId);
   routesEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
-      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}</ul>
+      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}${workersItem(townId)}</ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
       ${rows}
     </div>`;
+}
+
+// Jobs at sites a town's people reach (workers.ts, step 2c): room to grow.
+function jobsText(townId: string): string {
+  const room = jobsGrowth(world, townId);
+  if (room < 0.3) return "";
+  const at = [...world.towns.values()].filter((site) => site.industry && (workforceShares(world, site).get(townId) ?? 0) * siteJobs(world, site) >= 0.05).map((site) => site.name);
+  return `<p class="townshare"><b>Jobs:</b> its people work at ${at.join(", ")}: room for ${Math.round(room)}k more people while they get there.</p>`;
 }
 
 // A town's cement (cement.ts): how well supplied, and what that's holding back.
@@ -1395,6 +1427,7 @@ function renderTown(townId: string): void {
       ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
       ${world.tuning.goodsEnabled ? fuelText(townId) : ""}
       ${world.tuning.goodsEnabled ? cementText(townId) : ""}
+      ${jobsText(townId)}
       ${world.tuning.goodsEnabled ? goodsText(townId) : ""}
       ${rows}
       <div class="pager">

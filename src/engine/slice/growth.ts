@@ -5,6 +5,7 @@ import { isDirt } from "./congestion";
 import { laneEncroachment } from "./pushback";
 import { stoneServed } from "./industries";
 import { cementActive, cementServed } from "./cement";
+import { jobsGrowth } from "./workers";
 import { stationTowns } from "./rail";
 
 // The original towns grow (docs/principles.md §6, step 4: depth, one at a
@@ -124,7 +125,8 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   // A town a passenger train stops at grows past its rail rung (brief,
   // Revision 2: station towns grow) -- bounded, like every share, by its start.
   const station = tuning.railEnabled && stationTowns(world).has(townId) ? tuning.stationCapShare : 0;
-  const roadCap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone + station));
+  // Jobs at sites its people reach draw more (workers.ts, step 2c); new housing needs cement like any.
+  const roadCap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone + station)) + jobsGrowth(world, townId);
   // Cement holds growth back past a free stretch (brief, Revision 3, step
   // 2a): a town builds its first `cementFreeShare` of its start with local
   // materials; above that, its room is scaled by the cement it gets.

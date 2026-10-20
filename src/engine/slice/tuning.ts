@@ -490,6 +490,35 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   quarryAfterRestoreDays: 3,
   cementFreeShare: 0.4,
 
+  // Sites need people (workers.ts; brief, Revision 3, step 2b). A refinery
+  // employs about 3,000, a cement works 2,000, a quarry or depot 500. Each
+  // thousand jobs makes 40 commutes a day each way, from towns within 35
+  // cells: a refinery's 120 a day is a bus route's worth (the trunk carries
+  // 700-1,000). Danfos carry 16-76% of the trips to sites on day 1, so a
+  // full shift is half the commutes made: a tank farm by the port is fully
+  // staffed from the start, a works on dirt roads at ~60% until someone
+  // runs a bus. Nobody arriving, a site still makes a quarter (some live on
+  // site, or walk). First guesses, to be measured.
+  workersEnabled: true,
+  jobsRefinery: 3,
+  jobsWorks: 2,
+  jobsQuarry: 0.5,
+  jobsDepot: 0.5,
+  jobsSilo: 0.3,
+  jobsIdle: 0.05,
+  commutePerThousandJobs: 40,
+  commuteReachCells: 35,
+  staffFloor: 0.25,
+  staffFullShare: 0.5,
+  // Towns around sites (step 2c): each job held brings four people (the
+  // household and the trade), at most half a town's start -- a refinery's
+  // 3,000 jobs is ~12k people spread over the towns nearby. A refinery or
+  // cement works that has worked 30 staffed days grows a camp at its gate.
+  peoplePerJob: 4,
+  jobsCapShare: 0.5,
+  gateTownMinJobs: 1.5,
+  gateTownDays: 30,
+
   // Rail's own job (brief, Revision 2). A line carries `trackSlots` trains,
   // passenger and freight together: a freight train takes a passenger one's
   // slot, so a busy line is a choice (C7). Rail makes trips that weren't made

@@ -7,6 +7,7 @@ import { isWater } from "../pathing/terrainAStar";
 import { canAfford } from "../economy/state";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
+import { staffFactor } from "./workers";
 
 // The fuel chain (docs/brief.md, Revision 3, step 1): goods that feel real,
 // in chains. One site's output is another's input, and a site makes nothing
@@ -88,7 +89,7 @@ function crudeArriving(world: SliceWorld): number {
 export function refineryOutput(world: SliceWorld): number {
   const fuel = world.fuel;
   if (!fuel?.restored) return 0;
-  return Math.min(world.tuning.refineryShare * fuel.baseDemand, crudeArriving(world));
+  return Math.min(world.tuning.refineryShare * fuel.baseDemand, crudeArriving(world)) * staffFactor(world, fuel.refineryId);
 }
 
 /**
@@ -112,7 +113,8 @@ export function fuelFlows(world: SliceWorld): GoodsFlow[] {
   const byRoad = (from: string, to: string) => roadPath(world, from, to)?.distance ?? Infinity;
   const towns = burners(world).map((town) => ({ town, need: fuelDemand(world, town.id), fromRefinery: 0, fromDepot: 0, dr: byRoad(refinery.id, town.id), dd: byRoad(depot.id, town.id) }));
   let refined = refineryOutput(world);
-  let imported = world.tuning.fuelImportShare * fuel.baseDemand;
+  // Each site makes what its workers let it (workers.ts).
+  let imported = world.tuning.fuelImportShare * fuel.baseDemand * staffFactor(world, fuel.depotId);
   const unmet = (x: (typeof towns)[number]) => x.need - x.fromRefinery - x.fromDepot;
   const fill = (source: "refinery" | "depot", order: typeof towns) => {
     for (const x of order) {
@@ -140,7 +142,7 @@ export function fuelFlows(world: SliceWorld): GoodsFlow[] {
     if (x.fromRefinery > 0) flows.push({ from: fuel.refineryId, to: x.town.id, kind: "supplies", rate: x.fromRefinery });
     if (x.fromDepot > 0) flows.push({ from: fuel.depotId, to: x.town.id, kind: "supplies", rate: x.fromDepot });
   }
-  if (fuel.restored) flows.push({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies", rate: world.tuning.crudeShare * fuel.baseDemand });
+  if (fuel.restored) flows.push({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies", rate: world.tuning.crudeShare * fuel.baseDemand * staffFactor(world, fuel.sourceId) });
   return flows;
 }
 
@@ -222,6 +224,7 @@ export function restoreRefinery(world: SliceWorld): ActionResult & { charged?: n
   if (!canAfford(world.economy, cost)) return { ok: false, reason: "can't afford it" };
   world.economy.funds -= cost;
   fuel.restored = true;
+  refreshDemand(world); // its workers come back (workers.ts)
   return { ok: true, charged: cost };
 }
 

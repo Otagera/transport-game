@@ -1,3 +1,4 @@
+import { commuteDemand } from "./workers";
 import type { Vehicle } from "../simulation/types";
 import type { SliceTown, SliceWorld } from "./types";
 import { emptyOutcome, gravityDemand, pairKey } from "./world";
@@ -20,7 +21,7 @@ import { overWater, pointAlong, polylineLength, segmentLength, segmentPolyline, 
 // goes away (you built a bypass). The map's original towns are permanent.
 
 export type SliceEvent =
-  | { kind: "founded"; townId: string; name: string; between: [string, string] }
+  | { kind: "founded"; townId: string; name: string; between: [string, string]; site?: string }
   | { kind: "abandoned"; townId: string; name: string }
   // Pushback (pushback.ts): the danfos on a bus-lane corridor strike, and stop.
   | { kind: "strike-announced"; a: string; b: string; atSeconds: number }
@@ -153,7 +154,12 @@ function driftPopulations(world: SliceWorld, dt: number): void {
 }
 
 export function refreshDemand(world: SliceWorld): void {
-  world.simulation.demand = gravityDemand([...world.towns.values()], world.tuning.demandK);
+  // A site's trips are its workers' commutes (workers.ts), not a town's.
+  const workers = world.tuning.workersEnabled;
+  world.simulation.demand = [
+    ...gravityDemand([...world.towns.values()].filter((town) => !workers || !town.industry), world.tuning.demandK),
+    ...commuteDemand(world),
+  ];
   applyRailDemand(world); // trips a passenger line makes that weren't made before
   for (const pair of world.simulation.demand) {
     const key = pairKey(pair.from, pair.to);
@@ -200,6 +206,43 @@ function tryFoundTown(world: SliceWorld): SliceEvent | null {
   settlement.emergent.add(town.id);
   settlement.lastFoundedAtSeconds = settlement.elapsedSeconds;
   return { kind: "founded", townId: town.id, name: town.name, between: [segment.fromNodeId, segment.toNodeId] };
+}
+
+/**
+ * A camp at a site's gate (workers.ts, step 2c): a roadside town halfway
+ * along the site's busiest road, as `tryFoundTown` founds one on a busy
+ * road, growing and fading with the people passing (the commuters). Not
+ * counted against `maxEmergentTowns`: it comes from the site, not the road.
+ */
+export function foundGateTown(world: SliceWorld, siteId: string): SliceEvent | null {
+  const { settlement, simulation, tuning } = world;
+  const site = world.towns.get(siteId);
+  if (!site) return null;
+  const roads = simulation.map.segments
+    .filter((segment) => segment.type === "road" && (segment.fromNodeId === siteId || segment.toNodeId === siteId))
+    .sort((p, q) => (settlement.segmentFlowEMA.get(q.id) ?? 0) - (settlement.segmentFlowEMA.get(p.id) ?? 0));
+  for (const segment of roads) {
+    const length = roadLength(world, segment.id);
+    // Enough people passing to keep it (a camp that empties the week it's founded isn't one).
+    if (length < 6 || (settlement.segmentFlowEMA.get(segment.id) ?? 0) * tuning.populationPerFlow < tuning.abandonBelowPopulation * 1.5) continue;
+    const { x, y } = pointAlong(segmentPolyline(simulation.map, segment), length / 2);
+    if (overWater(world, { x, y })) continue;
+    const ends = new Set([segment.fromNodeId, segment.toNodeId]);
+    if (simulation.map.nodes.some((node) => !ends.has(node.id) && Math.hypot(node.x - x, node.y - y) < tuning.townSpacingCells / 2)) continue;
+    const town: SliceTown = { id: `town-${world.nextId++}`, name: gateName(world, site), x, y, population: tuning.newTownPopulation };
+    splitSegment(world, segment.id, town);
+    settlement.emergent.add(town.id);
+    return { kind: "founded", townId: town.id, name: town.name, between: [segment.fromNodeId, segment.toNodeId], site: siteId };
+  }
+  return null;
+}
+
+/** "Refinery Camp", "Cement Camp" -- then by the town it's named for. */
+function gateName(world: SliceWorld, site: SliceTown): string {
+  const taken = new Set([...world.towns.values(), ...world.ruins.values()].map((town) => town.name));
+  const what = site.industry === "refinery" ? "Refinery" : site.industry === "works" ? "Cement" : site.industry === "depot" ? "Tank Farm" : "Quarry";
+  const place = site.name.split(" ")[0]!;
+  return [`${what} Camp`, `${place} ${what} Camp`, `${place} Camp`].find((name) => !taken.has(name)) ?? `${what} Camp (${world.nextId})`;
 }
 
 // Roadside places are named for where they are: a milestone from the
