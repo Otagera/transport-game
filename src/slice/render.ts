@@ -12,6 +12,7 @@ import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
 import { refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { cementActive, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
+import { millCapacity, millOutput } from "@engine/slice/food";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -989,6 +990,16 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     ctx.rect(p.x - 6, p.y, 9, 5);
     ctx.rect(p.x + 3, p.y - 6, 3, 11);
     ctx.fill();
+  } else if (town.industry === "mill") {
+    // A sack, tied at the neck.
+    ctx.moveTo(p.x - 5, p.y + 6);
+    ctx.lineTo(p.x - 4, p.y - 2);
+    ctx.lineTo(p.x - 2, p.y - 5);
+    ctx.lineTo(p.x + 2, p.y - 5);
+    ctx.lineTo(p.x + 4, p.y - 2);
+    ctx.lineTo(p.x + 5, p.y + 6);
+    ctx.closePath();
+    ctx.fill();
   } else if (town.industry === "silo") {
     // Two tall silos.
     ctx.rect(p.x - 5, p.y - 5, 4, 10);
@@ -1025,6 +1036,7 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     : (town.industry === "oilfield" || town.industry === "terminal") && fuel ? `crude · ${fuel.restored ? `${perDay(world.tuning.crudeShare * fuel.baseDemand)} t/day` : "for the refinery"}`
     : town.industry === "works" ? (world.cement?.working ? `cement · ${perDay(worksOutput(world))} of ${perDay(worksCapacity(world))} t/day` : "idle · restore it")
     : town.industry === "silo" ? `cement imports · ${perDay(cementImports(world))} t/day`
+    : town.industry === "mill" && world.food ? `${world.food.crops.food} · ${perDay(millOutput(world))} of ${perDay(millCapacity(world))} t/day`
     : `${cementActive(world) ? "limestone" : "stone"} · ${world.tuning.quarryOutputPerDay} t/day`;
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.label;

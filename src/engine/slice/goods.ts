@@ -11,6 +11,7 @@ import { industryFlows } from "./industries";
 import { fuelFlows, isFuelSite, shortageAt } from "./fuel";
 import { cementFlows, isCementSite } from "./cement";
 import { haulShare } from "./truckers";
+import { foodActive, foodFlows } from "./food";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -87,7 +88,10 @@ export function goodsFlows(world: SliceWorld): GoodsFlow[] {
   const towns = [...world.towns.values()];
   const markets = towns.filter((town) => town.population >= tuning.marketPopulation && world.basePopulation.has(town.id));
   const flows: GoodsFlow[] = [];
+  // With the food chain, farm towns' staple and cash crop go to the mill and the port instead (food.ts).
+  const food = foodActive(world);
   for (const town of towns) {
+    if (food) break;
     if (!world.basePopulation.has(town.id) || town.population >= tuning.marketPopulation || town.id === world.port) continue;
     const market = [...markets].sort(
       (p, q) => Math.hypot(p.x - town.x, p.y - town.y) - Math.hypot(q.x - town.x, q.y - town.y) || q.population - p.population,
@@ -106,7 +110,7 @@ export function goodsFlows(world: SliceWorld): GoodsFlow[] {
       intoMarket.set(flow.to, (intoMarket.get(flow.to) ?? 0) + delivered);
     }
     for (const [market, delivered] of intoMarket) {
-      if (market === port.id || delivered <= 0) continue;
+      if (food || market === port.id || delivered <= 0) continue;
       flows.push({ from: market, to: port.id, kind: "produce", rate: delivered * tuning.exportShare });
     }
     for (const town of towns) {
@@ -120,6 +124,8 @@ export function goodsFlows(world: SliceWorld): GoodsFlow[] {
   flows.push(...fuelFlows(world));
   // The building chain (cement.ts): cement to the towns (limestone comes in industryFlows).
   flows.push(...cementFlows(world));
+  // The food chain (food.ts): staple to the mill, cash crops to the port, food to the markets.
+  flows.push(...foodFlows(world));
   return flows;
 }
 
@@ -138,7 +144,7 @@ export function produceAndSpoil(world: SliceWorld, dt: number): void {
     const waiting = (yard.get(key) ?? 0) + flow.rate * dt;
     // Bagged cement keeps, as fuel does (a week, not two days).
     const from = world.towns.get(flow.from);
-    const lost = waiting * (isFuelSite(from) || isCementSite(from) ? leak : spoil);
+    const lost = waiting * (isFuelSite(from) || isCementSite(from) || from?.industry === "mill" ? leak : spoil);
     yard.set(key, waiting - lost);
     spoiled.set(flowKey(flow), lost);
   }

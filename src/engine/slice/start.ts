@@ -2,6 +2,7 @@ import type { SliceMapDef, SliceTuning, SliceWorld } from "./types";
 import { placeFuelSites } from "./fuel";
 import { inheritedRoad, placeCementWorks } from "./cement";
 import { openQuarry } from "./industries";
+import { placeMill } from "./food";
 import { rebuildNetworks } from "./rail";
 import { createSliceWorld } from "./world";
 import { createBudgetTally, createRemittancePeriod } from "./budget";
@@ -33,6 +34,8 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
       world.plans = null;
     }
   }
+  // And the food chain's mill (food.ts), among the farm towns: placed last, so the others sit where they did.
+  placeMill(world, map.region);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) sliceTick(world, SIM_DT);
   world.startSeconds = world.economy.elapsedSeconds;

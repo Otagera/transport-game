@@ -147,8 +147,12 @@ export function fuelFlows(world: SliceWorld): GoodsFlow[] {
 }
 
 /** What a goods flow carries, named by the kind of site it leaves. */
-export function cargoName(world: SliceWorld, from: string, kind: "produce" | "supplies"): string {
+export function cargoName(world: SliceWorld, from: string, kind: "produce" | "supplies", to?: string): string {
   const site = world.towns.get(from)?.industry;
+  // The food chain (food.ts): a farm town's staple to the mill, its cash crop to the port; the mill's food.
+  const food = world.food && world.tuning.foodEnabled ? world.food : null;
+  if (food && site === "mill") return food.crops.food;
+  if (food && !site && kind === "produce") return to === world.port ? food.crops.cash : to === food.millId ? food.crops.staple : `${food.crops.staple} and ${food.crops.cash}`;
   if (site === "oilfield" || site === "terminal") return "crude";
   if (site === "depot" || site === "refinery") return "fuel";
   if (site === "works" || site === "silo") return "cement";

@@ -78,6 +78,24 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // there. The remittance stays, switched off, for the runs played with it.
   levyEnabled: true,
   levyShare: 0.1,
+  // The food chain (food.ts; brief, Revision 3, step 3). Farm towns grow 2 t
+  // of staple a day per thousand people (producePerThousandPerDay, as their
+  // produce did) and 0.5 t of cash crop for the port; market towns want 0.5
+  // t of food. A mill makes a tonne of food from 2 of staple, up to 1.2 times
+  // the markets' day-1 want: on map 2791, 268 t of staple from 134k farm
+  // people makes 134 t, against 135 t wanted by 270k in the markets. The
+  // state pays ₦4 a tonne of cash crop reaching the port (exports: ~₦270 a
+  // day there at full). A fed market draws 30% more trips (market days) and
+  // grows up to a quarter of its start more. First guesses, to be measured.
+  foodEnabled: true,
+  foodPerThousandPerDay: 0.5,
+  cashCropPerThousandPerDay: 0.5,
+  millShare: 1.2,
+  staplePerFood: 2,
+  exportPayPerTonne: 4,
+  jobsMill: 1,
+  marketTripBoost: 0.3,
+  foodCapShare: 0.25,
   // Bonds (bonds.ts; brief, Revision 3, money): repaid over 60 days with 20%
   // interest, the same each day; all repayments at most 30% of a day's
   // income. A ₦60,000 refinery bond is ₦1,200 a day: on map 2791 around day

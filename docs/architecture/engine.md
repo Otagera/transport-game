@@ -1031,3 +1031,25 @@ transfers, diagnosis, debt advice, receipts and forecasts treat it as any passen
 - **On screen** (`main.ts`): an Employs line on every site card (`workersItem`) and its
   problem when short (`workersProblem`), a Jobs line on town cards (`jobsText`), the camp's
   founding message.
+
+### The food chain (Revision 3, step 3)
+
+- **`food.ts`** — `placeMill` (from `start.ts`, last of the sites, so the others keep their
+  places): the dry spot nearest the farm towns' size-weighted middle, 8+ cells from any town
+  and within 16 of one on the network, with an old road to it; `world.food` holds the mill
+  and the region's `Crops` (`cropsFor`: staple, food, mill, cash crop). `foodActive` needs
+  `foodEnabled` and goods on.
+- **Flows** (`foodFlows`, in `goodsFlows`, which then skips produce to markets and markets'
+  exports): each farm town (original, below `marketPopulation`, not the port) sends
+  `producePerThousandPerDay` × size of staple to the mill and `cashCropPerThousandPerDay` of
+  cash crop to the port; the mill's `millOutput` -- `min(millShare × day 1's want, staple
+  arriving / staplePerFood) × staffFactor` -- is split over the market towns its road reaches
+  by `foodWant`. The mill's food keeps (`fuelLossSeconds`); it charges the loading levy; jobs
+  `jobsMill`. `cargoName(world, from, kind, to)` names staple, cash crop and food.
+- **Exports** (`payExports`, every tick, inside the allocation in `tick.ts`, so not levied):
+  `exportPayPerTonne` on cash crop reaching the port, yours or the truckers'; `budget.exports`.
+- **Market days** (`applyMarketDays`, from `settlement.ts refreshDemand`, after rail): every
+  demand pair touching a market town grows by `marketTripBoost` × `foodServed` (the larger
+  end's); `foodGrowth` adds `foodCapShare` × start × served to a market's room (`growth.ts`).
+- **On screen**: the mill's card (`renderMillSite`), a Food or Farms line on town cards
+  (`foodText`), Export payments in the budget, Food in the Treasury's chains; a sack glyph.

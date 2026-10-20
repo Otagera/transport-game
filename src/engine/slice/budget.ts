@@ -60,13 +60,15 @@ export interface BudgetTally {
   /** Lent you by bonds, and repaid on them (bonds.ts): neither is income or a running cost. */
   borrowed: number;
   bonds: number;
+  /** The state's export payment on cash crops reaching the port (food.ts): income, not levied. */
+  exports: number;
   /** Loading levies on truckers' loads (truckers.ts), and the touts' cut (never yours, kept to be shown). */
   loading: number;
   touts: number;
 }
 
 export function createBudgetTally(): BudgetTally {
-  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, fuel: 0, upkeep: 0, enforcement: 0, settlements: 0, struck: 0, remitted: 0, borrowed: 0, bonds: 0, loading: 0, touts: 0 };
+  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, fuel: 0, upkeep: 0, enforcement: 0, settlements: 0, struck: 0, remitted: 0, borrowed: 0, bonds: 0, exports: 0, loading: 0, touts: 0 };
 }
 
 /** The current remittance period: when it ends, and its net so far (income minus running costs). */

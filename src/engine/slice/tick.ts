@@ -7,6 +7,7 @@ import { pairKey, roadPath, takeShortestRoad } from "./world";
 import { foundGateTown, updateSettlements, type SliceEvent } from "./settlement";
 import { updateSites } from "./workers";
 import { repayBonds } from "./bonds";
+import { payExports } from "./food";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
 import { dispatchTrucks, truckersPickUp } from "./truckers";
@@ -263,7 +264,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   const takings: Takings = { tolls: 0, levies: 0, agberos: 0, leviesByCorridor: new Map(), loading: 0, touts: 0 };
   dispatchInformal(world, dt, lost, gaveUp, takings);
   // The state's allocation: a base, plus a share of the growth you caused (budget.ts).
-  const allocation = (allocationPerDay(world) * dt) / SECONDS_PER_GAME_DAY;
+  // And its export payment on cash crops reaching the port (food.ts): the state's, like the allocation.
+  const exportsBefore = world.budget.exports;
+  const allocation = (allocationPerDay(world) * dt) / SECONDS_PER_GAME_DAY + payExports(world, dt);
   const otherIncome = takings.tolls + takings.levies + takings.loading + allocation;
   economy.funds += otherIncome;
   revenueThisTick += otherIncome;
@@ -272,7 +275,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   world.budget.agberos += takings.agberos;
   world.budget.loading += takings.loading;
   world.budget.touts += takings.touts;
-  world.budget.allocation += allocation;
+  world.budget.allocation += allocation - (world.budget.exports - exportsBefore);
   reapInformal(world);
 
   // Roads wear with the traffic that just ran on them; maintained ones are

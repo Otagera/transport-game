@@ -44,6 +44,8 @@ export function siteJobs(world: SliceWorld, town: SliceTown): number {
       return t.jobsDepot;
     case "silo":
       return t.jobsSilo;
+    case "mill":
+      return t.jobsMill;
     default:
       return 0;
   }

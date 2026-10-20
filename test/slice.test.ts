@@ -17,8 +17,9 @@ import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/slice/industries";
 import { bondAmount, repayBonds } from "@engine/slice/bonds";
+import { cropsFor, farmTowns, foodGrowth, foodServed, foodWant, marketTowns, millOutput, payExports } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, updateSites, workforceShares } from "@engine/slice/workers";
-import { foundGateTown } from "@engine/slice/settlement";
+import { foundGateTown, refreshDemand } from "@engine/slice/settlement";
 import { cementDemand, cementFlows, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { lineSlots, onRoadCost, stationTowns, trackCost } from "@engine/slice/rail";
 import { haulShare, truckersPickUp } from "@engine/slice/truckers";
@@ -3245,5 +3246,66 @@ describe("Revision 3, money: bonds (bonds.ts)", () => {
     expect(applyAction(w, { kind: "bond", purpose: "project" }).ok).toBe(true);
     expect(w.economy.funds).toBeCloseTo(5000 + short, 6);
     expect(heldForProject(w)).toBeCloseTo(20000, 6);
+  });
+});
+
+describe("Revision 3, step 3: the food chain (food.ts)", () => {
+  const game = () => startSliceGame(generatedSliceMap(SLICE_MAP, 2791), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+
+  test("a working mill among the farm towns, on an old road to a town on the network, making the region's food", () => {
+    const w = game();
+    const food = w.food!;
+    expect(w.towns.get(food.millId)!.industry).toBe("mill");
+    expect(isCutOff(w, food.millId)).toBe(false);
+    expect(food.crops).toEqual(cropsFor(generatedSliceMap(SLICE_MAP, 2791).region));
+    expect(cargoName(w, food.millId, "supplies")).toBe(food.crops.food);
+    const farm = farmTowns(w)[0]!;
+    expect(cargoName(w, farm.id, "produce", food.millId)).toBe(food.crops.staple);
+    expect(cargoName(w, farm.id, "produce", w.port!)).toBe(food.crops.cash);
+  });
+
+  test("farm towns send their staple to the mill and their cash crop to the port, not produce to markets; the mill's food is split by want", () => {
+    const w = game();
+    const food = w.food!;
+    const flows = goodsFlows(w);
+    const markets = new Set(marketTowns(w).map((town) => town.id).filter((id) => id !== w.port)); // the port takes the cash crop
+    for (const farm of farmTowns(w)) {
+      expect(flows.some((flow) => flow.from === farm.id && flow.to === food.millId)).toBe(true);
+      expect(flows.some((flow) => flow.from === farm.id && flow.to === w.port)).toBe(true);
+      expect(flows.some((flow) => flow.from === farm.id && flow.kind === "produce" && markets.has(flow.to))).toBe(false);
+    }
+    // Staple enough for the whole capacity: the mill makes it, split by want, only where its road goes.
+    for (const farm of farmTowns(w)) w.goods.outcomes.set(flowKey({ from: farm.id, to: food.millId, kind: "produce" }), { delivered: 1e3, spoiled: 0 });
+    const out = goodsFlows(w).filter((flow) => flow.from === food.millId);
+    expect(out.reduce((sum, flow) => sum + flow.rate, 0)).toBeLessThanOrEqual(millOutput(w) + 1e-9);
+    for (const flow of out) expect(flow.rate / foodWant(w, flow.to)).toBeCloseTo(out[0]!.rate / foodWant(w, out[0]!.to), 9);
+  });
+
+  test("market days: a fed market draws more trips, by the share of its food it gets; and room to grow", () => {
+    const w = game();
+    const food = w.food!;
+    const market = marketTowns(w)[0]!;
+    const key = flowKey({ from: food.millId, to: market.id, kind: "supplies" });
+    const tripsTo = () => w.simulation.demand.filter((pair) => pair.to === market.id).reduce((sum, pair) => sum + pair.rate, 0);
+    w.goods.outcomes.set(key, { delivered: 0, spoiled: 0 });
+    refreshDemand(w);
+    const hungry = tripsTo();
+    expect(foodGrowth(w, market.id)).toBe(0);
+    w.goods.outcomes.set(key, { delivered: foodWant(w, market.id), spoiled: 0 });
+    refreshDemand(w);
+    expect(foodServed(w, market.id)).toBe(1);
+    // Every trip to it grows by the boost, except where the other end is a fed market too (the larger boost applies once).
+    expect(tripsTo()).toBeGreaterThan(hungry * (1 + w.tuning.marketTripBoost) * 0.9);
+    expect(foodGrowth(w, market.id)).toBeCloseTo(w.basePopulation.get(market.id)! * w.tuning.foodCapShare, 6);
+  });
+
+  test("the state pays for cash crops reaching the port, a sum a tonne", () => {
+    const w = game();
+    const farm = farmTowns(w)[0]!;
+    w.goods.outcomes.set(flowKey({ from: farm.id, to: w.port!, kind: "produce" }), { delivered: 2, spoiled: 0 });
+    const funds = w.economy.funds;
+    expect(payExports(w, 1)).toBeCloseTo(2 * w.tuning.exportPayPerTonne, 9);
+    expect(w.economy.funds).toBeCloseTo(funds + 2 * w.tuning.exportPayPerTonne, 9);
+    expect(w.budget.exports).toBeCloseTo(2 * w.tuning.exportPayPerTonne, 9);
   });
 });

@@ -88,8 +88,11 @@ From your two games and the day-136 run file (principles §6):
   takes a 10% levy on earnings instead of 80% of the surplus (named projects no longer lapse).
   Bonds (`bonds.ts`) for the refinery, the works or a named project: 60 days at 20%, capped
   at 30% of income. The Treasury drawer above the toolbar (your lab pick), the budget out of
-  the side panel. Your full lab look is recorded in the brief, not yet applied. Next: the food
-  chain (Revision 3, step 3).
+  the side panel. Your full lab look is recorded in the brief, not yet applied.
+- **Step 3 built** (the food chain, `food.ts`): farm towns' staple to one mill, its food to the
+  market towns; cash crops to the port with an export payment; a fed market's market days
+  (more trips) and room to grow. Next: your playtest of step 3, then the restyle to your lab
+  look.
 - **Steps 2b–2c built** (`workers.ts`): sites employ people who commute from nearby towns; a
   site makes less when they can't get there; jobs give nearby towns room to grow, and a
   long-working refinery or works grows a camp at its gate. Next: your playtest of step 2 on a

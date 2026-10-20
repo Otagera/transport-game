@@ -14,6 +14,7 @@ import type { FuelState } from "./fuel";
 import type { CementState } from "./cement";
 import type { SitesState } from "./workers";
 import type { Bond } from "./bonds";
+import type { FoodState } from "./food";
 import type { IndustryState } from "./industries";
 import type { TruckerHeld } from "./truckers";
 import type { BudgetTally, RemittancePeriod } from "./budget";
@@ -38,7 +39,7 @@ export interface SliceTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "oilfield" | "terminal" | "works" | "silo";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "oilfield" | "terminal" | "works" | "silo" | "mill";
 
 export interface SliceRoadDef {
   a: string;
@@ -148,6 +149,22 @@ export interface SliceTuning {
   /** The treasury's levy (budget.ts treasuryLevy): on, and its share of what you earn, taken as you earn it. */
   levyEnabled: boolean;
   levyShare: number;
+  /**
+   * The food chain (food.ts, brief Revision 3, step 3): on; food a market town wants and cash crop a
+   * farm town grows, tonnes per thousand people a day; the mill's capacity, a share of the markets'
+   * want at the start, and tonnes of staple a tonne of food takes; the state's export payment a tonne
+   * of cash crop reaching the port; the mill's jobs (thousands); a fed market's extra trips (market
+   * days, at full food) and room to grow, a share of its start.
+   */
+  foodEnabled: boolean;
+  foodPerThousandPerDay: number;
+  cashCropPerThousandPerDay: number;
+  millShare: number;
+  staplePerFood: number;
+  exportPayPerTonne: number;
+  jobsMill: number;
+  marketTripBoost: number;
+  foodCapShare: number;
   /** Bonds (bonds.ts): on; interest over the whole term, a share of what was lent; the term, days; all repayments at most this share of a day's income. */
   bondsEnabled: boolean;
   bondInterest: number;
@@ -501,6 +518,8 @@ export interface SliceWorld {
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */
   bonds: Bond[];
+  /** The food chain's mill and crops (food.ts); null until placed, or with food off. */
+  food: FoodState | null;
   /** Goods truckers hold at yards, filling a truck (truckers.ts). */
   truckers: TruckerHeld;
   width: number;

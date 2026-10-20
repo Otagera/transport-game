@@ -58,6 +58,7 @@ import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/slice/bonds";
+import { exportsArriving, farmTowns, foodActive, foodServed, foodWant, millCapacity, millOutput, stapleArriving } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/slice/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { isYourRoad } from "@engine/slice/upkeep";
@@ -1168,6 +1169,7 @@ function moveText(move: NamedMove): string {
 function renderIndustry(townId: string): void {
   if (isFuelSite(world.towns.get(townId))) return renderFuelSite(townId);
   if (isCementSite(world.towns.get(townId))) return renderCementSite(townId);
+  if (world.towns.get(townId)?.industry === "mill") return renderMillSite(townId);
   const limestone = cementActive(world);
   const cargo = limestone ? "limestone" : "stone";
   const site = world.towns.get(townId)!;
@@ -1378,6 +1380,64 @@ function jobsText(townId: string): string {
   return `<p class="townshare"><b>Jobs:</b> its people work at ${at.join(", ")}: room for ${Math.round(room)}k more people while they get there.</p>`;
 }
 
+// The mill's card (food.ts, step 3): what it makes, from what, for whom, and what holds it back.
+function renderMillSite(townId: string): void {
+  const food = world.food!;
+  const site = world.towns.get(townId)!;
+  const t = world.tuning;
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const flows = goodsFlows(world).filter((flow) => flow.from === townId || flow.to === townId).sort((p, q) => q.rate - p.rate);
+  const rows = flows
+    .map((flow) => {
+      const outcome = world.goods.outcomes.get(flowKey(flow));
+      const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
+      const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
+      const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
+      const other = flow.from === townId ? flow.to : flow.from;
+      return `<div class="trip"><span class="name">${flow.from === townId ? "→" : "←"} ${townName(other)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+    })
+    .join("");
+  const out = perDay(millOutput(world));
+  const cap = perDay(millCapacity(world));
+  let problem = "";
+  if (stapleArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = `No ${food.crops.staple} arriving. Carry it in from the farm towns: lorries (<kbd>L</kbd>), or truckers will on the short hauls once a road joins them.`;
+  else if (out < cap * 0.6) problem = `Short of ${food.crops.staple}: ${perDay(stapleArriving(world))} of ${Math.round(cap * t.staplePerFood)} t a day. Carry more in from the farm towns further off.`;
+  if (!problem) problem = workersProblem(townId);
+  routesEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">Mill · ${out} of ${cap} t of ${food.crops.food} a day</div>
+      <div class="title">${site.name}</div>
+      <ul>
+        <li>Makes ${food.crops.food} from the farm towns' ${food.crops.staple}: ${t.staplePerFood} t makes a tonne. ${perDay(stapleArriving(world))} t a day is reaching it.</li>
+        <li>Its ${food.crops.food} is split between the market towns by what they want. A fed market draws market days: more trips, and room to grow.</li>
+        <li>Truckers take short hauls (yellow on each bar); the far markets' share waits for your lorries or freight trains.</li>
+        ${workersItem(townId)}
+      </ul>
+      ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}
+      ${rows}
+    </div>`;
+}
+
+// A town's food (food.ts): a market's supply and its market days; a farm town's crops.
+function foodText(townId: string): string {
+  const food = world.food;
+  if (!food || !foodActive(world) || !world.basePopulation.has(townId)) return "";
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  if (foodWant(world, townId) > 0) {
+    const served = foodServed(world, townId);
+    const extra = Math.round(world.tuning.marketTripBoost * 100);
+    const state = served >= 0.8 ? `Its market days are busy: trips to it up ${pct(world.tuning.marketTripBoost * served)}.`
+      : served >= 0.2 ? `Its market is ${served >= 0.5 ? "short" : "half empty"}: trips to it up ${pct(world.tuning.marketTripBoost * served)} of a possible ${extra}%.`
+      : `Its market is empty: fed, its market days would draw up to ${extra}% more trips. Carry ${food.crops.food} from ${townName(food.millId)}.`;
+    return `<p class="townshare"><b>Food:</b> ${pct(served)} of the ${perDay(foodWant(world, townId))} t of ${food.crops.food} it wants a day. ${state}</p>`;
+  }
+  if (farmTowns(world).some((town) => town.id === townId)) {
+    const town = world.towns.get(townId)!;
+    return `<p class="townshare"><b>Farms:</b> ${Math.round(world.tuning.producePerThousandPerDay * town.population)} t of ${food.crops.staple} a day for ${townName(food.millId)}, and ${Math.round(world.tuning.cashCropPerThousandPerDay * town.population)} t of ${food.crops.cash} for export through the port.</p>`;
+  }
+  return "";
+}
+
 // A town's cement (cement.ts): how well supplied, and what that's holding back.
 function cementText(townId: string): string {
   if (!world.cement || !cementActive(world) || !world.basePopulation.has(townId)) return "";
@@ -1454,6 +1514,7 @@ function renderTown(townId: string): void {
       ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
       ${world.tuning.goodsEnabled ? fuelText(townId) : ""}
       ${world.tuning.goodsEnabled ? cementText(townId) : ""}
+      ${world.tuning.goodsEnabled ? foodText(townId) : ""}
       ${jobsText(townId)}
       ${world.tuning.goodsEnabled ? goodsText(townId) : ""}
       ${rows}
@@ -1689,6 +1750,7 @@ function budgetParts() {
     [`Park levies <span class="muted">(agberos kept ${naira(b.agberos)})</span>`, b.levies],
     ...(world.tuning.truckersEnabled && world.tuning.goodsEnabled ? [[`Loading levies <span class="muted">(touts kept ${naira(b.touts)})</span>`, b.loading] as [string, number]] : []),
     ["State allocation", b.allocation],
+    ...(world.food && world.tuning.foodEnabled ? [["Export payments", b.exports] as [string, number]] : []),
     ["Running costs", -b.running],
     ...(world.fuel && world.tuning.fuelEnabled ? [["Fuel above the pump price", -b.fuel] as [string, number]] : []),
     ["Road upkeep", -b.upkeep],
@@ -1775,6 +1837,17 @@ function chainLines(): Array<{ name: string; state: "good" | "warn" | "bad"; lin
     out.push(held.length === 0
       ? { name: "Cement", state: world.cement.working ? "good" : "warn", line: `${works}; no town held back.`, short: "enough" }
       : { name: "Cement", state: held.length >= 3 ? "bad" : "warn", line: `${works}; ${held.slice(0, 2).map((x) => `${townName(x.id)} held back ${Math.round(x.held)}k`).join(", ")}${held.length > 2 ? ` and ${held.length - 2} more` : ""}.`, short: `${held.length} town${held.length === 1 ? "" : "s"} held back` });
+  }
+  if (world.food && foodActive(world)) {
+    const food = world.food;
+    const markets = [...world.basePopulation.keys()].filter((id) => foodWant(world, id) > 0).map((id) => ({ id, s: foodServed(world, id) })).sort((p, q) => p.s - q.s);
+    const short = markets.filter((x) => x.s < 0.5);
+    const exports = perDay(exportsArriving(world));
+    const mill = `the mill makes ${perDay(millOutput(world))} of ${perDay(millCapacity(world))} t/day`;
+    const exportLine = `${exports} t/day of ${food.crops.cash} exported`;
+    out.push(short.length === 0
+      ? { name: "Food", state: "good", line: `Every market fed; ${mill}; ${exportLine}.`, short: "markets fed" }
+      : { name: "Food", state: short.length === markets.length ? "bad" : "warn", line: `${short.slice(0, 3).map((x) => `${townName(x.id)} ${pct(x.s)}`).join(", ")} fed: market days thin; ${mill}; ${exportLine}.`, short: `${short.length} market${short.length === 1 ? "" : "s"} short` });
   }
   if (world.tuning.workersEnabled) {
     const sites = [...world.towns.values()].filter((site) => site.industry && siteJobs(world, site) > world.tuning.jobsIdle + 1e-9);
@@ -1993,7 +2066,7 @@ function goodsText(townId: string): string {
   const out = goods.filter((g) => g.outgoing);
   const inbound = goods.filter((g) => !g.outgoing && !world.towns.get(g.other)?.industry);
   const parts: string[] = [];
-  for (const g of out) parts.push(`${Math.round(g.perDay)} t/day of ${cargoName(world, townId, g.kind)} to ${townName(g.other)} (${pct(g.delivered)} delivered)`);
+  for (const g of out) parts.push(`${Math.round(g.perDay)} t/day of ${cargoName(world, townId, g.kind, g.other)} to ${townName(g.other)} (${pct(g.delivered)} delivered)`);
   const stone = inboundStone(townId);
   if (stone) parts.push(stone);
   const into = inbound.reduce((sum, g) => sum + g.perDay, 0);
