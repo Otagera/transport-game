@@ -84,15 +84,17 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // t of food. A mill makes a tonne of food from 2 of staple, up to 1.2 times
   // the markets' day-1 want: on map 2791, 268 t of staple from 134k farm
   // people makes 134 t, against 135 t wanted by 270k in the markets. The
-  // state pays ₦4 a tonne of cash crop reaching the port (exports: ~₦270 a
-  // day there at full). A fed market draws 30% more trips (market trade) and
+  // state pays ₦20 a tonne of cash crop reaching the port: at ₦4 it was
+  // noise -- map 2411 to day 412 exported 34 t a day for ₦129 a day against
+  // ₦38,000 of income -- so 5x, ~₦700 a day there, ~₦1,300 with every farm
+  // town's crop carried. Run files keep the rate they were played at. A fed market draws 30% more trips (market trade) and
   // grows up to a quarter of its start more. First guesses, to be measured.
   foodEnabled: true,
   foodPerThousandPerDay: 0.5,
   cashCropPerThousandPerDay: 0.5,
   millShare: 1.2,
   staplePerFood: 2,
-  exportPayPerTonne: 4,
+  exportPayPerTonne: 20,
   jobsMill: 1,
   marketTripBoost: 0.3,
   foodCapShare: 0.25,
