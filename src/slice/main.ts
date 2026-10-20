@@ -41,7 +41,7 @@ import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt
 import { growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
 import { checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/slice/rail";
 import { checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
-import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, goodsFlows, isLorryRoute, lorrySummaries, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
+import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, goodsFlows, isLorryRoute, lorryEstimate, lorrySummaries, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
@@ -917,7 +917,13 @@ function ghost(): Ghost | null {
     const check = checkLorry(world, selectedTown, to);
     // Both ways, because that's the decision: a lorry runs full only where goods go each way.
     const goods = goodsAlong(world, selectedTown, to);
-    const label = `Lorry ${naira(world.tuning.lorryPurchaseCost)} · goods along it: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back`;
+    // And what one more would earn, roughly: whether it pays, before you buy it.
+    const estimate = lorryEstimate(world, selectedTown, to);
+    const truckers = estimate && estimate.truckersTake >= 1 ? `, truckers take ${Math.round(estimate.truckersTake)}` : "";
+    const verdict = !estimate ? ""
+      : estimate.tonnesPerDay < 1 ? " · another lorry here would find nothing to carry"
+      : ` · another lorry carries ~${Math.round(estimate.tonnesPerDay)} t/day, earning ~${naira(estimate.incomePerDay)}/day against ${naira(estimate.costPerDay)} to run${estimate.incomePerDay < estimate.costPerDay ? ": it would lose money" : ""}`;
+    const label = `Lorry ${naira(world.tuning.lorryPurchaseCost)} · goods along it: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back${truckers}${verdict}`;
     const path = shownPath(check, roadPath(world, selectedTown, to)?.nodeIds);
     const ghost = { from: selectedTown, to: end, ok: check.ok, path, label: refusedOr(check, label, `Lorry ${naira(world.tuning.lorryPurchaseCost)}`) };
     return withForecast(ghost, { kind: "lorry", a: selectedTown, b: to }, { label: "a lorry", towns: [selectedTown, to] });

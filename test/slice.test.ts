@@ -45,7 +45,7 @@ import { costRate, planRoad, polylineLength, segmentLength, segmentPolyline } fr
 import { bridgeCellsOn, corridorWear, fixRoadNow, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/slice/wear";
 import { computeBurnRate } from "@engine/economy/report";
 import { bestRung, growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
-import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsFlows, removeLorry, lorrySummaries } from "@engine/slice/goods";
+import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsAlong, goodsFlows, lorryEstimate, removeLorry, lorrySummaries } from "@engine/slice/goods";
 import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/slice/rail";
 import { slowOrder } from "@engine/slice/wear";
 import type { Vehicle } from "@engine/simulation/types";
@@ -1319,6 +1319,20 @@ describe("slice: goods (step 4c)", () => {
   // MAP with Big as the port. Markets: Big and Mid (>= 40k). Far's produce goes to Mid, its nearest.
   const goodsWorld = (overrides: Partial<SliceTuning> = {}) =>
     createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, ...overrides });
+
+  test("the lorry hint: what one more lorry would carry, never more than it can lift or than nobody else moves", () => {
+    const w = goodsWorld({ truckersEnabled: false });
+    const e = lorryEstimate(w, "big", "mid")!;
+    const along = goodsAlong(w, "big", "mid");
+    const cells = roadPath(w, "big", "mid")!.distance;
+    const lift = (w.tuning.lorryCapacity * w.tuning.lorrySpeed * SECONDS_PER_GAME_DAY) / (2 * cells);
+    expect(e.tonnesPerDay).toBeCloseTo(Math.min(lift, along.outbound) + Math.min(lift, along.inbound), 6);
+    expect(e.costPerDay).toBeCloseTo(w.tuning.lorryOperatingCostPerSecond * SECONDS_PER_GAME_DAY, 9);
+    // Goods already delivered by your vehicles aren't there for another lorry.
+    // (Twice: what's delivered to a market can go on to the port, a flow of its own.)
+    for (let i = 0; i < 3; i += 1) for (const flow of goodsFlows(w)) w.goods.outcomes.set(flowKey(flow), { delivered: flow.rate, spoiled: 0 });
+    expect(lorryEstimate(w, "big", "mid")!.tonnesPerDay).toBeCloseTo(0, 9);
+  });
 
   test("goods are one-way: produce from farm towns to their nearest market, supplies from the port", () => {
     const w = goodsWorld();

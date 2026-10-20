@@ -8,8 +8,9 @@ import { SWITCHED_OFF } from "./tuning";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, routeKey, type ActionResult } from "./world";
 import { lineSlots, railPath } from "./rail";
 import { industryFlows } from "./industries";
-import { fuelFlows, isFuelSite } from "./fuel";
+import { fuelFlows, isFuelSite, shortageAt } from "./fuel";
 import { cementFlows, isCementSite } from "./cement";
+import { haulShare } from "./truckers";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -352,6 +353,66 @@ export function goodsAlong(world: SliceWorld, a: string, b: string, onTrack = fa
     else inbound += flow.rate;
   }
   return { outbound: outbound * SECONDS_PER_GAME_DAY, inbound: inbound * SECONDS_PER_GAME_DAY };
+}
+
+/**
+ * What one more lorry between a and b would carry and earn, a day: the
+ * lorry hint (brief, Revision 3, money, from the step 2 playtest -- seven
+ * lorries bought and sold on one road finding out). Of the goods along the
+ * road each way, what nobody moves now: less what your vehicles deliver
+ * (any route: overlapping routes share the goods) and what truckers take
+ * (as measured; where nothing's moved yet, the share they'd take of a
+ * haul that long), up to what one lorry can lift a day each way at free
+ * speed. Its cost counts the fuel premium where its ends are short. A
+ * rough guide, not a forecast: no traffic, no wear, no tolls.
+ */
+export function lorryEstimate(world: SliceWorld, a: string, b: string): { tonnesPerDay: number; incomePerDay: number; costPerDay: number; truckersTake: number } | null {
+  const path = roadPath(world, a, b);
+  if (!path || path.distance <= 0) return null;
+  const { tuning } = world;
+  const order = new Map(path.nodeIds.map((id, i) => [id, i]));
+  const left = [0, 0];
+  const cellsWeighted = [0, 0];
+  let truckersTake = 0;
+  for (const flow of goodsFlows(world)) {
+    const i = order.get(flow.from);
+    const j = order.get(flow.to);
+    if (i === undefined || j === undefined) continue;
+    const cells = roadPath(world, flow.from, flow.to)?.distance ?? 0;
+    const reach = isFuelSite(world.towns.get(flow.from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells;
+    const site = world.towns.get(flow.from)?.industry;
+    const outcome = world.goods.outcomes.get(flowKey(flow));
+    const moved = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) > 0;
+    const share = !tuning.truckersEnabled || site === "oilfield" || site === "terminal" ? 0 : haulShare(world, cells, reach);
+    const trucked = (moved ? (outcome?.trucked ?? 0) : flow.rate * share) * SECONDS_PER_GAME_DAY;
+    const yours = (outcome?.delivered ?? 0) * SECONDS_PER_GAME_DAY;
+    const free = Math.max(0, flow.rate * SECONDS_PER_GAME_DAY - trucked - yours);
+    const dir = i < j ? 0 : 1;
+    left[dir]! += free;
+    cellsWeighted[dir]! += free * cells;
+    truckersTake += trucked;
+  }
+  // A round trip there and back at free speed; each way one load a trip.
+  let perLorryEachWay = (tuning.lorryCapacity * tuning.lorrySpeed * SECONDS_PER_GAME_DAY) / (2 * path.distance);
+  // Where your lorries already run it, no more than each of them actually
+  // loads (traffic, wear, loads waiting at the wrong end): measured, one on
+  // a 47-cell road lifted 4 t a day with 17 t free.
+  const route = findLorryRoute(world, a, b);
+  if (route && route.vehicleIds.length > 0 && world.economy.elapsedSeconds - route.openedAtSeconds > 2 * SECONDS_PER_GAME_DAY) {
+    perLorryEachWay = Math.min(perLorryEachWay, (route.boardingRateEMA * SECONDS_PER_GAME_DAY) / route.vehicleIds.length / 2);
+  }
+  let tonnesPerDay = 0;
+  let incomePerDay = 0;
+  for (const dir of [0, 1]) {
+    const take = Math.min(perLorryEachWay, left[dir]!);
+    const cells = left[dir]! > 0 ? cellsWeighted[dir]! / left[dir]! : 0;
+    tonnesPerDay += take;
+    incomePerDay += take * cells * tuning.goodsFarePerTonneCell;
+  }
+  // Fuel above the pump price, as chargeFuelPremium bills it: the mean shortage of where it goes.
+  const short = (shortageAt(world, a) + shortageAt(world, b)) / 2;
+  const costPerDay = tuning.lorryOperatingCostPerSecond * SECONDS_PER_GAME_DAY * (1 + tuning.fuelCostPremium * short);
+  return { tonnesPerDay, incomePerDay, costPerDay, truckersTake };
 }
 
 export interface LorryDiagnosis {
