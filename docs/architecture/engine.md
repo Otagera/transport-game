@@ -917,3 +917,33 @@ and "stayed home" rose as a share while more people travelled. Read by the bots
 route type (`mini:a~b`, `minibusRouteId`, `isMinibusRoute`), like trains are, so trip plans,
 transfers, diagnosis, debt advice, receipts and forecasts treat it as any passenger route.
 `vehicleCostPerDay` knows its running cost; `actions.ts` has a `minibus` action.
+
+### The fuel chain (Revision 3, step 1a)
+
+- **`fuel.ts`** — three sites placed when a game starts (`placeFuelSites`, from `start.ts`,
+  before the warm-up): a **tank farm** 7–9 cells from the port with an old road to it, an
+  **idle refinery** 9–13 cells from the second city on its side away from the port, and a
+  **crude source** on the map's edge as far from the refinery as it can be (≥30 cells): an
+  oilfield on a south-south map (`SliceMapDef.region`, set by `generate.ts`), a pipeline
+  terminal elsewhere. They're towns with an `industry` kind, not entries in
+  `world.industries`, so the quarry's open-and-close logic never touches them.
+- **Flows** (`fuelFlows`, added to `goodsFlows`): every town burns
+  `fuelPerThousandPerDay` × its size; the tank farm imports `fuelImportShare` of day 1's
+  need, split over the towns by need; a restored refinery adds what it makes —
+  `min(refineryShare × day 1's need, crude delivered to it)`, nothing without crude — and
+  wants `crudeShare × day 1's need` of crude from the source. Cargo is named by the site it
+  leaves (`cargoName`: crude, fuel, stone), never a new `CargoKind`, so the engine's types
+  stay the original game's.
+- **Who carries it:** fuel goes by road tanker — the truckers (`truckers.ts`) reach
+  `tankerMaxHaulCells` (90) for fuel against 40 for other goods, and a tanker isn't held
+  back by the danfos' road budget (it still takes road space): on a busy dirt trunk the
+  budget had stopped 350 t of fuel leaving the tank farm. Crude is never trucked: getting
+  it to the refinery is yours. Fuel waiting at a yard is lost over `fuelLossSeconds` (about
+  a week), not produce's two days. Tank farms and refineries charge the loading levy.
+- **`fuelSupply(world, town)`** — fuel delivered (yours and tankers') over need, and the
+  share from each source: the town card's Fuel line. `restoreRefinery` (`ActionSpec`
+  `restoreRefinery`) costs `refineryRestoreCost`.
+- Measured (map 543, 40 days): with no player, towns by the tank farm 66–82% supplied,
+  remote and cut-off ones 0; three lorries on the 58-cell crude leg feed the refinery 37 t
+  a day and lose ₦297 a day, one freight train feeds it 161 t and nets +₦694; with a road
+  out of the refinery, supply across the region (by people) rises from 35% to 46%.

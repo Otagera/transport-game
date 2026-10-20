@@ -41,7 +41,7 @@ import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt
 import { growthTrend, roadFull, townGrowth } from "@engine/slice/growth";
 import { checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/slice/rail";
 import { checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/slice/goods";
-import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, isLorryRoute, lorrySummaries, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
+import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, goodsFlows, isLorryRoute, lorrySummaries, townGoods, type LorryDiagnosis } from "@engine/slice/goods";
 import type { RouteDiagnosis } from "@engine/slice/world";
 import type { SliceEvent } from "@engine/slice/settlement";
 import { SLICE_MAP } from "./map";
@@ -56,6 +56,7 @@ import { remittanceExpected } from "@engine/slice/budget";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
+import { cargoName, fuelSupply, isFuelSite, refineryOutput } from "@engine/slice/fuel";
 import { isYourRoad } from "@engine/slice/upkeep";
 import { goneAt, restoreCost as restoreRoadCost } from "@engine/slice/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/slice/problems";
@@ -1144,6 +1145,7 @@ function moveText(move: NamedMove): string {
 // long, where its stone goes and how much of it arrives, and the one
 // problem with it -- no road, or nothing moved and the day it closes.
 function renderIndustry(townId: string): void {
+  if (isFuelSite(world.towns.get(townId))) return renderFuelSite(townId);
   const site = world.towns.get(townId)!;
   const industry = world.industries.get(townId);
   const flows = industryFlows(world).filter((flow) => flow.from === townId);
@@ -1180,6 +1182,86 @@ function renderIndustry(townId: string): void {
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}
       ${rows}
     </div>`;
+}
+
+// A fuel site's card (brief, Revision 3, the fuel chain): what it does, what
+// it needs, and the one thing holding it back -- idle, no crude, no road out.
+function renderFuelSite(townId: string): void {
+  const fuel = world.fuel!;
+  const site = world.towns.get(townId)!;
+  const t = world.tuning;
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const source = world.towns.get(fuel.sourceId)!;
+  const refinery = world.towns.get(fuel.refineryId)!;
+  const flows = goodsFlows(world).filter((flow) => flow.from === townId);
+  const rows = flows
+    .map((flow) => {
+      const outcome = world.goods.outcomes.get(flowKey(flow));
+      const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
+      const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
+      const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
+      return `<div class="trip"><span class="name">${townName(flow.to)}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+    })
+    .join("");
+  const nearestTown = [...world.towns.values()].filter((other) => !other.industry && !isCutOff(world, other.id)).sort((p, q) => Math.hypot(p.x - site.x, p.y - site.y) - Math.hypot(q.x - site.x, q.y - site.y))[0];
+  const capacity = perDay(t.refineryShare * fuel.baseDemand);
+  const crude = perDay(t.crudeShare * fuel.baseDemand);
+  let kicker = "";
+  let lines: string[] = [];
+  let problem = "";
+  let action = "";
+  if (site.industry === "depot") {
+    kicker = "Tank farm · fuel imports";
+    lines = [
+      `Imports ${perDay(t.fuelImportShare * fuel.baseDemand)} t of fuel a day through the port: ${pct(t.fuelImportShare)} of what the towns burnt on day 1.`,
+      "Road tankers carry it to the towns, nearest first (yellow on each bar); your lorries can too. Towns too far for the tankers run short.",
+    ];
+  } else if (site.industry === "refinery") {
+    const out = perDay(refineryOutput(world));
+    kicker = fuel.restored ? `Refinery · ${out} of ${capacity} t of fuel a day` : "Refinery · idle for years";
+    lines = [
+      `Turns crude into fuel: up to ${capacity} t a day, enough with the imports to supply every town.`,
+      `Its crude comes from ${source.name}. Tankers don't carry crude: only your lorries or freight trains do, and on a leg this long a freight train is what pays.`,
+      "Its fuel goes to the towns by road tanker, so it needs a road out.",
+    ];
+    if (!fuel.restored) {
+      problem = `Idle. Restore it, then get crude to it from ${source.name}.`;
+      action = `<span class="actions"><button data-restore-refinery="1">Restore it: ${naira(t.refineryRestoreCost)}</button></span>`;
+    } else if (refineryOutput(world) * SECONDS_PER_GAME_DAY < 1) {
+      problem = `No crude arriving. Run a freight train (<kbd>G</kbd>) on track from ${source.name}, or lorries (<kbd>L</kbd>) on a road.`;
+    } else if (isCutOff(world, townId)) {
+      problem = `No road out: its fuel can't leave. Build one (<kbd>R</kbd>)${nearestTown ? ` to ${townName(nearestTown.id)}` : ""}.`;
+    }
+  } else {
+    kicker = site.industry === "oilfield" ? "Oilfield · crude" : "Pipeline terminal · crude from the south";
+    lines = [
+      `${crude} t of crude a day for ${refinery.name}${fuel.restored ? "" : ", once it's restored"}.`,
+      "Only you carry crude: by lorry on a road, or by freight train on track, which pays on a haul this long.",
+    ];
+    if (!fuel.restored) problem = `Waiting on ${refinery.name}: until it's restored, nobody wants this crude.`;
+    else if (!railPath(world, townId, fuel.refineryId) && !roadPath(world, townId, fuel.refineryId)) problem = `No way to ${refinery.name}: lay track (<kbd>K</kbd>) or build a road (<kbd>R</kbd>) to it.`;
+  }
+  routesEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">${kicker}</div>
+      <div class="title">${site.name}</div>
+      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}</ul>
+      ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
+      ${rows}
+    </div>`;
+}
+
+// A town's fuel (fuel.ts): how well supplied, from where, and why not more.
+function fuelText(townId: string): string {
+  const supply = fuelSupply(world, townId);
+  if (!supply || !world.fuel) return "";
+  const sources = [`${pct(Math.min(1, supply.imported))} imported`, ...(supply.refined > 0.005 ? [`${pct(supply.refined)} from the refinery`] : [])].join(", ");
+  const why = isCutOff(world, townId)
+    ? " No road reaches it, so no fuel does."
+    : supply.supplied < 0.6
+      ? world.fuel.restored ? " Short: carry fuel to it, or get more crude to the refinery." : " Short: the tankers barely reach it. A working refinery would make up the rest."
+      : "";
+  return `<p class="townshare"><b>Fuel:</b> ${pct(supply.supplied)} supplied (${sources}).${why}</p>`;
 }
 
 function renderTown(townId: string): void {
@@ -1228,6 +1310,7 @@ function renderTown(townId: string): void {
       ${problemText(townId)}
       ${growthText(townId, town.name)}
       ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
+      ${world.tuning.goodsEnabled ? fuelText(townId) : ""}
       ${world.tuning.goodsEnabled ? goodsText(townId) : ""}
       ${rows}
       <div class="pager">
@@ -1694,7 +1777,7 @@ function goodsText(townId: string): string {
   const out = goods.filter((g) => g.outgoing);
   const inbound = goods.filter((g) => !g.outgoing && !world.towns.get(g.other)?.industry);
   const parts: string[] = [];
-  for (const g of out) parts.push(`${Math.round(g.perDay)} t/day of ${g.kind} to ${townName(g.other)} (${pct(g.delivered)} delivered)`);
+  for (const g of out) parts.push(`${Math.round(g.perDay)} t/day of ${cargoName(world, townId, g.kind)} to ${townName(g.other)} (${pct(g.delivered)} delivered)`);
   const stone = inboundStone(townId);
   if (stone) parts.push(stone);
   const into = inbound.reduce((sum, g) => sum + g.perDay, 0);
@@ -1747,6 +1830,12 @@ routesEl.addEventListener("click", (event) => {
     const [a, b, rung] = target.dataset.project.split("|") as [string, string, ProjectRung];
     const result = act({ label: `saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, { kind: "project", a, b, rung });
     say(result.ok ? `Saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone while you save. Once you can afford it, build it within ${world.tuning.projectLapseDays} days, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.restoreRefinery) {
+    const result = act({ label: "restoring the refinery", towns: world.fuel ? [world.fuel.refineryId] : [] }, { kind: "restoreRefinery" });
+    say(result.ok ? `Refinery restored for ${naira(result.amount ?? 0)}. Now get crude to it, and give it a road out.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

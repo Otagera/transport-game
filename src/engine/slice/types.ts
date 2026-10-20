@@ -10,6 +10,7 @@ import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
 import type { MilestoneState } from "./score";
 import type { CorridorState } from "./corridors";
+import type { FuelState } from "./fuel";
 import type { IndustryState } from "./industries";
 import type { TruckerHeld } from "./truckers";
 import type { BudgetTally, RemittancePeriod } from "./budget";
@@ -33,7 +34,8 @@ export interface SliceTown {
 }
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
-export type IndustryKind = "quarry";
+/** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
+export type IndustryKind = "quarry" | "depot" | "refinery" | "oilfield" | "terminal";
 
 export interface SliceRoadDef {
   a: string;
@@ -61,6 +63,8 @@ export interface SliceMapDef {
   width: number;
   height: number;
   towns: SliceTown[];
+  /** The part of the country its names come from (generate.ts): decides its fuel source (fuel.ts). */
+  region?: string;
   /** Inherited roads -- the network that already exists at start. Straight: they were built
    * for another age's needs and never fixed (principles §1, brownfield premise). */
   roads: SliceRoadDef[];
@@ -371,10 +375,25 @@ export interface SliceTuning {
   quarryExportShare: number;
   /** A town getting all the stone it wants can grow this share of townGrowthCap more (growth.ts). */
   stoneCapShare: number;
+  /**
+   * The fuel chain (fuel.ts, brief Revision 3): on; fuel a town burns, tonnes per thousand people a
+   * day; the tank farm's imports and a restored refinery's capacity, each a share of the towns' need
+   * at the start; the crude source's output, the same way; what restoring the refinery costs.
+   */
+  fuelEnabled: boolean;
+  fuelPerThousandPerDay: number;
+  fuelImportShare: number;
+  refineryShare: number;
+  crudeShare: number;
+  refineryRestoreCost: number;
+  /** Fuel and crude waiting at a yard are lost far slower than produce spoils (seconds, the time constant). */
+  fuelLossSeconds: number;
   /** Private truckers (truckers.ts, brief Revision 2): on, how fast they take waiting goods, the longest haul they take, their trucks, their cut of the fare, the loading levy. */
   truckersEnabled: boolean;
   truckerPickupSeconds: number;
   truckerMaxHaulCells: number;
+  /** How far tankers take fuel (fuel.ts): much further than truckers take other goods. */
+  tankerMaxHaulCells: number;
   truckLoad: number;
   truckSpeed: number;
   truckerFareShare: number;
@@ -412,6 +431,8 @@ export interface SliceWorld {
   /** Industrial sites open now, and the drawing of the next (industries.ts). */
   industries: Map<string, IndustryState>;
   industrySchedule: { nextAtSeconds: number; rngState: number; opened: number };
+  /** The fuel chain's sites and state (fuel.ts); null until placed, or with fuel off. */
+  fuel: FuelState | null;
   /** Goods truckers hold at yards, filling a truck (truckers.ts). */
   truckers: TruckerHeld;
   width: number;

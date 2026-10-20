@@ -1,3 +1,4 @@
+import { isFuelSite } from "./fuel";
 import type { SliceWorld } from "./types";
 import type { GoodsKind } from "./goods";
 import { roadPath } from "./world";
@@ -28,9 +29,8 @@ export type TruckerHeld = Map<string, number>;
 
 const heldKey = (from: string, to: string, kind: GoodsKind) => `${from}|${to}|${kind}`;
 
-/** How keen truckers are on a haul of this many cells: 1 next door, 0 at truckerMaxHaulCells and beyond. */
-export function haulShare(world: SliceWorld, cells: number): number {
-  const max = world.tuning.truckerMaxHaulCells;
+/** How keen truckers are on a haul of this many cells: 1 next door, 0 at `max` (truckerMaxHaulCells) and beyond. */
+export function haulShare(world: SliceWorld, cells: number, max = world.tuning.truckerMaxHaulCells): number {
   return max > 0 ? Math.max(0, 1 - cells / max) : 0;
 }
 
@@ -47,7 +47,12 @@ export function truckersPickUp(world: SliceWorld, dt: number): void {
       const kind = key.slice(bar + 1) as GoodsKind;
       const path = roadPath(world, from, to);
       if (!path) continue;
-      const take = amount * pickup * haulShare(world, path.distance);
+      // Fuel goes by road tanker, far: nearly all of it does here (fuel.ts).
+      // Crude doesn't go by the roadside: it's moved under contract -- yours.
+      const site = world.towns.get(from)?.industry;
+      if (site === "oilfield" || site === "terminal") continue;
+      const reach = isFuelSite(world.towns.get(from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells;
+      const take = amount * pickup * haulShare(world, path.distance, reach);
       if (take <= 0) continue;
       yard.set(key, amount - take);
       const k = heldKey(from, to, kind);
@@ -56,9 +61,11 @@ export function truckersPickUp(world: SliceWorld, dt: number): void {
   }
 }
 
-/** A loading levy is charged where loads are lifted at a market or the port. */
+/** A loading levy is charged where loads are lifted at a market, the port, or a fuel depot or refinery (the tanker drivers' union is there too). */
 function levied(world: SliceWorld, townId: string): boolean {
   if (townId === world.port) return true;
+  const site = world.towns.get(townId)?.industry;
+  if (site === "depot" || site === "refinery") return true;
   const town = world.towns.get(townId);
   return !!town && world.basePopulation.has(townId) && town.population >= world.tuning.marketPopulation;
 }
@@ -75,7 +82,11 @@ export function dispatchTrucks(world: SliceWorld, takings: Takings, fits: (segme
     if (held < tuning.truckLoad) continue;
     const [from, to, kind] = key.split("|") as [string, string, GoodsKind];
     const path = roadPath(world, from, to);
-    if (!path || !fits(path.segmentIds, tuning.lorryRoadSpace)) continue;
+    // A tanker isn't held back by the danfos' share of the road: fuel gets
+    // through a jammed road slowly, never not at all (fuel.ts). It still
+    // takes its road space and slows what's there.
+    const tanker = isFuelSite(world.towns.get(from));
+    if (!path || (!tanker && !fits(path.segmentIds, tuning.lorryRoadSpace))) continue;
     const id = `truck-${world.nextId++}`;
     const vehicle = createOneShotVehicle(id, from, to, simulation.routing, tuning.truckSpeed, tuning.truckLoad, tuning.lorryRoadSpace, new Map());
     if (!vehicle) continue;

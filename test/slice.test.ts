@@ -17,7 +17,9 @@ import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed } from "@engine/slice/industries";
 import { lineSlots, onRoadCost, stationTowns, trackCost } from "@engine/slice/rail";
-import { haulShare } from "@engine/slice/truckers";
+import { haulShare, truckersPickUp } from "@engine/slice/truckers";
+import { cargoName, fuelFlows, refineryOutput } from "@engine/slice/fuel";
+import { flowKey } from "@engine/slice/goods";
 import { restoreRoad, retireRoad } from "@engine/slice/retire";
 import { isYourRoad } from "@engine/slice/upkeep";
 import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, wornRoadAt } from "@engine/slice/problems";
@@ -2775,7 +2777,7 @@ describe("Revision 2: retiring a road, and the road that became the railway", ()
 
 describe("generated maps per seed, with guards (brief, After the ladder's playtest, 5; P8)", () => {
   test("seed 0 is the hand-made map; a seed always draws the same map, and another seed another", () => {
-    expect(generatedSliceMap(SLICE_MAP, 0)).toEqual(SLICE_MAP);
+    expect(generatedSliceMap(SLICE_MAP, 0)).toEqual({ ...SLICE_MAP, region: "southwest" });
     expect(generatedSliceMap(SLICE_MAP, 7)).toEqual(generatedSliceMap(SLICE_MAP, 7));
     expect(generatedSliceMap(SLICE_MAP, 7)).not.toEqual(generatedSliceMap(SLICE_MAP, 8));
   });
@@ -2906,5 +2908,57 @@ describe("run files: a played game saved, read and replayed (runlog.ts)", () => 
     expect(replayed.economy.funds).toBe(world.economy.funds);
     expect(headline(replayed)).toEqual(headline(world));
     expect([...replayed.towns.values()].map((t) => t.population)).toEqual([...world.towns.values()].map((t) => t.population));
+  }, 20_000);
+});
+
+describe("Revision 3, step 1: the fuel chain (fuel.ts)", () => {
+  const game = () => startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+
+  test("a new game has a tank farm by the port with its old road, an idle refinery, and crude far from it", () => {
+    const w = game();
+    const fuel = w.fuel!;
+    const site = (id: string) => w.towns.get(id)!;
+    expect(site(fuel.depotId).industry).toBe("depot");
+    expect(site(fuel.refineryId).industry).toBe("refinery");
+    expect(site(fuel.sourceId).industry).toBe("oilfield"); // a south-south map: crude from the wells
+    expect(fuel.restored).toBe(false);
+    expect(roadChain(w, fuel.depotId, w.port!)).not.toBeNull();
+    const [r, s] = [site(fuel.refineryId), site(fuel.sourceId)];
+    expect(Math.hypot(r.x - s.x, r.y - s.y)).toBeGreaterThanOrEqual(30);
+    // Elsewhere crude comes by pipeline.
+    expect(startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 }).towns.get("fuel-source")!.industry).toBe("terminal");
+  });
+
+  test("the refinery makes nothing until it's restored and crude reaches it; then fuel flows from it to every town", () => {
+    const w = game();
+    const fuel = w.fuel!;
+    const crudeKey = flowKey({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies" });
+    expect(fuelFlows(w).some((f) => f.from === fuel.sourceId)).toBe(false); // idle: no crude wanted
+    w.economy.funds = 1e6;
+    expect(applyAction(w, { kind: "restoreRefinery" }).ok).toBe(true);
+    expect(fuelFlows(w).some((f) => f.from === fuel.sourceId && f.to === fuel.refineryId)).toBe(true);
+    expect(refineryOutput(w)).toBe(0); // restored, but no crude yet
+    w.goods.outcomes.set(crudeKey, { delivered: 0.5 * fuel.baseDemand, spoiled: 0 });
+    expect(refineryOutput(w)).toBeCloseTo(0.5 * fuel.baseDemand, 9);
+    const refined = fuelFlows(w).filter((f) => f.from === fuel.refineryId);
+    expect(refined.length).toBe([...w.towns.values()].filter((t) => !t.industry).length);
+    // Never more than its capacity, however much crude arrives.
+    w.goods.outcomes.set(crudeKey, { delivered: 10 * fuel.baseDemand, spoiled: 0 });
+    expect(refineryOutput(w)).toBeCloseTo(w.tuning.refineryShare * fuel.baseDemand, 9);
+    expect(cargoName(w, fuel.sourceId, "supplies")).toBe("crude");
+    expect(cargoName(w, fuel.refineryId, "supplies")).toBe("fuel");
+  });
+
+  test("tankers carry fuel, never crude: getting crude to the refinery is yours", () => {
+    const w = game();
+    const fuel = w.fuel!;
+    w.goods.yards.set(fuel.sourceId, new Map([[`${fuel.refineryId}|supplies`, 500]]));
+    w.goods.yards.set(fuel.depotId, new Map([[`${w.port}|supplies`, 500]]));
+    // A road from the source to the refinery, so only the rule stops them.
+    w.economy.funds = 1e7;
+    buildRoad(w, fuel.sourceId, fuel.refineryId);
+    for (let i = 0; i < 300; i += 1) truckersPickUp(w, SIM_DT);
+    expect(w.goods.yards.get(fuel.sourceId)!.get(`${fuel.refineryId}|supplies`)).toBe(500);
+    expect(w.goods.yards.get(fuel.depotId)!.get(`${w.port}|supplies`)!).toBeLessThan(500);
   });
 });

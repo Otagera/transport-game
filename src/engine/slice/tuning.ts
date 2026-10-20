@@ -437,6 +437,26 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   quarryExportShare: 0.3,
   stoneCapShare: 0.25,
 
+  // The fuel chain (fuel.ts; brief, Revision 3, step 1): a tank farm by the
+  // port imports fuel, an idle refinery waits to be restored, and crude
+  // comes from an oilfield (south-south) or a pipeline terminal. A town
+  // burns a tonne a day per thousand people: on a ~600k map, ~600 t a day,
+  // the volumes freight rail is for. Imports cover 40% of the need at the
+  // start (see below), so the towns far from the tank farm run short until the refinery
+  // runs; it can make 90%, from crude delivered to it. First guesses: to
+  // be measured (C11, goods 20-40% of income by day 100). Imports 0.4 ->
+  // 0.7 at once: at 0.4 every town was short from day 1, an early tax like
+  // wear's; scarcity should bite the far towns first, as it does here.
+  fuelEnabled: true,
+  fuelPerThousandPerDay: 1,
+  fuelImportShare: 0.7,
+  refineryShare: 0.9,
+  crudeShare: 1,
+  refineryRestoreCost: 60000,
+  // About a week, against produce's two days: at two days the port city got
+  // half its fuel with the tank farm next door.
+  fuelLossSeconds: 180,
+
   // Rail's own job (brief, Revision 2). A line carries `trackSlots` trains,
   // passenger and freight together: a freight train takes a passenger one's
   // slot, so a busy line is a choice (C7). Rail makes trips that weren't made
@@ -451,6 +471,9 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   truckersEnabled: true,
   truckerPickupSeconds: 15,
   truckerMaxHaulCells: 40,
+  // Fuel goes by road tanker, and far: nearly all of it does here (fuel.ts).
+  // At truckers' 40 cells, only the towns by the tank farm got any fuel.
+  tankerMaxHaulCells: 90,
   truckLoad: 20,
   truckSpeed: 2.2,
   truckerFareShare: 0.8,

@@ -66,6 +66,8 @@ function describeAction(action: RunFile["actions"][number]["action"]): string {
       return `${action.kind} ${action.segmentId}`;
     case "dropProject":
       return "drop the named project";
+    case "restoreRefinery":
+      return "restore the refinery";
     case "sell":
       return `sell on ${action.routeId}`;
   }

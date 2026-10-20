@@ -7,6 +7,7 @@ import type { Alignment } from "./roads";
 import { setEnforcement, settleStrike, type Enforcement } from "./pushback";
 import { dropProject, nameProject, type ProjectRung } from "./project";
 import { restoreRoad, retireRoad } from "./retire";
+import { restoreRefinery } from "./fuel";
 
 // Every player action as plain data. Data, not a closure, so it can be
 // sent to a worker and replayed there: the forecast (forecast.ts) runs an
@@ -26,6 +27,7 @@ export type ActionSpec =
   | { kind: "fix"; segmentId: string; on: boolean }
   | { kind: "retire" | "restore" | "repair"; segmentId: string }
   | { kind: "dropProject" }
+  | { kind: "restoreRefinery" }
   | { kind: "sell"; routeId: string };
 
 /** `amount`: money charged (a repair) or returned (a sale), where the caller wants to say it. */
@@ -82,6 +84,10 @@ export function applyAction(world: SliceWorld, spec: ActionSpec): ActionOutcome 
     case "dropProject":
       dropProject(world);
       return { ok: true };
+    case "restoreRefinery": {
+      const result = restoreRefinery(world);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
     case "sell": {
       const refund = isLorryRoute(spec.routeId) ? removeLorry(world, spec.routeId) : removeBus(world, spec.routeId);
       return refund > 0 ? { ok: true, amount: refund } : { ok: false, reason: "nothing to sell" };

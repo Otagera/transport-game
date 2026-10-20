@@ -8,6 +8,7 @@ import { SWITCHED_OFF } from "./tuning";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, routeKey, type ActionResult } from "./world";
 import { lineSlots, railPath } from "./rail";
 import { industryFlows } from "./industries";
+import { fuelFlows, isFuelSite } from "./fuel";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -113,6 +114,8 @@ export function goodsFlows(world: SliceWorld): GoodsFlow[] {
   }
   // Industries' output (industries.ts): a quarry's stone to its towns and the port.
   if (tuning.industriesEnabled) flows.push(...industryFlows(world));
+  // The fuel chain (fuel.ts): imports and refined fuel to every town, crude to the refinery.
+  flows.push(...fuelFlows(world));
   return flows;
 }
 
@@ -120,6 +123,8 @@ export function goodsFlows(world: SliceWorld): GoodsFlow[] {
 export function produceAndSpoil(world: SliceWorld, dt: number): void {
   const { goods, tuning } = world;
   const spoil = 1 - Math.exp(-dt / tuning.goodsSpoilSeconds);
+  // Fuel and crude don't rot: what waits is lost far slower (sold off, tanks full).
+  const leak = 1 - Math.exp(-dt / tuning.fuelLossSeconds);
   const alpha = 1 - Math.exp(-dt / tuning.outcomeTauSeconds);
   const spoiled = new Map<string, number>();
   for (const flow of goodsFlows(world)) {
@@ -127,7 +132,7 @@ export function produceAndSpoil(world: SliceWorld, dt: number): void {
     const yard = goods.yards.get(flow.from)!;
     const key = yardKey(flow.to, flow.kind);
     const waiting = (yard.get(key) ?? 0) + flow.rate * dt;
-    const lost = waiting * spoil;
+    const lost = waiting * (isFuelSite(world.towns.get(flow.from)) ? leak : spoil);
     yard.set(key, waiting - lost);
     spoiled.set(flowKey(flow), lost);
   }

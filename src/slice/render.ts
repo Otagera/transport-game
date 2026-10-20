@@ -10,6 +10,7 @@ import { NO_SEAT_MIN_PER_DAY, corridorNoSeat } from "@engine/slice/problems";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
+import { refineryOutput } from "@engine/slice/fuel";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -940,30 +941,68 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
   const p = toScreen(view, town.x, town.y);
   const half = 9;
   const selected = state.selectedTown === town.id;
-  ctx.fillStyle = COLORS.goods;
+  const fuel = world.fuel;
+  // An idle refinery reads as out of action: greyed, like disused track.
+  const idle = town.industry === "refinery" && !fuel?.restored;
+  ctx.fillStyle = idle ? COLORS.home : COLORS.goods;
   ctx.strokeStyle = selected ? COLORS.selection : COLORS.townEdge;
   ctx.lineWidth = selected ? 3 : 2;
   ctx.beginPath();
   ctx.rect(p.x - half, p.y - half, half * 2, half * 2);
   ctx.fill();
   ctx.stroke();
-  // A quarry's peak.
   ctx.fillStyle = "#fffdf8";
+  ctx.strokeStyle = "#fffdf8";
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(p.x - 6, p.y + 5);
-  ctx.lineTo(p.x - 1, p.y - 5);
-  ctx.lineTo(p.x + 2, p.y);
-  ctx.lineTo(p.x + 3.5, p.y - 2);
-  ctx.lineTo(p.x + 6, p.y + 5);
-  ctx.closePath();
-  ctx.fill();
+  if (town.industry === "depot") {
+    // Two storage tanks.
+    ctx.arc(p.x - 3, p.y + 1, 3.2, 0, Math.PI * 2);
+    ctx.moveTo(p.x + 6.2, p.y + 1);
+    ctx.arc(p.x + 3, p.y + 1, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (town.industry === "refinery") {
+    // Two columns and a flare.
+    ctx.rect(p.x - 5, p.y - 4, 3, 9);
+    ctx.rect(p.x + 1, p.y - 6, 3, 11);
+    ctx.fill();
+  } else if (town.industry === "oilfield" || town.industry === "terminal") {
+    // A derrick (oilfield) or a pipe and valve (terminal).
+    if (town.industry === "oilfield") {
+      ctx.moveTo(p.x - 5, p.y + 6);
+      ctx.lineTo(p.x, p.y - 6);
+      ctx.lineTo(p.x + 5, p.y + 6);
+      ctx.moveTo(p.x - 3, p.y + 1);
+      ctx.lineTo(p.x + 3, p.y + 1);
+      ctx.stroke();
+    } else {
+      ctx.rect(p.x - 6, p.y - 1.5, 12, 3);
+      ctx.rect(p.x - 1.5, p.y - 5, 3, 3.5);
+      ctx.fill();
+    }
+  } else {
+    // A quarry's peak.
+    ctx.moveTo(p.x - 6, p.y + 5);
+    ctx.lineTo(p.x - 1, p.y - 5);
+    ctx.lineTo(p.x + 2, p.y);
+    ctx.lineTo(p.x + 3.5, p.y - 2);
+    ctx.lineTo(p.x + 6, p.y + 5);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const label =
+    town.industry === "depot" && fuel ? `fuel imports · ${perDay(world.tuning.fuelImportShare * fuel.baseDemand)} t/day`
+    : town.industry === "refinery" && fuel ? (fuel.restored ? `fuel · ${perDay(refineryOutput(world))} t/day` : "idle · restore it")
+    : (town.industry === "oilfield" || town.industry === "terminal") && fuel ? `crude · ${fuel.restored ? `${perDay(world.tuning.crudeShare * fuel.baseDemand)} t/day` : "for the refinery"}`
+    : `stone · ${world.tuning.quarryOutputPerDay} t/day`;
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.label;
   ctx.font = "600 12px system-ui, sans-serif";
   ctx.fillText(town.name, p.x, p.y + half + 14);
   ctx.fillStyle = COLORS.labelMuted;
   ctx.font = "11px system-ui, sans-serif";
-  ctx.fillText(`stone · ${world.tuning.quarryOutputPerDay} t/day`, p.x, p.y + half + 27);
+  ctx.fillText(label, p.x, p.y + half + 27);
   if (isCutOff(world, town.id)) {
     ctx.fillStyle = COLORS.ghostBad;
     ctx.font = "600 11px system-ui, sans-serif";

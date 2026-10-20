@@ -73,7 +73,7 @@ function buildMap(def: SliceMapDef): GeneratedMap {
   return map;
 }
 
-function addRoadToMap(
+export function addRoadToMap(
   map: GeneratedMap,
   id: string,
   a: string,
@@ -123,6 +123,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     truckers: new Map(),
     // Seeded by the map, so the same map draws the same sites.
     industrySchedule: createIndustrySchedule(tuning, def.towns.reduce((sum, town) => sum * 31 + Math.round(town.x * 7 + town.y * 13 + town.population), 17)),
+    fuel: null,
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),

@@ -563,6 +563,8 @@ You don't run the industries: companies and traders do, and they pay you freight
 2. **The building chain,** replacing today's quarry-to-growth link with limestone → cement → towns.
 3. **The food chain** and exports, by region.
 
+**Built 2026-10-20, step 1a: fuel as a chain** (`fuel.ts`; detail in architecture/engine.md, The fuel chain). Every game starts with a tank farm by the port (imports, 70% of day 1's need), an idle refinery near the second city (restore it for ₦60,000; up to 90% of the need, from crude delivered to it) and a crude source far from it (an oilfield in the south-south, a pipeline terminal elsewhere). Road tankers carry fuel up to 90 cells and get through jammed roads; crude is yours alone to carry. Each town's card says how well it's supplied and from where; each site's card says what holds it back. Measured on map 543: lorries lose on the crude leg (−₦297/day for three), a freight train pays (+₦694/day), and a road out of the refinery lifts supply across the region from 35% to 46%. Step 1b next: what a shortage does.
+
 ### Checks for Revision 3
 
 | # | Check | Passes when |

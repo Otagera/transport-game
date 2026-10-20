@@ -1,4 +1,5 @@
 import type { SliceMapDef, SliceTuning, SliceWorld } from "./types";
+import { placeFuelSites } from "./fuel";
 import { createSliceWorld } from "./world";
 import { createBudgetTally, createRemittancePeriod } from "./budget";
 import { createDayLedger } from "./ledger";
@@ -17,6 +18,8 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_SLICE_TUNING): SliceWorld {
   const world = createSliceWorld(map, tuning);
+  // The fuel chain's sites are there before you are (fuel.ts; brief, Revision 3).
+  placeFuelSites(world, map.region);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) sliceTick(world, SIM_DT);
   world.startSeconds = world.economy.elapsedSeconds;
@@ -29,7 +32,8 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   world.economy.funds = tuning.startingFunds;
   world.ledger = createDayLedger();
   world.remittance = createRemittancePeriod(world.economy.elapsedSeconds, tuning);
-  world.startPopulation = new Map([...world.towns.values()].map((town) => [town.id, town.population]));
+  // Towns only: a site's workers aren't the region's people (score.ts counts the same way).
+  world.startPopulation = new Map([...world.towns.values()].filter((town) => !town.industry).map((town) => [town.id, town.population]));
   world.milestones = new Map(); // growth during the warm-up isn't yours
   resetCorridors(world);
   // Industries count their days from day 1, not from the warm-up.

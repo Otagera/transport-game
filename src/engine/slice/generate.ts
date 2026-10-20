@@ -215,7 +215,7 @@ export function generatedSliceMap(base: SliceMapDef, seed: number): SliceMapDef 
 }
 
 export function generatedMapInfo(base: SliceMapDef, seed: number): GeneratedMapInfo {
-  if (seed === 0) return { map: structuredClone(base), setting: "inland", region: "southwest", trunk: ["ilase", "owode", "ado"], rejected: 0 };
+  if (seed === 0) return { map: { ...structuredClone(base), region: "southwest" }, setting: "inland", region: "southwest", trunk: ["ilase", "owode", "ado"], rejected: 0 };
   const rng = createRng(seed);
   // The setting is the seed's, drawn once: redrawn with every rejected draw,
   // the harder settings came up less (river 35 of 300 seeds).
@@ -224,7 +224,7 @@ export function generatedMapInfo(base: SliceMapDef, seed: number): GeneratedMapI
   const regional = region === "southwest" ? null : shuffle(createRng(seed + 2_000_003), REGION_NAMES[region]);
   for (let draw = 0; draw < MAX_DRAWS; draw += 1) {
     const result = drawMap(rng, setting, regional);
-    if (result) return { ...result, region, rejected: draw };
+    if (result) return { ...result, map: { ...result.map, region }, region, rejected: draw };
   }
   // Never reached by any seed the tests try; kept so a seed always makes a game.
   return { map: variedSliceMap(base, seed), setting: "inland", region: "southwest", trunk: ["ilase", "owode", "ado"], rejected: MAX_DRAWS };

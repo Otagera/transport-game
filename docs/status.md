@@ -76,7 +76,11 @@ From your two games and the day-136 run file (principles §6):
   instead of ₦24,940 (replayed from a run file). Paving cuts wear 1.5×, not 3×.
 - **Rail 30% cheaper** (track ₦4,200 a cell; restoring and halts with it): C2 reads 25.9–27.1
   days of surplus (seeds 0 and 1), down from 34–43; the lane 14.5–14.7.
-- **Revision 3 drafted** (the brief, Proposed): goods that feel real, in chains. Waits on you.
+- **Revision 3 agreed; step 1a built** (the fuel chain: tank farm, idle refinery, crude source,
+  tankers, a fuel line on every town card). Next: step 1b, what a shortage does (danfo fares
+  and numbers, your running costs, roadside sellers), then your playtest of step 1.
+- **Named projects:** the 30-day clock now starts when you can afford the project, with a
+  warning before it lapses. **Run files** record the build and the full tuning.
 
 ### What the draft was asked to cover (agreed to draft 2026-10-19)
 
