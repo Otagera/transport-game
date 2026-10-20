@@ -61,11 +61,11 @@ export function truckersPickUp(world: SliceWorld, dt: number): void {
   }
 }
 
-/** A loading levy is charged where loads are lifted at a market, the port, or a fuel depot or refinery (the tanker drivers' union is there too). */
+/** A loading levy is charged where loads are lifted at a market, the port, a fuel depot or refinery (the tanker drivers' union is there too), or at the cement works or terminal. */
 function levied(world: SliceWorld, townId: string): boolean {
   if (townId === world.port) return true;
   const site = world.towns.get(townId)?.industry;
-  if (site === "depot" || site === "refinery") return true;
+  if (site === "depot" || site === "refinery" || site === "works" || site === "silo") return true;
   const town = world.towns.get(townId);
   return !!town && world.basePopulation.has(townId) && town.population >= world.tuning.marketPopulation;
 }

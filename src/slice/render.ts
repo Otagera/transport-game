@@ -11,6 +11,7 @@ import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point }
 import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
 import { refineryOutput, shortageAt } from "@engine/slice/fuel";
+import { cementActive, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -960,7 +961,7 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
   const selected = state.selectedTown === town.id;
   const fuel = world.fuel;
   // An idle refinery reads as out of action: greyed, like disused track.
-  const idle = town.industry === "refinery" && !fuel?.restored;
+  const idle = (town.industry === "refinery" && !fuel?.restored) || (town.industry === "works" && !world.cement?.working);
   ctx.fillStyle = idle ? COLORS.home : COLORS.goods;
   ctx.strokeStyle = selected ? COLORS.selection : COLORS.townEdge;
   ctx.lineWidth = selected ? 3 : 2;
@@ -982,6 +983,16 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     // Two columns and a flare.
     ctx.rect(p.x - 5, p.y - 4, 3, 9);
     ctx.rect(p.x + 1, p.y - 6, 3, 11);
+    ctx.fill();
+  } else if (town.industry === "works") {
+    // A kiln and its tall chimney.
+    ctx.rect(p.x - 6, p.y, 9, 5);
+    ctx.rect(p.x + 3, p.y - 6, 3, 11);
+    ctx.fill();
+  } else if (town.industry === "silo") {
+    // Two tall silos.
+    ctx.rect(p.x - 5, p.y - 5, 4, 10);
+    ctx.rect(p.x + 1, p.y - 5, 4, 10);
     ctx.fill();
   } else if (town.industry === "oilfield" || town.industry === "terminal") {
     // A derrick (oilfield) or a pipe and valve (terminal).
@@ -1012,7 +1023,9 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     town.industry === "depot" && fuel ? `fuel imports · ${perDay(world.tuning.fuelImportShare * fuel.baseDemand)} t/day`
     : town.industry === "refinery" && fuel ? (fuel.restored ? `fuel · ${perDay(refineryOutput(world))} t/day` : "idle · restore it")
     : (town.industry === "oilfield" || town.industry === "terminal") && fuel ? `crude · ${fuel.restored ? `${perDay(world.tuning.crudeShare * fuel.baseDemand)} t/day` : "for the refinery"}`
-    : `stone · ${world.tuning.quarryOutputPerDay} t/day`;
+    : town.industry === "works" ? (world.cement?.working ? `cement · ${perDay(worksOutput(world))} of ${perDay(worksCapacity(world))} t/day` : "idle · restore it")
+    : town.industry === "silo" ? `cement imports · ${perDay(cementImports(world))} t/day`
+    : `${cementActive(world) ? "limestone" : "stone"} · ${world.tuning.quarryOutputPerDay} t/day`;
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.label;
   ctx.font = "600 12px system-ui, sans-serif";

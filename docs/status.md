@@ -79,7 +79,11 @@ From your two games and the day-136 run file (principles §6):
 - **Revision 3 agreed; step 1 built** (the fuel chain: tank farm, idle refinery, crude source,
   tankers, a fuel line on every town card; 1b, what a shortage does: danfo fares up and
   danfos parked, riders less patient, your running costs up, jerrycan sellers on the map).
-  Next: your playtest of step 1 on a generated map, past day 150, with the run saved.
+  Step 1's playtest was cut short (a code change reloaded the page); moved on at your word.
+- **Step 2a built** (the building chain, `cement.ts`): limestone quarries → a cement works
+  (working or idle by the map's seed) → towns; cement holds a town's growth back past +40% of
+  its start. Next: 2b, workers commuting to sites, then 2c, towns growing around them; then a
+  playtest of step 2.
 - **Named projects:** the 30-day clock now starts when you can afford the project, with a
   warning before it lapses. **Run files** record the build and the full tuning.
 

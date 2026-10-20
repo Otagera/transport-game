@@ -1,5 +1,8 @@
 import type { SliceMapDef, SliceTuning, SliceWorld } from "./types";
 import { placeFuelSites } from "./fuel";
+import { inheritedRoad, placeCementWorks } from "./cement";
+import { openQuarry } from "./industries";
+import { rebuildNetworks } from "./rail";
 import { createSliceWorld } from "./world";
 import { createBudgetTally, createRemittancePeriod } from "./budget";
 import { createDayLedger } from "./ledger";
@@ -20,6 +23,16 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   const world = createSliceWorld(map, tuning);
   // The fuel chain's sites are there before you are (fuel.ts; brief, Revision 3).
   placeFuelSites(world, map.region);
+  // So is the building chain's works (cement.ts); a working one has its quarry and the old road to it.
+  placeCementWorks(world);
+  if (world.cement?.working) {
+    const opened = openQuarry(world);
+    if (opened?.kind === "industry-opened") {
+      inheritedRoad(world, "cement-quarry-road", opened.townId, world.cement.worksId);
+      rebuildNetworks(world);
+      world.plans = null;
+    }
+  }
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) sliceTick(world, SIM_DT);
   world.startSeconds = world.economy.elapsedSeconds;

@@ -4,6 +4,7 @@ import { refreshDemand, retireNode } from "./settlement";
 import { flowKey, type GoodsFlow } from "./goods";
 import { isWater } from "../pathing/terrainAStar";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
+import { cementActive } from "./cement";
 
 // Industries that open and close (docs/brief.md, Revision 2: the second
 // economy). A site, not a town: a few workers of its own, and goods it wants
@@ -72,6 +73,16 @@ function originalTowns(world: SliceWorld): SliceTown[] {
 export function industryFlows(world: SliceWorld): GoodsFlow[] {
   const flows: GoodsFlow[] = [];
   const { tuning } = world;
+  // With the building chain, a quarry is limestone for the works, all of it
+  // (cement.ts): nobody wants it while the works is idle.
+  if (cementActive(world)) {
+    const cement = world.cement!;
+    if (!cement.working) return flows;
+    for (const industry of world.industries.values()) {
+      if (world.towns.has(industry.id)) flows.push({ from: industry.id, to: cement.worksId, kind: "supplies", rate: tuning.quarryOutputPerDay / SECONDS_PER_GAME_DAY });
+    }
+    return flows;
+  }
   for (const industry of world.industries.values()) {
     const site = world.towns.get(industry.id);
     if (!site) continue;
@@ -128,7 +139,8 @@ export function updateIndustries(world: SliceWorld, dt: number): SliceEvent[] {
   if (now >= world.industrySchedule.nextAtSeconds) {
     const gap = tuning.industryEveryMinDays + draw(world) * (tuning.industryEveryMaxDays - tuning.industryEveryMinDays);
     world.industrySchedule.nextAtSeconds = now + gap * SECONDS_PER_GAME_DAY;
-    if (world.industries.size < tuning.industryMaxOpen) {
+    // An idle works wants no limestone: no quarry opens for it until it runs (cement.ts).
+    if (world.industries.size < tuning.industryMaxOpen && (!cementActive(world) || world.cement!.working)) {
       const opened = openQuarry(world);
       if (opened) events.push(opened);
     }
@@ -139,9 +151,12 @@ export function updateIndustries(world: SliceWorld, dt: number): SliceEvent[] {
 /**
  * Opens a quarry where one fits: dry ground clear of water, 8-20 cells from
  * the nearest town (a spur's length, not on top of one), 12 from any other
- * site, near the ridge where the map has one. Null when nowhere fits.
+ * site, near the ridge where the map has one -- and, with the building chain,
+ * near the cement works it feeds (limestone is a short haul). Null when
+ * nowhere fits.
  */
 export function openQuarry(world: SliceWorld): SliceEvent | null {
+  const works = cementActive(world) ? world.towns.get(world.cement!.worksId) : undefined;
   const { terrain } = world.simulation.map;
   const highest = terrain.elevation.reduce((top, e) => Math.max(top, e), 0);
   const sites = [...world.towns.values(), ...world.ruins.values()];
@@ -157,7 +172,8 @@ export function openQuarry(world: SliceWorld): SliceEvent | null {
     if (sites.some((s) => Math.hypot(s.x - x, s.y - y) < (isIndustry(s) ? 12 : 6))) continue;
     // On the ridge's flanks where the map has one: higher ground scores better.
     const height = highest > 0 ? terrain.elevation[y * terrain.width + x]! / highest : 0;
-    const score = -height + draw(world) * 0.3;
+    const toWorks = works ? Math.hypot(works.x - x, works.y - y) / 40 : 0;
+    const score = -height + toWorks + draw(world) * 0.3;
     if (!best || score < best.score) best = { x, y, score };
   }
   if (!best) return null;
@@ -165,7 +181,7 @@ export function openQuarry(world: SliceWorld): SliceEvent | null {
   world.industrySchedule.opened += 1;
   const id = `site-${world.industrySchedule.opened}`;
   const near = [...world.towns.values()].filter((t) => !isIndustry(t)).sort((p, q) => Math.hypot(p.x - best!.x, p.y - best!.y) - Math.hypot(q.x - best!.x, q.y - best!.y))[0]!;
-  const site: SliceTown = { id, name: `${near.name} Quarry`, x: best.x, y: best.y, population: tuning.industryWorkers, industry: "quarry" };
+  const site: SliceTown = { id, name: `${near.name} ${works ? "Limestone" : "Quarry"}`, x: best.x, y: best.y, population: tuning.industryWorkers, industry: "quarry" };
   world.simulation.map.nodes.push({ id, kind: "settlement", x: site.x, y: site.y });
   world.towns.set(id, site);
   world.simulation.queues.set(id, new Map());

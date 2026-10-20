@@ -431,7 +431,7 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   industryGraceDays: 30,
   industryMinDeliveredPerDay: 5,
   industryWorkers: 2,
-  quarryOutputPerDay: 100,
+  quarryOutputPerDay: 150,
   quarryLifeMinDays: 90,
   quarryLifeMaxDays: 180,
   quarryExportShare: 0.3,
@@ -470,6 +470,25 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   fuelParked: 0.35,
   fuelPatience: 1,
   fuelCostPremium: 0.3,
+
+  // The building chain (cement.ts; brief, Revision 3, step 2a). A town
+  // wants 0.25 t of cement a day per thousand people (Nigeria uses about 25
+  // Mt a year: 0.3), so ~150 t a day on a ~600k map. The works makes up to
+  // 1.2 times day 1's want, from 1.5 t of limestone a tonne: a quarry's
+  // 150 t a day makes 100, so it takes two quarries to run near capacity,
+  // and three once the towns grow. A town grows its first 40% without
+  // cement; past that, only as far as its cement lets it. An idle works'
+  // map imports 30% of the want through the terminal. First guesses, to be
+  // measured (C11, C13, C14).
+  cementEnabled: true,
+  cementPerThousandPerDay: 0.25,
+  cementWorksShare: 1.2,
+  cementImportShare: 0.3,
+  limestonePerCement: 1.5,
+  worksRestoreCost: 45000,
+  cementIdleChance: 0.5,
+  quarryAfterRestoreDays: 3,
+  cementFreeShare: 0.4,
 
   // Rail's own job (brief, Revision 2). A line carries `trackSlots` trains,
   // passenger and freight together: a freight train takes a passenger one's

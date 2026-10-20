@@ -323,6 +323,12 @@ blow-by-blow; this section is the distilled rule.
   Allocating by one share, or the new source first, made restoring the refinery lower
   supply (its fuel crossed the map to towns beside the tank farm); the old source first,
   the new one filling what's short, nearest it, it can only help.
+- **Short, split a source over everyone by want, not nearest first** (slice, Revision 3,
+  cement). Nearest first, a short cement works gave its neighbours everything and the far
+  cities no flow at all — nothing waiting at the works for them, so a lorry to them had
+  nothing to carry and the player couldn't help. Split, every town's share waits at the
+  works; truckers take the near ones, and the far ones are yours. (Fuel's imports cover the
+  map, so nearest first there only decides who's short at the edges.)
 
 ### Decay (slice, §6 step 4)
 

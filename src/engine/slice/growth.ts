@@ -4,6 +4,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { isDirt } from "./congestion";
 import { laneEncroachment } from "./pushback";
 import { stoneServed } from "./industries";
+import { cementActive, cementServed } from "./cement";
 import { stationTowns } from "./rail";
 
 // The original towns grow (docs/principles.md §6, step 4: depth, one at a
@@ -54,6 +55,8 @@ export interface TownGrowth {
   service: number;
   /** Your share of its trips, 0..1 -- below growthMinPlayerShare it can't grow. */
   playerShare: number;
+  /** Thousands of people its service would grow it to that cement is holding back (cement.ts); 0 when none. */
+  cementHeld: number;
 }
 
 /** The rungs of the ladder built so far (brief, Revision 1): a town with no road has none. */
@@ -115,15 +118,25 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   // Stone feeds construction (brief, Revision 2): the stone delivered from
   // quarries raises the cap, by a share of it bounded by the town's start --
   // never its current size (principles §3, Growth).
-  const stone = tuning.goodsEnabled && tuning.industriesEnabled && world.industries.size > 0 ? stoneServed(world, townId) : 0;
+  // With the building chain on, cement does that job instead, as a limit (below).
+  const building = cementActive(world);
+  const stone = !building && tuning.goodsEnabled && tuning.industriesEnabled && world.industries.size > 0 ? stoneServed(world, townId) : 0;
   // A town a passenger train stops at grows past its rail rung (brief,
   // Revision 2: station towns grow) -- bounded, like every share, by its start.
   const station = tuning.railEnabled && stationTowns(world).has(townId) ? tuning.stationCapShare : 0;
-  const cap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone + station));
+  const roadCap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone + station));
+  // Cement holds growth back past a free stretch (brief, Revision 3, step
+  // 2a): a town builds its first `cementFreeShare` of its start with local
+  // materials; above that, its room is scaled by the cement it gets.
+  const free = base * (1 + tuning.cementFreeShare);
+  const cap = building && roadCap > free ? free + (roadCap - free) * cementServed(world, townId) : roadCap;
   const developed = share.player >= tuning.growthMinPlayerShare
     ? smoothstep((service - tuning.growthServiceFloor) / (tuning.growthServiceFull - tuning.growthServiceFloor))
     : 0;
-  return { base, cap, rung, target: base + (cap - base) * developed, service, playerShare: share.player };
+  const target = base + (cap - base) * developed;
+  // What it would grow to with all the cement it wants: the gap is what cement is holding back.
+  const cementHeld = base + (roadCap - base) * developed - target;
+  return { base, cap, rung, target, service, playerShare: share.player, cementHeld };
 }
 
 /**
@@ -139,6 +152,8 @@ export function roadFull(world: SliceWorld, townId: string): { rung: CorridorRun
   const growth = townGrowth(world, townId);
   const town = world.towns.get(townId);
   if (!growth || !town || growth.cap <= growth.base) return null;
+  // Held back by cement, not its road: a better road would add nothing (the town card says cement).
+  if (growth.cementHeld > growth.base * 0.02) return null;
   const grown = growth.target > growth.base * (1 + ROAD_FULL_GROWN);
   const levelled = town.population >= growth.target * ROAD_FULL_SHARE;
   if (!grown || !levelled) return null;

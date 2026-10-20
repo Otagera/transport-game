@@ -57,6 +57,7 @@ import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
+import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { isYourRoad } from "@engine/slice/upkeep";
 import { goneAt, restoreCost as restoreRoadCost } from "@engine/slice/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/slice/problems";
@@ -128,7 +129,7 @@ const controlsEl = document.querySelector<HTMLDivElement>("#controls")!;
   // A new map keeps the switches: the next game of a playtest runs the same systems.
   const off = switchedOff.map((system) => ` · ${system} off`).join("");
   document.querySelector<HTMLSpanElement>("#map-seed")!.innerHTML =
-    `Map ${seed}${off} · <a href="${location.pathname}${query ? `?${query}` : ""}">New map</a> · <a href="#" id="save-run">Save run</a>`;
+    `Map ${seed}${off}${world.cement && cementActive(world) ? ` · cement works ${world.cement.working ? "working" : "idle"} at the start` : ""} · <a href="${location.pathname}${query ? `?${query}` : ""}">New map</a> · <a href="#" id="save-run">Save run</a>`;
 }
 // The run so far as a file (runlog.ts): what you did and what each day looked
 // like, for reading by hand or with scripts/slice-run.ts.
@@ -491,7 +492,9 @@ function announce(event: SliceEvent): void {
   } else if (event.kind === "industry-opened") {
     // A new problem arriving (brief, Revision 2: industries that open and close).
     const buyers = industryFlows(world).filter((flow) => flow.from === event.townId).map((flow) => townName(flow.to));
-    say(`A quarry has opened near ${townName(event.near)}: ${world.tuning.quarryOutputPerDay} t of stone a day for ${[...new Set(buyers)].join(", ")}. Nothing moves it until you do.`, false, 9);
+    say(cementActive(world)
+      ? `A limestone quarry has opened near ${townName(event.near)}: ${world.tuning.quarryOutputPerDay} t a day for ${townName(world.cement!.worksId)}. Nothing moves it until you do, or truckers if it's near.`
+      : `A quarry has opened near ${townName(event.near)}: ${world.tuning.quarryOutputPerDay} t of stone a day for ${[...new Set(buyers)].join(", ")}. Nothing moves it until you do.`, false, 9);
   } else if (event.kind === "industry-closed") {
     say(`${event.name} has closed: ${event.reason === "worked out" ? "it's worked out" : "nothing was moved from it"}.`, true, 7);
   } else if (event.kind === "founded") {
@@ -1146,6 +1149,9 @@ function moveText(move: NamedMove): string {
 // problem with it -- no road, or nothing moved and the day it closes.
 function renderIndustry(townId: string): void {
   if (isFuelSite(world.towns.get(townId))) return renderFuelSite(townId);
+  if (isCementSite(world.towns.get(townId))) return renderCementSite(townId);
+  const limestone = cementActive(world);
+  const cargo = limestone ? "limestone" : "stone";
   const site = world.towns.get(townId)!;
   const industry = world.industries.get(townId);
   const flows = industryFlows(world).filter((flow) => flow.from === townId);
@@ -1166,17 +1172,19 @@ function renderIndustry(townId: string): void {
   if (isCutOff(world, townId)) {
     // From the nearest town a road already reaches: a spur from a cut-off town connects nothing.
     const near = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id)).sort((p, q) => Math.hypot(p.x - site.x, p.y - site.y) - Math.hypot(q.x - site.x, q.y - site.y))[0];
-    problem = `No road reaches it. Build one (<kbd>R</kbd>)${near ? ` from ${townName(near.id)}` : ""} and its stone can move.`;
+    problem = `No road reaches it. Build one (<kbd>R</kbd>)${near ? ` from ${townName(near.id)}` : ""} and its ${cargo} can move.`;
   } else if (industry && industry.deliveredEMA * SECONDS_PER_GAME_DAY < world.tuning.industryMinDeliveredPerDay) {
     const closes = industry.openedAtSeconds + world.tuning.industryGraceDays * SECONDS_PER_GAME_DAY;
-    problem = `Nothing is moving its stone${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
+    problem = `Nothing is moving its ${cargo}${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
   }
   routesEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
       <ul>
-        <li>${world.tuning.quarryOutputPerDay} t of stone a day. Stone feeds construction: a town that gets the stone it wants can grow more.</li>
+        <li>${limestone
+          ? `${world.tuning.quarryOutputPerDay} t of limestone a day for ${townName(world.cement!.worksId)}: ${world.tuning.limestonePerCement} t makes a tonne of cement, and towns past their first growth need cement to grow.`
+          : `${world.tuning.quarryOutputPerDay} t of stone a day. Stone feeds construction: a town that gets the stone it wants can grow more.`}</li>
         <li>${world.tuning.truckersEnabled ? "Truckers take what you don't on short hauls (yellow on each bar); the rest is lost." : "Nobody else carries it: what isn't moved is lost."}</li>
       </ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}
@@ -1251,6 +1259,75 @@ function renderFuelSite(townId: string): void {
     </div>`;
 }
 
+// The cement works' or terminal's card (brief, Revision 3, step 2a): what it
+// makes, from what, and the one thing holding it back.
+function renderCementSite(townId: string): void {
+  const cement = world.cement!;
+  const site = world.towns.get(townId)!;
+  const t = world.tuning;
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const flows = goodsFlows(world).filter((flow) => flow.from === townId).sort((p, q) => q.rate - p.rate);
+  const rows = flows
+    .map((flow) => {
+      const outcome = world.goods.outcomes.get(flowKey(flow));
+      const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
+      const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
+      const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
+      return `<div class="trip"><span class="name">${townName(flow.to)}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+    })
+    .join("");
+  const capacity = perDay(worksCapacity(world));
+  let kicker = "";
+  let lines: string[] = [];
+  let problem = "";
+  let action = "";
+  if (site.industry === "silo") {
+    kicker = "Cement terminal · imports";
+    lines = [
+      `Imports ${perDay(cementImports(world))} t of cement a day through the port, a share of what the towns want, split between them.`,
+      "Truckers take it on short hauls (yellow on each bar); further than that, it's yours to carry or it waits.",
+    ];
+  } else {
+    const out = perDay(worksOutput(world));
+    kicker = cement.working ? `Cement works · ${out} of ${capacity} t a day` : "Cement works · idle";
+    lines = [
+      `Makes up to ${capacity} t of cement a day, from ${t.limestonePerCement} t of limestone a tonne: ${perDay(limestoneArriving(world))} t of limestone a day is reaching it.`,
+      `Towns grow their first ${pct(t.cementFreeShare)} with local materials; past that, only as far as their cement lets them.`,
+      "Its cement is split between the towns by what they want. Truckers take it on short hauls; the far towns' share waits for your lorries or freight trains.",
+    ];
+    if (!cement.working) {
+      problem = "Idle. Restore it, and limestone quarries open for it; until then the towns get only imports.";
+      action = `<span class="actions"><button data-restore-works="1">Restore it: ${naira(t.worksRestoreCost)}</button></span>`;
+    } else if (world.industries.size === 0) {
+      problem = "No quarry is open: it makes nothing until the next one opens. Connect it when it does.";
+    } else if (![...world.industries.keys()].some((id) => roadPath(world, id, cement.worksId) || railPath(world, id, cement.worksId))) {
+      const quarry = [...world.industries.keys()][0]!;
+      problem = `No way to it from ${townName(quarry)}: build a road (<kbd>R</kbd>) or lay track (<kbd>K</kbd>) between them, and the limestone can come.`;
+    } else if (limestoneArriving(world) * SECONDS_PER_GAME_DAY < 1) {
+      problem = "No limestone arriving. Carry it from a quarry: a lorry (<kbd>L</kbd>) on a road, or a freight train on track.";
+    } else if (out < capacity * 0.6) {
+      problem = `Short of limestone: ${perDay(limestoneArriving(world))} of ${Math.round(capacity * t.limestonePerCement)} t a day. Carry more from a quarry, or connect another when one opens.`;
+    }
+  }
+  routesEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">${kicker}</div>
+      <div class="title">${site.name}</div>
+      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}</ul>
+      ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
+      ${rows}
+    </div>`;
+}
+
+// A town's cement (cement.ts): how well supplied, and what that's holding back.
+function cementText(townId: string): string {
+  if (!world.cement || !cementActive(world) || !world.basePopulation.has(townId)) return "";
+  const served = cementServed(world, townId);
+  const growth = townGrowth(world, townId);
+  const held = growth && growth.cementHeld > growth.base * 0.02 ? ` Short, it holds ${Math.round(growth.cementHeld)}k people of growth back.` : "";
+  return `<p class="townshare"><b>Cement:</b> ${pct(served)} of what it wants. It grows its first ${pct(world.tuning.cementFreeShare)} without; past that, only as far as its cement lets it.${held}</p>`;
+}
+
 // A town's fuel (fuel.ts): how well supplied, from where, and why not more.
 function fuelText(townId: string): string {
   const supply = fuelSupply(world, townId);
@@ -1317,6 +1394,7 @@ function renderTown(townId: string): void {
       ${growthText(townId, town.name)}
       ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
       ${world.tuning.goodsEnabled ? fuelText(townId) : ""}
+      ${world.tuning.goodsEnabled ? cementText(townId) : ""}
       ${world.tuning.goodsEnabled ? goodsText(townId) : ""}
       ${rows}
       <div class="pager">
@@ -1353,6 +1431,13 @@ function problemText(townId: string): string {
     const name = townName(townId);
     const next = full.next === "paved" ? "Pave its road (R)" : full.next === "lane" ? "A bus lane on its road (R)" : "Rail (K: restore the old line or lay track, then T for trains)";
     return `<p class="callout hook"><span class="k">The problem here</span>${name} can't grow: its road is full. ${next} to grow further.${saveButton(full)}</p>`;
+  }
+  // Grown as far as its cement lets it (cement.ts): the road isn't what's stopping it.
+  const growth = townGrowth(world, townId);
+  const town = world.towns.get(townId);
+  if (growth && town && world.cement && growth.cementHeld > growth.base * 0.05 && town.population >= growth.target * 0.97) {
+    const works = townName(world.cement.worksId);
+    return `<p class="callout hook"><span class="k">The problem here</span>${townName(townId)} can't grow: no cement. It gets ${pct(cementServed(world, townId))} of what it wants; all of it would grow it ${Math.round(growth.cementHeld)}k more. Carry cement from ${works}: a lorry (<kbd>L</kbd>), or a freight train on track.${world.cement.working ? "" : ` Or restore ${works}.`}</p>`;
   }
   // A worn road your vehicles pay for (brief, Revision 2: wear per corridor).
   const worn = wornRoadAt(world, townId);
@@ -1843,6 +1928,12 @@ routesEl.addEventListener("click", (event) => {
   if (target.dataset.restoreRefinery) {
     const result = act({ label: "restoring the refinery", towns: world.fuel ? [world.fuel.refineryId] : [] }, { kind: "restoreRefinery" });
     say(result.ok ? `Refinery restored for ${naira(result.amount ?? 0)}. Now get crude to it, and give it a road out.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.restoreWorks) {
+    const result = act({ label: "restoring the cement works", towns: world.cement ? [world.cement.worksId] : [] }, { kind: "restoreWorks" });
+    say(result.ok ? `Cement works restored for ${naira(result.amount ?? 0)}. A limestone quarry opens for it within days: connect it.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

@@ -964,3 +964,32 @@ transfers, diagnosis, debt advice, receipts and forecasts treat it as any passen
   one freight train feeds it 161 t and nets +₦694 (the refinery needs a road out). A
   played run (map 543) replayed with fuel on: net −15% and trips −17% by day 30, against
   −37% before imports went to 1.0 and the effects were softened.
+
+### The building chain (Revision 3, step 2a)
+
+- **`cement.ts`** — one **cement works** per map, placed at start (`placeCementWorks`, from
+  `start.ts`, after the fuel sites so they keep their places): the highest dry ground 8+
+  cells from any town and within 16 of one on the network, with an old road to it. The
+  map's own draw (`worksStartsIdle`, a hash of its towns, apart from every other draw)
+  decides how it starts: **working** — `start.ts` opens a quarry for it with an old road
+  between them — or **idle**, with a **cement terminal** (`silo`) 9–12 cells from the port
+  and its old road. `world.cement`; `cementActive` (needs `cementEnabled`, goods and
+  industries on).
+- **Quarries** (`industries.ts`) become limestone quarries: with the chain active, all of a
+  quarry's output goes to the works (`industryFlows`), none while it's idle, and no quarry
+  opens while it's idle; `restoreWorks` (`ActionSpec` `restoreWorks`) brings the next one
+  within `quarryAfterRestoreDays`. A new quarry scores nearer the works.
+- **Flows** (`cementFlows`, added to `goodsFlows`): each original town wants
+  `cementPerThousandPerDay` × its size; imports (`cementImportShare` of day 1's want, idle
+  maps only) are split first, then the works' output — `min(cementWorksShare × day 1's want,
+  limestone arriving / limestonePerCement)` — over the towns a road from it reaches, each by
+  what it still wants (split, not nearest first: principles §3, Economy). Cement and
+  limestone at the works and terminal keep (`fuelLossSeconds`); truckers take them at their
+  usual 40-cell reach; the works and terminal charge the loading levy.
+- **Growth** (`growth.ts townGrowth`): with the chain active, stone's bonus is off, and the
+  cap above `base × (1 + cementFreeShare)` is scaled by `cementServed` (yours and truckers'
+  deliveries over want). `TownGrowth.cementHeld` is the growth its service would give that
+  cement is holding back; `roadFull` stays quiet while cement, not the road, is the limit.
+- **On screen** (`main.ts`): the works' and terminal's cards (`renderCementSite`, with the
+  Restore button), a Cement line on the town card (`cementText`), "can't grow: no cement" as
+  the town's problem, the map footer saying how the works started; glyphs in `render.ts`.

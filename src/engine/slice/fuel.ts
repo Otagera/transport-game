@@ -149,7 +149,8 @@ export function cargoName(world: SliceWorld, from: string, kind: "produce" | "su
   const site = world.towns.get(from)?.industry;
   if (site === "oilfield" || site === "terminal") return "crude";
   if (site === "depot" || site === "refinery") return "fuel";
-  if (site === "quarry") return "stone";
+  if (site === "works" || site === "silo") return "cement";
+  if (site === "quarry") return world.cement && world.tuning.cementEnabled ? "limestone" : "stone";
   return kind;
 }
 
@@ -226,19 +227,19 @@ export function restoreRefinery(world: SliceWorld): ActionResult & { charged?: n
 
 // --- Placing the sites ---------------------------------------------------------
 
-function dry(world: SliceWorld, x: number, y: number, clearance: number): boolean {
+export function dry(world: SliceWorld, x: number, y: number, clearance: number): boolean {
   const { terrain } = world.simulation.map;
   if (x < 3 || y < 3 || x > world.width - 4 || y > world.height - 4) return false;
   for (let dy = -clearance; dy <= clearance; dy += 1) for (let dx = -clearance; dx <= clearance; dx += 1) if (isWater(terrain, x + dx, y + dy)) return false;
   return true;
 }
 
-function nearestDistance(world: SliceWorld, x: number, y: number): number {
+export function nearestDistance(world: SliceWorld, x: number, y: number): number {
   return Math.min(...[...world.towns.values()].map((town) => Math.hypot(town.x - x, town.y - y)));
 }
 
 /** A dry spot `minR`-`maxR` cells from (cx, cy) and at least `clear` from every town and site; the one scoring best. */
-function ringSpot(world: SliceWorld, cx: number, cy: number, minR: number, maxR: number, clear: number, score: (x: number, y: number) => number): { x: number; y: number } | null {
+export function ringSpot(world: SliceWorld, cx: number, cy: number, minR: number, maxR: number, clear: number, score: (x: number, y: number) => number): { x: number; y: number } | null {
   let best: { x: number; y: number; s: number } | null = null;
   for (let r = minR; r <= maxR; r += 1) {
     for (let k = 0; k < 24; k += 1) {
@@ -253,7 +254,7 @@ function ringSpot(world: SliceWorld, cx: number, cy: number, minR: number, maxR:
   return best ? { x: best.x, y: best.y } : null;
 }
 
-function addSite(world: SliceWorld, id: string, name: string, kind: SliceTown["industry"], at: { x: number; y: number }): SliceTown {
+export function addSite(world: SliceWorld, id: string, name: string, kind: SliceTown["industry"], at: { x: number; y: number }): SliceTown {
   const site: SliceTown = { id, name, x: at.x, y: at.y, population: world.tuning.industryWorkers, industry: kind };
   world.simulation.map.nodes.push({ id, kind: "settlement", x: site.x, y: site.y });
   world.towns.set(id, site);

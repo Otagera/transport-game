@@ -15,7 +15,8 @@ import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/slice/upk
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
-import { industryFlows, openQuarry, stoneServed } from "@engine/slice/industries";
+import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/slice/industries";
+import { cementDemand, cementFlows, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { lineSlots, onRoadCost, stationTowns, trackCost } from "@engine/slice/rail";
 import { haulShare, truckersPickUp } from "@engine/slice/truckers";
 import { cargoName, chargeFuelPremium, fuelFlows, refineryOutput } from "@engine/slice/fuel";
@@ -3014,5 +3015,87 @@ describe("Revision 3, step 1b: what a fuel shortage does (fuel.ts)", () => {
     w.fuel!.shortage.set(b!.id, 1);
     const cost = w.economy.vehicleEconomics.get(w.routes[0]!.vehicleIds[0]!)!.operatingCostPerSecond;
     expect(chargeFuelPremium(w, 1, routeOf).total).toBeCloseTo(cost * w.tuning.fuelCostPremium, 6);
+  });
+});
+
+describe("Revision 3, step 2a: the building chain (cement.ts)", () => {
+  // Map 0's works starts working, map 1's idle (by each map's own draw).
+  const game = (seed: number) => startSliceGame(generatedSliceMap(SLICE_MAP, seed), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+
+  test("a working works starts with a limestone quarry on an old road to it, and its own road to a town on the network", () => {
+    const w = game(0);
+    const cement = w.cement!;
+    expect(cement.working).toBe(true);
+    expect(cement.siloId).toBeNull();
+    expect(w.towns.get(cement.worksId)!.industry).toBe("works");
+    const [quarry] = [...w.industries.keys()];
+    expect(quarry).toBeDefined();
+    expect(roadPath(w, quarry!, cement.worksId)).not.toBeNull();
+    expect(isCutOff(w, cement.worksId)).toBe(false);
+    expect(cargoName(w, quarry!, "supplies")).toBe("limestone");
+    expect(cargoName(w, cement.worksId, "supplies")).toBe("cement");
+    // All the quarry's limestone goes to the works.
+    expect(industryFlows(w).every((flow) => flow.to === cement.worksId)).toBe(true);
+  });
+
+  test("an idle works has imports through a terminal by the port, no quarry, and opens one only once restored", () => {
+    const w = game(1);
+    const cement = w.cement!;
+    expect(cement.working).toBe(false);
+    expect(w.towns.get(cement.siloId!)!.industry).toBe("silo");
+    expect(w.industries.size).toBe(0);
+    expect(worksOutput(w)).toBe(0);
+    // Imports are split over the towns by what they want, adding up to the imports.
+    const imported = cementFlows(w).filter((flow) => flow.from === cement.siloId);
+    expect(imported.reduce((sum, flow) => sum + flow.rate, 0)).toBeCloseTo(cementImports(w), 9);
+    // No quarry while it's idle, however long.
+    w.industrySchedule.nextAtSeconds = 0;
+    updateIndustries(w, SIM_DT);
+    expect(w.industries.size).toBe(0);
+    w.economy.funds = 1e6;
+    expect(applyAction(w, { kind: "restoreWorks" }).ok).toBe(true);
+    expect(cement.working).toBe(true);
+    w.economy.elapsedSeconds = w.industrySchedule.nextAtSeconds;
+    updateIndustries(w, SIM_DT);
+    expect(w.industries.size).toBe(1);
+  });
+
+  test("the works makes what its limestone allows, up to its capacity, split by want, only where a road from it goes", () => {
+    const w = game(0);
+    const cement = w.cement!;
+    const [quarry] = [...w.industries.keys()];
+    const key = flowKey({ from: quarry!, to: cement.worksId, kind: "supplies" });
+    w.goods.outcomes.set(key, { delivered: 0, spoiled: 0 });
+    expect(worksOutput(w)).toBe(0);
+    const some = 0.3 * cement.baseDemand * w.tuning.limestonePerCement;
+    w.goods.outcomes.set(key, { delivered: some, spoiled: 0 });
+    expect(worksOutput(w)).toBeCloseTo(0.3 * cement.baseDemand, 9);
+    const flows = cementFlows(w);
+    expect(flows.reduce((sum, flow) => sum + flow.rate, 0)).toBeCloseTo(worksOutput(w), 9);
+    for (const flow of flows) {
+      expect(roadPath(w, cement.worksId, flow.to)).not.toBeNull();
+      // Short, every town it reaches gets the same share of what it wants.
+      expect(flow.rate / cementDemand(w, flow.to)).toBeCloseTo(flows[0]!.rate / cementDemand(w, flows[0]!.to), 9);
+    }
+    w.goods.outcomes.set(key, { delivered: 100 * cement.baseDemand, spoiled: 0 });
+    expect(worksOutput(w)).toBeCloseTo(worksCapacity(w), 9);
+  });
+
+  test("cement holds a town's growth back past its free stretch, not before", () => {
+    const w = game(0);
+    const town = [...w.basePopulation.keys()][0]!;
+    const base = w.basePopulation.get(town)!;
+    // Room to grow well past the free stretch: a lane-level road, served well.
+    w.tuning = { ...w.tuning, townGrowthCap: 3 };
+    for (const from of [w.cement!.worksId]) w.goods.outcomes.set(flowKey({ from, to: town, kind: "supplies" }), { delivered: 0, spoiled: 0 });
+    const none = townGrowth(w, town)!;
+    expect(none.cap).toBeCloseTo(base * (1 + w.tuning.cementFreeShare), 6);
+    w.goods.outcomes.set(flowKey({ from: w.cement!.worksId, to: town, kind: "supplies" }), { delivered: cementDemand(w, town), spoiled: 0 });
+    const full = townGrowth(w, town)!;
+    expect(full.cap).toBeGreaterThan(none.cap);
+    expect(full.cementHeld).toBeCloseTo(0, 9);
+    // With the chain off, no limit.
+    w.tuning = { ...w.tuning, cementEnabled: false };
+    expect(townGrowth(w, town)!.cap).toBeCloseTo(full.cap, 6);
   });
 });

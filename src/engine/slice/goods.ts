@@ -9,6 +9,7 @@ import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, rout
 import { lineSlots, railPath } from "./rail";
 import { industryFlows } from "./industries";
 import { fuelFlows, isFuelSite } from "./fuel";
+import { cementFlows, isCementSite } from "./cement";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -116,6 +117,8 @@ export function goodsFlows(world: SliceWorld): GoodsFlow[] {
   if (tuning.industriesEnabled) flows.push(...industryFlows(world));
   // The fuel chain (fuel.ts): imports and refined fuel to every town, crude to the refinery.
   flows.push(...fuelFlows(world));
+  // The building chain (cement.ts): cement to the towns (limestone comes in industryFlows).
+  flows.push(...cementFlows(world));
   return flows;
 }
 
@@ -132,7 +135,9 @@ export function produceAndSpoil(world: SliceWorld, dt: number): void {
     const yard = goods.yards.get(flow.from)!;
     const key = yardKey(flow.to, flow.kind);
     const waiting = (yard.get(key) ?? 0) + flow.rate * dt;
-    const lost = waiting * (isFuelSite(world.towns.get(flow.from)) ? leak : spoil);
+    // Bagged cement keeps, as fuel does (a week, not two days).
+    const from = world.towns.get(flow.from);
+    const lost = waiting * (isFuelSite(from) || isCementSite(from) ? leak : spoil);
     yard.set(key, waiting - lost);
     spoiled.set(flowKey(flow), lost);
   }

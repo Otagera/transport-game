@@ -11,6 +11,7 @@ import type { DayHistory } from "./history";
 import type { MilestoneState } from "./score";
 import type { CorridorState } from "./corridors";
 import type { FuelState } from "./fuel";
+import type { CementState } from "./cement";
 import type { IndustryState } from "./industries";
 import type { TruckerHeld } from "./truckers";
 import type { BudgetTally, RemittancePeriod } from "./budget";
@@ -35,7 +36,7 @@ export interface SliceTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "oilfield" | "terminal";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "oilfield" | "terminal" | "works" | "silo";
 
 export interface SliceRoadDef {
   a: string;
@@ -397,6 +398,22 @@ export interface SliceTuning {
   fuelParked: number;
   fuelPatience: number;
   fuelCostPremium: number;
+  /**
+   * The building chain (cement.ts, brief Revision 3, step 2a): on; cement a town wants, tonnes per
+   * thousand people a day; the works' capacity and an idle map's imports, each a share of the towns'
+   * want at the start; tonnes of limestone a tonne of cement takes; restoring an idle works; the
+   * chance a map's works starts idle; how soon a quarry opens once it's restored (days); the stretch a
+   * town grows without cement, a share of its start.
+   */
+  cementEnabled: boolean;
+  cementPerThousandPerDay: number;
+  cementWorksShare: number;
+  cementImportShare: number;
+  limestonePerCement: number;
+  worksRestoreCost: number;
+  cementIdleChance: number;
+  quarryAfterRestoreDays: number;
+  cementFreeShare: number;
   /** Private truckers (truckers.ts, brief Revision 2): on, how fast they take waiting goods, the longest haul they take, their trucks, their cut of the fare, the loading levy. */
   truckersEnabled: boolean;
   truckerPickupSeconds: number;
@@ -442,6 +459,8 @@ export interface SliceWorld {
   industrySchedule: { nextAtSeconds: number; rngState: number; opened: number };
   /** The fuel chain's sites and state (fuel.ts); null until placed, or with fuel off. */
   fuel: FuelState | null;
+  /** The building chain's works and state (cement.ts); null until placed, or with it off. */
+  cement: CementState | null;
   /** Goods truckers hold at yards, filling a truck (truckers.ts). */
   truckers: TruckerHeld;
   width: number;
