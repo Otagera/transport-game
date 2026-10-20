@@ -215,6 +215,8 @@ export function exportsArriving(world: SliceWorld): number {
 
 /** The state's export payment this tick (tick.ts): a sum a tonne of cash crop that reaches the port. */
 export function payExports(world: SliceWorld, dt: number): number {
+  // Off, nothing -- and never 0 times a rate a run file from before food doesn't have (NaN).
+  if (!foodActive(world)) return 0;
   const paid = exportsArriving(world) * dt * world.tuning.exportPayPerTonne;
   if (paid <= 0) return 0;
   world.economy.funds += paid;

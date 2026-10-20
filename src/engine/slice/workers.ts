@@ -55,16 +55,35 @@ export function siteJobs(world: SliceWorld, town: SliceTown): number {
 
 /** Where a site's workers live: each town's share of them, 0..1 -- the towns within reach, by size over distance. */
 export function workforceShares(world: SliceWorld, site: SliceTown): Map<string, number> {
-  const towns = [...world.towns.values()].filter((town) => !town.industry);
   const shares = new Map<string, number>();
-  if (towns.length === 0) return shares;
+  const from = commuterTowns(world, site);
+  if (from.length === 0) return shares;
+  // By live populations (they drift every tick), summed in the towns' order, as always.
+  let sum = 0;
+  for (const { town, distance } of from) sum += town.population / distance;
+  for (const { town, distance } of from) shares.set(town.id, town.population / distance / sum);
+  return shares;
+}
+
+// Which towns a site draws on, and how far: fixed while no town is founded
+// or retired, so kept until one is (profiled: rebuilding it for every town's
+// growth, every tick, was an eighth of a tick). Kept off the world, which is
+// plain data the forecasts clone.
+const commuters = new WeakMap<SliceWorld, { key: string; bySite: Map<string, Array<{ town: SliceTown; distance: number }>> }>();
+
+function commuterTowns(world: SliceWorld, site: SliceTown): Array<{ town: SliceTown; distance: number }> {
+  const key = `${world.towns.size}:${world.ruins.size}:${world.nextId}:${world.tuning.commuteReachCells}`;
+  let cache = commuters.get(world);
+  if (!cache || cache.key !== key) commuters.set(world, (cache = { key, bySite: new Map() }));
+  let list = cache.bySite.get(site.id);
+  if (list) return list;
+  const towns = [...world.towns.values()].filter((town) => !town.industry);
   const distance = (town: SliceTown) => Math.max(1, Math.hypot(town.x - site.x, town.y - site.y));
   let from = towns.filter((town) => distance(town) <= world.tuning.commuteReachCells);
-  if (from.length === 0) from = [[...towns].sort((p, q) => distance(p) - distance(q))[0]!];
-  const weight = (town: SliceTown) => town.population / distance(town);
-  const sum = from.reduce((s, town) => s + weight(town), 0);
-  for (const town of from) shares.set(town.id, weight(town) / sum);
-  return shares;
+  if (from.length === 0 && towns.length > 0) from = [[...towns].sort((p, q) => distance(p) - distance(q))[0]!];
+  list = from.map((town) => ({ town, distance: distance(town) }));
+  cache.bySite.set(site.id, list);
+  return list;
 }
 
 /** Every site's commutes, both ways (settlement.ts refreshDemand adds them to the towns' demand). */
@@ -90,7 +109,11 @@ export function staffing(world: SliceWorld, siteId: string): number {
   if (!world.tuning.workersEnabled) return 1;
   let made = 0;
   let total = 0;
-  for (const [key, rates] of world.pairOutcomes) {
+  const indexed = world.outcomeIndex?.to.get(siteId);
+  if (world.outcomeIndex) {
+    made = indexed?.made ?? 0;
+    total = indexed?.total ?? 0;
+  } else for (const [key, rates] of world.pairOutcomes) {
     if (key.slice(key.indexOf(":") + 1) !== siteId) continue;
     made += rates.player + rates.poached + rates.gaveUp;
     total += rates.player + rates.poached + rates.gaveUp + rates.lost;

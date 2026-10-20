@@ -107,6 +107,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     routes: [],
     informal: { pool: new Map(), smallPool: new Map(), active: new Map(), segmentSpace: new Map(), earnings: 0 },
     pairOutcomes: new Map(),
+    outcomeIndex: null,
     settlement: createSettlementState(),
     plans: null,
     transferRateEMA: new Map(),
@@ -910,8 +911,44 @@ export function networkShare(world: SliceWorld): ShareSummary {
   return toShare(sumOutcomes(world, () => true));
 }
 
+/**
+ * The pair outcomes summed by town, built once a tick right after they're
+ * rolled (tick.ts) and dropped when a town is retired (settlement.ts):
+ * profiled, staffing and town shares scanning every pair, per town, per
+ * site, were 40% of a tick. Summed in the same order as the scans, so every
+ * figure is the same to the bit -- replays stay exact.
+ */
+export interface OutcomeIndex {
+  /** Trips leaving each town, summed as townOutcomes sums them. */
+  from: Map<string, OutcomeRates>;
+  /** Trips arriving at each town: made (yours, poached, gave up) and in all, summed as staffing sums them. */
+  to: Map<string, { made: number; total: number }>;
+}
+
+export function indexOutcomes(world: SliceWorld): void {
+  const from = new Map<string, OutcomeRates>();
+  const to = new Map<string, { made: number; total: number }>();
+  for (const [key, rates] of world.pairOutcomes) {
+    const separator = key.indexOf(":");
+    const a = key.slice(0, separator);
+    const b = key.slice(separator + 1);
+    let sum = from.get(a);
+    if (!sum) from.set(a, (sum = emptyOutcome()));
+    sum.player += rates.player;
+    sum.poached += rates.poached;
+    sum.gaveUp += rates.gaveUp;
+    sum.lost += rates.lost;
+    let arrive = to.get(b);
+    if (!arrive) to.set(b, (arrive = { made: 0, total: 0 }));
+    arrive.made += rates.player + rates.poached + rates.gaveUp;
+    arrive.total += rates.player + rates.poached + rates.gaveUp + rates.lost;
+  }
+  world.outcomeIndex = { from, to };
+}
+
 /** Where passengers *leaving* this town ended up. */
 export function townOutcomes(world: SliceWorld, townId: string): OutcomeRates {
+  if (world.outcomeIndex) return { ...(world.outcomeIndex.from.get(townId) ?? emptyOutcome()) };
   return sumOutcomes(world, (from) => from === townId);
 }
 

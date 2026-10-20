@@ -15,6 +15,7 @@ import type { CementState } from "./cement";
 import type { SitesState } from "./workers";
 import type { Bond } from "./bonds";
 import type { FoodState } from "./food";
+import type { OutcomeIndex } from "./world";
 import type { IndustryState } from "./industries";
 import type { TruckerHeld } from "./truckers";
 import type { BudgetTally, RemittancePeriod } from "./budget";
@@ -548,6 +549,8 @@ export interface SliceWorld {
   informal: InformalState;
   /** pairKey (`from:to`) -> where that trip's passengers went. Town and network shares are sums of these. */
   pairOutcomes: Map<string, OutcomeRates>;
+  /** pairOutcomes summed by town, this tick (world.ts indexOutcomes); null when not built or stale. */
+  outcomeIndex: OutcomeIndex | null;
   settlement: SettlementState;
   /** Emergent towns that faded: kept so their names can stay on the map. */
   ruins: Map<string, SliceTown>;

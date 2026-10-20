@@ -437,5 +437,6 @@ export function retireNode(world: SliceWorld, townId: string): void {
   for (const key of [...world.pairOutcomes.keys()]) {
     if (key.startsWith(`${townId}:`) || key.endsWith(`:${townId}`)) world.pairOutcomes.delete(key);
   }
+  world.outcomeIndex = null; // its sums held the retired town's trips
   refreshDemand(world);
 }

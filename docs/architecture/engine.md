@@ -1008,6 +1008,17 @@ transfers, diagnosis, debt advice, receipts and forecasts treat it as any passen
   Restore button), a Cement line on the town card (`cementText`), "can't grow: no cement" as
   the town's problem, the map footer saying how the works started; glyphs in `render.ts`.
 
+### Speed: what a tick spends (2026-10-20)
+
+Profiled on map 2791 (10 game days): staffing and town shares each scanned every pair
+outcome, per town, per site, per tick -- 40% of a tick. Now `world.ts indexOutcomes` sums
+`pairOutcomes` by town once a tick, right after they roll (`world.outcomeIndex`; dropped by
+`retireNode`), and `workers.ts commuterTowns` keeps which towns each site draws on and how
+far (a WeakMap, rebuilt when a town is founded or retired). Both sum in the scans' order,
+so every figure is the same to the bit: map 2411's and 2791's run files replay exactly.
+10 days: 5.4 s → 3.3 s. Next in line: the informal sector's pooling (`groupPool`, ~20%)
+and roadPath lookups.
+
 ### Sites need people (Revision 3, steps 2b–2c)
 
 - **`workers.ts`** — `siteJobs` (thousands, by kind: `jobsRefinery`, `jobsWorks`,

@@ -3,7 +3,7 @@ import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
 import { applyOperatingCosts, updateIncomeRateEMA } from "../economy/state";
 import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types";
-import { pairKey, roadPath, takeShortestRoad } from "./world";
+import { indexOutcomes, pairKey, roadPath, takeShortestRoad } from "./world";
 import { foundGateTown, updateSettlements, type SliceEvent } from "./settlement";
 import { updateSites } from "./workers";
 import { repayBonds } from "./bonds";
@@ -347,6 +347,7 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     rates.gaveUp += ((gaveUp.get(key) ?? 0) / dt - rates.gaveUp) * alpha;
     rates.lost += ((lost.get(key) ?? 0) / dt - rates.lost) * alpha;
   }
+  indexOutcomes(world);
 
   const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor), ...updateIndustries(world, dt), ...updateSites(world, dt, foundGateTown), ...updateRetired(world, dt)];
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
