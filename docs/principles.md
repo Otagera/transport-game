@@ -325,6 +325,16 @@ blow-by-blow; this section is the distilled rule.
 - **The crossings are where it bites.** Measured: keeping the trunk up pays (+₦80/day over
   neglect on a 4-bus chain); keeping the bridged Owode–Ado road up as well *loses* (₦129/day
   upkeep for ₦72 back). A bridge wears 2× and costs 4× a cell to repair (the build ratio).
+- **Starting sound isn't enough if wear is fast: time to the floor is what matters**
+  (2026-10-20, from a playtest's run file). Roads started at 0.95, but on generated maps the
+  danfos' traffic wore every inherited dirt road to the floor in 5–30 days, and worn roads
+  raise your vehicles' running cost: the same early tax as starting worn ("routes kept
+  losing"). Replaying the run with five minibus routes, wear cost ₦24,940 over 60 days
+  against wear off. On dirt, weather and heavy danfo flows dominate, so cutting the traffic
+  term alone did nothing (floor still from day 22); the dirt multiplier was the lever. At
+  0.0001 traffic wear and dirt ×1.5, dirt reaches the floor on days 41–68 and wear costs
+  ₦14,320. Keeping roads up becomes a mid-game choice again. The cost: paving now cuts wear
+  1.5×, not 3×.
 
 - **The fare level scales everyone together; it can't fix a snowball or a skill gap**
   (slice zero step 5, fares by distance). Measured at ₦1 boarding plus ₦0.6, 0.8 and 1.0

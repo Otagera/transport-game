@@ -1094,7 +1094,8 @@ describe("slice: wear (step 4)", () => {
   });
 
   test("left alone, a busy road wears to the floor and the route says it's worn", () => {
-    const w = world(calm);
+    // At the wear rate this was written for (calibration lives in tuning.ts; this is the mechanism).
+    const w = world({ ...calm, wearPerFlow: 0.00045, dirtWearMultiplier: 3 });
     for (let i = 0; i < 2; i += 1) addBus(w, "big", "mid");
     run(w, 1200);
     expect(road(w, "big", "mid").condition).toBeCloseTo(0.3);
@@ -1231,7 +1232,8 @@ describe("slice: the way out of debt (playtest, day 14)", () => {
   });
 
   test("in debt, it names the losing routes, and selling them returns exactly what it quoted", () => {
-    const w = world({ maxEmergentTowns: 0 });
+    // At the wear rate this was written for: the thin route's loss includes its worn road.
+    const w = world({ maxEmergentTowns: 0, wearPerFlow: 0.00045, dirtWearMultiplier: 3 });
     addBus(w, "big", "mid");
     addBus(w, "mid", "far"); // thin: loses money
     run(w, 300);
@@ -1249,7 +1251,8 @@ describe("slice: the way out of debt (playtest, day 14)", () => {
 
   test("a full route on worn roads asks for a bus, not a repair", () => {
     // Small buses so it runs full, a fare high enough that a full one pays its way.
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 8, farePerStage: 30 });
+    // Roads already worn, so the test is about the verdict's order, not how fast they wear.
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 8, farePerStage: 30, inheritedRoadCondition: 0.35 });
     addBus(w, "big", "mid");
     run(w, 1200);
     const d = diagnoseRoute(w, w.routes[0]!.id)!;
@@ -1397,11 +1400,14 @@ describe("slice: goods (step 4c)", () => {
   test("a lorry's road space wears a road harder than anyone else's", () => {
     const w = goodsWorld();
     const road = w.simulation.map.segments[0]!;
-    w.roadFlowEMA.set(road.id, 1);
+    w.roadFlowEMA.set(road.id, 0);
     w.heavyFlowEMA.set(road.id, 0);
-    const light = wearRate(w, road);
+    const weather = wearRate(w, road);
+    w.roadFlowEMA.set(road.id, 1);
+    const light = wearRate(w, road) - weather;
     w.heavyFlowEMA.set(road.id, 1); // the same road space, all of it lorries
-    expect(wearRate(w, road)).toBeGreaterThan(light * 1.3);
+    // The traffic's share of the wear, lorries counted lorryWearMultiplier times over.
+    expect((wearRate(w, road) - weather) / light).toBeCloseTo(w.tuning.lorryWearMultiplier, 6);
   });
 
   test("a losing lorry route is in the debt advice, and selling it returns what was quoted", () => {
@@ -1848,7 +1854,8 @@ describe("slice: a lorry on worn roads says so (track 2)", () => {
 describe("slice: a route too long for flat fares (playtest, day 31)", () => {
   test("full, but a full bus loses money: it says the route is too long, not to add a bus", () => {
     // Small buses so it runs full; the long run big-mid-far makes few trips a day.
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 6 });
+    // At the wear rate this was written for: worn roads slow the bus, so it runs full.
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 6, wearPerFlow: 0.00045, dirtWearMultiplier: 3 });
     addBus(w, "big", "far");
     run(w, 600);
     const d = diagnoseRoute(w, w.routes[0]!.id)!;

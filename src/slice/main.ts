@@ -434,6 +434,14 @@ function pauseForStrike(): void {
 }
 
 let toastTimer = 0;
+/** How much slower a paved road wears than dirt, in words, from the tuning (so the text can't drift from it). */
+function pavedWear(): string {
+  const share = 1 / world.tuning.dirtWearMultiplier;
+  const words: Array<[number, string]> = [[1 / 3, "a third as fast"], [1 / 2, "half as fast"], [2 / 3, "two-thirds as fast"]];
+  const near = words.find(([value]) => Math.abs(value - share) < 0.02);
+  return near ? near[1] : `${Math.round(share * 100)}% as fast as dirt`;
+}
+
 function say(message: string, bad = false, seconds = 2.6): void {
   toast.textContent = message;
   toast.dataset.bad = String(bad);
@@ -1319,7 +1327,7 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
       const rough = worn.reduce((sum, r) => sum + r.roughPerDay, 0);
       // The decision in two numbers: what the wear costs you, what keeping it up would.
       const verdict = rough > upkeep ? "worth it" : "more than the wear costs you";
-      return `Worn roads${roads ? ` (${roads})` : ""} cost your buses ${naira(rough)}/day extra to run and hold them to ${pct(d.wornSpeed)} speed. Maintaining them (Fix tool, F) costs about ${naira(upkeep)}/day: ${verdict}. Paved roads wear a third as fast.`;
+      return `Worn roads${roads ? ` (${roads})` : ""} cost your buses ${naira(rough)}/day extra to run and hold them to ${pct(d.wornSpeed)} speed. Maintaining them (Fix tool, F) costs about ${naira(upkeep)}/day: ${verdict}. Paved roads wear ${pavedWear()}.`;
     }
     case "long": {
       // Full, yet a full bus loses: another would too. Say why, and what to do instead.
@@ -1652,7 +1660,7 @@ function lorryReason(d: LorryDiagnosis, onePerDay: number): string {
       return `Thin: only ${Math.round(d.outbound + d.inbound)} t/day of goods go along it, not enough to pay one lorry's running cost (${naira(onePerDay)}/day).`;
     case "worn": {
       const dirt = dirtRoadsOn(world, d.routeId);
-      const pave = dirt.length > 0 ? ` Pave ${dirt.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ")} (Road tool, click both towns): paved roads wear a third as fast.` : "";
+      const pave = dirt.length > 0 ? ` Pave ${dirt.map((r) => `${townName(r.a)}–${townName(r.b)}`).join(", ")} (Road tool, click both towns): paved roads wear ${pavedWear()}.` : "";
       return `Worn roads cost your lorries ${naira(d.roughPerDay)}/day extra to run. Lorries wear roads hardest and pay most on worn ones; maintain them (Fix tool, F).${pave}`;
     }
     case "one-way":

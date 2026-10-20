@@ -68,6 +68,16 @@ trucker, a strike warning, a worn road). If game 1 already feels alive, goods st
 only game 2 does, goods carry the late game. Log the two games separately in principles §6.
 Unmeasured: C6-C9 by bots (they don't run goods or rail); the mill and the factory wait.
 
+### After Revision 2's playtest (2026-10-20)
+
+From your two games and the day-136 run file (principles §6):
+- **Wear slowed** (traffic wear 0.00045 → 0.0001, dirt ×3 → ×1.5): dirt roads now reach the
+  floor on days 41–68, not 5–30, and wear costs a five-route network ₦14,320 over 60 days
+  instead of ₦24,940 (replayed from a run file). Paving cuts wear 1.5×, not 3×.
+- **Rail 30% cheaper** (track ₦4,200 a cell; restoring and halts with it): C2 reads 25.9–27.1
+  days of surplus (seeds 0 and 1), down from 34–43; the lane 14.5–14.7.
+- **Revision 3 drafted** (the brief, Proposed): goods that feel real, in chains. Waits on you.
+
 ### What the draft was asked to cover (agreed to draft 2026-10-19)
 
 From the R1 7 playtest (principles.md §6): the slice ends at "nothing more to build", and

@@ -246,9 +246,13 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // wanted in, 18 days' wait, built day 123 (C4: rail by day 100-150). At
   // 4,000 a cell, 19.6 days. Restoring and halts scaled with it, so the
   // wrong old line stays the cheap choice.
-  railCostPerCell: 6000,
+  // 2026-10-20: 6,000 -> 4,200 (restoring and halts x0.7 with it). On
+  // generated maps rail had drifted to 34-43 days of surplus (the
+  // playtest's map 543: ~45, and 27 idle days waiting for it); at 4,200 the
+  // corridor probe's REAL_MONEY C2 reads 25.5 (seed 0) and 25.8 (seed 1).
+  railCostPerCell: 4200,
   railGradientMultiplier: 3,
-  railRestoreCostPerCell: 1500,
+  railRestoreCostPerCell: 1050,
   // Halts and the narrow-gauge line (rail.ts, wear.ts lineSpeed). Audit,
   // 20 days on: old line to Owode via a halt + train +₦249/day (~12 days),
   // new track Ilase-Owode + train +₦312 (~10), the whole old line to Ipaja
@@ -256,7 +260,7 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // to Ipaja barely paid.
   haltReachCells: 6,
   oldLineSpeed: 0.55,
-  haltCost: 30000,
+  haltCost: 21000,
   trainCapacity: 80,
   trainSpeed: 8,
   trainPurchaseCost: 20000,
@@ -346,8 +350,19 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // own traffic wear them, so keeping roads up becomes a mid-game decision.
   inheritedRoadCondition: 0.95,
   weatherPerSecond: 0.0001,
-  wearPerFlow: 0.00045,
-  dirtWearMultiplier: 3,
+  // 2026-10-20: 0.00045 -> 0.0001 and dirt 3 -> 1.5. On generated maps the
+  // danfos' traffic wore every inherited dirt road to the floor in 5-30
+  // days, and worn roads raise your vehicles' running cost (roughRoadCostMax):
+  // the early tax principles.md §3 warns of, behind the playtest's "routes
+  // kept losing". Replaying a run (map 543, five minibus routes, 60 days):
+  // wear cost ₦24,940 today (running +₦15,495, fares -₦9,445 against wear
+  // off), ₦14,320 at these numbers, with dirt roads reaching the floor on
+  // days 41, 63 and 68 instead of 5-30. Keeping dirt at 3 and only cutting
+  // wearPerFlow didn't do it (at 0.00005 the floor still came from day 22):
+  // on dirt, weather and heavy danfo flows dominate. Paving now cuts wear by
+  // 1.5x, not 3x; it still carries 1.7x the traffic and earns tolls.
+  wearPerFlow: 0.0001,
+  dirtWearMultiplier: 1.5,
   bridgeWearMultiplier: 2,
   repairCostScale: 8,
   // Worn roads cost your road vehicles extra to run (wear.ts): up to +70% at
