@@ -58,6 +58,7 @@ import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/slice/bonds";
+import { siteProduction, type SiteLimit } from "@engine/slice/production";
 import { exportsArriving, farmTowns, flourCapacity, flourOutput, flourServed, flourWant, foodActive, foodServed, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/slice/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput } from "@engine/slice/cement";
@@ -1197,12 +1198,13 @@ function renderIndustry(townId: string): void {
     problem = `No road reaches it. Build one (<kbd>R</kbd>)${near ? ` from ${townName(near.id)}` : ""} and its ${cargo} can move.`;
   } else if (industry && industry.deliveredEMA * SECONDS_PER_GAME_DAY < world.tuning.industryMinDeliveredPerDay) {
     const closes = industry.openedAtSeconds + world.tuning.industryGraceDays * SECONDS_PER_GAME_DAY;
-    problem = workersProblem(townId) || `Nothing is moving its ${cargo}${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
+    problem = siteProblem(townId) || `Nothing is moving its ${cargo}${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
   }
   routesEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
+      ${productionHtml(townId)}
       <ul>
         <li>${limestone
           ? `${world.tuning.quarryOutputPerDay} t of limestone a day for ${townName(world.cement!.worksId)}: ${world.tuning.limestonePerCement} t makes a tonne of cement, and towns past their first growth need cement to grow.`
@@ -1235,6 +1237,49 @@ function workersItem(siteId: string): string {
   if (!world.tuning.workersEnabled || jobs <= world.tuning.jobsIdle + 1e-9) return "";
   const from = [...workforceShares(world, site)].sort((p, q) => q[1] - p[1]).slice(0, 3).map(([id, share]) => `${townName(id)} ${pct(share)}`).join(", ");
   return `<li>Employs ${Math.round(jobs * 1000).toLocaleString()}, from ${from}; ${pct(staffing(world, siteId))} of a full shift gets here, so it makes ${pct(staffFactor(world, siteId))} of what it could.</li>`;
+}
+
+// A site's production (production.ts): what it makes against what it could,
+// each input against what full output takes, its shift, what gets away --
+// and what's holding it back, marked (playtest, map 2411: "we need
+// indications for the factories in terms of production").
+function productionHtml(siteId: string): string {
+  const p = siteProduction(world, siteId);
+  if (!p || p.capacity <= 0) return "";
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const tone = (share: number) => (share >= 0.8 ? "var(--good)" : share >= 0.4 ? "var(--danfo)" : "var(--bad)");
+  const gauge = (share: number) => `<div class="bar"><i style="width:${pct(Math.min(1, share))};background:${tone(share)}"></i></div>`;
+  const held = (what: SiteLimit) => (p.limit === what ? ` <span class="held">holding it back</span>` : "");
+  const made = p.made / p.capacity;
+  const rows = [
+    `<div class="prow main"><span>${p.limit === "idle" ? "Idle" : `Makes ${perDay(p.made)} of ${perDay(p.capacity)} t of ${p.product} a day`}</span><span class="num">${pct(made)}</span>${gauge(made)}</div>`,
+    ...p.inputs.map((input) => {
+      const share = input.needed > 0 ? input.arriving / input.needed : 1;
+      return `<div class="prow"><span>${capitalise(input.name)} in: ${perDay(input.arriving)} of ${perDay(input.needed)} t a day${held("input")}</span><span class="num">${pct(Math.min(1, share))}</span>${gauge(share)}</div>`;
+    }),
+    ...(p.staffing === null ? [] : [`<div class="prow"><span>Workers: ${pct(p.staffing)} of a full shift${held("workers")}</span><span class="num">${pct(p.staffing)}</span>${gauge(p.staffing)}</div>`]),
+    ...(p.made * SECONDS_PER_GAME_DAY >= 1 ? [`<div class="prow"><span>Carried away: ${pct(p.shipped)} of it${p.shipped < 0.5 ? ` <span class="held">the rest waits</span>` : ""}</span><span class="num">${pct(p.shipped)}</span>${gauge(p.shipped)}</div>`] : []),
+  ];
+  return `<div class="production">${rows.join("")}</div>`;
+}
+
+/** The problem a site's production names, when nothing more pressing does: its short input, its shift, or its goods waiting. */
+function siteProblem(siteId: string): string {
+  const workers = workersProblem(siteId);
+  if (workers) return workers;
+  const p = siteProduction(world, siteId);
+  if (!p || p.capacity <= 0 || p.limit === "idle") return "";
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const site = world.towns.get(siteId)!;
+  if (p.limit === "input" && p.made < 0.8 * p.capacity) {
+    const input = p.inputs[0]!;
+    const from = site.industry === "refinery" && world.fuel ? `from ${townName(world.fuel.sourceId)}` : site.industry === "works" ? "from the limestone quarries" : site.industry === "mill" ? "in from the farm towns" : site.industry === "flourmill" ? "from the port" : "";
+    return `Short of ${input.name}: ${perDay(input.arriving)} of the ${perDay(input.needed)} t a day it could use, so it makes ${pct(p.made / p.capacity)} of what it could. Carry more ${from}: lorries (<kbd>L</kbd>) on a road, or a freight train on track.`;
+  }
+  if (p.shipped < 0.5 && p.made * SECONDS_PER_GAME_DAY >= 5) {
+    return `Most of its ${p.product} is waiting: ${pct(p.shipped)} gets carried away. Truckers take the short hauls; run lorries (<kbd>L</kbd>) to the towns further off.`;
+  }
+  return "";
 }
 
 function workersProblem(siteId: string): string {
@@ -1301,11 +1346,12 @@ function renderFuelSite(townId: string): void {
     if (!fuel.restored) problem = `Waiting on ${refinery.name}: until it's restored, nobody wants this crude.`;
     else if (!railPath(world, townId, fuel.refineryId) && !roadPath(world, townId, fuel.refineryId)) problem = `No way to ${refinery.name}: lay track (<kbd>K</kbd>) or build a road (<kbd>R</kbd>) to it.`;
   }
-  if (!problem) problem = workersProblem(townId);
+  if (!problem) problem = siteProblem(townId);
   routesEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
+      ${productionHtml(townId)}
       <ul>${lines.map((line) => `<li>${line}</li>`).join("")}${workersItem(townId)}</ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
       ${rows}
@@ -1362,11 +1408,12 @@ function renderCementSite(townId: string): void {
       problem = `Short of limestone: ${perDay(limestoneArriving(world))} of ${Math.round(capacity * t.limestonePerCement)} t a day. Carry more from a quarry, or connect another when one opens.`;
     }
   }
-  if (!problem) problem = workersProblem(townId);
+  if (!problem) problem = siteProblem(townId);
   routesEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
       <div class="title">${site.name}</div>
+      ${productionHtml(townId)}
       <ul>${lines.map((line) => `<li>${line}</li>`).join("")}${workersItem(townId)}</ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
       ${rows}
@@ -1403,11 +1450,12 @@ function renderMillSite(townId: string): void {
   let problem = "";
   if (stapleArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = `No ${food.crops.staple} arriving. Carry it in from the farm towns: lorries (<kbd>L</kbd>), or truckers will on the short hauls once a road joins them.`;
   else if (out < cap * 0.6) problem = `Short of ${food.crops.staple}: ${perDay(stapleArriving(world))} of ${Math.round(cap * t.staplePerFood)} t a day. Carry more in from the farm towns further off.`;
-  if (!problem) problem = workersProblem(townId);
+  if (!problem) problem = siteProblem(townId);
   routesEl.innerHTML = `
     <div class="town-card">
       <div class="k">Mill · ${out} of ${cap} t of ${food.crops.food} a day</div>
       <div class="title">${site.name}</div>
+      ${productionHtml(townId)}
       <ul>
         <li>Makes ${food.crops.food} from the farm towns' ${food.crops.staple}: ${t.staplePerFood} t makes a tonne. ${perDay(stapleArriving(world))} t a day is reaching it.</li>
         <li>Its ${food.crops.food} is split between the market towns by what they want. A fed market draws trade: more trips, and room to grow.</li>
@@ -1440,11 +1488,12 @@ function renderFlourMillSite(townId: string): void {
   let problem = "";
   if (isCutOff(world, townId) || !roadPath(world, townId, world.port ?? townId)) problem = "No road to the port: the wheat can't come in. Build one (<kbd>R</kbd>).";
   else if (wheatArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = "No wheat arriving from the port yet: truckers bring it on its short road, or run a lorry (<kbd>L</kbd>).";
-  if (!problem) problem = workersProblem(townId);
+  if (!problem) problem = siteProblem(townId);
   routesEl.innerHTML = `
     <div class="town-card">
       <div class="k">Flour mill · ${out} of ${cap} t of flour a day</div>
       <div class="title">${site.name}</div>
+      ${productionHtml(townId)}
       <ul>
         <li>Mills imported wheat into flour: ${t.wheatPerFlour} t makes a tonne. ${perDay(wheatArriving(world))} t a day is reaching it from the port.</li>
         <li>Its flour goes to the market towns, split by what they want: ${pct(t.flourWeight)} of a market's food. Truckers take short hauls; the far markets' share waits for your lorries or freight trains.</li>

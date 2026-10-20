@@ -78,7 +78,7 @@ function totalDemand(world: SliceWorld): number {
 }
 
 /** Crude reaching the refinery now, tonnes a second: yours and the truckers'. */
-function crudeArriving(world: SliceWorld): number {
+export function crudeArriving(world: SliceWorld): number {
   const fuel = world.fuel;
   if (!fuel) return 0;
   const outcome = world.goods.outcomes.get(flowKey({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies" }));

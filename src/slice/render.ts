@@ -13,6 +13,8 @@ import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
 import { refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { cementActive, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { flourCapacity, flourOutput, millCapacity, millOutput } from "@engine/slice/food";
+import { siteProduction } from "@engine/slice/production";
+import { goodsFlows, type GoodsFlow } from "@engine/slice/goods";
 
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
@@ -135,7 +137,8 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   occupied = [];
   const towns = [...world.towns.values()];
   for (const town of towns.filter((t) => !t.industry).sort((p, q) => q.population - p.population)) drawTown(ctx, world, view, town, state);
-  for (const town of towns.filter((t) => t.industry)) drawIndustry(ctx, world, view, town, state);
+  const flows = goodsFlows(world);
+  for (const town of towns.filter((t) => t.industry)) drawIndustry(ctx, world, view, town, state, flows);
   drawWardens(ctx, world, view);
   drawStrikeLabels(ctx, world, view);
   drawTakenLabels(ctx, world, view);
@@ -970,7 +973,7 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
 // An industrial site (industries.ts, brief Revision 2): a square, not a
 // circle -- a place goods come from, not people -- with a peak for a quarry,
 // its name and output, and "no road" while nothing reaches it.
-function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, town: SliceTown, state: DrawState): void {
+function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, town: SliceTown, state: DrawState, flows: GoodsFlow[]): void {
   const p = toScreen(view, town.x, town.y);
   const half = 9;
   const selected = state.selectedTown === town.id;
@@ -1063,6 +1066,19 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     : town.industry === "mill" && world.food ? `${world.food.crops.food} · ${perDay(millOutput(world))} of ${perDay(millCapacity(world))} t/day`
     : town.industry === "flourmill" ? `flour · ${perDay(flourOutput(world))} of ${perDay(flourCapacity(world))} t/day`
     : `${cementActive(world) ? "limestone" : "stone"} · ${world.tuning.quarryOutputPerDay} t/day`;
+  // A gauge under it: what it makes of what it could, green to red, so a
+  // struggling factory shows without a click (playtest, map 2411).
+  const production = siteProduction(world, town.id, flows);
+  let below = 0;
+  if (production && production.capacity > 0) {
+    const share = Math.min(1, production.made / production.capacity);
+    const gy = p.y + half + 3;
+    ctx.fillStyle = "rgba(60, 45, 20, 0.18)";
+    ctx.fillRect(p.x - half, gy, 2 * half, 3);
+    ctx.fillStyle = production.limit === "idle" ? COLORS.home : share >= 0.8 ? COLORS.grow : share >= 0.4 ? COLORS.danfo : COLORS.ghostBad;
+    ctx.fillRect(p.x - half, gy, 2 * half * Math.max(share, production.limit === "idle" ? 1 : 0.04), 3);
+    below = 6;
+  }
   // Its name at rest; what it makes only when you point at it (the card has
   // the rest). "No road" and "restore it" stay: they're the problem to fix.
   const focused = selected || state.hoverTown === town.id;
@@ -1075,13 +1091,13 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
   const h = lines.length * lineH;
   // Below, above, right, left: the first side that's free. None free: no label until you point at it.
   const spots: Array<{ box: Box; align: CanvasTextAlign; x: number }> = [
-    { box: { x: p.x - w / 2, y: p.y + half + 3, w, h }, align: "center", x: p.x },
+    { box: { x: p.x - w / 2, y: p.y + half + 3 + below, w, h }, align: "center", x: p.x },
     { box: { x: p.x - w / 2, y: p.y - half - 3 - h, w, h }, align: "center", x: p.x },
     { box: { x: p.x + half + 4, y: p.y - h / 2, w, h }, align: "left", x: p.x + half + 6 },
     { box: { x: p.x - half - 4 - w, y: p.y - h / 2, w, h }, align: "right", x: p.x - half - 6 },
   ];
   const spot = spots.find((s) => !occupied.some((box) => overlaps(box, s.box))) ?? (focused || cut ? spots[0] : undefined);
-  occupied.push({ x: p.x - half, y: p.y - half, w: 2 * half, h: 2 * half });
+  occupied.push({ x: p.x - half, y: p.y - half, w: 2 * half, h: 2 * half + below });
   if (!spot) return;
   occupied.push(spot.box);
   ctx.textAlign = spot.align;

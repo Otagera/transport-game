@@ -17,6 +17,7 @@ import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/slice/industries";
 import { bondAmount, repayBonds } from "@engine/slice/bonds";
+import { siteProduction } from "@engine/slice/production";
 import { cropsFor, farmTowns, flourCapacity, flourOutput, flourWant, foodGrowth, foodServed, foodWant, marketFed, marketTowns, millOutput, payExports } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, updateSites, workforceShares } from "@engine/slice/workers";
 import { foundGateTown, refreshDemand } from "@engine/slice/settlement";
@@ -3342,5 +3343,27 @@ describe("Revision 3, step 3c: flour from imported wheat at the port (food.ts)",
     expect(marketFed(w, market.id)).toBeCloseTo(1 - w.tuning.flourWeight, 9);
     w.goods.outcomes.set(flowKey({ from: food.flourMillId!, to: market.id, kind: "supplies" }), { delivered: flourWant(w, market.id), spoiled: 0 });
     expect(marketFed(w, market.id)).toBeCloseTo(1, 9);
+  });
+});
+
+describe("site production: what a site makes, and what holds it back (production.ts)", () => {
+  test("a refinery short of crude says so; idle says idle; fed in full, capacity's the limit", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const fuel = w.fuel!;
+    expect(siteProduction(w, fuel.refineryId)!.limit).toBe("idle");
+    w.economy.funds = 1e6;
+    applyAction(w, { kind: "restoreRefinery" });
+    const crude = flowKey({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies" });
+    const capacity = w.tuning.refineryShare * fuel.baseDemand;
+    w.goods.outcomes.set(crude, { delivered: 0.1 * capacity, spoiled: 0 });
+    const short = siteProduction(w, fuel.refineryId)!;
+    expect(short.product).toBe("fuel");
+    expect(short.inputs[0]!.name).toBe("crude");
+    expect(short.inputs[0]!.arriving).toBeCloseTo(0.1 * capacity, 9);
+    expect(short.limit).toBe("input");
+    w.goods.outcomes.set(crude, { delivered: 2 * capacity, spoiled: 0 });
+    const full = siteProduction(w, fuel.refineryId)!;
+    expect(full.made).toBeLessThanOrEqual(full.capacity + 1e-12);
+    expect(["capacity", "workers"]).toContain(full.limit);
   });
 });

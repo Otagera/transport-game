@@ -212,6 +212,14 @@ terrain isn't applied: the map still draws shaded hills.
 - **Route cards** (`routeCard`): vehicles, in, cost and net a day; the pair with +/−; one
   verdict of at most 12 words naming one lever (`verdicts.ts` `shortVerdict`, tested), the
   long `reasonText` on the card's hover; the riders bar.
+- **Site production** (`production.ts siteProduction`; `main.ts productionHtml`,
+  `siteProblem`): every site card opens with what it makes against capacity, each input
+  against what full output takes, its shift, and the share carried away, a gauge each, the
+  binding one marked "holding it back"; with no more pressing problem, the bottleneck is "The
+  problem here" (short of its input, naming where from; or most of it waiting). On the map, a
+  gauge under each site's square (green ≥80%, amber ≥40%, red below; grey idle). The map
+  passes `goodsFlows` in once a frame (playtest, map 2411: "we need indications for the
+  factories in terms of production").
 - **Map labels** (`render.ts draw`, `occupied`): towns draw first, biggest first, and take
   their circle and name; then sites, each with its name only (muted) at rest -- what it makes
   only when hovered or selected, "idle · restore it" and "no road" always -- placed below,
