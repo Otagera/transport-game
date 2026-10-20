@@ -501,9 +501,9 @@ Each played before the next, as before.
 
 The Revision 1 checks stay as regression checks.
 
-## Revision 3 (proposed 2026-10-20): goods that feel real, in chains
+## Revision 3 (agreed 2026-10-20): goods that feel real, in chains
 
-**Proposed, nothing built. Goods today are a rounding error, so the game runs out of reasons to build once the passenger network is done. Revision 3 makes the second economy real: cargo that belongs to the map's region, industries that feed each other in chains, volumes big enough to need freight rail, and one chain, fuel, that reaches back into the passenger game.**
+**Agreed 2026-10-20 ("yeah"), built in the order below, one step at a time, each measured and played. Goods today are a rounding error, so the game runs out of reasons to build once the passenger network is done. Revision 3 makes the second economy real: cargo that belongs to the map's region, industries that feed each other in chains, volumes big enough to need freight rail, and one chain, fuel, that reaches back into the passenger game.**
 
 Prompted by your playtest of Revision 2 (principles.md §6) and its run file (map 543, everything on, to day 136): *"this feel like max"*. What the file shows:
 
@@ -716,12 +716,12 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Forty-three decisions were drafted on 2026-10-17 to 20, three of them from a review of this brief; seventeen are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Forty-three decisions were drafted on 2026-10-17 to 20, three of them from a review of this brief; nineteen are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
-| 2026-10-20 | Revision 3: goods that feel real, in chains -- sites with inputs and outputs that make nothing without their input (fuel, building, food), cargo by the map's region, long legs in hundreds of tonnes a day for freight rail, a brownfield refinery; built in order (fuel chain first), each measured and played | Proposed |
-| 2026-10-20 | Fuel reaches the passenger game: a town short of fuel raises its danfo fares, thins its danfos and raises your running costs there; roadside sellers appear where it runs dry (C12) | Proposed |
+| 2026-10-20 | Revision 3: goods that feel real, in chains -- sites with inputs and outputs that make nothing without their input (fuel, building, food), cargo by the map's region, long legs in hundreds of tonnes a day for freight rail, a brownfield refinery; built in order (fuel chain first), each measured and played | Agreed 2026-10-20 |
+| 2026-10-20 | Fuel reaches the passenger game: a town short of fuel raises its danfo fares, thins its danfos and raises your running costs there; roadside sellers appear where it runs dry (C12) | Agreed 2026-10-20 |
 | 2026-10-20 | Town names by region: one region per generated map (south-west most likely; a coast only south-west or south-south), real towns of that region; geography unchanged for every seed | Agreed 2026-10-19 (asked for, built) |
 | 2026-10-19 | Revision 2, step 1 first and alone: show the problems the late game already has (why a town is shrinking, where "no seat" is and the move that carries it, unserved trips drawn on the corridor), played past day 150 (C5) before any goods. Its playtest sizes the rest | Agreed 2026-10-19 |
 | 2026-10-19 | Revision 2: industries that open and close (quarry, mill, factory) as the second reason to build; goods back on; an industry's own ladder (dirt track, paved, your lorries, a rail spur); served industries grow the towns that trade with them | Agreed 2026-10-19 |
