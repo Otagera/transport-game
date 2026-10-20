@@ -551,6 +551,14 @@ You don't run the industries: companies and traders do, and they pay you freight
 - **Touts at depots and markets** take their loading levies (as built).
 - **Roadside fuel sellers** appear wherever a town runs dry, and the danfos buy from them at a premium. A shortage you leave becomes their market.
 
+### Sites need people, and towns grow around them
+
+A working site is a workplace, not just a dot on a chain (asked for in the step 1 playtest, 2026-10-20). Today a site counts as a town of 2 people (`industryWorkers`), a placeholder: nobody travels to it. Instead:
+- **Workers come from nearby towns.** A working site employs people by its size (a refinery hundreds, a quarry tens), and they commute from the towns around it: trips to the site, as real as any other, that your buses and the danfos and okadas compete for.
+- **Workers are an input.** A site short of workers, because no road reaches it, the road is jammed, or fuel is short and the danfos are parked, makes less, as a refinery short of crude does. A shortage can travel through the passenger game and back into the chain.
+- **Towns grow around it.** Jobs draw people: the towns its workers come from grow toward it, and a working site long enough can grow a settlement at its gate (a camp, then a town: Eleme by Port Harcourt's refinery, Ewekoro by its cement works). An idle or closed site stops drawing, and what grew around it shrinks back, never below where it started.
+- Growth still follows service (principles.md §3, Growth): the jobs make people *want* to move there, and only reachable jobs count, so the town around a site grows when you or the informal sector carry its workers.
+
 ### On screen
 
 - Each site has a card: what it needs and makes, what it got and shipped in the last 5 days, and **what's holding it back** ("short of crude: 40 of 300 t a day").
@@ -560,7 +568,7 @@ You don't run the industries: companies and traders do, and they pay you freight
 ### The order, one at a time, each measured and played
 
 1. **The chain mechanic, with the fuel chain.** Sites with inputs, outputs and stock; fuel reaching danfo fares, danfo numbers and your running costs; roadside sellers; the brownfield refinery.
-2. **The building chain,** replacing today's quarry-to-growth link with limestone → cement → towns.
+2. **The building chain,** replacing today's quarry-to-growth link with limestone → cement → towns; and **sites need people**: workers commuting to every site (the refinery and quarry included), output short without them, towns growing around a working site.
 3. **The food chain** and exports, by region.
 
 **Built 2026-10-20, step 1a: fuel as a chain** (`fuel.ts`; detail in architecture/engine.md, The fuel chain). Every game starts with a tank farm by the port (imports, 70% of day 1's need), an idle refinery near the second city (restore it for ₦60,000; up to 90% of the need, from crude delivered to it) and a crude source far from it (an oilfield in the south-south, a pipeline terminal elsewhere). Road tankers carry fuel up to 90 cells and get through jammed roads; crude is yours alone to carry. Each town's card says how well it's supplied and from where; each site's card says what holds it back. Measured on map 543: lorries lose on the crude leg (−₦297/day for three), a freight train pays (+₦694/day), and a road out of the refinery lifts supply across the region from 35% to 46%. Step 1b next: what a shortage does.
@@ -726,6 +734,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 | --- | --- | --- |
 | 2026-10-20 | Revision 3: goods that feel real, in chains -- sites with inputs and outputs that make nothing without their input (fuel, building, food), cargo by the map's region, long legs in hundreds of tonnes a day for freight rail, a brownfield refinery; built in order (fuel chain first), each measured and played | Agreed 2026-10-20 |
 | 2026-10-20 | Fuel reaches the passenger game: a town short of fuel raises its danfo fares, thins its danfos and raises your running costs there; roadside sellers appear where it runs dry (C12) | Agreed 2026-10-20 |
+| 2026-10-20 | Sites need people, and towns grow around them: a working site employs workers who commute from nearby towns (trips you and the informal sector compete for), makes less without them, and draws growth -- nearby towns grow toward it and a long-working site can grow a settlement at its gate, shrinking back if it closes; built with step 2 | Agreed 2026-10-20 (asked for) |
 | 2026-10-20 | Town names by region: one region per generated map (south-west most likely; a coast only south-west or south-south), real towns of that region; geography unchanged for every seed | Agreed 2026-10-19 (asked for, built) |
 | 2026-10-19 | Revision 2, step 1 first and alone: show the problems the late game already has (why a town is shrinking, where "no seat" is and the move that carries it, unserved trips drawn on the corridor), played past day 150 (C5) before any goods. Its playtest sizes the rest | Agreed 2026-10-19 |
 | 2026-10-19 | Revision 2: industries that open and close (quarry, mill, factory) as the second reason to build; goods back on; an industry's own ladder (dirt track, paved, your lorries, a rail spur); served industries grow the towns that trade with them | Agreed 2026-10-19 |
