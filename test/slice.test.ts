@@ -255,6 +255,23 @@ describe("slice zero: systems switched off", () => {
     expect(applyAction(w, { kind: "track", a: "big", b: "far", alignment: "cheapest" }).ok).toBe(true);
   });
 
+  test("a bus takes a shorter road built after it was bought, once it's back at the start of its route", () => {
+    const w = world();
+    w.economy.funds = 1e7;
+    expect(addBus(w, "big", "far").ok).toBe(true);
+    const bus = w.simulation.vehicles.find((v) => v.id === w.routes[0]!.vehicleIds[0])!;
+    expect(bus.path).toContain("mid"); // the only road there is through Mid
+    run(w, 5);
+    expect(buildRoad(w, "big", "far").ok).toBe(true);
+    expect(roadPath(w, "big", "far")!.nodeIds).not.toContain("mid");
+    expect(bus.path).toContain("mid"); // not mid-trip: riders aboard may be bound for Mid
+    run(w, 900);
+    expect(bus.path).not.toContain("mid");
+    expect(bus.path[0]).toBe("big");
+    // Nobody left riding to a stop it no longer makes.
+    expect(bus.cargo.every((entry) => bus.path.includes(entry.to))).toBe(true);
+  });
+
   test("roads start sound and stay sound, and your buses pay no rough-road cost", () => {
     const w = zero();
     for (let i = 0; i < 4; i += 1) addBus(w, "big", "mid");

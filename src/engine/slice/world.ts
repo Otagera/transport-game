@@ -490,6 +490,24 @@ export function placeAtCycleFraction(world: SliceWorld, vehicle: Vehicle, fracti
   }
 }
 
+/**
+ * A road vehicle arriving at the start of its route (`route.a`) takes the
+ * shortest road round now, if a road built since it was bought gives a
+ * shorter one. Called there, after everyone aboard has got off and before
+ * anyone boards (tick.ts), so nobody rides to a stop the new way skips (the
+ * playtest, day 273: buses kept the long way round after the two towns
+ * were joined directly). It stays at index 0, the stop it's at.
+ */
+export function takeShortestRoad(world: SliceWorld, vehicle: Vehicle, route: SliceRoute): void {
+  const there = findPath(world.simulation.routing, route.a, route.b);
+  const back = findPath(world.simulation.routing, route.b, route.a);
+  if (!there || !back) return;
+  const path = [...there.nodeIds, ...back.nodeIds.slice(1, -1)];
+  if (path.length === vehicle.path.length && path.every((id, i) => id === vehicle.path[i])) return;
+  vehicle.path = path;
+  world.plans = null; // the stops it makes have changed, and riders' plans with them
+}
+
 export function largestGapMidpoint(fractions: number[]): number {
   if (fractions.length === 0) return 0;
   const sorted = [...fractions].sort((a, b) => a - b);

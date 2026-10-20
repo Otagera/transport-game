@@ -3,7 +3,7 @@ import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
 import { applyOperatingCosts, updateIncomeRateEMA } from "../economy/state";
 import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types";
-import { pairKey, roadPath } from "./world";
+import { pairKey, roadPath, takeShortestRoad } from "./world";
 import { updateSettlements, type SliceEvent } from "./settlement";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
@@ -135,13 +135,24 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   if (tuning.goodsEnabled) truckersPickUp(world, dt);
   const routeOf = new Map<string, string>();
   for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
+  const routeById = new Map([...world.routes, ...world.lorryRoutes].map((route) => [route.id, route]));
   const goodsDelivered = new Map<string, number>();
   const goodsTrucked = new Map<string, number>();
   const boardings = new Map<string, number>();
   const routeRevenue = new Map<string, number>();
   const plans = tripPlans(world);
 
+  // Arriving at the start of its route, a road vehicle takes a shorter road
+  // built since it was bought -- before it loads, so riders board for the
+  // stops it will make.
+  const atStart = (vehicle: Vehicle, at: string, index: number) => {
+    if (index !== 0 || world.railVehicles.has(vehicle.id)) return;
+    const route = routeById.get(routeOf.get(vehicle.id) ?? "");
+    if (route && at === route.a) takeShortestRoad(world, vehicle, route);
+  };
+
   const busLoader: Loader = (vehicle, at, index) => {
+    atStart(vehicle, at, index);
     const queue = simulation.queues.get(at);
     const routeId = routeOf.get(vehicle.id);
     if (!queue || !routeId) return;
@@ -162,7 +173,11 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   };
 
   // A lorry loads goods bound anywhere ahead on its route (goods.ts).
-  const lorryLoader = goodsLoader(world, boardings, routeOf);
+  const loadGoods = goodsLoader(world, boardings, routeOf);
+  const lorryLoader: Loader = (vehicle, at, index) => {
+    atStart(vehicle, at, index);
+    loadGoods(vehicle, at, index);
+  };
 
   // A danfo passing through takes anyone going its way -- your riders
   // included. That is the competition, not a leak.
