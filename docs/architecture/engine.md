@@ -781,6 +781,13 @@ fares, goods, tolls, park and loading levies, not its own allocation -- into
 remittance to shelter from. The remittance below stays behind `remittanceEnabled` (off) for
 runs played with it; a run file's recorded tuning brings it back on replay.
 
+**Bonds** (`bonds.ts`, Revision 3, money): `issueBond(world, purpose)` (`ActionSpec`
+`bond`) lends `bondAmount` -- the refinery's or works' restore cost (restored at once), or
+what the named project still lacks (into funds) -- if all repayments, with this one, stay
+under `bondIncomeCap` of `economy.incomeRateEMA` a day. `repayBonds` (every tick, after the
+levy) bills each `perDay = lent × (1 + bondInterest) / bondTermDays` until `owed` is 0, into
+`budget.bonds`; `budget.borrowed` tallies what was lent. `world.bonds`.
+
 The **treasury remittance** (`budget.ts` `remit`, step 6 pass 2): `world.remittance` is the
 current period (`remittancePeriodDays`, 10) and its net -- income minus running costs, so
 purchases are never a deficit. At the period's end the state takes `remittanceShare` (0.8)

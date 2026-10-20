@@ -9,6 +9,7 @@ import { dropProject, nameProject, type ProjectRung } from "./project";
 import { restoreRoad, retireRoad } from "./retire";
 import { restoreRefinery } from "./fuel";
 import { restoreWorks } from "./cement";
+import { issueBond, type BondPurpose } from "./bonds";
 
 // Every player action as plain data. Data, not a closure, so it can be
 // sent to a worker and replayed there: the forecast (forecast.ts) runs an
@@ -30,6 +31,7 @@ export type ActionSpec =
   | { kind: "dropProject" }
   | { kind: "restoreRefinery" }
   | { kind: "restoreWorks" }
+  | { kind: "bond"; purpose: BondPurpose }
   | { kind: "sell"; routeId: string };
 
 /** `amount`: money charged (a repair) or returned (a sale), where the caller wants to say it. */
@@ -93,6 +95,10 @@ export function applyAction(world: SliceWorld, spec: ActionSpec): ActionOutcome 
     case "restoreWorks": {
       const result = restoreWorks(world);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
+    case "bond": {
+      const result = issueBond(world, spec.purpose);
+      return result.ok ? { ok: true, amount: result.lent ?? 0 } : { ok: false, reason: result.reason };
     }
     case "sell": {
       const refund = isLorryRoute(spec.routeId) ? removeLorry(world, spec.routeId) : removeBus(world, spec.routeId);

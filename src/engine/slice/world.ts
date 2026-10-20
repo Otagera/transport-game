@@ -127,6 +127,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     fuel: null,
     cement: null,
     sites: createSitesState(),
+    bonds: [],
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),
     vehicleSegment: new Map(),

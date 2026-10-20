@@ -57,6 +57,7 @@ import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
 import { cargoName, fuelSupply, isFuelSite, refineryOutput, shortageAt } from "@engine/slice/fuel";
+import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/slice/bonds";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/slice/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { isYourRoad } from "@engine/slice/upkeep";
@@ -1205,12 +1206,24 @@ function renderIndustry(townId: string): void {
     </div>`;
 }
 
+// A bond for a purpose (bonds.ts): the button, its terms, or why not.
+function bondButton(purpose: BondPurpose): string {
+  const lent = bondAmount(world, purpose);
+  if (lent === null || !world.tuning.bondsEnabled) return "";
+  const check = checkBond(world, purpose);
+  const terms = `repay ${naira(bondPerDay(world, lent))}/day for ${world.tuning.bondTermDays} days`;
+  return check.ok
+    ? `<button data-bond="${purpose}" title="${pct(world.tuning.bondInterest)} interest over the term">Borrow ${naira(lent)}: ${terms}</button>`
+    : `<span class="muted">A bond: ${check.reason}.</span>`;
+}
+
 // A site's workers (workers.ts, step 2b): how many, where from, how many
 // get there -- and, short, the problem: a site short of workers makes less.
 function workersItem(siteId: string): string {
   const site = world.towns.get(siteId)!;
   const jobs = siteJobs(world, site);
-  if (!world.tuning.workersEnabled || jobs <= 0) return "";
+  // An idle site's few watchmen aren't a workforce to report.
+  if (!world.tuning.workersEnabled || jobs <= world.tuning.jobsIdle + 1e-9) return "";
   const from = [...workforceShares(world, site)].sort((p, q) => q[1] - p[1]).slice(0, 3).map(([id, share]) => `${townName(id)} ${pct(share)}`).join(", ");
   return `<li>Employs ${Math.round(jobs * 1000).toLocaleString()}, from ${from}; ${pct(staffing(world, siteId))} of a full shift gets here, so it makes ${pct(staffFactor(world, siteId))} of what it could.</li>`;
 }
@@ -1259,12 +1272,12 @@ function renderFuelSite(townId: string): void {
     kicker = fuel.restored ? `Refinery · ${out} of ${capacity} t of fuel a day` : "Refinery · idle for years";
     lines = [
       `Turns crude into fuel: up to ${capacity} t a day, enough with the imports to supply every town.`,
-      `Its crude comes from ${source.name}. Tankers don't carry crude: only your lorries or freight trains do, and on a leg this long a freight train is what pays.`,
+      `Its crude comes from ${source.name}. Tankers don't carry crude: only your lorries (on a road) or freight trains (on track) do. Track is dear on a leg this long; full lorries pay too.`,
       "Its fuel goes to the towns by road tanker, so it needs a road out.",
     ];
     if (!fuel.restored) {
       problem = `Idle. Restore it, then get crude to it from ${source.name}.`;
-      action = `<span class="actions"><button data-restore-refinery="1">Restore it: ${naira(t.refineryRestoreCost)}</button></span>`;
+      action = `<span class="actions"><button data-restore-refinery="1">Restore it: ${naira(t.refineryRestoreCost)}</button>${world.economy.funds < t.refineryRestoreCost ? bondButton("refinery") : ""}</span>`;
     } else if (refineryOutput(world) * SECONDS_PER_GAME_DAY < 1) {
       problem = `No crude arriving. Run a freight train (<kbd>G</kbd>) on track from ${source.name}, or lorries (<kbd>L</kbd>) on a road.`;
     } else if (isCutOff(world, townId)) {
@@ -1274,7 +1287,7 @@ function renderFuelSite(townId: string): void {
     kicker = site.industry === "oilfield" ? "Oilfield · crude" : "Pipeline terminal · crude from the south";
     lines = [
       `${crude} t of crude a day for ${refinery.name}${fuel.restored ? "" : ", once it's restored"}.`,
-      "Only you carry crude: by lorry on a road, or by freight train on track, which pays on a haul this long.",
+      "Only you carry crude: by lorry on a road, or by freight train on track. Full lorries pay; track is dear on a leg this long.",
     ];
     if (!fuel.restored) problem = `Waiting on ${refinery.name}: until it's restored, nobody wants this crude.`;
     else if (!railPath(world, townId, fuel.refineryId) && !roadPath(world, townId, fuel.refineryId)) problem = `No way to ${refinery.name}: lay track (<kbd>K</kbd>) or build a road (<kbd>R</kbd>) to it.`;
@@ -1328,7 +1341,7 @@ function renderCementSite(townId: string): void {
     ];
     if (!cement.working) {
       problem = "Idle. Restore it, and limestone quarries open for it; until then the towns get only imports.";
-      action = `<span class="actions"><button data-restore-works="1">Restore it: ${naira(t.worksRestoreCost)}</button></span>`;
+      action = `<span class="actions"><button data-restore-works="1">Restore it: ${naira(t.worksRestoreCost)}</button>${world.economy.funds < t.worksRestoreCost ? bondButton("works") : ""}</span>`;
     } else if (world.industries.size === 0) {
       problem = "No quarry is open: it makes nothing until the next one opens. Connect it when it does.";
     } else if (![...world.industries.keys()].some((id) => roadPath(world, id, cement.worksId) || railPath(world, id, cement.worksId))) {
@@ -1704,17 +1717,29 @@ function budgetHtml(): string {
   const saving = project
     ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside${!world.tuning.remittanceEnabled ? `${project.affordableAt === null ? "." : ": you can afford it now."}` : `, safe from the treasury`}${!world.tuning.remittanceEnabled ? "" : project.affordableAt === null ? ` while you save. Once you can afford it, you have ${world.tuning.projectLapseDays} days to build it` : `: you can afford it, so build it by day ${gameDay(world, projectLapsesAt(world, project))} or the savings lapse`}.
         <span class="bar project-bar" title="${pct(held / project.price)} set aside"><i style="width:${pct(Math.min(1, held / project.price))};background:var(--player)"></i></span>
-        <span class="actions"><button data-drop-project="1">Drop it</button></span></p>`
+        <span class="actions">${bondButton("project")}<button data-drop-project="1">Drop it</button></span></p>`
     : "";
   return `${saving}<h2 class="section">Budget, a day</h2><p class="hint">5-day average.</p>
     <div class="budget">${lines.map(([label, x]) => `<span>${label}</span><span class="num ${x < 0 ? "bad" : ""}">${signed(x)}</span>`).join("")}
       <span class="total">Net</span><span class="total num ${net < 0 ? "bad" : "good"}">${signed(net)}</span>
       ${took}
+      ${b.bonds >= 0.5 ? `<span class="muted">Bond repayments</span><span class="num bad">${signed(-b.bonds)}</span>` : ""}
       ${struck}
     </div>
     ${countdown}
+    ${bondsHtml(b.bonds)}
     ${t.levyEnabled ? `<p class="hint">The treasury takes ${pct(t.levyShare)} of what you earn, as you earn it: fares, goods, tolls and levies, not the state's allocation. What you keep, you keep.</p>` : ""}
     ${t.remittanceEnabled ? `<p class="hint">Every ${t.remittancePeriodDays} days the treasury takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus. Money set aside for a project is safe.</p>` : ""}`;
+}
+
+// The bonds you owe on (bonds.ts): what for, what's left, what it costs a day.
+function bondsHtml(_repaidPerDay: number): string {
+  const owing = world.bonds.filter((bond) => bond.owed > 0.5);
+  if (owing.length === 0) return "";
+  const rows = owing
+    .map((bond) => `<li>${bond.label}: ${naira(bond.owed)} left, ${naira(bond.perDay)}/day for ${Math.ceil(bond.owed / bond.perDay)} more days</li>`)
+    .join("");
+  return `<p class="hint"><b>Bonds</b></p><ul class="hint">${rows}</ul>`;
 }
 
 // Each corridor you run along: who carries its trips, and whether you've
@@ -1972,6 +1997,17 @@ routesEl.addEventListener("click", (event) => {
   if (target.dataset.restoreRefinery) {
     const result = act({ label: "restoring the refinery", towns: world.fuel ? [world.fuel.refineryId] : [] }, { kind: "restoreRefinery" });
     say(result.ok ? `Refinery restored for ${naira(result.amount ?? 0)}. Now get crude to it, and give it a road out.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.bond) {
+    const purpose = target.dataset.bond as BondPurpose;
+    const lent = bondAmount(world, purpose) ?? 0;
+    const towns = purpose === "refinery" && world.fuel ? [world.fuel.refineryId] : purpose === "works" && world.cement ? [world.cement.worksId] : world.project ? [world.project.a, world.project.b] : [];
+    const result = act({ label: `a bond for ${purpose === "project" ? "your project" : purpose === "works" ? "the cement works" : "the refinery"}`, towns }, { kind: "bond", purpose });
+    say(result.ok
+      ? `Borrowed ${naira(lent)}${purpose === "project" ? " toward your project: build it" : ", and it's restored"}. You repay ${naira(bondPerDay(world, lent))} a day for ${world.tuning.bondTermDays} days.`
+      : `Can't borrow: ${result.reason}`, !result.ok, 9);
     renderPanel();
     return;
   }

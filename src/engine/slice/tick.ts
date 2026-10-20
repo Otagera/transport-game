@@ -6,6 +6,7 @@ import type { InformalMode, SliceRoute, SliceTuning, SliceWorld } from "./types"
 import { pairKey, roadPath, takeShortestRoad } from "./world";
 import { foundGateTown, updateSettlements, type SliceEvent } from "./settlement";
 import { updateSites } from "./workers";
+import { repayBonds } from "./bonds";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
 import { dispatchTrucks, truckersPickUp } from "./truckers";
@@ -316,6 +317,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   const remitted = remit(world, revenueThisTick - runningCost);
   // Or its levy, on what you earned this tick (budget.ts): the state's own allocation isn't taxed.
   treasuryLevy(world, revenueThisTick - allocation);
+  // And what's owed on bonds (bonds.ts), billed in debt too.
+  repayBonds(world, dt);
 
   // Rolling rates, each updated exactly once per tick (architecture hard
   // rule 7).

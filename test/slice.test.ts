@@ -16,6 +16,7 @@ import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/slice/moves";
 import { startSliceGame } from "@engine/slice/start";
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/slice/industries";
+import { bondAmount, repayBonds } from "@engine/slice/bonds";
 import { jobsGrowth, siteJobs, staffFactor, updateSites, workforceShares } from "@engine/slice/workers";
 import { foundGateTown } from "@engine/slice/settlement";
 import { cementDemand, cementFlows, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
@@ -3200,5 +3201,49 @@ describe("Revision 3, steps 2b-2c: sites need people, and towns grow around them
     // Only one.
     w.sites.workedDays.set(id, 2 * w.tuning.gateTownDays);
     expect(updateSites(w, SIM_DT, foundGateTown).some((e) => e.kind === "founded")).toBe(false);
+  });
+});
+
+describe("Revision 3, money: bonds (bonds.ts)", () => {
+  const game = () => startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+
+  test("a bond restores the refinery now, and is repaid with interest, the same each day, until it's paid", () => {
+    const w = game();
+    w.economy.funds = 1000;
+    w.economy.incomeRateEMA = 1e6 / SECONDS_PER_GAME_DAY; // income enough that the cap doesn't bind
+    expect(applyAction(w, { kind: "bond", purpose: "refinery" }).ok).toBe(true);
+    expect(w.fuel!.restored).toBe(true);
+    expect(w.economy.funds).toBeCloseTo(1000, 6); // lent the price, spent on the restore
+    const bond = w.bonds[0]!;
+    const t = w.tuning;
+    expect(bond.perDay).toBeCloseTo((t.refineryRestoreCost * (1 + t.bondInterest)) / t.bondTermDays, 6);
+    repayBonds(w, SECONDS_PER_GAME_DAY);
+    expect(w.budget.bonds).toBeCloseTo(bond.perDay, 6);
+    for (let i = 0; i < t.bondTermDays + 5; i += 1) repayBonds(w, SECONDS_PER_GAME_DAY);
+    expect(bond.owed).toBeCloseTo(0, 6);
+    expect(w.budget.bonds).toBeCloseTo(t.refineryRestoreCost * (1 + t.bondInterest), 3);
+    // Nothing left to borrow for there.
+    expect(applyAction(w, { kind: "bond", purpose: "refinery" }).ok).toBe(false);
+  });
+
+  test("repayments are bounded by income: a bond that would pass the cap is refused", () => {
+    const w = game();
+    w.economy.incomeRateEMA = 100 / SECONDS_PER_GAME_DAY; // ₦100 a day
+    const result = applyAction(w, { kind: "bond", purpose: "refinery" });
+    expect(result.ok).toBe(false);
+    expect(w.fuel!.restored).toBe(false);
+    expect(w.bonds.length).toBe(0);
+  });
+
+  test("a bond for your named project pays what you still lack into your funds", () => {
+    const w = game();
+    const [a, b] = [...w.basePopulation.keys()];
+    w.economy.funds = 5000;
+    w.economy.incomeRateEMA = 1e6 / SECONDS_PER_GAME_DAY;
+    w.project = { a: a!, b: b!, rung: "lane", price: 20000, namedAt: 0, affordableAt: null, warned: false };
+    const short = bondAmount(w, "project")!;
+    expect(applyAction(w, { kind: "bond", purpose: "project" }).ok).toBe(true);
+    expect(w.economy.funds).toBeCloseTo(5000 + short, 6);
+    expect(heldForProject(w)).toBeCloseTo(20000, 6);
   });
 });

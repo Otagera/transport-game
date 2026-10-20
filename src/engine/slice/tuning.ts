@@ -78,6 +78,15 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // there. The remittance stays, switched off, for the runs played with it.
   levyEnabled: true,
   levyShare: 0.1,
+  // Bonds (bonds.ts; brief, Revision 3, money): repaid over 60 days with 20%
+  // interest, the same each day; all repayments at most 30% of a day's
+  // income. A ₦60,000 refinery bond is ₦1,200 a day: on map 2791 around day
+  // 100, income ~₦9,000 a day, 13% -- and fuel above the pump price there
+  // was costing ₦300-1,500 a day. First guesses, to be measured.
+  bondsEnabled: true,
+  bondInterest: 0.2,
+  bondTermDays: 60,
+  bondIncomeCap: 0.3,
   remittanceEnabled: false,
   remittanceShare: 0.8,
   remittanceReserve: 3000,

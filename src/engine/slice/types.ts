@@ -13,6 +13,7 @@ import type { CorridorState } from "./corridors";
 import type { FuelState } from "./fuel";
 import type { CementState } from "./cement";
 import type { SitesState } from "./workers";
+import type { Bond } from "./bonds";
 import type { IndustryState } from "./industries";
 import type { TruckerHeld } from "./truckers";
 import type { BudgetTally, RemittancePeriod } from "./budget";
@@ -147,6 +148,11 @@ export interface SliceTuning {
   /** The treasury's levy (budget.ts treasuryLevy): on, and its share of what you earn, taken as you earn it. */
   levyEnabled: boolean;
   levyShare: number;
+  /** Bonds (bonds.ts): on; interest over the whole term, a share of what was lent; the term, days; all repayments at most this share of a day's income. */
+  bondsEnabled: boolean;
+  bondInterest: number;
+  bondTermDays: number;
+  bondIncomeCap: number;
   remittanceEnabled: boolean;
   remittanceShare: number;
   remittanceReserve: number;
@@ -493,6 +499,8 @@ export interface SliceWorld {
   cement: CementState | null;
   /** Each site's staffed days and the camp at its gate (workers.ts). */
   sites: SitesState;
+  /** Bonds issued, paid off or not (bonds.ts). */
+  bonds: Bond[];
   /** Goods truckers hold at yards, filling a truck (truckers.ts). */
   truckers: TruckerHeld;
   width: number;
