@@ -501,6 +501,80 @@ Each played before the next, as before.
 
 The Revision 1 checks stay as regression checks.
 
+## Revision 3 (proposed 2026-10-20): goods that feel real, in chains
+
+**Proposed, nothing built. Goods today are a rounding error, so the game runs out of reasons to build once the passenger network is done. Revision 3 makes the second economy real: cargo that belongs to the map's region, industries that feed each other in chains, volumes big enough to need freight rail, and one chain, fuel, that reaches back into the passenger game.**
+
+Prompted by your playtest of Revision 2 (principles.md §6) and its run file (map 543, everything on, to day 136): *"this feel like max"*. What the file shows:
+
+- **Goods earned ₦3,237 in 135 days, against ₦476,860 in fares** (0.7%). All four lorry routes lost ₦108–175 a day, running 4–6% full on 10–12 tonnes a day.
+- **For 27 days (95–121) you did nothing.** Funds rose from ₦60k to ₦105k with no move worth making; rail, the next rung, cost about 45 days of surplus.
+- **Five of the six routes you added on day 122 lost money**, mostly poached by danfos: the passenger network was done.
+- Your asks: *"just saying goods is not enough… it needs to feel real"*; *"the economy can be interconnected, like a refinery will need crude oil and a filling station will need fuel."*
+
+What you should be able to say after an hour: "The refinery at Warri ran dry because the crude came by lorry and the truckers took half of it. I put a freight line in, the filling stations in Opobo filled up, and the danfo fares there came down. Then the cement works opened and Oleh started growing again."
+
+### Chains: one site's output is another's input
+
+A **chain** is sites linked by cargo. Each site turns its inputs into outputs at a rate, and **makes nothing without its input**. A shortage then travels down the chain to the towns at the end, where you see it. Three chains to start, each true here (from general knowledge; check each before relying on it):
+
+| Chain | Sites and cargo | Where it ends | What a shortage does |
+| --- | --- | --- | --- |
+| **Fuel** | Crude oil (wells, flow station) → refinery → fuel depot → filling stations | Every town's filling stations | Danfo fares rise, fewer danfos run, your vehicles cost more to run; roadside sellers appear (below) |
+| **Building** | Limestone quarry → cement works → building sites | Growing towns | The town's growth stalls: "Oleh can't grow: no cement" |
+| **Food** | The region's farms → mill or processing → markets; cash crops → the port | Markets and the port | Market towns stop growing; export income stops |
+
+**Fuel reaches the passenger game.** This is the interconnection you asked for, and it's true and dramatic here: when the filling stations run dry, the danfos park, the queues form, and roadside sellers sell fuel in jerrycans at a premium. A town short of fuel raises its danfos' fares and thins them out: its riders crowd your buses, or stay home. Your own vehicles fuel there too, so their running costs rise. Moving fuel then counts as passenger service, not a side business.
+
+**A brownfield refinery.** Many maps start with an old state refinery that doesn't work, like the colonial railway: cheap to restore, but wrongly placed or short of crude. Fuel then comes through the port as imports until you fix the chain. It's true to the country, and it's the brownfield pillar applied to industry.
+
+### Real cargo, by region
+
+The map's region (its town names, `generate.ts`) decides which chains appear and what they carry:
+
+| Region | Fuel | Building | Food and cash crops |
+| --- | --- | --- | --- |
+| South-south | Crude at the wells, a refinery | Limestone | Palm oil, cassava → garri; export through the port |
+| South-west | Imported at the port | Limestone, granite | Cocoa and kola to the port; cassava, maize |
+| South-east | Imported, or piped in from the south | Limestone | Palm oil, cassava, yams |
+| Middle Belt | Imported | Limestone, granite | Yams, sesame, rice |
+| North, north-east | Imported, long haul | Limestone (cement) | Groundnuts, cotton, grain, cattle |
+
+### Volume: big enough to need freight rail
+
+Each chain's long leg (crude to the refinery, fuel to a far town, cement to the cities) moves **hundreds of tonnes a day**, not 10–12. A few lorries can't carry it at a profit, but a freight train can. Short legs stay with lorries and the truckers. Rail's job becomes the backbone of a chain, and a line becomes a choice between freight and passengers (C7).
+
+### Who owns the goods, and the informal sector
+
+You don't run the industries: companies and traders do, and they pay you freight fares per tonne per cell (as today). The informal sector is in every chain:
+- **Truckers and tanker drivers** take the loads you don't, and the short hauls (as built).
+- **Touts at depots and markets** take their loading levies (as built).
+- **Roadside fuel sellers** appear wherever a town runs dry, and the danfos buy from them at a premium. A shortage you leave becomes their market.
+
+### On screen
+
+- Each site has a card: what it needs and makes, what it got and shipped in the last 5 days, and **what's holding it back** ("short of crude: 40 of 300 t a day").
+- The town card gains a **Supplies** line: fuel, cement and food, each fine or short, and what the shortage is doing ("No fuel 3 days: danfo fares +40%").
+- Chains are drawn as flows on the map, the way desire lines are for people.
+
+### The order, one at a time, each measured and played
+
+1. **The chain mechanic, with the fuel chain.** Sites with inputs, outputs and stock; fuel reaching danfo fares, danfo numbers and your running costs; roadside sellers; the brownfield refinery.
+2. **The building chain,** replacing today's quarry-to-growth link with limestone → cement → towns.
+3. **The food chain** and exports, by region.
+
+### Checks for Revision 3
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C11 | Goods matter | By day 100 of a good game, goods are 20–40% of income (today 0.7%), and at least one chain leg pays on its own |
+| C12 | A shortage is felt | A fuel shortage in a town moves its danfo fares and your riders there measurably, against a twin without it, and the town card says so |
+| C13 | Rail carries a chain | On at least one map, a freight line on a chain's long leg pays back within C2's 20–40 days, and lorries on the same leg don't pay |
+| C14 | No dead stretch | From day 60 to day 150 of your playtest's run file, no stretch of 15 days without a move worth making (today: 27 days) |
+| C15 | It feels like this place (played) | You can name the chain that mattered in your game and what it changed for your passengers |
+
+The Revision 1 and 2 checks stay as regression checks.
+
 ## Slice zero: what's on, what's off, and the order things come back
 
 **Slice zero is the smallest game that tests this brief: roads, buses and danfos, with the new money and the new headline.** Everything else is already built and tested; it goes behind a switch in `tuning.ts`, not into the bin.
@@ -642,10 +716,13 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 ## Decisions log
 
-**Forty decisions were drafted on 2026-10-17 to 19, three of them from a review of this brief; sixteen are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
+**Forty-three decisions were drafted on 2026-10-17 to 20, three of them from a review of this brief; seventeen are agreed.** Newest first. Change a status as you decide; a rejected decision stays in the log with a line on why.
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-20 | Revision 3: goods that feel real, in chains -- sites with inputs and outputs that make nothing without their input (fuel, building, food), cargo by the map's region, long legs in hundreds of tonnes a day for freight rail, a brownfield refinery; built in order (fuel chain first), each measured and played | Proposed |
+| 2026-10-20 | Fuel reaches the passenger game: a town short of fuel raises its danfo fares, thins its danfos and raises your running costs there; roadside sellers appear where it runs dry (C12) | Proposed |
+| 2026-10-20 | Town names by region: one region per generated map (south-west most likely; a coast only south-west or south-south), real towns of that region; geography unchanged for every seed | Agreed 2026-10-19 (asked for, built) |
 | 2026-10-19 | Revision 2, step 1 first and alone: show the problems the late game already has (why a town is shrinking, where "no seat" is and the move that carries it, unserved trips drawn on the corridor), played past day 150 (C5) before any goods. Its playtest sizes the rest | Agreed 2026-10-19 |
 | 2026-10-19 | Revision 2: industries that open and close (quarry, mill, factory) as the second reason to build; goods back on; an industry's own ladder (dirt track, paved, your lorries, a rail spur); served industries grow the towns that trade with them | Agreed 2026-10-19 |
 | 2026-10-19 | The informal hook in goods: lorries on the shared road (built), loading levies at markets and the port, and private truckers as the informal freight rival -- the last amends principles.md §3's "paratransit is passengers-only" in spirit (truckers aren't paratransit) | Agreed 2026-10-19 (the direction; built after step 1's playtest, as the order says) |
