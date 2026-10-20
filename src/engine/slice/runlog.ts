@@ -78,6 +78,10 @@ export interface RunFile {
   devFunds: number | null;
   /** Ticks run when saved. */
   ticks: number;
+  /** The game's code when played (the git commit the dev server started on; "-dirty" with uncommitted changes). */
+  build?: string;
+  /** Every number the game ran with, so a replay reproduces it after the tuning moves on (absent in older files). */
+  tuning?: SliceTuning;
   actions: RunAction[];
   days: RunDay[];
 }
@@ -99,7 +103,11 @@ export function runTuning(switches: RunSwitches, overrides: Partial<SliceTuning>
 
 /** A new game as the page starts it: the seed's map, the switches, the warm-up, any dev funds. */
 export function startRun(base: SliceMapDef, seed: number, switches: RunSwitches, devFunds: number | null, overrides: Partial<SliceTuning> = {}): SliceWorld {
-  const world = startSliceGame(generatedSliceMap(base, seed), runTuning(switches, overrides));
+  return startRunWith(base, seed, runTuning(switches, overrides), devFunds);
+}
+
+function startRunWith(base: SliceMapDef, seed: number, tuning: SliceTuning, devFunds: number | null): SliceWorld {
+  const world = startSliceGame(generatedSliceMap(base, seed), tuning);
   if (devFunds !== null) world.economy.funds = devFunds;
   return world;
 }
@@ -111,9 +119,9 @@ export interface RunRecorder {
   lastDay: number;
 }
 
-export function createRunRecorder(world: SliceWorld, seed: number, switches: RunSwitches, devFunds: number | null): RunRecorder {
+export function createRunRecorder(world: SliceWorld, seed: number, switches: RunSwitches, devFunds: number | null, build?: string): RunRecorder {
   return {
-    file: { format: RUN_FORMAT, version: 1, savedAt: "", seed, switches, devFunds, ticks: 0, actions: [], days: [] },
+    file: { format: RUN_FORMAT, version: 1, savedAt: "", seed, switches, devFunds, ticks: 0, build, tuning: structuredClone(world.tuning), actions: [], days: [] },
     ticks: 0,
     pending: [],
     lastDay: gameDay(world),
@@ -180,7 +188,8 @@ export function replayRun(
   onTick?: (world: SliceWorld, tick: number) => void,
   overrides: Partial<SliceTuning> = {},
 ): SliceWorld {
-  const world = startRun(base, file.seed, file.switches, file.devFunds, overrides);
+  // The numbers it was played with when the file has them, else today's for its switches.
+  const world = startRunWith(base, file.seed, { ...(file.tuning ?? runTuning(file.switches)), ...overrides }, file.devFunds);
   let next = 0;
   for (let tick = 0; ; tick += 1) {
     while (next < file.actions.length && file.actions[next]!.tick === tick) {

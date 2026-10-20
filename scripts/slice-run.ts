@@ -89,6 +89,10 @@ function describeEvent(event: RunDay["events"][number]): string | null {
       return `project built: ${event.rung} ${pair(town(event.a), town(event.b))}`;
     case "project-lapsed":
       return `project lapsed: ${event.rung} ${pair(town(event.a), town(event.b))}, treasury took ${naira(event.taken)}`;
+    case "project-affordable":
+      return `project affordable: ${event.rung} ${pair(town(event.a), town(event.b))}`;
+    case "project-lapse-warning":
+      return `project lapse warning: ${event.rung} ${pair(town(event.a), town(event.b))}`;
     case "remitted":
       return event.amount > 0 ? `treasury took ${naira(event.amount)}` : null;
     default:
@@ -116,7 +120,7 @@ function printDay(day: RunDay): void {
 
 const last = file.days.at(-1);
 const switches = [file.switches.all ? "all systems" : "", file.switches.goodsOff ? "goods off" : "", file.switches.wearOff ? "wear off" : ""].filter(Boolean).join(", ") || "defaults";
-console.log(`Run: map ${file.seed} (${switches}), saved ${file.savedAt}, ${file.days.length} days, ${file.actions.length} actions${file.devFunds !== null ? `, dev funds ${naira(file.devFunds)}` : ""}`);
+console.log(`Run: map ${file.seed} (${switches}), saved ${file.savedAt}, ${file.days.length} days, ${file.actions.length} actions${file.devFunds !== null ? `, dev funds ${naira(file.devFunds)}` : ""}, build ${file.build ?? "not recorded"}${file.tuning ? "" : ", tuning not recorded (replays use today's)"}`);
 
 const dayArg = flag("--day");
 if (dayArg !== undefined) {

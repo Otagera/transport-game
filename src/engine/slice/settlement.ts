@@ -30,6 +30,9 @@ export type SliceEvent =
   // The named project (project.ts): built, or lapsed to the treasury.
   | { kind: "project-done"; a: string; b: string; rung: "lane" | "rail" }
   | { kind: "project-lapsed"; a: string; b: string; rung: "lane" | "rail"; taken: number }
+  // ...affordable now: the 30-day clock starts; and a warning before it lapses.
+  | { kind: "project-affordable"; a: string; b: string; rung: "lane" | "rail"; lapsesAt: number }
+  | { kind: "project-lapse-warning"; a: string; b: string; rung: "lane" | "rail"; lapsesAt: number }
   // The treasury's remittance (budget.ts): what a period's end took, 0 included.
   | { kind: "remitted"; amount: number }
   // A town passing a quarter, a half, double or triple its day-1 size (score.ts).

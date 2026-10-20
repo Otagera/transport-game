@@ -3,7 +3,7 @@ import { addBus, buildRoad, createSliceWorld, largestGapMidpoint, networkShare, 
 import { informalBudget, sliceTick } from "@engine/slice/tick";
 import { laneOn, setEnforcement, settleStrike, settlementPrice, struckSegments } from "@engine/slice/pushback";
 import { addBrt, addBusLane, brtRouteId, checkBrt, checkLane, laneCost } from "@engine/slice/world";
-import { heldForProject, nameProject } from "@engine/slice/project";
+import { heldForProject, nameProject, updateProject } from "@engine/slice/project";
 import { ALL_SYSTEMS_ON, DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
 import type { SliceMapDef, SliceTuning, SliceWorld } from "@engine/slice/types";
 import { SIM_DT } from "@engine/loop";
@@ -2032,8 +2032,27 @@ describe("slice zero step 7: the budget breakdown", () => {
     run(w, 5 * SECONDS_PER_GAME_DAY);
     const due = remittanceDue(w);
     expect(due).toBeGreaterThan(0);
-    w.project = { a: "big", b: "mid", rung: "lane", price: 1_000_000, namedAt: w.economy.elapsedSeconds };
+    w.project = { a: "big", b: "mid", rung: "lane", price: 1_000_000, namedAt: w.economy.elapsedSeconds, affordableAt: null, warned: false };
     expect(remittanceDue(w)).toBe(0);
+  });
+
+  test("a named project's clock starts when you can afford it, not when you name it (playtest: rail lapsed twice)", () => {
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
+    w.project = { a: "big", b: "mid", rung: "lane", price: 50_000, namedAt: w.economy.elapsedSeconds, affordableAt: null, warned: false };
+    // Saving for longer than the lapse time: still yours, nothing taken.
+    w.economy.funds = 20_000;
+    w.economy.elapsedSeconds += (w.tuning.projectLapseDays + 10) * SECONDS_PER_GAME_DAY;
+    expect(updateProject(w)).toEqual([]);
+    expect(w.project).not.toBeNull();
+    // Affordable now: the clock starts, then a warning, then the lapse.
+    w.economy.funds = w.tuning.remittanceReserve + 60_000;
+    expect(updateProject(w).map((e) => e.kind)).toEqual(["project-affordable"]);
+    w.economy.elapsedSeconds += (w.tuning.projectLapseDays - 4) * SECONDS_PER_GAME_DAY;
+    expect(updateProject(w).map((e) => e.kind)).toEqual(["project-lapse-warning"]);
+    expect(updateProject(w)).toEqual([]); // warned once
+    w.economy.elapsedSeconds += 5 * SECONDS_PER_GAME_DAY;
+    expect(updateProject(w).map((e) => e.kind)).toEqual(["project-lapsed"]);
+    expect(w.project).toBeNull();
   });
 });
 

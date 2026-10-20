@@ -110,7 +110,7 @@ const devFunds = dev && params.has("funds") && Number.isFinite(fundsParam) ? fun
 // Started as a replay would start it (runlog.ts), and recorded as it goes:
 // "Save run" writes the file a script can read or replay.
 const world = startRun(SLICE_MAP, seed, switches, devFunds);
-const recorder = createRunRecorder(world, seed, switches, devFunds);
+const recorder = createRunRecorder(world, seed, switches, devFunds, String(import.meta.env.VITE_GAME_BUILD ?? "unknown"));
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
 const strip = document.querySelector<HTMLDivElement>("#strip")!;
@@ -459,6 +459,11 @@ function announce(event: SliceEvent): void {
     pauseForStrike();
   } else if (event.kind === "project-done") {
     say(`Your project is built: the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}. The treasury goes back to its usual share.`, false, 6);
+  } else if (event.kind === "project-affordable") {
+    say(`You can afford the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}: build it by day ${gameDay(world, event.lapsesAt)}, or the savings lapse to the treasury.`, false, 9);
+  } else if (event.kind === "project-lapse-warning") {
+    say(`Your ${event.rung === "lane" ? "bus lane" : "rail"} savings for ${corridor} lapse on day ${gameDay(world, event.lapsesAt)}: build it before then, or the treasury takes them.`, true, 9);
+    pauseForStrike();
   } else if (event.kind === "project-lapsed") {
     say(`Your project on ${corridor} lapsed unbuilt: the treasury took ${naira(event.taken)} of what you'd set aside.`, true, 8);
   } else if (event.kind === "remitted") {
@@ -1479,7 +1484,7 @@ function budgetHtml(): string {
   const project = world.project;
   const held = project ? heldForProject(world) : 0;
   const saving = project
-    ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside, safe from the treasury until day ${gameDay(world, projectLapsesAt(world, project))}.
+    ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside, safe from the treasury${project.affordableAt === null ? ` while you save. Once you can afford it, you have ${world.tuning.projectLapseDays} days to build it` : `: you can afford it, so build it by day ${gameDay(world, projectLapsesAt(world, project))} or the savings lapse`}.
         <span class="bar project-bar" title="${pct(held / project.price)} set aside"><i style="width:${pct(Math.min(1, held / project.price))};background:var(--player)"></i></span>
         <span class="actions"><button data-drop-project="1">Drop it</button></span></p>`
     : "";
@@ -1741,7 +1746,7 @@ routesEl.addEventListener("click", (event) => {
   if (target.dataset.project) {
     const [a, b, rung] = target.dataset.project.split("|") as [string, string, ProjectRung];
     const result = act({ label: `saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, { kind: "project", a, b, rung });
-    say(result.ok ? `Saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone for ${world.tuning.projectLapseDays} days. Build it before then, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
+    say(result.ok ? `Saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone while you save. Once you can afford it, build it within ${world.tuning.projectLapseDays} days, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }
