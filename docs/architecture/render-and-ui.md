@@ -212,6 +212,11 @@ terrain isn't applied: the map still draws shaded hills.
 - **Route cards** (`routeCard`): vehicles, in, cost and net a day; the pair with +/−; one
   verdict of at most 12 words naming one lever (`verdicts.ts` `shortVerdict`, tested), the
   long `reasonText` on the card's hover; the riders bar.
+- **Map labels** (`render.ts draw`, `occupied`): towns draw first, biggest first, and take
+  their circle and name; then sites, each with its name only (muted) at rest -- what it makes
+  only when hovered or selected, "idle · restore it" and "no road" always -- placed below,
+  above, right or left of its square, whichever is free, else hidden until you point at it
+  (playtest, map 2411: "the screen is getting too muddled").
 - **The Treasury drawer** (`treasuryHtml`, `#treasury` in `slice.html`; Revision 3, Money, 5,
   the design lab's pick): a one-line tab above the control line (kept a day, levy, bond
   repayments, the worst chain), out on hover or focus, pinned by a click on the tab, into four

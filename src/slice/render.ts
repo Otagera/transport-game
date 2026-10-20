@@ -129,10 +129,13 @@ export function draw(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vie
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
   drawVehicles(ctx, world, view);
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
-  for (const town of world.towns.values()) {
-    if (town.industry) drawIndustry(ctx, world, view, town, state);
-    else drawTown(ctx, world, view, town, state);
-  }
+  // Towns first, biggest first, so their labels claim the space; then the
+  // sites, whose names go where there's room (playtest, map 2411: "the
+  // screen is getting too muddled" -- site labels on town labels).
+  occupied = [];
+  const towns = [...world.towns.values()];
+  for (const town of towns.filter((t) => !t.industry).sort((p, q) => q.population - p.population)) drawTown(ctx, world, view, town, state);
+  for (const town of towns.filter((t) => t.industry)) drawIndustry(ctx, world, view, town, state);
   drawWardens(ctx, world, view);
   drawStrikeLabels(ctx, world, view);
   drawTakenLabels(ctx, world, view);
@@ -847,9 +850,20 @@ function drawInformal(ctx: CanvasRenderingContext2D, mode: InformalMode): void {
 // Each town shows two things at a glance. The ring: where its passengers
 // ended up (yours / informal / stayed home). The dots: who is waiting right
 // now, one dot per few people.
+// Screen boxes already taken this frame (towns and their labels, then site
+// labels): where a site's name may not go.
+interface Box { x: number; y: number; w: number; h: number }
+let occupied: Box[] = [];
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
 function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, town: SliceTown, state: DrawState): void {
   const p = toScreen(view, town.x, town.y);
   const r = townRadius(town, view);
+  // The town, and its name and size below it, are taken.
+  ctx.font = "600 13px system-ui, sans-serif";
+  const nameW = Math.max(ctx.measureText(town.name).width, 30);
+  occupied.push({ x: p.x - r - 6, y: p.y - r - 6, w: 2 * r + 12, h: 2 * r + 12 });
+  occupied.push({ x: p.x - nameW / 2 - 2, y: p.y + r + 5, w: nameW + 4, h: isCutOff(world, town.id) ? 42 : 30 });
 
   const share = townShare(world, town.id);
   const ringR = r + 5;
@@ -1049,18 +1063,33 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     : town.industry === "mill" && world.food ? `${world.food.crops.food} · ${perDay(millOutput(world))} of ${perDay(millCapacity(world))} t/day`
     : town.industry === "flourmill" ? `flour · ${perDay(flourOutput(world))} of ${perDay(flourCapacity(world))} t/day`
     : `${cementActive(world) ? "limestone" : "stone"} · ${world.tuning.quarryOutputPerDay} t/day`;
-  ctx.textAlign = "center";
-  ctx.fillStyle = COLORS.label;
-  ctx.font = "600 12px system-ui, sans-serif";
-  ctx.fillText(town.name, p.x, p.y + half + 14);
-  ctx.fillStyle = COLORS.labelMuted;
-  ctx.font = "11px system-ui, sans-serif";
-  ctx.fillText(label, p.x, p.y + half + 27);
-  if (isCutOff(world, town.id)) {
-    ctx.fillStyle = COLORS.ghostBad;
-    ctx.font = "600 11px system-ui, sans-serif";
-    ctx.fillText("no road", p.x, p.y + half + 40);
-  }
+  // Its name at rest; what it makes only when you point at it (the card has
+  // the rest). "No road" and "restore it" stay: they're the problem to fix.
+  const focused = selected || state.hoverTown === town.id;
+  const cut = isCutOff(world, town.id);
+  const lines: Array<{ text: string; font: string; color: string }> = [{ text: town.name, font: "600 11px system-ui, sans-serif", color: focused ? COLORS.label : COLORS.labelMuted }];
+  if (focused || label.startsWith("idle")) lines.push({ text: label, font: "11px system-ui, sans-serif", color: COLORS.labelMuted });
+  if (cut) lines.push({ text: "no road", font: "600 11px system-ui, sans-serif", color: COLORS.ghostBad });
+  const lineH = 13;
+  const w = Math.max(...lines.map((line) => { ctx.font = line.font; return ctx.measureText(line.text).width; })) + 4;
+  const h = lines.length * lineH;
+  // Below, above, right, left: the first side that's free. None free: no label until you point at it.
+  const spots: Array<{ box: Box; align: CanvasTextAlign; x: number }> = [
+    { box: { x: p.x - w / 2, y: p.y + half + 3, w, h }, align: "center", x: p.x },
+    { box: { x: p.x - w / 2, y: p.y - half - 3 - h, w, h }, align: "center", x: p.x },
+    { box: { x: p.x + half + 4, y: p.y - h / 2, w, h }, align: "left", x: p.x + half + 6 },
+    { box: { x: p.x - half - 4 - w, y: p.y - h / 2, w, h }, align: "right", x: p.x - half - 6 },
+  ];
+  const spot = spots.find((s) => !occupied.some((box) => overlaps(box, s.box))) ?? (focused || cut ? spots[0] : undefined);
+  occupied.push({ x: p.x - half, y: p.y - half, w: 2 * half, h: 2 * half });
+  if (!spot) return;
+  occupied.push(spot.box);
+  ctx.textAlign = spot.align;
+  lines.forEach((line, i) => {
+    ctx.font = line.font;
+    ctx.fillStyle = line.color;
+    ctx.fillText(line.text, spot.x, spot.box.y + 10 + i * lineH);
+  });
   ctx.textAlign = "left";
 }
 
