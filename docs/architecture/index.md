@@ -93,6 +93,7 @@ public/mods/       Mod packages written by the Asset Modder tab (vehicle.json + 
 scripts/slice-probe.ts  Headless calibration probe for the slice
 scripts/slice-bots.ts   Bot personas + the brief's measured checks M1-M9 (docs/brief.md)
 scripts/slice-strategist.ts  A long-game bot (Revision 3): plays the ladder and the chains to day 250+, measures C2, C11, C14
+scripts/slice-play.ts   Play from a terminal: state as text, moves as JSON, a run file saved (Revision 4: an OpenCode player)
 scripts/slice-lever-audit.ts  Each lever pulled in a twin world, measured against the original
 scripts/{coldstart,connect,horizon}.ts  The brief's Evidence measurements, re-runnable
 docs/
