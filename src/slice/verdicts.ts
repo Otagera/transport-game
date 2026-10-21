@@ -33,6 +33,8 @@ export function shortVerdict(c: VerdictContext): string {
     case "long":
       return "Too long for its fares. End it at a nearer town.";
     case "full":
+      // Full yet losing: another vehicle loses more (the OpenCode player, day 95).
+      if (c.netPerDay < 0) return c.vehicle === "minibus" ? "Full but losing: a bus (B) carries more per naira." : "Full but losing: costs outrun fares. Check fuel and worn roads.";
       return "Full: riders left behind go to the danfos. Add one (+).";
     // The long reasons add "if their fares cover its cost"; short, that
     // condition has to be decided here. A route already losing money won't

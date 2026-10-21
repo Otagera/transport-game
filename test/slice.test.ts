@@ -2592,6 +2592,17 @@ describe("Revision 2, step 1: the problems the late game already has, with their
     expect(more.price).toBe(DEFAULT_SLICE_TUNING.minibusPurchaseCost);
   });
 
+  test("no advice to add a vehicle a route can't pay for: once judged, it says why instead, and isn't a move", () => {
+    // Minibuses that cost far more to run than any fare brings in.
+    const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0, minibusOperatingCostPerSecond: 500 });
+    addMinibus(w, "big", "mid");
+    run(w, 4 * SECONDS_PER_GAME_DAY);
+    const more = seatMove(w, "big", "mid");
+    expect(more.price).toBe(Infinity);
+    expect(more.label).toMatch(/another minibus wouldn't pay/);
+    expect(namedMoves(w).some((m) => m.label === more.label)).toBe(false);
+  });
+
   test("a town's no seat names the trip most of it wants and a move; corridors list theirs worst first", () => {
     const w = startSliceGame(MAP, { ...DEFAULT_SLICE_TUNING, maxEmergentTowns: 0 });
     run(w, 2 * SECONDS_PER_GAME_DAY);

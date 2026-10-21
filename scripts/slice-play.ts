@@ -34,6 +34,7 @@ import { expandCost } from "../src/engine/slice/expand";
 import { checkBond, bondAmount, bondPerDay } from "../src/engine/slice/bonds";
 import { carryOver, sweepDue } from "../src/engine/slice/sweep";
 import type { SliceWorld } from "../src/engine/slice/types";
+import { yardGain } from "../src/engine/slice/yards";
 
 interface Saved {
   world: SliceWorld;
@@ -114,7 +115,7 @@ function state(w: SliceWorld): string {
     if (s.industry === "works" && w.cement && !w.cement.working) moves.push(`restore ${k(w.tuning.worksRestoreCost)}: ${j({ kind: "restoreWorks" })}`);
     const cost = expandCost(w, s.id);
     if (cost !== null && p?.limit === "capacity") moves.push(`expand ${k(cost)}: ${j({ kind: "expand", siteId: s.id })}`);
-    if (w.tuning.yardsEnabled && !w.yards.has(s.id)) moves.push(`haulage yard ${k(w.tuning.yardCost)}: ${j({ kind: "yard", townId: s.id })}`);
+    if (w.tuning.yardsEnabled && !w.yards.has(s.id)) moves.push(`haulage yard ${k(w.tuning.yardCost)} (~${Math.round(yardGain(w, s.id))} t/day wait here within its reach): ${j({ kind: "yard", townId: s.id })}`);
     const line = p && p.capacity > 0
       ? `${p.limit === "idle" ? "idle" : `makes ${Math.round(p.made * D)} of ${Math.round(p.capacity * D)} t ${p.product}/day`}${p.inputs.map((i) => `, ${i.name} in ${Math.round(i.arriving * D)} of ${Math.round(i.needed * D)}`).join("")}${p.staffing !== null ? `, workers ${pc(p.staffing)}` : ""}, carried away ${pc(p.shipped)}${p.limit !== "capacity" && p.limit !== "idle" ? ` -- held back by its ${p.limit}` : ""}`
       : "";

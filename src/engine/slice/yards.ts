@@ -1,6 +1,8 @@
 import type { SliceWorld } from "./types";
 import type { ActionResult } from "./world";
-import { canAfford } from "../economy/state";
+import { canAfford, SECONDS_PER_GAME_DAY } from "../economy/state";
+import { flowKey, goodsFlows } from "./goods";
+import { roadPath } from "./world";
 import { SWITCHED_OFF } from "./tuning";
 
 // Haulage yards (docs/brief.md, Revision 4, 1). Road freight is private
@@ -33,4 +35,22 @@ export function buildYard(world: SliceWorld, townId: string): ActionResult & { c
   world.economy.funds -= world.tuning.yardCost;
   world.yards.add(townId);
   return { ok: true, charged: world.tuning.yardCost };
+}
+
+/**
+ * What a yard here would have to work with: tonnes a day of goods leaving this
+ * place that nobody moves now, on roads within a yard's reach (the OpenCode
+ * player: "haulage yards felt like noise" -- nothing said what one would do).
+ * For the Yard tool's preview; an estimate, not a forecast.
+ */
+export function yardGain(world: SliceWorld, townId: string): number {
+  let tonnes = 0;
+  for (const flow of goodsFlows(world)) {
+    if (flow.from !== townId) continue;
+    const path = roadPath(world, flow.from, flow.to);
+    if (!path || path.distance > world.tuning.yardReachCells) continue;
+    const outcome = world.goods.outcomes.get(flowKey(flow));
+    tonnes += Math.max(0, flow.rate - (outcome?.delivered ?? 0) - (outcome?.trucked ?? 0)) * SECONDS_PER_GAME_DAY;
+  }
+  return tonnes;
 }

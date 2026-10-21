@@ -54,7 +54,7 @@ import { isDirt } from "@engine/slice/congestion";
 import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
 import { remittanceExpected } from "@engine/slice/budget";
 import { carryOver, sweepDue } from "@engine/slice/sweep";
-import { checkYard } from "@engine/slice/yards";
+import { checkYard, yardGain } from "@engine/slice/yards";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
@@ -859,7 +859,10 @@ function ghost(): Ghost | null {
     if (!hoverTown) return null;
     const check = checkYard(world, hoverTown);
     const at = toScreen(view, world.towns.get(hoverTown)!.x, world.towns.get(hoverTown)!.y);
-    const label = `Haulage yard ${naira(world.tuning.yardCost)} · hauliers reach ${world.tuning.yardReachCells} cells from here`;
+    // What it would have to work with (yards.ts yardGain): goods waiting here, within its reach.
+    const waiting = yardGain(world, hoverTown);
+    const work = waiting >= 5 ? `~${Math.round(waiting)} t/day wait here within its reach · levy ~${naira(waiting * world.tuning.yardLevyPerTonne * (1 - world.tuning.yardToutShare))}/day` : "little waits here for hauliers";
+    const label = `Haulage yard ${naira(world.tuning.yardCost)} · ${work}`;
     return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Haulage yard ${naira(world.tuning.yardCost)}`) };
   }
   if (!selectedTown || !mouse) return null;
@@ -1220,6 +1223,8 @@ function serviceText(townId: string, name: string): string {
 
 /** A named move as the screen says it: what, and its price. Named, not bought: the player does it (brief, Information design). */
 function moveText(move: NamedMove): string {
+  // Not a move (problems.ts seatMove: another vehicle wouldn't pay): said plainly, no price.
+  if (!Number.isFinite(move.price)) return `<span class="muted">${move.label}.</span>`;
   return `<b>${move.label}</b>${move.price > 0 ? ` · ${naira(move.price)}` : ""}`;
 }
 

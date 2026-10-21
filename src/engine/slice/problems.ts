@@ -1,6 +1,6 @@
 import type { SliceWorld } from "./types";
 import type { ActionSpec } from "./actions";
-import { findRoute, isBrtRoute, isMinibusRoute, laneCost, pairDemand, paveCost, roadPath } from "./world";
+import { diagnoseRoute, findRoute, isBrtRoute, isMinibusRoute, laneCost, pairDemand, paveCost, roadPath, routeSummaries } from "./world";
 import { growthTrend, roadFull, townGrowth } from "./growth";
 import { corridorsAlong } from "./corridors";
 import { laneEncroachment, lanesBySegment } from "./pushback";
@@ -90,6 +90,17 @@ export function seatMove(world: SliceWorld, a: string, b: string): NamedMove {
     const kind = isRailRoute(route.id) ? "train" : isMinibusRoute(route.id) ? "minibus" : isBrtRoute(route.id) ? "brt" : "bus";
     const price = kind === "train" ? t.trainPurchaseCost : kind === "minibus" ? t.minibusPurchaseCost : kind === "brt" ? t.brtPurchaseCost : t.busPurchaseCost;
     const noun = kind === "brt" ? "BRT bus" : kind;
+    // Only where one more would pay: a route losing money, or whose vehicles earn less than
+    // they cost to run, loses more with another (the OpenCode player, day 95: following
+    // "Add a minibus (+)" took its net from +₦905 to -₦442 a day). Then it's not a move:
+    // an infinite price keeps it off namedMoves, and the label says why.
+    // A route needs a few days running to be judged: new, it has earned nothing yet.
+    const d = diagnoseRoute(world, route.id);
+    const net = routeSummaries(world).find((r) => r.id === route.id)?.netPerDay ?? 0;
+    const judged = world.economy.elapsedSeconds - route.openedAtSeconds >= 3 * SECONDS_PER_GAME_DAY;
+    if (d && judged && (net < 0 || d.incomePerVehicle < d.costPerVehicle)) {
+      return { action: { kind, a: route.a, b: route.b }, price: Infinity, label: `${pair}: another ${noun} wouldn't pay (each earns ₦${Math.round(d.incomePerVehicle)} a day against ₦${Math.round(d.costPerVehicle)} to run)` };
+    }
     return { action: { kind, a: route.a, b: route.b }, price, label: `Add a ${noun} to ${pair} (+)` };
   }
   if (!path && railPath(world, a, b)) return { action: { kind: "train", a, b }, price: t.trainPurchaseCost, label: `Run a train ${pair} (T)` };
