@@ -628,7 +628,30 @@ Your run (map 2791, to day 241; file to day 209) found the game stuck in a bind.
 
 The Revision 1 and 2 checks stay as regression checks.
 
-## Slice zero: what's on, what's off, and the order things come back
+## Revision 4 (agreed 2026-10-21): the late game
+
+**Agreed 2026-10-21 (your answers: "No player lorries… we can add the action of providing parks for danfos"; "towns expecting better service is a go"; "the second refinery is a go too. even metro"; "lets test out the levy… if it turns out like the last 80% cut off we know it's not a good game mechanic"). Built in the order below, each in a worktree, measured with the strategist (`scripts/slice-strategist.ts`), merged on your word.**
+
+Why: your map 2411 game to day 412 and the strategist on three maps to day 250 say the same three things. Goods make the income line, not the money: 45–75% of income, yet lorries net about ₦0 between them (51 routes on 2411, 33 losing; the strategist's 27–44 routes, −₦3,492 to +₦1,020 a day). Lorries are busywork: 105–165 bought a game. And the late game piles money up with nothing to buy: ₦100–590k held after day 200, stretches of 32–55 days with nothing built.
+
+1. **No player lorries; haulage yards.** Road freight is private hauliers', as it is here: the state builds roads and runs freight rail, it doesn't run lorry fleets. You build **haulage yards** at towns and sites: a yard lets hauliers reach further from it and load faster, and you collect a yard levy on what they lift (the touts' cut smaller than at a roadside). The Lorry tool goes; freight trains stay yours, for the long legs (C13). A run file played with lorries replays as played.
+2. **Towns expect better service as they grow.** Past a size, a town expects you to carry a share of its trips that rises with it (e.g. 100k: 20%); below it, its growth slows, and the town card and the Treasury say so ("Gusau expects better buses"). Money goes into fleets, lanes, BRT.
+3. **The budget-year sweep (a trial).** Every 60 days, cash above your carry-over (the larger of your biggest named project's price and ₦50k) returns to the treasury; money set aside for a named project or borrowed is safe; a countdown in the Treasury drawer. True here (unspent budgets lapse at year end). *If it plays like the 80% cut did -- a confusing tax on progress -- it comes out.*
+4. **A second refinery.** Mid-game, a new privately owned refinery opens (the Dangote story): it needs crude brought in and its fuel moved out -- a new problem, a reason for rail.
+5. **Motor parks for danfos.** You build a park at a town: danfos load there, not on the road (less jam on the roads into it), and their levies reach you properly (the touts take less). The state's real role with danfos: managed, not fought.
+6. **A metro.** Last and biggest: a new mode for the biggest towns. Agreed knowing it stretches the slice.
+
+Alongside: **C11 measures goods by what they unlock** -- the growth cement and food make possible -- not by their share of income. And **an OpenCode player**: a text interface (state in, moves out, a run file saved) so a free model can playtest beside you.
+
+### Checks for Revision 4
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C11 (amended) | Goods matter | By day 150 of a good game, the chains (cement, food) account for at least a fifth of the original towns' growth since day 1 |
+| C16 | Money stays a decision | From day 150 to 250 of a good game (strategist or your playtest), money held stays under ~60 days of net, and the longest stretch with nothing built is under 20 days |
+| C17 | The sweep isn't a tax on progress (played) | You can say what the countdown wanted you to do, and it never took money you were saving for something |
+
+
 
 **Slice zero is the smallest game that tests this brief: roads, buses and danfos, with the new money and the new headline.** Everything else is already built and tested; it goes behind a switch in `tuning.ts`, not into the bin.
 
@@ -775,6 +798,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 | --- | --- | --- |
 | 2026-10-20 | Revision 3: goods that feel real, in chains -- sites with inputs and outputs that make nothing without their input (fuel, building, food), cargo by the map's region, long legs in hundreds of tonnes a day for freight rail, a brownfield refinery; built in order (fuel chain first), each measured and played | Agreed 2026-10-20 |
 | 2026-10-20 | Fuel reaches the passenger game: a town short of fuel raises its danfo fares, thins its danfos and raises your running costs there; roadside sellers appear where it runs dry (C12) | Agreed 2026-10-20 |
+| 2026-10-21 | Revision 4, the late game: no player lorries (haulage yards you build, hauliers licensed there; freight rail stays yours); towns expect better service as they grow; the budget-year sweep as a trial; a second refinery; motor parks for danfos; a metro, last. C11 amended to goods' growth effect; C16, C17 added; an OpenCode player | Agreed 2026-10-21 |
 | 2026-10-20 | Step 3, the food chain: staples by region from farm towns to one always-working mill, food to the market towns; cash crops by region straight to the port, paying an export payment per tonne; a market town's food draws trade -- more trips -- and room to grow (market trade), not a growth hold. 3a the chain and exports, 3b market trade | Agreed 2026-10-20 |
 | 2026-10-20 | Money, from the step 2 playtest: goods pay ₦0.25 a tonne a cell (from 0.1); a lorry hint on picking two towns; a steady levy on income replaces the treasury's 80% of surplus; bonds for named projects, repaid daily with interest, bounded by income; a Treasury panel (variants in the design lab first). In that order, each measured on the map 2791 run | Agreed 2026-10-20 |
 | 2026-10-20 | Step 2: cement holds a town's growth back past a free stretch of about +40% of its start (replacing stone's bonus); one cement works per map, working or idle by the seed (idle: imported cement through a terminal by the port until restored); built 2a cement, 2b workers, 2c growth around sites | Agreed 2026-10-20 |
