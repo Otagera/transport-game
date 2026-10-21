@@ -1494,7 +1494,7 @@ function renderCementSite(townId: string): void {
     lines = [
       `Makes up to ${capacity} t of cement a day, from ${t.limestonePerCement} t of limestone a tonne: ${perDay(limestoneArriving(world))} t of limestone a day is reaching it.`,
       `Towns grow their first ${pct(t.cementFreeShare)} with local materials; past that, only as far as their cement lets them.`,
-      "Its cement is split between the towns by what they want. Truckers take it on short hauls; the far towns' share waits for your lorries or freight trains.",
+      `Its cement is split between the towns by what they want. Truckers take it on short hauls; the far towns' share waits for ${haulierMove("your lorries or freight trains", "a haulage yard here (<kbd>Y</kbd>: hauliers reach further) or freight trains")}.`,
     ];
     if (!cement.working) {
       problem = "Idle. Restore it, and limestone quarries open for it; until then the towns get only imports.";
@@ -1551,7 +1551,22 @@ function renderMillSite(townId: string): void {
   const cap = perDay(millCapacity(world));
   let problem = "";
   if (stapleArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = `No ${food.crops.staple} arriving. Carry it in from the farm towns: ${haulierMove(`lorries (<kbd>L</kbd>)`, `build a haulage yard (<kbd>Y</kbd>) at a farm town so hauliers reach the mill`)}, or truckers will on the short hauls once a road joins them.`;
-  else if (out < cap * 0.6) problem = `Short of ${food.crops.staple}: ${perDay(stapleArriving(world))} of ${Math.round(cap * t.staplePerFood)} t a day. Carry more in from the farm towns further off.`;
+  else if (out < cap * 0.6) {
+    // Name the farm town whose staple is most stuck, with no yard yet (map 2418: "carry more
+    // in from the farm towns further off" didn't say which, or how).
+    const stuck = goodsFlows(world)
+      .filter((flow) => flow.to === food.millId && !world.yards.has(flow.from))
+      .map((flow) => {
+        const o = world.goods.outcomes.get(flowKey(flow));
+        return { from: flow.from, left: Math.max(0, flow.rate - (o?.delivered ?? 0) - (o?.trucked ?? 0)) };
+      })
+      .sort((p, q) => q.left - p.left)[0];
+    const where = stuck && perDay(stuck.left) >= 3 ? `: ${perDay(stuck.left)} t a day of ${townName(stuck.from)}'s waits there` : "";
+    problem = `Short of ${food.crops.staple}: ${perDay(stapleArriving(world))} of ${Math.round(cap * t.staplePerFood)} t a day. ${haulierMove(
+      "Carry more in from the farm towns further off.",
+      stuck && where ? `Build a haulage yard (<kbd>Y</kbd>) at ${townName(stuck.from)}${where}, so hauliers reach the mill.` : "Build haulage yards (<kbd>Y</kbd>) at the farm towns further off, so hauliers reach the mill.",
+    )}`;
+  }
   if (!problem) problem = siteProblem(townId);
   townEl.innerHTML = `
     <div class="town-card">
@@ -1561,7 +1576,7 @@ function renderMillSite(townId: string): void {
       <ul>
         <li>Makes ${food.crops.food} from the farm towns' ${food.crops.staple}: ${t.staplePerFood} t makes a tonne. ${perDay(stapleArriving(world))} t a day is reaching it.</li>
         <li>Its ${food.crops.food} is split between the market towns by what they want. A fed market draws trade: more trips, and room to grow.</li>
-        <li>Truckers take short hauls (yellow on each bar); the far markets' share waits for your lorries or freight trains.</li>
+        <li>Truckers take short hauls (yellow on each bar); the far markets' share waits for ${haulierMove("your lorries or freight trains", "a haulage yard here (<kbd>Y</kbd>) or freight trains")}.</li>
         ${workersItem(townId)}
       </ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}
@@ -1598,7 +1613,7 @@ function renderFlourMillSite(townId: string): void {
       ${productionHtml(townId)}
       <ul>
         <li>Mills imported wheat into flour: ${t.wheatPerFlour} t makes a tonne. ${perDay(wheatArriving(world))} t a day is reaching it from the port.</li>
-        <li>Its flour goes to the market towns, split by what they want: ${pct(t.flourWeight)} of a market's food. Truckers take short hauls; the far markets' share waits for your lorries or freight trains.</li>
+        <li>Its flour goes to the market towns, split by what they want: ${pct(t.flourWeight)} of a market's food. Truckers take short hauls; the far markets' share waits for ${haulierMove("your lorries or freight trains", "a haulage yard here (<kbd>Y</kbd>) or freight trains")}.</li>
         ${workersItem(townId)}
       </ul>
       ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}</p>` : ""}

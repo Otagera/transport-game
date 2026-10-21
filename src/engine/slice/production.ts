@@ -130,7 +130,10 @@ export function siteProduction(world: SliceWorld, siteId: string, flows: GoodsFl
     if (flow.from !== siteId) continue;
     out += flow.rate;
     const outcome = world.goods.outcomes.get(flowKey(flow));
-    away += (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+    // Each flow counts up to what it wants: one town's burst of a cleared backlog
+    // mustn't cover for towns getting nothing (map 2418: "carried away 100%" with
+    // six of seven towns at 0).
+    away += Math.min(flow.rate, (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0));
   }
   const shipped = smoothed(world, siteId, out > 0 ? Math.min(1, away / out) : 0);
   // The binding one: idle first; else the lowest of the inputs and the shift, if it bites.
