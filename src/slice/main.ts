@@ -1144,7 +1144,11 @@ function renderPanel(): void {
     townEl.innerHTML = `<p class="hint">Hover a town on the map to see it here: where its people want to go, and what it needs.</p>`;
   }
   // A town pointed at brings its wing out, tucked again when you look away (unless you're in it).
-  townWing.classList.toggle("out", town !== null);
+  // Mid-action -- the first town of a road, track or route clicked -- the wings stay
+  // tucked: a card coming out covers the other end you're about to click (playtest,
+  // map 2418: a road from Vom Terminal to Kabba Refinery, a card over each end).
+  const placing = selectedTown !== null && tool !== "fix" && tool !== "yard";
+  townWing.classList.toggle("out", town !== null && !placing);
   // Pointing at a town the left wing would cover: the card comes out on the right instead.
   // It stays there while you read it (the pointer on the card), and goes home once you leave.
   const at = town ? world.towns.get(town) ?? world.ruins.get(town) : undefined;
@@ -1344,6 +1348,9 @@ function expandHtml(siteId: string): string {
   if (!t.expandEnabled || (cost === null && level === 0)) return "";
   const done = level > 0 ? `Expanded ${level === 1 ? "once" : `${level} times`}: ${pct(siteScale(world, siteId))} of what it was built to make. ` : "";
   if (cost === null) return `<p class="hint">${done}As big as it gets.</p>`;
+  // Offered when it's near capacity: expanding a site that makes little adds nothing.
+  const p = siteProduction(world, siteId);
+  if (!p || p.made < 0.8 * p.capacity) return done ? `<p class="hint">${done}</p>` : "";
   const check = checkExpand(world, siteId);
   return `<p class="hint">${done}<span class="actions"><button data-expand="${siteId}" ${check.ok ? "" : `disabled title="${check.reason}"`}>Expand it: +${pct(t.expandStep)} capacity · ${naira(cost)}</button></span>${check.ok ? "" : ` <span class="muted">${check.reason}</span>`}</p>`;
 }
@@ -1411,10 +1418,16 @@ function renderFuelSite(townId: string): void {
     kicker = fuel.restored ? `Refinery · ${out} of ${capacity} t of fuel a day` : "Refinery · idle for years";
     lines = [
       `Turns crude into fuel: up to ${capacity} t a day, enough with the imports to supply every town.`,
-      `Its crude comes from ${source.name}. Tankers don't carry crude: only your lorries (on a road) or freight trains (on track) do. Track is dear on a leg this long; full lorries pay too.`,
+      haulierMove(
+        `Its crude comes from ${source.name}. Tankers don't carry crude: only your lorries (on a road) or freight trains (on track) do. Track is dear on a leg this long; full lorries pay too.`,
+        `Its crude comes from ${source.name}: by freight train on track, or by hauliers on a road from a haulage yard (<kbd>Y</kbd>) at ${source.name}. Track is dear on a leg this long.`,
+      ),
       "Its fuel goes to the towns by road tanker, so it needs a road out.",
     ];
-    if (!fuel.restored) {
+    if (fuel.restored && isCutOff(world, townId)) {
+      // No road at all comes first: no crude in, no fuel out, and its workers can't get there.
+      problem = `No road reaches it: no crude can come in, no fuel go out, and its workers can't get there. Build one (<kbd>R</kbd>)${nearestTown ? ` to ${townName(nearestTown.id)}` : ""}.`;
+    } else if (!fuel.restored) {
       problem = `Idle. Restore it, then get crude to it from ${source.name}.`;
       action = `<span class="actions"><button data-restore-refinery="1">Restore it: ${naira(t.refineryRestoreCost)}</button>${world.economy.funds < t.refineryRestoreCost ? bondButton("refinery") : ""}</span>`;
     } else if (refineryOutput(world) * SECONDS_PER_GAME_DAY < 1) {
@@ -1426,10 +1439,14 @@ function renderFuelSite(townId: string): void {
     kicker = site.industry === "oilfield" ? "Oilfield · crude" : "Pipeline terminal · crude from the south";
     lines = [
       `${crude} t of crude a day for ${refinery.name}${fuel.restored ? "" : ", once it's restored"}.`,
-      "Only you carry crude: by lorry on a road, or by freight train on track. Full lorries pay; track is dear on a leg this long.",
+      haulierMove(
+        "Only you carry crude: by lorry on a road, or by freight train on track. Full lorries pay; track is dear on a leg this long.",
+        "Nobody trucks crude unless you build a haulage yard (<kbd>Y</kbd>) here: then hauliers take it by road. Or a freight train on track.",
+      ),
     ];
     if (!fuel.restored) problem = `Waiting on ${refinery.name}: until it's restored, nobody wants this crude.`;
-    else if (!railPath(world, townId, fuel.refineryId) && !roadPath(world, townId, fuel.refineryId)) problem = `No way to ${refinery.name}: lay track (<kbd>K</kbd>) or build a road (<kbd>R</kbd>) to it.`;
+    else if (!railPath(world, townId, fuel.refineryId) && !roadPath(world, townId, fuel.refineryId)) problem = `No way to ${refinery.name}: lay track (<kbd>K</kbd>) for a freight train, or build a road (<kbd>R</kbd>)${world.tuning.noPlayerLorries ? " and a haulage yard (<kbd>Y</kbd>) here" : ""}.`;
+    else if (world.tuning.noPlayerLorries && world.tuning.yardsEnabled && !world.yards.has(townId) && !railPath(world, townId, fuel.refineryId)) problem = `A road reaches ${refinery.name}, but nobody trucks crude: build a haulage yard (<kbd>Y</kbd>) here, or run a freight train on track.`;
   }
   if (!problem) problem = siteProblem(townId);
   townEl.innerHTML = `
