@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**578 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**581 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Where things stand (2026-10-21)
@@ -41,7 +41,15 @@ hold up under play"). Built and played, in order:
 | C14 no dead stretch (days 60–150) | Passes in play (longest 13 days, map 2411); **fails after ~day 200** (stretches up to 32 days, ₦100–340k idle) -- site expansion is the first answer, in your playtest now |
 | C15 it feels like this place | Yours to answer |
 
-**Now:** your playtest of the merged build (expansion, exports at ₦20, the look) to ~day 250.
+**Revision 4, the late game** (brief): steps 1-3 merged 2026-10-21 -- no player lorries, haulage
+yards (Y; a yard at the crude source lets hauliers truck crude), towns expecting service (the
+town card's Service line), the budget-year sweep as a trial (the Treasury's countdown). The
+strategist on maps 0 and 2411: money held peaks ₦139-175k (was ₦305k), the sweep took
+₦85-196k, the bot already meets the expectations; late-game stretches with nothing built
+remain -- steps 4-6 (a second refinery, motor parks, a metro) are for that. `scripts/slice-play.ts`
+plays the game from a terminal for an OpenCode player.
+
+**Before that:** your playtest of expansion, exports at ₦20, the look.
 In a worktree meanwhile: **the strategist** (`scripts/slice-strategist.ts`), a long-game bot
 that plays the ladder and the chains from the game's own advice and measures C2, C11 and C14
 on several maps -- the bots in `slice-bots.ts` predate rail and the chains. **Then the
