@@ -3439,3 +3439,20 @@ describe("Revision 4: towns expect service; the budget-year sweep", () => {
     expect(w.sweep.endsAtSeconds).toBeGreaterThan(w.economy.elapsedSeconds);
   });
 });
+
+describe("Revision 4: haulage yards", () => {
+  test("a yard lets hauliers carry from a place further and faster, crude included from a yard at the source", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const fuel = w.fuel!;
+    w.economy.funds = 1e7;
+    expect(applyAction(w, { kind: "lorry", a: fuel.sourceId, b: fuel.refineryId }).ok).toBe(false); // no player lorries
+    applyAction(w, { kind: "road", a: fuel.sourceId, b: fuel.refineryId, alignment: "cheapest" });
+    w.goods.yards.set(fuel.sourceId, new Map([[`${fuel.refineryId}|supplies`, 500]]));
+    truckersPickUp(w, 1);
+    expect(w.truckers.size).toBe(0); // nobody trucks crude
+    expect(applyAction(w, { kind: "yard", townId: fuel.sourceId }).ok).toBe(true);
+    expect(applyAction(w, { kind: "yard", townId: fuel.sourceId }).ok).toBe(false); // one is enough
+    truckersPickUp(w, 1);
+    expect([...w.truckers.values()].reduce((s, t) => s + t, 0)).toBeGreaterThan(0);
+  });
+});

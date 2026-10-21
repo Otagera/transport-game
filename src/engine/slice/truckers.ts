@@ -49,9 +49,11 @@ export function truckersPickUp(world: SliceWorld, dt: number): void {
       const path = roadPath(world, from, to);
       if (!path) continue;
       // Fuel goes by road tanker, far: nearly all of it does here (fuel.ts).
-      // Crude doesn't go by the roadside: it's moved under contract -- yours.
+      // Crude doesn't go by the roadside: it's moved under contract -- yours,
+      // by rail, or hauliers' from a yard at the source (Revision 4: with no
+      // player lorries, a refinery mustn't need track to get any crude).
       const site = world.towns.get(from)?.industry;
-      if (site === "oilfield" || site === "terminal") continue;
+      if ((site === "oilfield" || site === "terminal") && !(tuning.yardsEnabled && hasYard(world, from))) continue;
       // From a haulage yard (yards.ts), hauliers reach further and load faster.
       const atYard = tuning.yardsEnabled && hasYard(world, from);
       const reach = Math.max(isFuelSite(world.towns.get(from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells, atYard ? tuning.yardReachCells : 0);

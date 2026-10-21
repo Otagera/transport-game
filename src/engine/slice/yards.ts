@@ -10,7 +10,8 @@ import { SWITCHED_OFF } from "./tuning";
 // or a site; from it, hauliers reach `yardReachCells` instead of their usual
 // short hauls, and load `yardPickupBoost` times as fast -- so a chain's
 // middle legs move without you, as far as the yard's reach and the roads
-// allow. You collect `yardLevyPerTonne` on every load lifted there, the touts
+// allow -- crude included, from a yard at the oilfield or terminal (nobody
+// trucks it otherwise). You collect `yardLevyPerTonne` on every load lifted there, the touts
 // taking `yardToutShare` of it (a yard is run properly; a roadside park
 // isn't). The long legs past a yard's reach stay rail's, and yours.
 
