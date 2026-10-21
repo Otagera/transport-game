@@ -2296,6 +2296,12 @@ function moneyNote(): string {
 }
 
 // The Treasury drawer's buttons (bonds, a project dropped) are the panel's: one handler.
+// A press held on a panel holds the panel still until it's released (frame(): a redraw
+// mid-click swallowed the click).
+let panelPressed = false;
+for (const panel of [routesEl, townEl, treasuryEl]) panel.addEventListener("pointerdown", () => (panelPressed = true));
+window.addEventListener("pointerup", () => (panelPressed = false));
+window.addEventListener("pointercancel", () => (panelPressed = false));
 treasuryEl.addEventListener("click", (event) => onPanelClick(event));
 townEl.addEventListener("click", (event) => onPanelClick(event));
 // A click on a wing's spine pins it out (and again unpins it): hover alone is no good on touch.
@@ -2537,7 +2543,10 @@ function frame(now: number): void {
   if (panelTimer > 0.25) {
     panelTimer = 0;
     renderStrip();
-    renderPanel();
+    // Not while a button in a panel is pressed: redrawing replaces the button under
+    // the pointer, and a click needs the same one pressed and released (playtest:
+    // "Keep it up" took several clicks -- the panel redraws every quarter second).
+    if (!panelPressed) renderPanel();
   }
   // Every frame: a hint pinned to a town follows it, and hovering dismisses hint 1 at once.
   renderHint();
