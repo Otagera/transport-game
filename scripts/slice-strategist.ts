@@ -1,0 +1,316 @@
+// The strategist: a long-game bot for Revision 3's checks (docs/brief.md,
+// Checks for Revision 3; status.md: "the bots don't play the ladder"). The
+// personas in slice-bots.ts play 40 days with buses and roads; the checks
+// that matter now -- C2, C4, C5, C11, C14 -- need a game played to day 250
+// with the whole ladder and the chains. This plays one the way a sensible
+// player does, from the game's own advice, once a game day:
+//
+//   - connect a cut-off town; add a vehicle where riders find no seat
+//     (namedMoves: what the screen names), keep up a worn road it runs on;
+//   - climb: a town grown to all its road allows gets the next rung (pave,
+//     a bus lane, rail and a train), saved for or borrowed for;
+//   - chains: restore the refinery or the works when towns are short (cash,
+//     else a bond), give sites a road, buy a lorry where the lorry hint says
+//     one more pays, expand a site that's at capacity while towns go short;
+//   - prune: sell a route that's lost money five days running.
+//
+// No forecasts: it's the player who reads the screen, not the oracle, and
+// it runs ~250 days a map in a minute or two. It measures as it plays.
+//
+//   bun scripts/slice-strategist.ts                     # maps 0, 543, 2411; 250 days
+//   SEEDS=1,2 DAYS=300 bun scripts/slice-strategist.ts
+//   SLICE_TUNING='{"goodsFarePerTonneCell":0.15}' ...  # tuning overrides
+//   LOG=1 ...                                           # every move as it's made
+
+import { SLICE_MAP } from "../src/slice/map";
+import { startRun } from "../src/engine/slice/runlog";
+import { applyAction, type ActionSpec } from "../src/engine/slice/actions";
+import { sliceTick } from "../src/engine/slice/tick";
+import { SIM_DT } from "../src/engine/loop";
+import { SECONDS_PER_GAME_DAY as D } from "../src/engine/economy/state";
+import { affordable, namedMoves, noSeatPairs } from "../src/engine/slice/problems";
+import { diagnoseRoute, pairDemand } from "../src/engine/slice/world";
+import { isRailRoute } from "../src/engine/slice/rail";
+import { roadFull } from "../src/engine/slice/growth";
+import { rungPrice } from "../src/engine/slice/project";
+import { headline, isCutOff, paveCost, roadPath, routeSummaries, roadCost } from "../src/engine/slice/world";
+import { averageNet } from "../src/engine/slice/history";
+import { goodsFlows, lorryEstimate, lorrySummaries } from "../src/engine/slice/goods";
+import { siteProduction } from "../src/engine/slice/production";
+import { expandCost } from "../src/engine/slice/expand";
+import { checkBond } from "../src/engine/slice/bonds";
+import { fuelSupply } from "../src/engine/slice/fuel";
+import { townGrowth } from "../src/engine/slice/growth";
+import { marketFed, marketTowns } from "../src/engine/slice/food";
+import type { SliceWorld } from "../src/engine/slice/types";
+
+const SEEDS = (process.env.SEEDS ?? "0,543,2411").split(",").map(Number);
+const DAYS = Number(process.env.DAYS ?? 250);
+const OVERRIDES = JSON.parse(process.env.SLICE_TUNING ?? "{}");
+const LOG = !!process.env.LOG;
+/** Kept back for running costs and a bad week: no move spends below it. */
+const RESERVE = 2500;
+/** A lorry is bought where the hint says one more earns this much over its cost. */
+const LORRY_MARGIN = 1.15;
+
+interface Day {
+  day: number;
+  funds: number;
+  net: number;
+  trips: number;
+  people: number;
+  fares: number;
+  goods: number;
+  income: number;
+  moves: number;
+  /** Moves that build: not a lorry bought, a route sold, or a road kept up -- C14's "a move worth making". */
+  builds: number;
+  /** Waiting on money: a rung it wants that it can't afford yet. */
+  waiting: boolean;
+}
+
+const ticksPerDay = Math.round(D / SIM_DT);
+const pop = (world: SliceWorld) => [...world.towns.values()].filter((t) => !t.industry).reduce((s, t) => s + t.population, 0);
+const spend = (world: SliceWorld, price: number) => world.economy.funds - price >= RESERVE;
+
+// Routes it sold, and the day: it doesn't buy back into a loser for SOLD_DAYS (the screen
+// keeps naming a seat move on a route that can't pay; a player learns, so does this).
+const SOLD_DAYS = 40;
+const sold = new Map<string, number>();
+/** Every move made, by kind, and the building ones made today. */
+const made = new Map<string, number>();
+let buildsToday = 0;
+const pairOf = (action: ActionSpec) => ("a" in action && "b" in action ? [action.a, action.b].sort().join("~") : null);
+
+function act(world: SliceWorld, day: number, action: ActionSpec, why: string): boolean {
+  const pair = pairOf(action);
+  if (pair && ["bus", "minibus", "lorry"].includes(action.kind) && day - (sold.get(`${action.kind}:${pair}`) ?? -Infinity) < SOLD_DAYS) return false;
+  const result = applyAction(world, action);
+  if (result.ok) {
+    made.set(action.kind, (made.get(action.kind) ?? 0) + 1);
+    if (!["lorry", "sell", "fix"].includes(action.kind)) buildsToday += 1;
+  }
+  if (result.ok && LOG) console.log(`  day ${day}: ${why} -- ${JSON.stringify(action)}`);
+  return result.ok;
+}
+
+/** One game day's decisions. Returns the moves made, and whether it's waiting on money for a rung. */
+function decide(world: SliceWorld, day: number, losing: Map<string, number>): { moves: number; waiting: boolean } {
+  let moves = 0;
+  let waiting = false;
+  const did = (ok: boolean) => (ok ? (moves += 1, true) : false);
+
+  // Prune: a route a week in the red, past its first fortnight (riders take days to find a
+  // new one), loses a vehicle -- unless its card says it's short of vehicles, not riders.
+  const now = world.economy.elapsedSeconds;
+  const opened = new Map([...world.routes, ...world.lorryRoutes].map((r) => [r.id, r.openedAtSeconds]));
+  for (const route of [...routeSummaries(world), ...lorrySummaries(world)]) {
+    const days = route.netPerDay < -10 ? (losing.get(route.id) ?? 0) + 1 : 0;
+    losing.set(route.id, days);
+    const age = (now - (opened.get(route.id) ?? now)) / D;
+    const verdict = diagnoseRoute(world, route.id)?.verdict;
+    if (days >= 7 && age >= 15 && verdict !== "full" && verdict !== "waiting") {
+      did(act(world, day, { kind: "sell", routeId: route.id }, `sell, ${Math.round(route.netPerDay)}/day`));
+      losing.set(route.id, 0);
+      const kind = route.id.startsWith("lorry:") ? "lorry" : route.id.startsWith("mini:") ? "minibus" : "bus";
+      sold.set(`${kind}:${[route.a, route.b].sort().join("~")}`, day);
+    }
+  }
+  // Losing money overall: only pruning until it's back above water.
+  if (averageNet(world) < 0 && world.economy.funds < 3 * RESERVE) return { moves, waiting };
+
+  // Climb: the first town grown to all its road allows gets the next rung.
+  const full = [...world.basePopulation.keys()].map((id) => roadFull(world, id)).find((f) => f?.road && !f.thin);
+  if (full?.road) {
+    const { a, b } = full.road;
+    if (full.next === "paved") {
+      if (spend(world, paveCost(world, a, b))) did(act(world, day, { kind: "pave", a, b }, "the road is full: pave it"));
+    } else {
+      const rung = full.next;
+      const price = rungPrice(world, a, b, rung);
+      if (Number.isFinite(price) && spend(world, price)) {
+        if (rung === "lane") {
+          if (did(act(world, day, { kind: "lane", a, b }, "the road is full: a lane"))) act(world, day, { kind: "brt", a, b }, "a BRT bus on it");
+        } else if (did(act(world, day, { kind: "track", a, b, alignment: "cheapest" }, "the road is full: rail"))) act(world, day, { kind: "train", a, b }, "a train on it");
+      } else if (Number.isFinite(price)) {
+        waiting = true;
+        if (!world.project) act(world, day, { kind: "project", a, b, rung }, "save for it");
+        else if (checkBond(world, "project").ok && world.project.a === a && world.project.b === b) did(act(world, day, { kind: "bond", purpose: "project" }, "borrow the rest"));
+      }
+    }
+  }
+
+  // Connect a cut-off town: the cheapest road from it to one on the network.
+  const cut = [...world.basePopulation.keys()].filter((id) => isCutOff(world, id));
+  for (const id of cut.slice(0, 1)) {
+    const town = world.towns.get(id)!;
+    const near = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id)).sort((p, q) => Math.hypot(p.x - town.x, p.y - town.y) - Math.hypot(q.x - town.x, q.y - town.y))[0];
+    if (near && spend(world, roadCost(world, id, near.id))) did(act(world, day, { kind: "road", a: id, b: near.id, alignment: "cheapest" }, "connect a cut-off town"));
+  }
+
+  // Passengers, by the route cards: another vehicle where a route is full or its riders wait,
+  // and one vehicle earns more than it costs. Two a day at most.
+  let added = 0;
+  for (const route of routeSummaries(world)) {
+    if (added >= 2 || isRailRoute(route.id)) continue;
+    const d = diagnoseRoute(world, route.id);
+    if (!d || (d.verdict !== "full" && d.verdict !== "waiting" && d.verdict !== "poached") || d.incomePerVehicle < (d.verdict === "full" ? 0.9 : 1.1) * d.costPerVehicle) continue;
+    const kind = route.id.startsWith("mini:") ? "minibus" : route.id.startsWith("brt:") ? "brt" : "bus";
+    const price = kind === "minibus" ? world.tuning.minibusPurchaseCost : kind === "brt" ? world.tuning.brtPurchaseCost : world.tuning.busPurchaseCost;
+    if (spend(world, price) && did(act(world, day, { kind, a: route.a, b: route.b }, `${d.verdict}: another ${kind}`))) added += 1;
+  }
+  // A new route on the worst no-seat pair nobody of yours serves: a bus where it's busy, else a minibus. One a day.
+  const served = (a: string, b: string) => [...world.routes].some((r) => {
+    const v = world.simulation.vehicles.find((x) => x.id === r.vehicleIds[0]);
+    return v && v.path.includes(a) && v.path.includes(b);
+  });
+  let pair = noSeatPairs(world).find((p) => p.perDay >= 60 && !served(p.a, p.b));
+  // With money to spare, the busiest trip nobody of yours carries, whoever does now: a player
+  // reads the desire lines, not only the empty platforms.
+  if (!pair && world.economy.funds > 20000) {
+    const towns = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id));
+    let best: { a: string; b: string; perDay: number } | null = null;
+    for (let i = 0; i < towns.length; i += 1) for (let j = i + 1; j < towns.length; j += 1) {
+      const a = towns[i]!.id, b = towns[j]!.id;
+      if (served(a, b) || !roadPath(world, a, b)) continue;
+      const perDay = pairDemand(world, a, b) * D;
+      if (perDay >= 80 && (!best || perDay > best.perDay)) best = { a, b, perDay };
+    }
+    if (best && day - (sold.get(`bus:${[best.a, best.b].sort().join("~")}`) ?? -Infinity) >= SOLD_DAYS) pair = best;
+  }
+  if (pair) {
+    const kind = pair.perDay >= 150 ? "bus" : "minibus";
+    if (spend(world, kind === "bus" ? world.tuning.busPurchaseCost : world.tuning.minibusPurchaseCost)) did(act(world, day, { kind, a: pair.a, b: pair.b }, `${Math.round(pair.perDay)} a day find no seat: a ${kind}`));
+  }
+  // What else the screen names that builds: a worn road kept up, a road paved. One a day.
+  for (const move of namedMoves(world).filter((m) => ["fix", "pave", "road"].includes(m.action.kind)).sort((p, q) => p.price - q.price).slice(0, 1)) {
+    if (affordable(world, move) && spend(world, move.price)) did(act(world, day, move.action, move.label));
+  }
+
+  // Chains. The refinery: restored once three towns run short; a road out; crude by lorry.
+  const fuel = world.fuel;
+  if (fuel) {
+    const short = [...world.basePopulation.keys()].filter((id) => (fuelSupply(world, id)?.supplied ?? 1) < 0.6).length;
+    if (!fuel.restored && short >= 3) {
+      if (spend(world, world.tuning.refineryRestoreCost)) did(act(world, day, { kind: "restoreRefinery" }, "towns short of fuel: restore the refinery"));
+      else if (checkBond(world, "refinery").ok) did(act(world, day, { kind: "bond", purpose: "refinery" }, "towns short of fuel: borrow for the refinery"));
+    }
+    if (fuel.restored) siteRoads(world, day, fuel.refineryId, did);
+    if (fuel.restored && !roadPath(world, fuel.sourceId, fuel.refineryId) && spend(world, roadCost(world, fuel.sourceId, fuel.refineryId))) {
+      did(act(world, day, { kind: "road", a: fuel.sourceId, b: fuel.refineryId, alignment: "cheapest" }, "a road for crude"));
+    }
+  }
+  // The works: restored once cement holds 10k people back.
+  const cement = world.cement;
+  if (cement && !cement.working) {
+    const held = [...world.basePopulation.keys()].reduce((s, id) => s + (townGrowth(world, id)?.cementHeld ?? 0), 0);
+    if (held >= 10) {
+      if (spend(world, world.tuning.worksRestoreCost)) did(act(world, day, { kind: "restoreWorks" }, "cement short: restore the works"));
+      else if (checkBond(world, "works").ok) did(act(world, day, { kind: "bond", purpose: "works" }, "cement short: borrow for the works"));
+    }
+  }
+  // Every working site and open quarry gets a road to the network.
+  for (const site of [...world.towns.values()].filter((t) => t.industry && t.industry !== "oilfield" && t.industry !== "terminal")) siteRoads(world, day, site.id, did);
+
+  // Lorries where one more pays, by the hint: one a day at most, best first.
+  const pairs = new Map<string, { a: string; b: string; margin: number }>();
+  for (const flow of goodsFlows(world)) {
+    const [a, b] = flow.from < flow.to ? [flow.from, flow.to] : [flow.to, flow.from];
+    if (pairs.has(`${a}~${b}`) || !roadPath(world, a, b)) continue;
+    const e = lorryEstimate(world, a, b);
+    if (e && e.tonnesPerDay >= 5) pairs.set(`${a}~${b}`, { a, b, margin: e.incomePerDay / e.costPerDay });
+  }
+  for (const pair of [...pairs.values()].filter((p) => p.margin >= LORRY_MARGIN).sort((p, q) => q.margin - p.margin).slice(0, 1)) {
+    if (spend(world, world.tuning.lorryPurchaseCost)) did(act(world, day, { kind: "lorry", a: pair.a, b: pair.b }, `a lorry pays here (${pair.margin.toFixed(2)}x)`));
+  }
+
+  // Expand a site at capacity while its towns go short.
+  const shortOf = (siteId: string) => {
+    const kind = world.towns.get(siteId)?.industry;
+    if (kind === "works") return [...world.basePopulation.keys()].reduce((s, id) => s + (townGrowth(world, id)?.cementHeld ?? 0), 0) >= 10;
+    if (kind === "refinery") return [...world.basePopulation.keys()].some((id) => (fuelSupply(world, id)?.supplied ?? 1) < 0.6);
+    return marketTowns(world).some((t) => marketFed(world, t.id) < 0.5);
+  };
+  for (const site of [...world.towns.values()].filter((t) => t.industry)) {
+    const p = siteProduction(world, site.id);
+    const cost = expandCost(world, site.id);
+    if (!p || cost === null || p.limit !== "capacity" || !shortOf(site.id)) continue;
+    if (spend(world, cost)) did(act(world, day, { kind: "expand", siteId: site.id }, `${site.name} at capacity: expand it`));
+  }
+  return { moves, waiting };
+}
+
+/** A road from a site to the nearest town on the network, if it has none. */
+function siteRoads(world: SliceWorld, day: number, siteId: string, did: (ok: boolean) => boolean): void {
+  if (!isCutOff(world, siteId)) return;
+  const site = world.towns.get(siteId)!;
+  const near = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id)).sort((p, q) => Math.hypot(p.x - site.x, p.y - site.y) - Math.hypot(q.x - site.x, q.y - site.y))[0];
+  if (near && spend(world, roadCost(world, siteId, near.id))) did(act(world, day, { kind: "road", a: siteId, b: near.id, alignment: "cheapest" }, `a road to ${site.name}`));
+}
+
+function play(seed: number): { seed: number; days: Day[]; world: SliceWorld } {
+  const world = startRun(SLICE_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, OVERRIDES);
+  const losing = new Map<string, number>();
+  const days: Day[] = [];
+  let last = { ...world.budget };
+  for (let day = 1; day <= DAYS; day += 1) {
+    buildsToday = 0;
+    const { moves, waiting } = decide(world, day, losing);
+    const builds = buildsToday;
+    for (let i = 0; i < ticksPerDay; i += 1) sliceTick(world, SIM_DT);
+    const b = world.budget;
+    const fares = b.fares - last.fares;
+    const goods = b.goods - last.goods;
+    const income = fares + goods + (b.tolls - last.tolls) + (b.levies - last.levies) + (b.loading - last.loading) + (b.allocation - last.allocation) + (b.exports - last.exports);
+    last = { ...b };
+    days.push({ day, funds: world.economy.funds, net: averageNet(world), trips: headline(world).tripsPerDay, people: pop(world), fares, goods, income, moves, builds, waiting });
+  }
+  return { seed, days, world };
+}
+
+/** The longest run of days in [from, to] with no move made. */
+function longestQuiet(days: Day[], from: number, to: number): { length: number; start: number } {
+  let best = { length: 0, start: 0 };
+  let run = 0;
+  for (const d of days.filter((x) => x.day >= from && x.day <= to)) {
+    run = d.builds === 0 ? run + 1 : 0;
+    if (run > best.length) best = { length: run, start: d.day - run + 1 };
+  }
+  return best;
+}
+
+const k = (n: number) => `₦${Math.round(n / 1000)}k`;
+for (const seed of SEEDS) {
+  const started = performance.now();
+  const { days, world } = play(seed);
+  const at = (day: number) => days[Math.min(day, days.length) - 1]!;
+  const window = (from: number, to: number) => days.filter((d) => d.day > from && d.day <= to);
+  const share = (from: number, to: number) => {
+    const w = window(from, to);
+    const income = w.reduce((s, d) => s + d.income, 0);
+    return income > 0 ? w.reduce((s, d) => s + d.goods, 0) / income : 0;
+  };
+  console.log(`\nmap ${seed} (${((performance.now() - started) / 1000).toFixed(0)} s)`);
+  console.log("  day   funds    net/day  trips  people  goods share  moves (last 50 days)");
+  for (const day of [60, 100, 150, 200, 250, 300].filter((d) => d <= DAYS)) {
+    const d = at(day);
+    console.log(`  ${String(day).padStart(3)}  ${k(d.funds).padStart(7)}  ${String(Math.round(d.net)).padStart(7)}  ${String(Math.round(d.trips)).padStart(5)}  ${String(Math.round(d.people)).padStart(5)}k  ${String(Math.round(share(day - 20, day) * 100)).padStart(9)}%  ${window(day - 50, day).reduce((s, x) => s + x.moves, 0)}`);
+  }
+  const q1 = longestQuiet(days, 60, 150);
+  const q2 = longestQuiet(days, 150, DAYS);
+  const waited = window(20, 60).filter((d) => d.waiting).length;
+  const lorries = lorrySummaries(world);
+  const rungs = new Map<string, number>();
+  for (const s of world.simulation.map.segments) {
+    const r = s.type === "rail" ? "rail" : s.busLane ? "lane" : s.surface === "paved" ? "paved" : "dirt";
+    rungs.set(r, (rungs.get(r) ?? 0) + 1);
+  }
+  console.log(`  C11 goods share of income, days 80-100: ${Math.round(share(80, 100) * 100)}% (wanted 20-40%)`);
+  console.log(`  C14 longest stretch with nothing built (lorries, selling, upkeep aside), days 60-150: ${q1.length} days from day ${q1.start} (wanted < 15); after 150: ${q2.length} from day ${q2.start}`);
+  console.log(`  C2 days 20-60 waiting on money for a rung: ${waited} of 40 (wanted >= 10)`);
+  console.log(`  rungs (road pieces): ${[...rungs].map(([r, n]) => `${r} ${n}`).join(", ")} | most money held ${k(Math.max(...days.map((d) => d.funds)))}`);
+  console.log(`  moves: ${[...made].sort((x, y) => y[1] - x[1]).map(([kind, n]) => `${kind} ${n}`).join(", ")}`);
+  made.clear();
+  sold.clear();
+  console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);
+}
