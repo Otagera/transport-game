@@ -57,10 +57,14 @@ export function truckersPickUp(world: SliceWorld, dt: number): void {
       // From a haulage yard (yards.ts), hauliers reach further and load faster.
       const atYard = tuning.yardsEnabled && hasYard(world, from);
       const reach = Math.max(isFuelSite(world.towns.get(from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells, atYard ? tuning.yardReachCells : 0);
-      const take = Math.min(amount, amount * pickup * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach));
+      // No more than a few loads held a destination (truckerHoldLoads): the rest stays at the
+      // yard, where it shows as waiting and spoils if nobody comes (map 2418, day 233:
+      // hauliers held 4,214 t of cement for Katsina-Ala, delivering none -- it vanished).
+      const k = heldKey(from, to, kind);
+      const room = Math.max(0, (tuning.truckerHoldLoads ?? Infinity) * tuning.truckLoad - (world.truckers.get(k) ?? 0));
+      const take = Math.min(amount, room, amount * pickup * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach));
       if (take <= 0) continue;
       yard.set(key, amount - take);
-      const k = heldKey(from, to, kind);
       world.truckers.set(k, (world.truckers.get(k) ?? 0) + take);
     }
   }
@@ -91,7 +95,10 @@ export function dispatchTrucks(world: SliceWorld, takings: Takings, fits: (segme
     // through a jammed road slowly, never not at all (fuel.ts). It still
     // takes its road space and slows what's there.
     const tanker = isFuelSite(world.towns.get(from));
-    if (!path || (!tanker && !fits(path.segmentIds, tuning.lorryRoadSpace))) continue;
+    // Freight isn't held to the danfos' share of the road either, now goods depend on
+    // hauliers (Revision 4): waiting for it, trucks never left busy towns (map 2418).
+    const free = tanker || tuning.trucksFreeOfDanfoBudget;
+    if (!path || (!free && !fits(path.segmentIds, tuning.lorryRoadSpace))) continue;
     const id = `truck-${world.nextId++}`;
     const vehicle = createOneShotVehicle(id, from, to, simulation.routing, tuning.truckSpeed, tuning.truckLoad, tuning.lorryRoadSpace, new Map());
     if (!vehicle) continue;
@@ -113,7 +120,7 @@ export function dispatchTrucks(world: SliceWorld, takings: Takings, fits: (segme
     // A tanker shares the road (its traffic congests it), not the danfos'
     // share of it: counted against their budget, the fuel's long slow hauls
     // crowded danfos off the roads and cut trips made by a quarter.
-    if (tanker) continue;
+    if (free) continue;
     informal.active.set(id, { segmentIds: path.segmentIds, weight: tuning.lorryRoadSpace, mode: "truck", released: 0 });
     for (const segmentId of path.segmentIds) informal.segmentSpace.set(segmentId, (informal.segmentSpace.get(segmentId) ?? 0) + tuning.lorryRoadSpace);
   }

@@ -119,6 +119,11 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // (₦0.4 at a market), the touts a fifth (half at a market). First
   // guesses, to measure with the strategist.
   noPlayerLorries: true,
+  // Hauliers' trucks: free of the danfos' road share (their traffic still slows the
+  // road), and holding at most two loads a destination -- map 2418 to day 233, held
+  // 4,214 t of cement for one town and delivered none.
+  trucksFreeOfDanfoBudget: true,
+  truckerHoldLoads: 2,
   // Towns expect better service as they grow (Revision 4, 2): from 80k, 15%
   // of their trips, a point more each 10k, 35% at most (280k). Short of it, a
   // town keeps only part of what your service would grow it to. First

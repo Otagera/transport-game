@@ -1503,9 +1503,9 @@ describe("slice: rail (step 4d)", () => {
   });
 
   test("a train is never road traffic: it adds no flow, wear or roadside-town traffic", () => {
-    // No informal sector: with only trains moving, any road flow would be the trains'.
+    // No informal sector (hauliers' trucks held to its road space too): with only trains moving, any road flow would be the trains'.
     // (With danfos about, trains do lower road traffic -- by taking riders who'd have given up.)
-    const w = railWorld({ informalRoadSpace: 0, informalRoadSpaceDirt: 0 });
+    const w = railWorld({ informalRoadSpace: 0, informalRoadSpaceDirt: 0, trucksFreeOfDanfoBudget: false });
     buildTrack(w, "big", "far");
     for (let i = 0; i < 6; i += 1) addTrain(w, "big", "far");
     run(w, 200);
@@ -3465,5 +3465,19 @@ describe("Revision 4: haulage yards", () => {
     expect(applyAction(w, { kind: "yard", townId: fuel.sourceId }).ok).toBe(false); // one is enough
     truckersPickUp(w, 1);
     expect([...w.truckers.values()].reduce((s, t) => s + t, 0)).toBeGreaterThan(0);
+  });
+});
+
+describe("hauliers: no hoarding (map 2418, day 233)", () => {
+  test("they hold at most a few loads a destination; the rest waits at the yard", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const works = w.cement!.worksId;
+    w.yards.add(works);
+    const to = [...w.basePopulation.keys()][0]!;
+    w.goods.yards.set(works, new Map([[`${to}|supplies`, 10_000]]));
+    for (let i = 0; i < 200; i += 1) truckersPickUp(w, 1);
+    const held = w.truckers.get(`${works}|${to}|supplies`) ?? 0;
+    expect(held).toBeLessThanOrEqual(w.tuning.truckerHoldLoads * w.tuning.truckLoad + 1e-9);
+    expect(w.goods.yards.get(works)!.get(`${to}|supplies`)!).toBeGreaterThan(9_000);
   });
 });

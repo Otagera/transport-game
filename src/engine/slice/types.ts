@@ -189,6 +189,13 @@ export interface SliceTuning {
    */
   noPlayerLorries: boolean;
   /**
+   * Hauliers' trucks don't wait for the danfos' share of the road (truckers.ts), as tankers
+   * don't; and they hold at most this many truckloads a destination, the rest left at the yard.
+   * Run files without them replay as played.
+   */
+  trucksFreeOfDanfoBudget: boolean;
+  truckerHoldLoads: number;
+  /**
    * Towns expect better service as they grow (growth.ts expectedShare, Revision 4, 2): on; from
    * what size (thousands); the share expected there; added a thousand people; at most.
    */
