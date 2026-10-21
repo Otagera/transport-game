@@ -49,6 +49,22 @@ strategist on maps 0 and 2411: money held peaks ₦139-175k (was ₦305k), the s
 remain -- steps 4-6 (a second refinery, motor parks, a metro) are for that. `scripts/slice-play.ts`
 plays the game from a terminal for an OpenCode player.
 
+**Revision 4, step 4, the second refinery: merged 2026-10-21 for your playtest, not yet
+settled.** A private refinery opens once, on a seeded day 90-120, by the port and far from the
+crude, working but with no road (`fuel.ts` `updateNewRefinery`; a toast that pauses the game
+once). It wants crude from the same source, fills what imports and the old refinery leave
+short, and sends the rest to the port. Strategist at day 250, without → with: maps 0 and 2411
+lay rail for its crude, net +₦0.9-1.4k a day, goods 5-12% of income where it was 0; **map 543
+collapses** (people 707k → 321k, trips 2,192 → 681) -- not from crude trucks (a refinery a
+twentieth the size collapses the same), but from the site: the strategist chases the commute
+to it next to Opobo with 53 minibuses, restores the old refinery (towns ran short of fuel, cause
+unknown), and never builds the lane, BRT and rail that grew 543 before. It also makes only
+23-46% of its capacity with crude arriving (probably its workers; unchecked). Open, also:
+cash-crop exports are paid twice a tick since `a4eeb21` (`payExports` adds to funds, and
+`tick.ts` adds it again through the allocation) -- yours to decide; and C17 failed in your
+2026-10-21 playtest (the sweep took money saved for rail), which the brief says takes the sweep
+out.
+
 **Before that:** your playtest of expansion, exports at ₦20, the look.
 In a worktree meanwhile: **the strategist** (`scripts/slice-strategist.ts`), a long-game bot
 that plays the ladder and the chains from the game's own advice and measures C2, C11 and C14

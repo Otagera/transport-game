@@ -45,6 +45,8 @@ export type SliceEvent =
   | { kind: "corridor-released"; a: string; b: string; share: number }
   // An industrial site opening near a town, or closing (industries.ts).
   | { kind: "industry-opened"; townId: string; name: string; industry: "quarry"; near: string }
+  // The second, private refinery opens (fuel.ts): what it wants and makes, tonnes a day.
+  | { kind: "refinery-opened"; townId: string; name: string; near: string; crude: number; fuel: number }
   | { kind: "industry-closed"; townId: string; name: string; reason: "worked out" | "nothing moved" }
   // A retired road gone from the map (retire.ts): routes that lost their way sold.
   | { kind: "road-gone"; a: string; b: string; sold: number; refund: number };
@@ -243,7 +245,7 @@ export function foundGateTown(world: SliceWorld, siteId: string): SliceEvent | n
 /** "Refinery Camp", "Cement Camp" -- then by the town it's named for. */
 function gateName(world: SliceWorld, site: SliceTown): string {
   const taken = new Set([...world.towns.values(), ...world.ruins.values()].map((town) => town.name));
-  const what = site.industry === "refinery" ? "Refinery" : site.industry === "works" ? "Cement" : site.industry === "depot" ? "Tank Farm" : "Quarry";
+  const what = site.industry === "refinery" || site.industry === "newrefinery" ? "Refinery" : site.industry === "works" ? "Cement" : site.industry === "depot" ? "Tank Farm" : "Quarry";
   const place = site.name.split(" ")[0]!;
   return [`${what} Camp`, `${place} ${what} Camp`, `${place} Camp`].find((name) => !taken.has(name)) ?? `${what} Camp (${world.nextId})`;
 }

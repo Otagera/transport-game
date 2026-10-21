@@ -41,7 +41,7 @@ export interface SliceTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill";
 
 export interface SliceRoadDef {
   a: string;
@@ -478,6 +478,16 @@ export interface SliceTuning {
   refineryShare: number;
   crudeShare: number;
   refineryRestoreCost: number;
+  /**
+   * The second refinery (fuel.ts, Revision 4, step 4): a private one that opens mid-game,
+   * between these days; what it can make and the crude it wants, as shares of day 1's fuel
+   * need. Run files without them replay without it, as played.
+   */
+  newRefineryEnabled: boolean;
+  newRefineryDayMin: number;
+  newRefineryDayMax: number;
+  newRefineryShare: number;
+  newRefineryCrudeShare: number;
   /** Fuel and crude waiting at a yard are lost far slower than produce spoils (seconds, the time constant). */
   fuelLossSeconds: number;
   /**

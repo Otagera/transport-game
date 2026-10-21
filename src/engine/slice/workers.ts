@@ -31,6 +31,9 @@ export function siteJobs(world: SliceWorld, town: SliceTown): number {
   switch (town.industry) {
     case "refinery":
       return world.fuel?.restored ? t.jobsRefinery * siteScale(world, town.id) : idle;
+    case "newrefinery":
+      // Private, and working from the day it opens.
+      return t.jobsRefinery;
     case "oilfield":
     case "terminal":
       // Oil workers live at the wells, in camps, brought in by boat or air;

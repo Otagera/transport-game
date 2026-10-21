@@ -30,7 +30,7 @@ import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY as D } from "../src/engine/economy/state";
 import { affordable, namedMoves, noSeatPairs } from "../src/engine/slice/problems";
 import { diagnoseRoute, pairDemand } from "../src/engine/slice/world";
-import { isRailRoute } from "../src/engine/slice/rail";
+import { isRailRoute, railPath, trackCost } from "../src/engine/slice/rail";
 import { roadFull } from "../src/engine/slice/growth";
 import { rungPrice } from "../src/engine/slice/project";
 import { headline, isCutOff, paveCost, roadPath, routeSummaries, roadCost, tripsFrom } from "../src/engine/slice/world";
@@ -39,7 +39,7 @@ import { flowKey, goodsFlows, lorryEstimate, lorrySummaries } from "../src/engin
 import { siteProduction } from "../src/engine/slice/production";
 import { expandCost } from "../src/engine/slice/expand";
 import { checkBond } from "../src/engine/slice/bonds";
-import { fuelSupply } from "../src/engine/slice/fuel";
+import { crudeArriving, fuelSupply, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput } from "../src/engine/slice/fuel";
 import { townGrowth } from "../src/engine/slice/growth";
 import { marketFed, marketTowns } from "../src/engine/slice/food";
 import type { SliceWorld } from "../src/engine/slice/types";
@@ -214,6 +214,18 @@ function decide(world: SliceWorld, day: number, losing: Map<string, number>): { 
       did(act(world, day, { kind: "road", a: fuel.sourceId, b: fuel.refineryId, alignment: "cheapest" }, "a road for crude"));
     }
   }
+  // The second, private refinery (Revision 4, 4): when it opens, a road for its crude (the
+  // yards below put hauliers on it), then track and a freight train once the track's affordable.
+  const second = newRefinery(world);
+  if (fuel && second) {
+    secondOpened ??= day;
+    if (!roadPath(world, fuel.sourceId, second.id) && spend(world, roadCost(world, fuel.sourceId, second.id))) {
+      did(act(world, day, { kind: "road", a: fuel.sourceId, b: second.id, alignment: "cheapest" }, "the private refinery opened: a road for its crude"));
+    }
+    if (!railPath(world, fuel.sourceId, second.id) && spend(world, trackCost(world, fuel.sourceId, second.id))) {
+      if (did(act(world, day, { kind: "track", a: fuel.sourceId, b: second.id, alignment: "cheapest" }, "crude to the private refinery: rail"))) act(world, day, { kind: "freight", a: fuel.sourceId, b: second.id }, "a freight train for crude");
+    }
+  }
   // The works: restored once cement holds 10k people back.
   const cement = world.cement;
   if (cement && !cement.working) {
@@ -310,6 +322,8 @@ function longestQuiet(days: Day[], from: number, to: number): { length: number; 
 }
 
 const k = (n: number) => `₦${Math.round(n / 1000)}k`;
+/** The day the private refinery was first seen open, this map (reset per map). */
+let secondOpened: number | undefined;
 for (const seed of SEEDS) {
   const started = performance.now();
   const { days, world } = play(seed);
@@ -346,5 +360,9 @@ for (const seed of SEEDS) {
   console.log(`  service expected (Revision 4, 2): ${short.map((x) => `${world.towns.get(x.id)!.name} ${Math.round(x.g!.playerShare * 100)}/${Math.round(x.g!.expected * 100)}%`).join(", ") || "no town big enough"} | swept to the treasury: ₦${Math.round(world.budget.swept)}`);
   const levy = window(DAYS - 20, DAYS).reduce((s, d) => s + d.loading, 0) / 20;
   console.log(`  yards: ${world.yards.size} (${[...world.yards].map((id) => world.towns.get(id)?.name).join(", ")}); loading and yard levies to you, last 20 days: ₦${Math.round(levy)}/day`);
+  const second = newRefinery(world);
+  const shortOfFuel = [...world.basePopulation.keys()].filter((id) => (fuelSupply(world, id)?.supplied ?? 1) < 0.6).length;
+  console.log(`  second refinery (Revision 4, 4): ${second ? `opened day ${secondOpened ?? "?"} (${second.name}); crude in ${Math.round(crudeArriving(world, second.id) * D)} of ${Math.round(newRefineryCrude(world) * D)} t/day by rail ${railPath(world, world.fuel!.sourceId, second.id) ? "yes" : "no"}; fuel made ${Math.round(newRefineryOutput(world) * D)} of ${Math.round(newRefineryCapacity(world) * D)} t/day` : "not open"} | towns under 60% fuel: ${shortOfFuel}`);
+  secondOpened = undefined;
   console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);
 }

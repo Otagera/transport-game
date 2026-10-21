@@ -1,6 +1,6 @@
 import type { SliceTown, SliceWorld } from "./types";
 import { flowKey, type GoodsFlow } from "./goods";
-import { refreshDemand } from "./settlement";
+import { refreshDemand, type SliceEvent } from "./settlement";
 import { addRoadToMap, isCutOff, roadPath, type ActionResult } from "./world";
 import { rebuildNetworks } from "./rail";
 import { isWater } from "../pathing/terrainAStar";
@@ -35,6 +35,15 @@ import { siteScale } from "./expand";
 // the tank farm or the refinery), not a new cargo kind, so the engine's cargo
 // types stay as the original game has them.
 //
+// Revision 4, step 4, a second refinery: mid-game (between newRefineryDayMin
+// and newRefineryDayMax) a privately owned refinery opens by the port, already
+// built (the Dangote story). Nobody restores it: it wants crude from the same
+// source -- the long leg, where freight rail pays -- and its fuel has to get
+// out. It fills what imports and the old refinery leave short, nearest it
+// first; what no town needs leaves through the port. It arrives with no road:
+// connecting it is the problem it brings, and its opening is announced loudly
+// (playtest 2026-10-21: late changes went unseen).
+//
 // Step 1b, what a shortage does (a town's shortage: 1 - its fuel supplied,
 // rolling; none where no road reaches): its danfos charge more, as a toll
 // makes them (fuelFarePremium of the fare at a total shortage, so riders
@@ -50,13 +59,16 @@ export interface FuelState {
   refineryId: string;
   sourceId: string;
   restored: boolean;
+  /** The second, private refinery: when it opens (economy seconds; 0, never), and its site once open. */
+  newRefineryAt: number;
+  newRefineryId: string | null;
   /** Tonnes a second the towns needed at the start: imports, the refinery and crude are sized from it. */
   baseDemand: number;
   /** Each town's shortage now, 0..1 (updateFuelShortage, every tick): what step 1b's effects read. */
   shortage: Map<string, number>;
 }
 
-const FUEL_SITES = new Set(["depot", "refinery", "oilfield", "terminal"]);
+const FUEL_SITES = new Set(["depot", "refinery", "newrefinery", "oilfield", "terminal"]);
 
 export function isFuelSite(town: SliceTown | undefined): boolean {
   return town?.industry !== undefined && FUEL_SITES.has(town.industry);
@@ -78,12 +90,35 @@ function totalDemand(world: SliceWorld): number {
   return burners(world).reduce((sum, town) => sum + fuelDemand(world, town.id), 0);
 }
 
-/** Crude reaching the refinery now, tonnes a second: yours and the truckers'. */
-export function crudeArriving(world: SliceWorld): number {
+/** Crude reaching a refinery now (the old one unless named), tonnes a second: yours and the truckers'. */
+export function crudeArriving(world: SliceWorld, refineryId = world.fuel?.refineryId): number {
   const fuel = world.fuel;
-  if (!fuel) return 0;
-  const outcome = world.goods.outcomes.get(flowKey({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies" }));
+  if (!fuel || !refineryId) return 0;
+  const outcome = world.goods.outcomes.get(flowKey({ from: fuel.sourceId, to: refineryId, kind: "supplies" }));
   return (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+}
+
+/** The second refinery's site, once it's open (and the switch is on). */
+export function newRefinery(world: SliceWorld): SliceTown | null {
+  const id = world.fuel?.newRefineryId;
+  return id && world.tuning.newRefineryEnabled ? (world.towns.get(id) ?? null) : null;
+}
+
+/** The most the second refinery can make, and the crude it wants, tonnes a second (0 before it opens). */
+export function newRefineryCapacity(world: SliceWorld): number {
+  return world.fuel && newRefinery(world) ? world.tuning.newRefineryShare * world.fuel.baseDemand : 0;
+}
+
+export function newRefineryCrude(world: SliceWorld): number {
+  return world.fuel && newRefinery(world) ? world.tuning.newRefineryCrudeShare * world.fuel.baseDemand * staffFactor(world, world.fuel.sourceId) : 0;
+}
+
+/** What the second refinery makes now: its capacity or the crude it gets (crude to fuel at its own ratio), whichever is less. */
+export function newRefineryOutput(world: SliceWorld): number {
+  const site = newRefinery(world);
+  if (!site) return 0;
+  const t = world.tuning;
+  return Math.min(newRefineryCapacity(world), (crudeArriving(world, site.id) * t.newRefineryShare) / t.newRefineryCrudeShare) * staffFactor(world, site.id);
 }
 
 /** The most the refinery can make, tonnes a second, as built and expanded (expand.ts). */
@@ -118,19 +153,24 @@ export function fuelFlows(world: SliceWorld): GoodsFlow[] {
   if (!depot || !refinery) return [];
   // By road, as the tankers go: a town that looks near the refinery may be a long drive from it.
   const byRoad = (from: string, to: string) => roadPath(world, from, to)?.distance ?? Infinity;
-  const towns = burners(world).map((town) => ({ town, need: fuelDemand(world, town.id), fromRefinery: 0, fromDepot: 0, dr: byRoad(refinery.id, town.id), dd: byRoad(depot.id, town.id) }));
+  const second = newRefinery(world);
+  const towns = burners(world).map((town) => ({ town, need: fuelDemand(world, town.id), fromRefinery: 0, fromDepot: 0, fromNew: 0, dr: byRoad(refinery.id, town.id), dd: byRoad(depot.id, town.id), dn: second ? byRoad(second.id, town.id) : Infinity }));
   let refined = refineryOutput(world);
+  let made = newRefineryOutput(world);
   // Each site makes what its workers let it (workers.ts).
   let imported = world.tuning.fuelImportShare * fuel.baseDemand * staffFactor(world, fuel.depotId);
-  const unmet = (x: (typeof towns)[number]) => x.need - x.fromRefinery - x.fromDepot;
-  const fill = (source: "refinery" | "depot", order: typeof towns) => {
+  const unmet = (x: (typeof towns)[number]) => x.need - x.fromRefinery - x.fromDepot - x.fromNew;
+  const fill = (source: "refinery" | "depot" | "new", order: typeof towns) => {
     for (const x of order) {
-      const left = source === "refinery" ? refined : imported;
+      const left = source === "refinery" ? refined : source === "new" ? made : imported;
       const take = Math.min(unmet(x), left);
       if (take <= 0) continue;
       if (source === "refinery") {
         x.fromRefinery += take;
         refined -= take;
+      } else if (source === "new") {
+        x.fromNew += take;
+        made -= take;
       } else {
         x.fromDepot += take;
         imported -= take;
@@ -144,12 +184,20 @@ export function fuelFlows(world: SliceWorld): GoodsFlow[] {
   // refinery fills what's still short, nearest it first -- the far side.
   fill("depot", byDepot);
   fill("refinery", byRefinery.filter((x) => Number.isFinite(x.dr)));
+  // The second refinery last, nearest it first; by road only, as the old one.
+  if (second) fill("new", [...towns].filter((x) => Number.isFinite(x.dn)).sort((p, q) => p.dn - q.dn));
   const flows: GoodsFlow[] = [];
   for (const x of towns) {
     if (x.fromRefinery > 0) flows.push({ from: fuel.refineryId, to: x.town.id, kind: "supplies", rate: x.fromRefinery });
     if (x.fromDepot > 0) flows.push({ from: fuel.depotId, to: x.town.id, kind: "supplies", rate: x.fromDepot });
+    if (second && x.fromNew > 0) flows.push({ from: second.id, to: x.town.id, kind: "supplies", rate: x.fromNew });
   }
   if (fuel.restored) flows.push({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies", rate: world.tuning.crudeShare * fuel.baseDemand * siteScale(world, fuel.refineryId) * staffFactor(world, fuel.sourceId) });
+  if (second) {
+    // What no town needs leaves through the port: its fuel always has somewhere to go.
+    if (made > 0 && world.port && world.towns.has(world.port)) flows.push({ from: second.id, to: world.port, kind: "supplies", rate: made });
+    flows.push({ from: fuel.sourceId, to: second.id, kind: "supplies", rate: newRefineryCrude(world) });
+  }
   return flows;
 }
 
@@ -163,14 +211,14 @@ export function cargoName(world: SliceWorld, from: string, kind: "produce" | "su
   if (food && to !== undefined && to === food.flourMillId) return "wheat";
   if (food && !site && kind === "produce") return to === world.port ? food.crops.cash : to === food.millId ? food.crops.staple : `${food.crops.staple} and ${food.crops.cash}`;
   if (site === "oilfield" || site === "terminal") return "crude";
-  if (site === "depot" || site === "refinery") return "fuel";
+  if (site === "depot" || site === "refinery" || site === "newrefinery") return "fuel";
   if (site === "works" || site === "silo") return "cement";
   if (site === "quarry") return world.cement && world.tuning.cementEnabled ? "limestone" : "stone";
   return kind;
 }
 
-/** How well a town is supplied with fuel, 0..1, and the share from each source. */
-export function fuelSupply(world: SliceWorld, townId: string): { supplied: number; imported: number; refined: number } | null {
+/** How well a town is supplied with fuel, 0..1, and the share from each source (refined: both refineries; second: the private one's part). */
+export function fuelSupply(world: SliceWorld, townId: string): { supplied: number; imported: number; refined: number; second: number } | null {
   const fuel = world.fuel;
   const demand = fuelDemand(world, townId);
   if (!fuel || demand <= 0) return null;
@@ -179,8 +227,9 @@ export function fuelSupply(world: SliceWorld, townId: string): { supplied: numbe
     return ((outcome?.delivered ?? 0) + (outcome?.trucked ?? 0)) / demand;
   };
   const imported = got(fuel.depotId);
-  const refined = got(fuel.refineryId);
-  return { supplied: Math.min(1, imported + refined), imported, refined };
+  const second = fuel.newRefineryId && world.tuning.newRefineryEnabled ? got(fuel.newRefineryId) : 0;
+  const refined = got(fuel.refineryId) + second;
+  return { supplied: Math.min(1, imported + refined), imported, refined, second };
 }
 
 /** Recomputes every town's shortage, once a tick (tick.ts), from the rolling fuel supplied. No road, no traffic: none counted. */
@@ -326,8 +375,42 @@ export function placeFuelSites(world: SliceWorld, region: string | undefined): v
   addRoadToMap(world.simulation.map, "fuel-depot-road", "fuel-depot", port.id, "inherited");
   const road = world.simulation.map.segments.find((segment) => segment.id === "fuel-depot-road")!;
   road.condition = world.tuning.wearEnabled ? world.tuning.inheritedRoadCondition : 1;
-  world.fuel = { depotId: "fuel-depot", refineryId: "fuel-refinery", sourceId: "fuel-source", restored: false, baseDemand, shortage: new Map() };
+  // The second refinery's day, drawn from where the sites fell (a seed of its
+  // own: drawing from the industries' would move every quarry of a game).
+  const t = world.tuning;
+  const hash = (Math.imul(depotAt.x * 73 + refineryAt.y, 2654435761) ^ Math.imul(sourceAt.x * 31 + sourceAt.y, 40503)) >>> 0;
+  const day = t.newRefineryDayMin + ((hash % 1000) / 1000) * (t.newRefineryDayMax - t.newRefineryDayMin);
+  const newRefineryAt = t.newRefineryEnabled ? day * SECONDS_PER_GAME_DAY : 0;
+  world.fuel = { depotId: "fuel-depot", refineryId: "fuel-refinery", sourceId: "fuel-source", restored: false, newRefineryAt, newRefineryId: null, baseDemand, shortage: new Map() };
   world.plans = null;
   rebuildNetworks(world);
   refreshDemand(world);
+}
+
+/**
+ * Opens the second refinery when its day comes (tick.ts, every tick): by the
+ * port, 10-16 cells from it on dry ground clear of the towns, as far from the
+ * crude source as fits -- crude's leg the long one. No road: connecting it is
+ * the problem it brings. Null until then, or if it's off or nothing fits.
+ */
+export function updateNewRefinery(world: SliceWorld): SliceEvent | null {
+  const fuel = world.fuel;
+  const t = world.tuning;
+  if (!fuel || fuel.newRefineryId || !fuel.newRefineryAt || !t.newRefineryEnabled || !t.fuelEnabled || !t.goodsEnabled) return null;
+  if (world.economy.elapsedSeconds < fuel.newRefineryAt) return null;
+  fuel.newRefineryAt = 0; // once: if nothing fits, it never opens
+  const port = world.port ? world.towns.get(world.port) : undefined;
+  const source = world.towns.get(fuel.sourceId);
+  if (!port || !source) return null;
+  const at = ringSpot(world, port.x, port.y, 10, 16, 8, (x, y) => Math.hypot(x - source.x, y - source.y));
+  if (!at) return null;
+  const near = [...world.towns.values()].filter((town) => !town.industry).sort((p, q) => Math.hypot(p.x - at.x, p.y - at.y) - Math.hypot(q.x - at.x, q.y - at.y))[0]!;
+  const taken = new Set([...world.towns.values(), ...world.ruins.values()].map((town) => town.name));
+  const name = [`${near.name} Refinery`, `${near.name} New Refinery`].find((n) => !taken.has(n)) ?? `${near.name} Refinery (${world.nextId})`;
+  addSite(world, "fuel-newrefinery", name, "newrefinery", at);
+  fuel.newRefineryId = "fuel-newrefinery";
+  world.plans = null;
+  rebuildNetworks(world);
+  refreshDemand(world);
+  return { kind: "refinery-opened", townId: fuel.newRefineryId, name, near: near.id, crude: newRefineryCrude(world) * SECONDS_PER_GAME_DAY, fuel: newRefineryCapacity(world) * SECONDS_PER_GAME_DAY };
 }

@@ -1,6 +1,6 @@
 import type { SliceWorld } from "./types";
 import { flowKey, goodsFlows, type GoodsFlow } from "./goods";
-import { crudeArriving, refineryCapacity, refineryOutput } from "./fuel";
+import { crudeArriving, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput } from "./fuel";
 import { siteScale } from "./expand";
 import { cementImports, limestoneArriving, worksCapacity, worksOutput } from "./cement";
 import { flourCapacity, flourOutput, millCapacity, millOutput, stapleArriving, wheatArriving } from "./food";
@@ -80,6 +80,12 @@ export function siteProduction(world: SliceWorld, siteId: string, flows: GoodsFl
       inputs = [{ name: "crude", arriving: crudeArriving(world), needed: capacity }];
       idle = !fuel?.restored;
       break;
+    case "newrefinery":
+      product = "fuel";
+      capacity = newRefineryCapacity(world);
+      made = newRefineryOutput(world);
+      inputs = [{ name: "crude", arriving: crudeArriving(world, siteId), needed: newRefineryCrude(world) }];
+      break;
     case "works":
       product = "cement";
       capacity = worksCapacity(world);
@@ -117,9 +123,10 @@ export function siteProduction(world: SliceWorld, siteId: string, flows: GoodsFl
     case "oilfield":
     case "terminal":
       product = "crude";
-      capacity = fuel ? t.crudeShare * fuel.baseDemand * siteScale(world, fuel.refineryId) : 0;
-      made = fuel?.restored ? capacity : 0;
-      idle = !fuel?.restored;
+      // For the old refinery once restored, and the second once it's open.
+      capacity = (fuel?.restored ? t.crudeShare * fuel.baseDemand * siteScale(world, fuel.refineryId) : 0) + newRefineryCrude(world);
+      made = capacity;
+      idle = capacity <= 0;
       break;
   }
   const jobs = siteJobs(world, site);

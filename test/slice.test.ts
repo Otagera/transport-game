@@ -27,7 +27,8 @@ import { foundGateTown, refreshDemand } from "@engine/slice/settlement";
 import { cementDemand, cementFlows, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { lineSlots, onRoadCost, stationTowns, trackCost } from "@engine/slice/rail";
 import { haulShare, truckersPickUp } from "@engine/slice/truckers";
-import { cargoName, chargeFuelPremium, fuelFlows, refineryOutput } from "@engine/slice/fuel";
+import { cargoName, chargeFuelPremium, fuelFlows, refineryOutput, newRefinery, newRefineryOutput, newRefineryCapacity, updateNewRefinery } from "@engine/slice/fuel";
+import { siteProduction as newRefinerySiteProduction } from "@engine/slice/production";
 import { flowKey } from "@engine/slice/goods";
 import { restoreRoad, retireRoad } from "@engine/slice/retire";
 import { isYourRoad } from "@engine/slice/upkeep";
@@ -3479,5 +3480,68 @@ describe("hauliers: no hoarding (map 2418, day 233)", () => {
     const held = w.truckers.get(`${works}|${to}|supplies`) ?? 0;
     expect(held).toBeLessThanOrEqual(w.tuning.truckerHoldLoads * w.tuning.truckLoad + 1e-9);
     expect(w.goods.yards.get(works)!.get(`${to}|supplies`)!).toBeGreaterThan(9_000);
+  });
+});
+
+describe("Revision 4, step 4: a second, private refinery (fuel.ts)", () => {
+  const game = (tuning: Partial<SliceTuning> = {}) => startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0, ...tuning });
+  const open = (w: SliceWorld) => {
+    w.economy.elapsedSeconds = w.fuel!.newRefineryAt;
+    return updateNewRefinery(w);
+  };
+
+  test("it opens once, mid-game, by the port and far from the crude, with no road, and says so", () => {
+    const w = game();
+    const fuel = w.fuel!;
+    const opensAt = fuel.newRefineryAt;
+    const day = opensAt / SECONDS_PER_GAME_DAY;
+    expect(day).toBeGreaterThanOrEqual(w.tuning.newRefineryDayMin);
+    expect(day).toBeLessThanOrEqual(w.tuning.newRefineryDayMax);
+    expect(updateNewRefinery(w)).toBeNull(); // not yet
+    expect(newRefinery(w)).toBeNull();
+    const event = open(w)!;
+    expect(event.kind).toBe("refinery-opened");
+    const site = newRefinery(w)!;
+    expect(site.industry).toBe("newrefinery");
+    expect(isCutOff(w, site.id)).toBe(true);
+    const port = w.towns.get(w.port!)!;
+    const source = w.towns.get(fuel.sourceId)!;
+    expect(Math.hypot(site.x - port.x, site.y - port.y)).toBeLessThanOrEqual(16.5);
+    expect(Math.hypot(site.x - source.x, site.y - source.y)).toBeGreaterThan(Math.hypot(port.x - source.x, port.y - source.y) - 16.5);
+    expect(updateNewRefinery(w)).toBeNull(); // once
+    // Seeded: the same map opens it on the same day.
+    expect(game().fuel!.newRefineryAt).toBe(opensAt);
+  });
+
+  test("it wants crude whether or not the old one runs, makes fuel only from crude delivered, and sends it out", () => {
+    const w = game();
+    const fuel = w.fuel!;
+    open(w);
+    const site = newRefinery(w)!;
+    expect(fuel.restored).toBe(false);
+    expect(fuelFlows(w).some((f) => f.from === fuel.sourceId && f.to === site.id)).toBe(true);
+    expect(newRefineryOutput(w)).toBe(0);
+    expect(newRefinerySiteProduction(w, site.id)!.limit).not.toBe("idle");
+    w.goods.outcomes.set(flowKey({ from: fuel.sourceId, to: site.id, kind: "supplies" }), { delivered: 10 * fuel.baseDemand, spoiled: 0 });
+    expect(newRefineryOutput(w)).toBeCloseTo(newRefineryCapacity(w) * (w.tuning.newRefineryShare > 0 ? 1 : 0), 6);
+    expect(cargoName(w, site.id, "supplies")).toBe("fuel");
+    // No road out: nothing leaves for the towns. With one, it fills what's short, and the rest goes to the port.
+    w.tuning = { ...w.tuning, fuelImportShare: 0.5 };
+    expect(fuelFlows(w).some((f) => f.from === site.id && f.to !== w.port)).toBe(false);
+    w.economy.funds = 1e7;
+    expect(applyAction(w, { kind: "road", a: site.id, b: w.port!, alignment: "cheapest" }).ok).toBe(true);
+    const out = fuelFlows(w).filter((f) => f.from === site.id);
+    expect(out.some((f) => f.to !== w.port)).toBe(true);
+    expect(out.reduce((sum, f) => sum + f.rate, 0)).toBeCloseTo(newRefineryOutput(w), 9);
+  });
+
+  test("switched off (and in a run file from before it), it never opens", () => {
+    const w = game({ newRefineryEnabled: false });
+    expect(w.fuel!.newRefineryAt).toBe(0);
+    w.economy.elapsedSeconds = 200 * SECONDS_PER_GAME_DAY;
+    expect(updateNewRefinery(w)).toBeNull();
+    const old = game({ newRefineryEnabled: undefined as unknown as boolean });
+    old.economy.elapsedSeconds = 200 * SECONDS_PER_GAME_DAY;
+    expect(updateNewRefinery(old)).toBeNull();
   });
 });

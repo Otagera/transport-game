@@ -58,7 +58,7 @@ import { checkYard, yardGain } from "@engine/slice/yards";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
-import { cargoName, fuelSupply, isFuelSite, refineryCapacity, refineryOutput, shortageAt } from "@engine/slice/fuel";
+import { cargoName, crudeArriving, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { checkExpand, expandCost, expandLevel, siteScale } from "@engine/slice/expand";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/slice/bonds";
 import { siteProduction, type SiteLimit } from "@engine/slice/production";
@@ -513,6 +513,13 @@ function announce(event: SliceEvent): void {
     say(cementActive(world)
       ? `A limestone quarry has opened near ${townName(event.near)}: ${world.tuning.quarryOutputPerDay} t a day for ${townName(world.cement!.worksId)}. Nothing moves it until you do, or truckers if it's near.`
       : `A quarry has opened near ${townName(event.near)}: ${world.tuning.quarryOutputPerDay} t of stone a day for ${[...new Set(buyers)].join(", ")}. Nothing moves it until you do.`, false, 9);
+  } else if (event.kind === "refinery-opened") {
+    // Once a game, and big: it pauses at any speed (playtest 2026-10-21: late changes went unseen).
+    say(`A private refinery has opened near ${townName(event.near)}: ${event.name}. It wants ${Math.round(event.crude)} t of crude a day from ${world.fuel ? townName(world.fuel.sourceId) : "the oil"} and can make ${Math.round(event.fuel)} t of fuel. No road reaches it yet: connect it, and get crude to it -- by freight train on track, or hauliers from a yard.`, false, 16);
+    if (!paused) {
+      paused = true;
+      renderToolbar();
+    }
   } else if (event.kind === "industry-closed") {
     say(`${event.name} has closed: ${event.reason === "worked out" ? "it's worked out" : "nothing was moved from it"}.`, true, 7);
   } else if (event.kind === "founded" && event.site) {
@@ -1365,7 +1372,7 @@ function siteProblem(siteId: string): string {
   const site = world.towns.get(siteId)!;
   if (p.limit === "input" && p.made < 0.8 * p.capacity) {
     const input = p.inputs[0]!;
-    const from = site.industry === "refinery" && world.fuel ? `from ${townName(world.fuel.sourceId)}` : site.industry === "works" ? "from the limestone quarries" : site.industry === "mill" ? "in from the farm towns" : site.industry === "flourmill" ? "from the port" : "";
+    const from = (site.industry === "refinery" || site.industry === "newrefinery") && world.fuel ? `from ${townName(world.fuel.sourceId)}` : site.industry === "works" ? "from the limestone quarries" : site.industry === "mill" ? "in from the farm towns" : site.industry === "flourmill" ? "from the port" : "";
     return `Short of ${input.name}: ${perDay(input.arriving)} of the ${perDay(input.needed)} t a day it could use, so it makes ${pct(p.made / p.capacity)} of what it could. Carry more ${from}: ${haulierMove(`lorries (<kbd>L</kbd>) on a road`, `build a haulage yard (<kbd>Y</kbd>) where it leaves from so hauliers reach this site`)}, or a freight train on track.`;
   }
   if (p.shipped < 0.5 && p.made * SECONDS_PER_GAME_DAY >= 5) {
@@ -1435,16 +1442,30 @@ function renderFuelSite(townId: string): void {
     } else if (isCutOff(world, townId)) {
       problem = `No road out: its fuel can't leave. Build one (<kbd>R</kbd>)${nearestTown ? ` to ${townName(nearestTown.id)}` : ""}.`;
     }
+  } else if (site.industry === "newrefinery") {
+    const cap = perDay(newRefineryCapacity(world));
+    kicker = `Private refinery · ${perDay(newRefineryOutput(world))} of ${cap} t of fuel a day`;
+    lines = [
+      `Built and run privately; it opened ready to work. Up to ${cap} t of fuel a day, from ${perDay(newRefineryCrude(world))} t of crude.`,
+      `Its crude comes from ${source.name}: by freight train on track, or by hauliers on a road from a haulage yard (<kbd>Y</kbd>) at ${source.name}. The leg is long: rail's.`,
+      "Its fuel fills what the imports and the old refinery leave short, nearest it first; the rest leaves through the port.",
+    ];
+    if (isCutOff(world, townId)) problem = `No road reaches it: no crude can come in, no fuel go out, and its workers can't get there. Build one (<kbd>R</kbd>)${nearestTown ? ` to ${townName(nearestTown.id)}` : ""}.`;
+    else if (crudeArriving(world, townId) * SECONDS_PER_GAME_DAY < 1) problem = `No crude arriving. Run a freight train (<kbd>G</kbd>) on track from ${source.name}, or build a haulage yard (<kbd>Y</kbd>) at ${source.name} so hauliers reach it by road.`;
   } else {
+    const second = newRefinery(world);
     kicker = site.industry === "oilfield" ? "Oilfield · crude" : "Pipeline terminal · crude from the south";
     lines = [
       `${crude} t of crude a day for ${refinery.name}${fuel.restored ? "" : ", once it's restored"}.`,
+      ...(second ? [`${perDay(newRefineryCrude(world))} t of crude a day for ${second.name}, the private refinery.`] : []),
       haulierMove(
         "Only you carry crude: by lorry on a road, or by freight train on track. Full lorries pay; track is dear on a leg this long.",
         "Nobody trucks crude unless you build a haulage yard (<kbd>Y</kbd>) here: then hauliers take it by road. Or a freight train on track.",
       ),
     ];
-    if (!fuel.restored) problem = `Waiting on ${refinery.name}: until it's restored, nobody wants this crude.`;
+    if (!fuel.restored && !second) problem = `Waiting on ${refinery.name}: until it's restored, nobody wants this crude.`;
+    else if (!fuel.restored && second && !railPath(world, townId, second.id) && !roadPath(world, townId, second.id)) problem = `No way to ${second.name}: lay track (<kbd>K</kbd>) for a freight train, or build a road (<kbd>R</kbd>) and a haulage yard (<kbd>Y</kbd>) here.`;
+    else if (!fuel.restored) problem = "";
     else if (!railPath(world, townId, fuel.refineryId) && !roadPath(world, townId, fuel.refineryId)) problem = `No way to ${refinery.name}: lay track (<kbd>K</kbd>) for a freight train, or build a road (<kbd>R</kbd>)${world.tuning.noPlayerLorries ? " and a haulage yard (<kbd>Y</kbd>) here" : ""}.`;
     else if (world.tuning.noPlayerLorries && world.tuning.yardsEnabled && !world.yards.has(townId) && !railPath(world, townId, fuel.refineryId)) problem = `A road reaches ${refinery.name}, but nobody trucks crude: build a haulage yard (<kbd>Y</kbd>) here, or run a freight train on track.`;
   }

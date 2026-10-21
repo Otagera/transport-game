@@ -1,4 +1,4 @@
-import { chargeFuelPremium, shortageAt, updateFuelShortage } from "./fuel";
+import { chargeFuelPremium, shortageAt, updateFuelShortage, updateNewRefinery } from "./fuel";
 import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
 import { applyOperatingCosts, updateIncomeRateEMA } from "../economy/state";
@@ -351,6 +351,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   indexOutcomes(world);
 
   const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor), ...updateIndustries(world, dt), ...updateSites(world, dt, foundGateTown), ...updateRetired(world, dt)];
+  const refinery = updateNewRefinery(world);
+  if (refinery) events.push(refinery);
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
   const swept = updateSweep(world);
   if (swept !== null) events.push({ kind: "swept", amount: swept });

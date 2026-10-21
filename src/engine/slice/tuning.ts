@@ -557,6 +557,17 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   refineryShare: 0.9,
   crudeShare: 1,
   refineryRestoreCost: 60000,
+  // Revision 4, step 4: a privately owned refinery opens mid-game (the Dangote
+  // story), by the port, already built: crude has to reach it from the source
+  // (the long leg, rail's) and its fuel has to get out. It's bigger than the
+  // old one -- as much as the towns burnt on day 1 -- and fills what imports
+  // and the old refinery leave short; the rest leaves through the port. First
+  // guesses, to measure with the strategist.
+  newRefineryEnabled: true,
+  newRefineryDayMin: 90,
+  newRefineryDayMax: 120,
+  newRefineryShare: 1,
+  newRefineryCrudeShare: 1.1,
   // About a week, against produce's two days: at two days the port city got
   // half its fuel with the tank farm next door.
   fuelLossSeconds: 180,

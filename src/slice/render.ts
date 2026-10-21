@@ -10,7 +10,7 @@ import { NO_SEAT_MIN_PER_DAY, corridorNoSeat } from "@engine/slice/problems";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/slice/roads";
 import { isDirt } from "@engine/slice/congestion";
 import { laneEncroachment, struckSegments } from "@engine/slice/pushback";
-import { refineryOutput, shortageAt } from "@engine/slice/fuel";
+import { newRefineryOutput, refineryOutput, shortageAt } from "@engine/slice/fuel";
 import { cementActive, cementImports, worksCapacity, worksOutput } from "@engine/slice/cement";
 import { flourCapacity, flourOutput, millCapacity, millOutput } from "@engine/slice/food";
 import { siteProduction } from "@engine/slice/production";
@@ -1150,7 +1150,7 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     ctx.moveTo(p.x + 6.2, p.y + 1);
     ctx.arc(p.x + 3, p.y + 1, 3.2, 0, Math.PI * 2);
     ctx.fill();
-  } else if (town.industry === "refinery") {
+  } else if (town.industry === "refinery" || town.industry === "newrefinery") {
     // Two columns and a flare.
     ctx.rect(p.x - 5, p.y - 4, 3, 9);
     ctx.rect(p.x + 1, p.y - 6, 3, 11);
@@ -1214,6 +1214,7 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
   const label =
     town.industry === "depot" && fuel ? `fuel imports · ${perDay(world.tuning.fuelImportShare * fuel.baseDemand)} t/day`
     : town.industry === "refinery" && fuel ? (fuel.restored ? `fuel · ${perDay(refineryOutput(world))} t/day` : "idle · restore it")
+    : town.industry === "newrefinery" ? `private · fuel ${perDay(newRefineryOutput(world))} t/day`
     : (town.industry === "oilfield" || town.industry === "terminal") && fuel ? `crude · ${fuel.restored ? `${perDay(world.tuning.crudeShare * fuel.baseDemand)} t/day` : "for the refinery"}`
     : town.industry === "works" ? (world.cement?.working ? `cement · ${perDay(worksOutput(world))} of ${perDay(worksCapacity(world))} t/day` : "idle · restore it")
     : town.industry === "silo" ? `cement imports · ${perDay(cementImports(world))} t/day`
