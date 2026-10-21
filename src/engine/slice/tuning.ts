@@ -112,6 +112,19 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   flourMillShare: 1.2,
   jobsFlourMill: 0.5,
   flourWeight: 0.4,
+  // Revision 4, 1 (brief): no player lorries; road freight is hauliers',
+  // reaching further from the haulage yards you build (yards.ts). A yard
+  // costs about a paved stretch; from it hauliers reach 120 cells (40
+  // elsewhere) and load twice as fast; you take ₦1 a tonne lifted there
+  // (₦0.4 at a market), the touts a fifth (half at a market). First
+  // guesses, to measure with the strategist.
+  noPlayerLorries: true,
+  yardsEnabled: true,
+  yardCost: 6000,
+  yardReachCells: 120,
+  yardPickupBoost: 2,
+  yardLevyPerTonne: 1,
+  yardToutShare: 0.2,
   // Expanding a site (expand.ts; the map 2411 playtest, day 216: ₦193,748
   // held, 8 towns short of cement from a works at capacity). Each line adds
   // half the site's first capacity, twice at most; the first costs 0.8 of

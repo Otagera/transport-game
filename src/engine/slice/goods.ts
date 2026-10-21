@@ -238,6 +238,8 @@ export function findLorryRoute(world: SliceWorld, a: string, b: string): SliceRo
 
 export function checkLorry(world: SliceWorld, a: string, b: string): ActionResult {
   if (!world.tuning.goodsEnabled) return { ok: false, reason: SWITCHED_OFF };
+  // Revision 4, 1: road freight is hauliers'; build them a haulage yard (yards.ts).
+  if (world.tuning.noPlayerLorries) return { ok: false, reason: "road freight is the hauliers' now: build a haulage yard" };
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!roadPath(world, a, b)) return { ok: false, reason: "no road between them" };
   if (!canAfford(world.economy, world.tuning.lorryPurchaseCost)) return { ok: false, reason: "can't afford a lorry" };

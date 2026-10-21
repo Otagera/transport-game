@@ -183,6 +183,21 @@ export interface SliceTuning {
   jobsFlourMill: number;
   flourWeight: number;
   /**
+   * Revision 4, 1: the player runs no lorries (goods.ts checkLorry); road freight is hauliers'.
+   * A run file without it replays with lorries, as it was played.
+   */
+  noPlayerLorries: boolean;
+  /**
+   * Haulage yards (yards.ts): on; what one costs; how far hauliers reach from one (cells); how much
+   * faster they load there; the yard levy a tonne lifted, and the touts' share of it.
+   */
+  yardsEnabled: boolean;
+  yardCost: number;
+  yardReachCells: number;
+  yardPickupBoost: number;
+  yardLevyPerTonne: number;
+  yardToutShare: number;
+  /**
    * Expanding a site (expand.ts): on; capacity added a time, a share of what it was built with;
    * how many times; a first expansion's cost, a share of the site's restore cost (the mills' own
    * base), each next one dearer by this factor.
@@ -546,6 +561,8 @@ export interface SliceWorld {
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */
   bonds: Bond[];
+  /** Towns and sites with a haulage yard (yards.ts). */
+  yards: Set<string>;
   /** Times each site has been expanded (expand.ts), by its id. */
   expansions: Map<string, number>;
   /** The food chain's mill and crops (food.ts); null until placed, or with food off. */

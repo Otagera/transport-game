@@ -130,6 +130,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     sites: createSitesState(),
     bonds: [],
     expansions: new Map(),
+    yards: new Set(),
     food: null,
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),

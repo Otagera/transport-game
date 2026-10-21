@@ -3,6 +3,7 @@ import type { SliceWorld } from "./types";
 import type { GoodsKind } from "./goods";
 import { roadPath } from "./world";
 import { tollFor, type Takings } from "./budget";
+import { hasYard } from "./yards";
 import { createOneShotVehicle } from "../simulation/vehicle";
 
 // Private truckers: the informal sector's freight rival (docs/brief.md,
@@ -51,8 +52,10 @@ export function truckersPickUp(world: SliceWorld, dt: number): void {
       // Crude doesn't go by the roadside: it's moved under contract -- yours.
       const site = world.towns.get(from)?.industry;
       if (site === "oilfield" || site === "terminal") continue;
-      const reach = isFuelSite(world.towns.get(from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells;
-      const take = amount * pickup * haulShare(world, path.distance, reach);
+      // From a haulage yard (yards.ts), hauliers reach further and load faster.
+      const atYard = tuning.yardsEnabled && hasYard(world, from);
+      const reach = Math.max(isFuelSite(world.towns.get(from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells, atYard ? tuning.yardReachCells : 0);
+      const take = Math.min(amount, amount * pickup * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach));
       if (take <= 0) continue;
       yard.set(key, amount - take);
       const k = heldKey(from, to, kind);
@@ -94,7 +97,12 @@ export function dispatchTrucks(world: SliceWorld, takings: Takings, fits: (segme
     vehicle.cargo = [{ from, to, kind, amount: tuning.truckLoad }];
     world.truckers.set(key, held - tuning.truckLoad);
     takings.tolls += tollFor(world, path.segmentIds, tuning.lorryRoadSpace);
-    if (levied(world, from)) {
+    if (tuning.yardsEnabled && hasYard(world, from)) {
+      // A yard's levy: more a tonne, run properly, the touts' share smaller (yards.ts).
+      const levy = tuning.yardLevyPerTonne * tuning.truckLoad;
+      takings.loading += levy * (1 - tuning.yardToutShare);
+      takings.touts += levy * tuning.yardToutShare;
+    } else if (levied(world, from)) {
       const levy = tuning.loadingLevyPerTonne * tuning.truckLoad;
       takings.loading += levy * (1 - tuning.agberoCut);
       takings.touts += levy * tuning.agberoCut;

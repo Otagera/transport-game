@@ -35,7 +35,7 @@ import { roadFull } from "../src/engine/slice/growth";
 import { rungPrice } from "../src/engine/slice/project";
 import { headline, isCutOff, paveCost, roadPath, routeSummaries, roadCost } from "../src/engine/slice/world";
 import { averageNet } from "../src/engine/slice/history";
-import { goodsFlows, lorryEstimate, lorrySummaries } from "../src/engine/slice/goods";
+import { flowKey, goodsFlows, lorryEstimate, lorrySummaries } from "../src/engine/slice/goods";
 import { siteProduction } from "../src/engine/slice/production";
 import { expandCost } from "../src/engine/slice/expand";
 import { checkBond } from "../src/engine/slice/bonds";
@@ -62,6 +62,8 @@ interface Day {
   fares: number;
   goods: number;
   income: number;
+  /** Loading and yard levies to you, the day. */
+  loading: number;
   moves: number;
   /** Moves that build: not a lorry bought, a route sold, or a road kept up -- C14's "a move worth making". */
   builds: number;
@@ -212,16 +214,31 @@ function decide(world: SliceWorld, day: number, losing: Map<string, number>): { 
   // Every working site and open quarry gets a road to the network.
   for (const site of [...world.towns.values()].filter((t) => t.industry && t.industry !== "oilfield" && t.industry !== "terminal")) siteRoads(world, day, site.id, did);
 
-  // Lorries where one more pays, by the hint: one a day at most, best first.
-  const pairs = new Map<string, { a: string; b: string; margin: number }>();
-  for (const flow of goodsFlows(world)) {
-    const [a, b] = flow.from < flow.to ? [flow.from, flow.to] : [flow.to, flow.from];
-    if (pairs.has(`${a}~${b}`) || !roadPath(world, a, b)) continue;
-    const e = lorryEstimate(world, a, b);
-    if (e && e.tonnesPerDay >= 5) pairs.set(`${a}~${b}`, { a, b, margin: e.incomePerDay / e.costPerDay });
-  }
-  for (const pair of [...pairs.values()].filter((p) => p.margin >= LORRY_MARGIN).sort((p, q) => q.margin - p.margin).slice(0, 1)) {
-    if (spend(world, world.tuning.lorryPurchaseCost)) did(act(world, day, { kind: "lorry", a: pair.a, b: pair.b }, `a lorry pays here (${pair.margin.toFixed(2)}x)`));
+  // No player lorries (Revision 4): a haulage yard where the most goods sit unmoved, so the
+  // hauliers reach further from there. One every five days at most.
+  if (world.tuning.noPlayerLorries) {
+    if (day % 5 === 0) {
+      const unmoved = new Map<string, number>();
+      for (const flow of goodsFlows(world)) {
+        const outcome = world.goods.outcomes.get(flowKey(flow));
+        const left = Math.max(0, flow.rate - (outcome?.delivered ?? 0) - (outcome?.trucked ?? 0)) * D;
+        unmoved.set(flow.from, (unmoved.get(flow.from) ?? 0) + left);
+      }
+      const best = [...unmoved].filter(([id, t]) => t >= 30 && !world.yards.has(id) && !isCutOff(world, id)).sort((x, y) => y[1] - x[1])[0];
+      if (best && spend(world, world.tuning.yardCost)) did(act(world, day, { kind: "yard", townId: best[0] }, `${Math.round(best[1])} t a day sit unmoved: a haulage yard`));
+    }
+  } else {
+    // Lorries where one more pays, by the hint: one a day at most, best first.
+    const pairs = new Map<string, { a: string; b: string; margin: number }>();
+    for (const flow of goodsFlows(world)) {
+      const [a, b] = flow.from < flow.to ? [flow.from, flow.to] : [flow.to, flow.from];
+      if (pairs.has(`${a}~${b}`) || !roadPath(world, a, b)) continue;
+      const e = lorryEstimate(world, a, b);
+      if (e && e.tonnesPerDay >= 5) pairs.set(`${a}~${b}`, { a, b, margin: e.incomePerDay / e.costPerDay });
+    }
+    for (const pair of [...pairs.values()].filter((p) => p.margin >= LORRY_MARGIN).sort((p, q) => q.margin - p.margin).slice(0, 1)) {
+      if (spend(world, world.tuning.lorryPurchaseCost)) did(act(world, day, { kind: "lorry", a: pair.a, b: pair.b }, `a lorry pays here (${pair.margin.toFixed(2)}x)`));
+    }
   }
 
   // Expand a site at capacity while its towns go short.
@@ -262,8 +279,9 @@ function play(seed: number): { seed: number; days: Day[]; world: SliceWorld } {
     const fares = b.fares - last.fares;
     const goods = b.goods - last.goods;
     const income = fares + goods + (b.tolls - last.tolls) + (b.levies - last.levies) + (b.loading - last.loading) + (b.allocation - last.allocation) + (b.exports - last.exports);
+    const prevLoading = last.loading;
     last = { ...b };
-    days.push({ day, funds: world.economy.funds, net: averageNet(world), trips: headline(world).tripsPerDay, people: pop(world), fares, goods, income, moves, builds, waiting });
+    days.push({ day, funds: world.economy.funds, net: averageNet(world), trips: headline(world).tripsPerDay, people: pop(world), fares, goods, income, loading: b.loading - prevLoading, moves, builds, waiting });
   }
   return { seed, days, world };
 }
@@ -312,5 +330,7 @@ for (const seed of SEEDS) {
   console.log(`  moves: ${[...made].sort((x, y) => y[1] - x[1]).map(([kind, n]) => `${kind} ${n}`).join(", ")}`);
   made.clear();
   sold.clear();
+  const levy = window(DAYS - 20, DAYS).reduce((s, d) => s + d.loading, 0) / 20;
+  console.log(`  yards: ${world.yards.size} (${[...world.yards].map((id) => world.towns.get(id)?.name).join(", ")}); loading and yard levies to you, last 20 days: ₦${Math.round(levy)}/day`);
   console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);
 }
