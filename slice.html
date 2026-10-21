@@ -75,6 +75,10 @@
       .wing:hover, .wing:focus-within, .wing.out, .wing.pinned { --dock-now: 0; --tilt-now: 0; transition-delay: 0s; }
       #wing-routes { right: 16px; transform-origin: right center; }
       #wing-town { left: 16px; --side: -1; transform-origin: left center; }
+      /* A town under the left wing's space: its card opens from the right, over your routes,
+         so it never covers the town you're pointing at (playtest, map 2418). */
+      #wing-town.flip { left: auto; right: 16px; --side: 1; transform-origin: right center; z-index: 8; }
+      #wing-town.flip .spine { display: none; }
       .wing-body { position: absolute; inset: 0; overflow-y: auto; padding: 12px 14px 12px 14px; transition: opacity 0.2s 0.15s; }
       .wing:not(:hover):not(:focus-within):not(.out):not(.pinned) .wing-body { opacity: 0; }
       .spine {

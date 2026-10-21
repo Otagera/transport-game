@@ -290,7 +290,8 @@ function drawGroundNames(ctx: CanvasRenderingContext2D, world: SliceWorld, view:
     for (let i = 0; i < terrain.elevation.length; i += 1) {
       const x = i % width, y = Math.floor(i / width);
       if (terrain.water[i] === 1 || x < 4 || y < 3 || x > width - 5 || y > height - 4 || terrain.elevation[i]! < 0.4 * peak) continue;
-      if (clearance(x, y) < 6) continue;
+      // Its whole width clear, not just its middle: the name runs ~5 cells either side.
+      if (clearance(x, y) < 6 || clearance(x - 5, y) < 4 || clearance(x + 5, y) < 4) continue;
       if (best < 0 || terrain.elevation[i]! > terrain.elevation[best]!) best = i;
     }
     if (best >= 0) {

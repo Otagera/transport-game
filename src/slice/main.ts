@@ -1142,6 +1142,11 @@ function renderPanel(): void {
   }
   // A town pointed at brings its wing out, tucked again when you look away (unless you're in it).
   townWing.classList.toggle("out", town !== null);
+  // Pointing at a town the left wing would cover: the card comes out on the right instead.
+  // It stays there while you read it (the pointer on the card), and goes home once you leave.
+  const at = town ? world.towns.get(town) ?? world.ruins.get(town) : undefined;
+  if (at) townWing.classList.toggle("flip", toScreen(view, at.x, at.y).x < townWing.offsetWidth + 60);
+  else if (!townWing.matches(":hover")) townWing.classList.remove("flip");
   const shown = shownTown ? world.towns.get(shownTown) ?? world.ruins.get(shownTown) : undefined;
   townWing.querySelector(".spine")!.innerHTML = shown ? `<span class="k">${shown.industry ? "Site" : "Town"}</span> <b>${shown.name}</b>${shown.industry ? "" : ` <span class="num">${Math.round(shown.population)}k</span>`}` : `<span class="k">Towns</span>`;
   const net = routeSummaries(world).reduce((sum, route) => sum + route.netPerDay, 0) + lorrySummaries(world).reduce((sum, route) => sum + route.netPerDay, 0);
