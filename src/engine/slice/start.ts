@@ -10,6 +10,7 @@ import { createDayLedger } from "./ledger";
 import { resetCorridors } from "./corridors";
 import { sliceTick } from "./tick";
 import { DEFAULT_SLICE_TUNING } from "./tuning";
+import { createSweepState } from "./sweep";
 import { SIM_DT } from "../loop";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
@@ -48,6 +49,8 @@ export function startSliceGame(map: SliceMapDef, tuning: SliceTuning = DEFAULT_S
   world.economy.funds = tuning.startingFunds;
   world.ledger = createDayLedger();
   world.remittance = createRemittancePeriod(world.economy.elapsedSeconds, tuning);
+  // The budget year starts with you (sweep.ts).
+  world.sweep = createSweepState(world.economy.elapsedSeconds, tuning.sweepPeriodDays ?? 60);
   // Towns only: a site's workers aren't the region's people (score.ts counts the same way).
   world.startPopulation = new Map([...world.towns.values()].filter((town) => !town.industry).map((town) => [town.id, town.population]));
   world.milestones = new Map(); // growth during the warm-up isn't yours

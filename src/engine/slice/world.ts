@@ -24,6 +24,7 @@ import { costRate, planRoad, segmentLength, type Alignment, type Point } from ".
 import { paveStepCost } from "../pathing/cost";
 import { openLane } from "./pushback";
 import { createSitesState } from "./workers";
+import { createSweepState } from "./sweep";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -131,6 +132,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     bonds: [],
     expansions: new Map(),
     yards: new Set(),
+    sweep: createSweepState(0, tuning.sweepPeriodDays ?? 60),
     food: null,
     segmentLoad: new Map(),
     roadFlowEMA: new Map(),

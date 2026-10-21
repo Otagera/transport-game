@@ -15,6 +15,7 @@ import type { CementState } from "./cement";
 import type { SitesState } from "./workers";
 import type { Bond } from "./bonds";
 import type { FoodState } from "./food";
+import type { SweepState } from "./sweep";
 import type { OutcomeIndex } from "./world";
 import type { IndustryState } from "./industries";
 import type { TruckerHeld } from "./truckers";
@@ -187,6 +188,19 @@ export interface SliceTuning {
    * A run file without it replays with lorries, as it was played.
    */
   noPlayerLorries: boolean;
+  /**
+   * Towns expect better service as they grow (growth.ts expectedShare, Revision 4, 2): on; from
+   * what size (thousands); the share expected there; added a thousand people; at most.
+   */
+  /** The budget-year sweep (sweep.ts, Revision 4, 3, a trial): on; the year, days; the least you may carry over. */
+  sweepEnabled: boolean;
+  sweepPeriodDays: number;
+  sweepCarryMin: number;
+  serviceExpectEnabled: boolean;
+  serviceExpectFrom: number;
+  serviceExpectBase: number;
+  serviceExpectPerThousand: number;
+  serviceExpectMax: number;
   /**
    * Haulage yards (yards.ts): on; what one costs; how far hauliers reach from one (cells); how much
    * faster they load there; the yard levy a tonne lifted, and the touts' share of it.
@@ -561,6 +575,8 @@ export interface SliceWorld {
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */
   bonds: Bond[];
+  /** The budget year and its sweep (sweep.ts). */
+  sweep: SweepState;
   /** Towns and sites with a haulage yard (yards.ts). */
   yards: Set<string>;
   /** Times each site has been expanded (expand.ts), by its id. */

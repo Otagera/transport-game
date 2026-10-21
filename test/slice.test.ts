@@ -19,6 +19,8 @@ import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engin
 import { bondAmount, repayBonds } from "@engine/slice/bonds";
 import { siteProduction } from "@engine/slice/production";
 import { expandCost } from "@engine/slice/expand";
+import { expectedShare } from "@engine/slice/growth";
+import { sweepDue, updateSweep } from "@engine/slice/sweep";
 import { cropsFor, farmTowns, flourCapacity, flourOutput, flourWant, foodGrowth, foodServed, foodWant, marketFed, marketTowns, millOutput, payExports } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, updateSites, workforceShares } from "@engine/slice/workers";
 import { foundGateTown, refreshDemand } from "@engine/slice/settlement";
@@ -3401,5 +3403,39 @@ describe("expanding a site (expand.ts)", () => {
     expect(applyAction(w, { kind: "expand", siteId: works }).ok).toBe(false); // as big as it gets
     // The refinery starts idle: restore it first.
     expect(applyAction(w, { kind: "expand", siteId: w.fuel!.refineryId }).ok).toBe(false);
+  });
+});
+
+describe("Revision 4: towns expect service; the budget-year sweep", () => {
+  test("a town past the threshold expects a share that rises with its size, capped; short of it, it grows less", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const t = w.tuning;
+    const town = [...w.basePopulation.keys()].map((id) => w.towns.get(id)!).sort((p, q) => q.population - p.population)[0]!;
+    town.population = t.serviceExpectFrom - 1;
+    expect(expectedShare(w, town.id)).toBe(0);
+    town.population = t.serviceExpectFrom + 100;
+    expect(expectedShare(w, town.id)).toBeCloseTo(t.serviceExpectBase + 100 * t.serviceExpectPerThousand, 9);
+    town.population = 10_000;
+    expect(expectedShare(w, town.id)).toBe(t.serviceExpectMax);
+    w.tuning = { ...t, serviceExpectEnabled: false };
+    expect(expectedShare(w, town.id)).toBe(0);
+  });
+
+  test("at the year's end, cash above the carry-over goes back; a named project's price and this year's borrowing are safe", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const t = w.tuning;
+    w.economy.funds = t.sweepCarryMin + 30_000;
+    expect(sweepDue(w)).toBeCloseTo(30_000, 6);
+    const [a, b] = [...w.basePopulation.keys()];
+    w.project = { a: a!, b: b!, rung: "lane", price: t.sweepCarryMin + 20_000, namedAt: 0, affordableAt: null, warned: false };
+    expect(sweepDue(w)).toBeCloseTo(10_000, 6);
+    w.sweep.borrowed = 10_000;
+    expect(sweepDue(w)).toBeCloseTo(0, 6);
+    w.sweep.borrowed = 0;
+    w.economy.elapsedSeconds = w.sweep.endsAtSeconds;
+    expect(updateSweep(w)).toBeCloseTo(10_000, 6);
+    expect(w.economy.funds).toBeCloseTo(t.sweepCarryMin + 20_000, 6);
+    expect(w.budget.swept).toBeCloseTo(10_000, 6);
+    expect(w.sweep.endsAtSeconds).toBeGreaterThan(w.economy.elapsedSeconds);
   });
 });

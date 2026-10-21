@@ -82,6 +82,7 @@ export function issueBond(world: SliceWorld, purpose: BondPurpose): ActionResult
   const lent = bondAmount(world, purpose)!;
   world.economy.funds += lent;
   world.budget.borrowed += lent;
+  world.sweep.borrowed += lent; // a bond's money is for its purpose: safe from the year-end sweep
   let label = "";
   if (purpose === "refinery") {
     const done = restoreRefinery(world);

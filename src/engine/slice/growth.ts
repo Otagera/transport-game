@@ -59,6 +59,8 @@ export interface TownGrowth {
   playerShare: number;
   /** Thousands of people its service would grow it to that cement is holding back (cement.ts); 0 when none. */
   cementHeld: number;
+  /** The share of its trips it expects you to carry (expectedShare); 0 for a town too small to expect any. */
+  expected: number;
 }
 
 /** The rungs of the ladder built so far (brief, Revision 1): a town with no road has none. */
@@ -133,13 +135,31 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   // materials; above that, its room is scaled by the cement it gets.
   const free = base * (1 + tuning.cementFreeShare);
   const cap = building && roadCap > free ? free + (roadCap - free) * cementServed(world, townId) : roadCap;
-  const developed = share.player >= tuning.growthMinPlayerShare
+  // A big town expects more of you (Revision 4, 2): short of the share it expects, it keeps
+  // only part of what your service would grow it to -- half, carrying none of it.
+  const expected = expectedShare(world, townId);
+  const meets = expected > 0 ? Math.min(1, share.player / expected) : 1;
+  const developed = (share.player >= tuning.growthMinPlayerShare
     ? smoothstep((service - tuning.growthServiceFloor) / (tuning.growthServiceFull - tuning.growthServiceFloor))
-    : 0;
+    : 0) * (expected > 0 ? 0.5 + 0.5 * meets : 1);
   const target = base + (cap - base) * developed;
   // What it would grow to with all the cement it wants: the gap is what cement is holding back.
   const cementHeld = base + (roadCap - base) * developed - target;
-  return { base, cap, rung, target, service, playerShare: share.player, cementHeld };
+  return { base, cap, rung, target, service, playerShare: share.player, cementHeld, expected };
+}
+
+/**
+ * The share of its trips a town expects you to carry (docs/brief.md, Revision
+ * 4, 2; the late game piled money up with nothing to buy): none below
+ * `serviceExpectFrom` (thousands), then `serviceExpectBase`, rising by
+ * `serviceExpectPerThousand` a thousand people, at most `serviceExpectMax`.
+ * Your money goes into fleets, lanes and BRT as your towns grow.
+ */
+export function expectedShare(world: SliceWorld, townId: string): number {
+  const t = world.tuning;
+  const town = world.towns.get(townId);
+  if (!t.serviceExpectEnabled || !town || town.industry || town.population < t.serviceExpectFrom) return 0;
+  return Math.min(t.serviceExpectMax, t.serviceExpectBase + (town.population - t.serviceExpectFrom) * t.serviceExpectPerThousand);
 }
 
 /**

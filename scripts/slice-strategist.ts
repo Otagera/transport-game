@@ -33,7 +33,7 @@ import { diagnoseRoute, pairDemand } from "../src/engine/slice/world";
 import { isRailRoute } from "../src/engine/slice/rail";
 import { roadFull } from "../src/engine/slice/growth";
 import { rungPrice } from "../src/engine/slice/project";
-import { headline, isCutOff, paveCost, roadPath, routeSummaries, roadCost } from "../src/engine/slice/world";
+import { headline, isCutOff, paveCost, roadPath, routeSummaries, roadCost, tripsFrom } from "../src/engine/slice/world";
 import { averageNet } from "../src/engine/slice/history";
 import { flowKey, goodsFlows, lorryEstimate, lorrySummaries } from "../src/engine/slice/goods";
 import { siteProduction } from "../src/engine/slice/production";
@@ -184,6 +184,18 @@ function decide(world: SliceWorld, day: number, losing: Map<string, number>): { 
     const kind = pair.perDay >= 150 ? "bus" : "minibus";
     if (spend(world, kind === "bus" ? world.tuning.busPurchaseCost : world.tuning.minibusPurchaseCost)) did(act(world, day, { kind, a: pair.a, b: pair.b }, `${Math.round(pair.perDay)} a day find no seat: a ${kind}`));
   }
+  // A big town expecting more of you than it gets (Revision 4, 2): a bus on its biggest trip,
+  // or another vehicle on a route through it. One a day.
+  const wanting = [...world.basePopulation.keys()]
+    .map((id) => ({ id, g: townGrowth(world, id) }))
+    .filter((x) => x.g && x.g.expected > 0 && x.g.playerShare < x.g.expected)
+    .sort((p, q) => q.g!.expected - q.g!.playerShare - (p.g!.expected - p.g!.playerShare))[0];
+  if (wanting) {
+    const trip = tripsFrom(world, wanting.id).find((t) => t.reachable && !served(wanting.id, t.to));
+    const through = world.routes.find((r) => !isRailRoute(r.id) && world.simulation.vehicles.find((v) => v.id === r.vehicleIds[0])?.path.includes(wanting.id));
+    if (trip && spend(world, world.tuning.busPurchaseCost)) did(act(world, day, { kind: "bus", a: wanting.id, b: trip.to }, `${world.towns.get(wanting.id)!.name} expects ${Math.round(wanting.g!.expected * 100)}% (you ${Math.round(wanting.g!.playerShare * 100)}%): a bus`));
+    else if (through && spend(world, world.tuning.busPurchaseCost)) did(act(world, day, { kind: through.id.startsWith("mini:") ? "minibus" : "bus", a: through.a, b: through.b }, `${world.towns.get(wanting.id)!.name} expects more: another vehicle`));
+  }
   // What else the screen names that builds: a worn road kept up, a road paved. One a day.
   for (const move of namedMoves(world).filter((m) => ["fix", "pave", "road"].includes(m.action.kind)).sort((p, q) => p.price - q.price).slice(0, 1)) {
     if (affordable(world, move) && spend(world, move.price)) did(act(world, day, move.action, move.label));
@@ -330,6 +342,8 @@ for (const seed of SEEDS) {
   console.log(`  moves: ${[...made].sort((x, y) => y[1] - x[1]).map(([kind, n]) => `${kind} ${n}`).join(", ")}`);
   made.clear();
   sold.clear();
+  const short = [...world.basePopulation.keys()].map((id) => ({ id, g: townGrowth(world, id) })).filter((x) => x.g && x.g.expected > 0);
+  console.log(`  service expected (Revision 4, 2): ${short.map((x) => `${world.towns.get(x.id)!.name} ${Math.round(x.g!.playerShare * 100)}/${Math.round(x.g!.expected * 100)}%`).join(", ") || "no town big enough"} | swept to the treasury: ₦${Math.round(world.budget.swept)}`);
   const levy = window(DAYS - 20, DAYS).reduce((s, d) => s + d.loading, 0) / 20;
   console.log(`  yards: ${world.yards.size} (${[...world.yards].map((id) => world.towns.get(id)?.name).join(", ")}); loading and yard levies to you, last 20 days: ₦${Math.round(levy)}/day`);
   console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);

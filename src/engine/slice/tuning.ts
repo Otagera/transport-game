@@ -119,6 +119,21 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // (₦0.4 at a market), the touts a fifth (half at a market). First
   // guesses, to measure with the strategist.
   noPlayerLorries: true,
+  // Towns expect better service as they grow (Revision 4, 2): from 80k, 15%
+  // of their trips, a point more each 10k, 35% at most (280k). Short of it, a
+  // town keeps only part of what your service would grow it to. First
+  // guesses, to measure with the strategist (C16: money stays a decision).
+  // The budget-year sweep (Revision 4, 3, a trial): every 60 days, cash above
+  // the larger of ₦50k and your named project's price (plus this year's
+  // borrowing) lapses to the treasury.
+  sweepEnabled: true,
+  sweepPeriodDays: 60,
+  sweepCarryMin: 50000,
+  serviceExpectEnabled: true,
+  serviceExpectFrom: 80,
+  serviceExpectBase: 0.15,
+  serviceExpectPerThousand: 0.001,
+  serviceExpectMax: 0.35,
   yardsEnabled: true,
   yardCost: 6000,
   yardReachCells: 120,

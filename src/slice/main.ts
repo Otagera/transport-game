@@ -512,6 +512,9 @@ function announce(event: SliceEvent): void {
     say(`${event.name} has closed: ${event.reason === "worked out" ? "it's worked out" : "nothing was moved from it"}.`, true, 7);
   } else if (event.kind === "founded" && event.site) {
     say(`${event.name} has grown at the gate of ${townName(event.site)}: its workers live there now, and your buses on its road stop at it.`, false, 7);
+  } else if (event.kind === "swept") {
+    // The budget year's end (sweep.ts): only said when it took something.
+    if (event.amount >= 1) say(`The budget year ended: ${naira(event.amount)} above what you may carry over went back to the treasury. Name a project to keep money for it.`, true, 9);
   } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
   } else {

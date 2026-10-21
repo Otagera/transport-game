@@ -8,6 +8,7 @@ import { foundGateTown, updateSettlements, type SliceEvent } from "./settlement"
 import { updateSites } from "./workers";
 import { repayBonds } from "./bonds";
 import { payExports } from "./food";
+import { updateSweep } from "./sweep";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
 import { dispatchTrucks, truckersPickUp } from "./truckers";
@@ -351,6 +352,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
 
   const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor), ...updateIndustries(world, dt), ...updateSites(world, dt, foundGateTown), ...updateRetired(world, dt)];
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });
+  const swept = updateSweep(world);
+  if (swept !== null) events.push({ kind: "swept", amount: swept });
   if (recordDay(world)) sampleTowns(world);
   return events;
 }
