@@ -24,7 +24,7 @@ The `opencode-delegate` skill is installed globally (`~/.agents/skills/opencode-
 offload bounded, mechanical implementation tasks (renames, boilerplate, straightforward fixes/tests)
 off the orchestrating agent's own usage.
 
-- **Default model:** `opencode/deepseek-v4-flash-free` (OpenCode Zen, confirmed `$0` cost). Use it
+- **Default model:** `opencode/deepseek-v4.1-flash-free` (OpenCode Zen, confirmed `$0` cost). Use it
   unless a task needs stronger judgment.
 - **Do not use other OpenCode models without asking first** — most are metered per-token and only the
   human knows which ones are pre-approved.
