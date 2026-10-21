@@ -53,6 +53,8 @@ import { paveUpkeepPerDay, upkeepFor } from "@engine/slice/upkeep";
 import { isDirt } from "@engine/slice/congestion";
 import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/slice/project";
 import { remittanceExpected } from "@engine/slice/budget";
+import { carryOver, sweepDue } from "@engine/slice/sweep";
+import { checkYard } from "@engine/slice/yards";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
@@ -78,13 +80,15 @@ import { shortVerdict } from "./verdicts";
 //      pave the dirt road already joining them.
 //   B  bus tool  -- click a town, then another: buy a bus running between them.
 //   L  lorry tool -- click a town, then another: buy a lorry running goods between them.
+//   Y  yard tool  -- click a town or site: build a haulage yard, and private
+//      hauliers reach further from it (yards.ts).
 //   K  track tool -- click a town, then another: restore the old line there, or lay new track.
 //   T  train tool -- click a town, then another joined by track: buy a train between them.
 //   G  freight tool -- click a town, then another joined by track: buy a freight train between them.
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "track" | "train" | "freight" | "fix";
+type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "track" | "train" | "freight" | "fix";
 
 // Which systems run (tuning.ts). `?systems=all` turns every one on, for
 // comparing; `?goods=off` and `?wear=off` turn those off, so a playtest can
@@ -317,6 +321,7 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
     case "freight":
       return { kind: current, a, b };
     case "fix":
+    case "yard":
       return null;
   }
 }
@@ -578,7 +583,8 @@ function roadPieces(segmentId: string) {
 /** Whether a tool's system is on (slice zero switches some off). */
 function toolOn(candidate: Tool): boolean {
   const t = world.tuning;
-  if (candidate === "lorry") return t.goodsEnabled;
+  if (candidate === "lorry") return t.goodsEnabled && !t.noPlayerLorries;
+  if (candidate === "yard") return t.goodsEnabled && t.yardsEnabled;
   if (candidate === "freight") return t.goodsEnabled && t.railEnabled;
   if (candidate === "track" || candidate === "train") return t.railEnabled;
   if (candidate === "fix") return t.wearEnabled;
@@ -636,6 +642,15 @@ canvas.addEventListener("click", (event) => {
   const town = townAt(event.clientX, event.clientY);
   if (!town) {
     selectedTown = null;
+    return;
+  }
+  // A yard needs one town, not two (yards.ts): click it, and hauliers reach further.
+  if (tool === "yard") {
+    const result = act({ label: "a haulage yard", towns: [town] }, { kind: "yard", townId: town });
+    if (result.ok) say(`Haulage yard built at ${townName(town)} for ${naira(result.amount ?? world.tuning.yardCost)}: hauliers now reach ${world.tuning.yardReachCells} cells from here, and you take a levy on what they load.`);
+    else say(`Can't build a yard: ${result.reason}`, true);
+    selectedTown = null;
+    renderPanel();
     return;
   }
   // Track tool, the same town twice: a halt where a line passes it by.
@@ -745,7 +760,10 @@ window.addEventListener("keydown", (event) => {
   else if (event.key === "m" || event.key === "M") setTool("minibus");
   else if (event.key === "x" || event.key === "X") setTool("brt");
   else if (event.key === "f" || event.key === "F") setTool("fix");
-  else if (event.key === "l" || event.key === "L") setTool("lorry");
+  else if (event.key === "l" || event.key === "L") {
+    if (!world.tuning.noPlayerLorries) setTool("lorry");
+  }
+  else if (event.key === "y" || event.key === "Y") setTool("yard");
   else if (event.key === "k" || event.key === "K") setTool("track");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
@@ -836,6 +854,14 @@ function paveGain(): string {
 }
 
 function ghost(): Ghost | null {
+  // A yard is one click on a town or site, not a pair: say what it does over it.
+  if (tool === "yard") {
+    if (!hoverTown) return null;
+    const check = checkYard(world, hoverTown);
+    const at = toScreen(view, world.towns.get(hoverTown)!.x, world.towns.get(hoverTown)!.y);
+    const label = `Haulage yard ${naira(world.tuning.yardCost)} · hauliers reach ${world.tuning.yardReachCells} cells from here`;
+    return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Haulage yard ${naira(world.tuning.yardCost)}`) };
+  }
   if (!selectedTown || !mouse) return null;
   // Track tool, back over the selected town: offer the halt if a line passes it.
   if (tool === "track" && hoverTown === selectedTown) {
@@ -1024,7 +1050,7 @@ function renderToolbar(): void {
       button("Bus", "B", tool === "bus", () => setTool("bus")),
       button("Minibus", "M", tool === "minibus", () => setTool("minibus")),
       ...on(world.lanes.length > 0, button("BRT", "X", tool === "brt", () => setTool("brt"))),
-      ...on(t.goodsEnabled, button("Lorry", "L", tool === "lorry", () => setTool("lorry"))),
+      ...on(t.goodsEnabled && !t.noPlayerLorries, button("Lorry", "L", tool === "lorry", () => setTool("lorry"))),
     ),
     ...on(
       t.railEnabled,
@@ -1035,7 +1061,7 @@ function renderToolbar(): void {
         ...on(t.goodsEnabled, button("Freight", "G", tool === "freight", () => setTool("freight"))),
       ),
     ),
-    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track")))),
+    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track")))),
     ...on(t.straightAlignmentEnabled, group(t.railEnabled ? "Line (road, track)" : "Line", "setting", lineSwitch)),
     ...on(t.wearEnabled, group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix")))),
     group(
@@ -1178,9 +1204,24 @@ function growthText(townId: string, name: string): string {
   return `<p class="townshare"><b>${name} is ${heading}.</b> ${why}</p>`;
 }
 
+// What the town expects of you, and what you carry (growth.ts): the shortfall
+// is why a town stops growing, so it sits right under the growth line.
+function serviceText(townId: string, name: string): string {
+  const growth = townGrowth(world, townId);
+  if (!growth || growth.expected <= 0) return "";
+  const short = growth.playerShare < growth.expected ? " Short of it, it grows less: more buses, a lane or BRT here." : "";
+  return `<p class="townshare"><b>Service:</b> ${name} expects you to carry ${pct(growth.expected)} of its trips; you carry ${pct(growth.playerShare)}.${short}</p>`;
+}
+
 /** A named move as the screen says it: what, and its price. Named, not bought: the player does it (brief, Information design). */
 function moveText(move: NamedMove): string {
   return `<b>${move.label}</b>${move.price > 0 ? ` · ${naira(move.price)}` : ""}`;
+}
+
+// How goods get carried further: your lorries, or private hauliers from a yard
+// (yards.ts). Both wordings live here, so the cards can't drift from the rules.
+function haulierMove(lorries: string, yard: string): string {
+  return world.tuning.noPlayerLorries ? yard : lorries;
 }
 
 // The town card (design lab, "the brief, step 8"): a kicker, the name, three
@@ -1220,7 +1261,7 @@ function renderIndustry(townId: string): void {
     problem = `No road reaches it. Build one (<kbd>R</kbd>)${near ? ` from ${townName(near.id)}` : ""} and its ${cargo} can move.`;
   } else if (industry && industry.deliveredEMA * SECONDS_PER_GAME_DAY < world.tuning.industryMinDeliveredPerDay) {
     const closes = industry.openedAtSeconds + world.tuning.industryGraceDays * SECONDS_PER_GAME_DAY;
-    problem = siteProblem(townId) || `Nothing is moving its ${cargo}${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`;
+    problem = siteProblem(townId) || `Nothing is moving its ${cargo}${closes > now ? `: it closes on day ${gameDay(world, closes)} unless something does` : ""}. ${haulierMove(`Run a lorry (<kbd>L</kbd>)${biggest ? ` to ${townName(biggest.to)}` : ""}, or a freight train on track.`, `Build a haulage yard (<kbd>Y</kbd>) at ${site.name}${biggest ? ` so hauliers reach ${townName(biggest.to)}` : ""}, or a freight train on track.`)}`;
   }
   townEl.innerHTML = `
     <div class="town-card">
@@ -1308,10 +1349,10 @@ function siteProblem(siteId: string): string {
   if (p.limit === "input" && p.made < 0.8 * p.capacity) {
     const input = p.inputs[0]!;
     const from = site.industry === "refinery" && world.fuel ? `from ${townName(world.fuel.sourceId)}` : site.industry === "works" ? "from the limestone quarries" : site.industry === "mill" ? "in from the farm towns" : site.industry === "flourmill" ? "from the port" : "";
-    return `Short of ${input.name}: ${perDay(input.arriving)} of the ${perDay(input.needed)} t a day it could use, so it makes ${pct(p.made / p.capacity)} of what it could. Carry more ${from}: lorries (<kbd>L</kbd>) on a road, or a freight train on track.`;
+    return `Short of ${input.name}: ${perDay(input.arriving)} of the ${perDay(input.needed)} t a day it could use, so it makes ${pct(p.made / p.capacity)} of what it could. Carry more ${from}: ${haulierMove(`lorries (<kbd>L</kbd>) on a road`, `build a haulage yard (<kbd>Y</kbd>) where it leaves from so hauliers reach this site`)}, or a freight train on track.`;
   }
   if (p.shipped < 0.5 && p.made * SECONDS_PER_GAME_DAY >= 5) {
-    return `Most of its ${p.product} is waiting: ${pct(p.shipped)} gets carried away. Truckers take the short hauls; run lorries (<kbd>L</kbd>) to the towns further off.`;
+    return `Most of its ${p.product} is waiting: ${pct(p.shipped)} gets carried away. Truckers take the short hauls; ${haulierMove(`run lorries (<kbd>L</kbd>) to the towns further off.`, `build a haulage yard (<kbd>Y</kbd>) at ${site.name} so hauliers reach the towns further off.`)}`;
   }
   return "";
 }
@@ -1367,7 +1408,7 @@ function renderFuelSite(townId: string): void {
       problem = `Idle. Restore it, then get crude to it from ${source.name}.`;
       action = `<span class="actions"><button data-restore-refinery="1">Restore it: ${naira(t.refineryRestoreCost)}</button>${world.economy.funds < t.refineryRestoreCost ? bondButton("refinery") : ""}</span>`;
     } else if (refineryOutput(world) * SECONDS_PER_GAME_DAY < 1) {
-      problem = `No crude arriving. Run a freight train (<kbd>G</kbd>) on track from ${source.name}, or lorries (<kbd>L</kbd>) on a road.`;
+      problem = `No crude arriving. Run a freight train (<kbd>G</kbd>) on track from ${source.name}, or ${haulierMove(`lorries (<kbd>L</kbd>) on a road.`, `build a haulage yard (<kbd>Y</kbd>) at ${source.name} so hauliers reach it by road.`)}`;
     } else if (isCutOff(world, townId)) {
       problem = `No road out: its fuel can't leave. Build one (<kbd>R</kbd>)${nearestTown ? ` to ${townName(nearestTown.id)}` : ""}.`;
     }
@@ -1437,7 +1478,7 @@ function renderCementSite(townId: string): void {
       const quarry = [...world.industries.keys()][0]!;
       problem = `No way to it from ${townName(quarry)}: build a road (<kbd>R</kbd>) or lay track (<kbd>K</kbd>) between them, and the limestone can come.`;
     } else if (limestoneArriving(world) * SECONDS_PER_GAME_DAY < 1) {
-      problem = "No limestone arriving. Carry it from a quarry: a lorry (<kbd>L</kbd>) on a road, or a freight train on track.";
+      problem = `No limestone arriving. Carry it from a quarry: ${haulierMove("a lorry (<kbd>L</kbd>) on a road", "build a haulage yard (<kbd>Y</kbd>) at the quarry so hauliers reach the works")}, or a freight train on track.`;
     } else if (out < capacity * 0.6) {
       problem = `Short of limestone: ${perDay(limestoneArriving(world))} of ${Math.round(capacity * t.limestonePerCement)} t a day. Carry more from a quarry, or connect another when one opens.`;
     }
@@ -1482,7 +1523,7 @@ function renderMillSite(townId: string): void {
   const out = perDay(millOutput(world));
   const cap = perDay(millCapacity(world));
   let problem = "";
-  if (stapleArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = `No ${food.crops.staple} arriving. Carry it in from the farm towns: lorries (<kbd>L</kbd>), or truckers will on the short hauls once a road joins them.`;
+  if (stapleArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = `No ${food.crops.staple} arriving. Carry it in from the farm towns: ${haulierMove(`lorries (<kbd>L</kbd>)`, `build a haulage yard (<kbd>Y</kbd>) at a farm town so hauliers reach the mill`)}, or truckers will on the short hauls once a road joins them.`;
   else if (out < cap * 0.6) problem = `Short of ${food.crops.staple}: ${perDay(stapleArriving(world))} of ${Math.round(cap * t.staplePerFood)} t a day. Carry more in from the farm towns further off.`;
   if (!problem) problem = siteProblem(townId);
   townEl.innerHTML = `
@@ -1521,7 +1562,7 @@ function renderFlourMillSite(townId: string): void {
   const cap = perDay(flourCapacity(world));
   let problem = "";
   if (isCutOff(world, townId) || !roadPath(world, townId, world.port ?? townId)) problem = "No road to the port: the wheat can't come in. Build one (<kbd>R</kbd>).";
-  else if (wheatArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = "No wheat arriving from the port yet: truckers bring it on its short road, or run a lorry (<kbd>L</kbd>).";
+  else if (wheatArriving(world) * SECONDS_PER_GAME_DAY < 1) problem = `No wheat arriving from the port yet: truckers bring it on its short road, or ${haulierMove("run a lorry (<kbd>L</kbd>).", "build a haulage yard (<kbd>Y</kbd>) at the port so hauliers reach the mill.")}`;
   if (!problem) problem = siteProblem(townId);
   townEl.innerHTML = `
     <div class="town-card">
@@ -1635,6 +1676,7 @@ function renderTown(townId: string): void {
       ${strikeBadge(laneAtTown(townId))}
       ${problemText(townId)}
       ${growthText(townId, town.name)}
+      ${serviceText(townId, town.name)}
       ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
       ${world.tuning.goodsEnabled ? fuelText(townId) : ""}
       ${world.tuning.goodsEnabled ? cementText(townId) : ""}
@@ -1682,7 +1724,7 @@ function problemText(townId: string): string {
   const town = world.towns.get(townId);
   if (growth && town && world.cement && growth.cementHeld > growth.base * 0.05 && town.population >= growth.target * 0.97) {
     const works = townName(world.cement.worksId);
-    return `<p class="callout hook"><span class="k">The problem here</span>${townName(townId)} can't grow: no cement. It gets ${pct(cementServed(world, townId))} of what it wants; all of it would grow it ${Math.round(growth.cementHeld)}k more. Carry cement from ${works}: a lorry (<kbd>L</kbd>), or a freight train on track.${world.cement.working ? "" : ` Or restore ${works}.`}</p>`;
+    return `<p class="callout hook"><span class="k">The problem here</span>${townName(townId)} can't grow: no cement. It gets ${pct(cementServed(world, townId))} of what it wants; all of it would grow it ${Math.round(growth.cementHeld)}k more. Carry cement from ${works}: ${haulierMove("a lorry (<kbd>L</kbd>), or a freight train on track.", `build a haulage yard (<kbd>Y</kbd>) at ${works} so hauliers reach it, or a freight train on track.`)}${world.cement.working ? "" : ` Or restore ${works}.`}</p>`;
   }
   // A worn road your vehicles pay for (brief, Revision 2: wear per corridor).
   const worn = wornRoadAt(world, townId);
@@ -1901,6 +1943,12 @@ function budgetParts() {
       ? `<p class="callout hook treasury"><span class="k">Treasury</span>About ${naira(due)} over the reserve goes to the treasury ${when}; spend it or set it aside.</p>`
       : `<p class="hint">Treasury: nothing over the ${naira(t.remittanceReserve)} reserve to take ${when}.</p>`
     : "";
+  // The budget year's end (sweep.ts): what would go back, and what you may keep.
+  const sweep = t.sweepEnabled
+    ? sweepDue(world) >= 1
+      ? `<p class="callout hook treasury"><span class="k">Budget year</span>It ends day ${gameDay(world, world.sweep.endsAtSeconds)}: ${naira(sweepDue(world))} above what you may carry over (${naira(carryOver(world))}) goes back to the treasury unless you spend it or name a project.</p>`
+      : `<p class="hint">Budget year ends day ${gameDay(world, world.sweep.endsAtSeconds)}; you may carry over ${naira(carryOver(world))}.</p>`
+    : "";
   const project = world.project;
   const held = project ? heldForProject(world) : 0;
   const saving = project
@@ -1916,7 +1964,7 @@ function budgetParts() {
   const kept = net - b.remitted - b.bonds;
   const levyHint = t.levyEnabled ? `<p class="hint">The treasury takes ${pct(t.levyShare)} of what you earn, as you earn it: fares, goods, tolls and levies, not the state's allocation. What you keep, you keep.</p>` : "";
   const remitHint = t.remittanceEnabled ? `<p class="hint">Every ${t.remittancePeriodDays} days the treasury takes ${pct(t.remittanceShare)} of funds above ${naira(t.remittanceReserve)}, never more than the period's surplus. Money set aside for a project is safe.</p>` : "";
-  return { b, signed, lines, income, spending, row, net, kept, took, bondsLine, struck, countdown, saving, levyHint, remitHint };
+  return { b, signed, lines, income, spending, row, net, kept, took, bondsLine, struck, countdown, sweep, saving, levyHint, remitHint };
 }
 
 // The Treasury drawer (brief, Revision 3, Money, 5; the design lab pick,
@@ -1928,7 +1976,7 @@ function treasuryHtml(): string {
   const p = budgetParts();
   const chains = chainLines();
   const worst = chains.find((chain) => chain.state === "bad") ?? chains.find((chain) => chain.state === "warn");
-  const tab = `<div class="tab"><span class="k">Treasury</span> <span class="num ${p.kept < 0 ? "bad" : "good"}">${p.signed(p.kept)}/day kept</span>${p.b.remitted >= 0.5 ? ` · levy <span class="num bad">${p.signed(-p.b.remitted)}</span>` : ""}${p.b.bonds >= 0.5 ? ` · bonds <span class="num bad">${p.signed(-p.b.bonds)}</span>` : ""}${worst ? ` · <span class="chain ${worst.state}"><b>${worst.name}</b> ${worst.short}</span>` : ""}<span class="more">▴</span></div>`;
+  const tab = `<div class="tab"><span class="k">Treasury</span> <span class="num ${p.kept < 0 ? "bad" : "good"}">${p.signed(p.kept)}/day kept</span>${p.b.remitted >= 0.5 ? ` · levy <span class="num bad">${p.signed(-p.b.remitted)}</span>` : ""}${p.b.bonds >= 0.5 ? ` · bonds <span class="num bad">${p.signed(-p.b.bonds)}</span>` : ""}${world.tuning.sweepEnabled && sweepDue(world) >= 1 ? ` · year ends day ${gameDay(world, world.sweep.endsAtSeconds)}: <span class="num bad">−${naira(sweepDue(world))}</span> to go` : ""}${worst ? ` · <span class="chain ${worst.state}"><b>${worst.name}</b> ${worst.short}</span>` : ""}<span class="more">▴</span></div>`;
   const income = p.income.reduce((sum, [, x]) => sum + x, 0);
   const spent = p.spending.reduce((sum, [, x]) => sum + x, 0);
   const col = (title: string, inner: string) => `<div class="tcol"><h3>${title}</h3>${inner}</div>`;
@@ -1937,7 +1985,7 @@ function treasuryHtml(): string {
     <div class="tgrid">
       ${col("Income", `<div class="budget">${p.income.map(p.row).join("")}<span class="total">In</span><span class="total num">${p.signed(income)}</span></div>`)}
       ${col("Spending", `<div class="budget">${p.spending.map(p.row).join("")}<span class="total">Out</span><span class="total num bad">${p.signed(spent)}</span>${p.struck}</div>`)}
-      ${col("Treasury and bonds", `<div class="budget"><span class="muted">Net</span><span class="num ${p.net < 0 ? "bad" : ""}">${p.signed(p.net)}</span>${p.took}${p.bondsLine}<span class="total">You keep</span><span class="total num ${p.kept < 0 ? "bad" : "good"}">${p.signed(p.kept)}</span></div>${p.countdown}${bondsHtml(p.b.bonds)}${p.saving}${p.levyHint}${p.remitHint}`)}
+      ${col("Treasury and bonds", `<div class="budget"><span class="muted">Net</span><span class="num ${p.net < 0 ? "bad" : ""}">${p.signed(p.net)}</span>${p.took}${p.bondsLine}<span class="total">You keep</span><span class="total num ${p.kept < 0 ? "bad" : "good"}">${p.signed(p.kept)}</span></div>${p.countdown}${p.sweep}${bondsHtml(p.b.bonds)}${p.saving}${p.levyHint}${p.remitHint}`)}
       ${col("Chains", chains.length > 0 ? chains.map((chain) => `<p class="chain ${chain.state}"><b>${chain.name}</b> ${chain.line}</p>`).join("") : `<p class="hint">No chains on this map.</p>`)}
     </div></div>`;
 }

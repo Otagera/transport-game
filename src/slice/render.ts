@@ -1000,6 +1000,16 @@ interface Box { x: number; y: number; w: number; h: number }
 let occupied: Box[] = [];
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
+// A haulage yard (yards.ts): a small brown square at a town's or site's
+// top-left, where goods leave from and hauliers reach further.
+function drawYardMark(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = COLORS.goods;
+  ctx.strokeStyle = COLORS.kept;
+  ctx.lineWidth = 1;
+  ctx.fillRect(x, y, 7, 7);
+  ctx.strokeRect(x + 0.5, y + 0.5, 6, 6);
+}
+
 function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, town: SliceTown, state: DrawState): void {
   const p = toScreen(view, town.x, town.y);
   const r = townRadius(town, view);
@@ -1049,6 +1059,7 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
     ctx.arc(p.x, p.y, r - 4, 0, Math.PI * 2);
     ctx.stroke();
   }
+  if (world.yards.has(town.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
 
   drawWaiting(ctx, p.x + ringR + 8, p.y - ringR + 2, waitingAt(world, town.id));
 
@@ -1197,6 +1208,7 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: SliceWorld, view: Vi
     ctx.closePath();
     ctx.fill();
   }
+  if (world.yards.has(town.id)) drawYardMark(ctx, p.x - half - 6, p.y - half - 6);
   const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
   const label =
     town.industry === "depot" && fuel ? `fuel imports · ${perDay(world.tuning.fuelImportShare * fuel.baseDemand)} t/day`
