@@ -995,6 +995,40 @@ Steps, each played before the next:
    - Asked for: town names from all over Nigeria (built, one region per map); save files of a
      run, readable by hand or by a script.
 
+   **Played 2026-10-21, Revision 4 steps 1-3 (map 2418, twice; build `7e81e3e`, before the
+   hauliers fix):** the first game to day 340, the second to day 301, both "done". The second,
+   day 200 → 300: trips made 2,376 → 3,321, but your riders flat (1,563 → 1,678) while informal
+   doubled (814 → 1,643); no seat 1,039 → 1,916; the year-end sweep took ₦581,609 (funds cut to
+   ₦50,000 on days 240 and 300), more than anything you bought; quiet stretches (days 230-260,
+   only sales); supplies to Kabba and Lokoja and wheat to the flour mill 0% delivered on day
+   301, with nothing to carry them. In your words:
+   - Why done: *"I had connected the big oil stuff with rail and nothing else to do."*
+   - The sweep: *"I saw it coming once, I was waiting for the money to grow and it ate it."* You
+     built rail in pieces because *"it didn't seem like the money could grow enough to connect
+     them directly"* -- naming a project to save for wasn't remembered.
+   - Cement: quarries opened late, but *"Did any re-open? I just left the road."*
+   - The danfos taking the late growth, and goods at 0% delivered: *"nope"*, not noticed.
+
+   Findings:
+   - **The sweep blocks the big project instead of forcing a choice.** Saving for something
+     large is exactly what the year-end sweep punishes, and the escape (name a project) isn't
+     where you look when you're waiting. An OpenCode player hit the same trap at day 120
+     (₦45,689 taken; "saving for rail only protected the project's price").
+   - **Late change happens off-screen.** Quarries opening, the danfos doubling, supply flows
+     with no carrier: all real, none noticed. A change you don't see isn't a problem to solve.
+   - **The end is still "nothing else to do"** once the high-value chain (crude by rail) is
+     connected; the rest of the map's needs didn't read as asks.
+
+   **The same build, played by OpenCode** (free model, map 2411, to day 120, through
+   `scripts/slice-play.ts`): ended ₦50,000, 2,645 trips a day (yours 2,317), no seat 2,537;
+   rail the standout (₦1,531 a day from two trains), the cement chain satisfying. Confused by:
+   paving refused with "no road joins them" for served pairs, and "road is full: next rung
+   paved" naming no road (days 30-35); a BRT on a ₦41,000 lane 8% full and losing while the
+   advice kept recommending it (day 70); routes 100% full with negative net, "worn"/"jammed"
+   with no clear move, and a third train making rail "overcapacity" (days 100-118); haulage
+   yards opaque ("reach" unexplained, most at ~0 t a day); towns' expected service mattering
+   nowhere it could see.
+
 Rules for working this way:
 
 - **Every step is played before the next starts.** Every finding that mattered came from
