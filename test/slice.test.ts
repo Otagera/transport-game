@@ -1326,7 +1326,7 @@ describe("slice: through-routes (playtest, day 14)", () => {
 describe("slice: goods (step 4c)", () => {
   // MAP with Big as the port. Markets: Big and Mid (>= 40k). Far's produce goes to Mid, its nearest.
   const goodsWorld = (overrides: Partial<SliceTuning> = {}) =>
-    createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, ...overrides });
+    createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, noPlayerLorries: false, ...overrides });
 
   test("the lorry hint: what one more lorry would carry, never more than it can lift or than nobody else moves", () => {
     const w = goodsWorld({ truckersEnabled: false });
@@ -1885,7 +1885,7 @@ describe("slice: halts on the old line (track 2)", () => {
 describe("slice: a lorry on worn roads says so (track 2)", () => {
   test("worn dirt roads read as the lorry route's reason, naming the roads to pave", () => {
     // Big is the port: supplies out to Far, Far's produce in to market Mid -- goods both ways along it.
-    const w = createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, inheritedRoadCondition: 0.35 });
+    const w = createSliceWorld({ ...MAP, port: "big" }, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, noPlayerLorries: false, inheritedRoadCondition: 0.35 });
     addLorry(w, "big", "far");
     run(w, 120);
     const d = diagnoseLorryRoute(w, w.lorryRoutes[0]!.id)!;
@@ -2695,7 +2695,7 @@ describe("Revision 2: industries that open and close -- the quarry", () => {
   });
 
   test("served, its stone raises the towns it reaches: their cap grows by the share delivered", () => {
-    const w = quarryWorld({ industryEveryMinDays: 999, industryEveryMaxDays: 999 });
+    const w = quarryWorld({ industryEveryMinDays: 999, industryEveryMaxDays: 999, noPlayerLorries: false });
     openQuarry(w);
     const [site] = [...w.industries.keys()];
     const buyer = [...industryFlows(w)].filter((f) => f.to !== "big").sort((p, q) => q.rate - p.rate)[0]!.to;
