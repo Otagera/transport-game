@@ -35,6 +35,7 @@ import { checkBond, bondAmount, bondPerDay } from "../src/engine/slice/bonds";
 import { carryOver, sweepDue } from "../src/engine/slice/sweep";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { yardGain } from "../src/engine/slice/yards";
+import { cementBreak } from "../src/engine/slice/cement";
 import { parkLevyGain, parkReport } from "../src/engine/slice/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "../src/engine/slice/metro";
 
@@ -79,7 +80,15 @@ function state(w: SliceWorld): string {
     const bits = [`${t.name} ${Math.round(t.population)}k ${growthTrend(w, id)}`];
     if (isCutOff(w, id)) bits.push("NO ROAD");
     if (g) bits.push(`you carry ${pc(g.playerShare)} of its trips${g.expected > 0 ? ` (it expects ${pc(g.expected)})` : ""}`);
-    if (g && g.cementHeld > 2) bits.push(`cement ${pc(cementServed(w, id))}, holding back ${Math.round(g.cementHeld)}k people`);
+    if (g && g.cementHeld > 2) {
+      // What breaks the chain, and so the move (cement.ts cementBreak).
+      const broken = cementBreak(w);
+      const why = broken?.kind === "idle" ? "the works is idle: restore it"
+        : broken?.kind === "no-quarry" ? `no quarry is working -- the next opens about day ${broken.nextDay}: give it a road and a yard then${broken.siloId ? `; meanwhile a yard at ${name(w, broken.siloId)} spreads imported cement` : ""}`
+        : broken?.kind === "quarry" ? `the works is short of limestone: connect ${name(w, broken.quarryId)} (road and yard, or track)`
+        : "the works makes enough: carry it here (a yard at the works, or freight)";
+      bits.push(`cement ${pc(cementServed(w, id))}, holding back ${Math.round(g.cementHeld)}k people -- ${why}`);
+    }
     const fuel = fuelSupply(w, id);
     if (fuel && fuel.supplied < 0.6) bits.push(`fuel ${pc(fuel.supplied)}`);
     if (foodWant(w, id) > 0) bits.push(`market fed ${pc(marketFed(w, id))}`);

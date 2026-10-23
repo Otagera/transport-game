@@ -38,6 +38,7 @@ import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopl
 import { variedSliceMap } from "@engine/slice/variation";
 import { generatedMapInfo, generatedSliceMap } from "@engine/slice/generate";
 import { agberoCutAt, parkReport } from "@engine/slice/parks";
+import { cementBreak } from "@engine/slice/cement";
 import { metroLines, metroRiders, runMetros } from "@engine/slice/metro";
 import { indexOutcomes, townShare as shareOfTown, townShareBetweenTowns } from "@engine/slice/world";
 import { buildSliceTerrain } from "@engine/slice/terrain";
@@ -3695,5 +3696,23 @@ describe("Revision 4, step 6: a metro (metro.ts)", () => {
     const town = biggest(w);
     town.population = 400;
     expect(applyAction(w, { kind: "metro", townId: town.id }).ok).toBe(false);
+  });
+});
+
+describe("a cement shortage names where the chain breaks (cement.ts cementBreak, 2026-10-23)", () => {
+  test("idle works, then no quarry working (with when the next opens), then a quarry the works doesn't hear from", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const cement = w.cement!;
+    cement.working = false;
+    expect(cementBreak(w)).toEqual({ kind: "idle" });
+    cement.working = true;
+    w.industries.clear();
+    const none = cementBreak(w)!;
+    expect(none.kind).toBe("no-quarry");
+    expect((none as { nextDay: number }).nextDay).toBeGreaterThanOrEqual(1);
+    w.industrySchedule.nextAtSeconds = 0;
+    const opened = openQuarry(w);
+    expect(opened).not.toBeNull();
+    expect(cementBreak(w)).toEqual({ kind: "quarry", quarryId: (opened as { townId: string }).townId });
   });
 });

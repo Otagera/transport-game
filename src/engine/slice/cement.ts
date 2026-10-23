@@ -219,3 +219,41 @@ export function inheritedRoad(world: SliceWorld, id: string, a: string, b: strin
   const road = world.simulation.map.segments.find((segment) => segment.id === id)!;
   road.condition = world.tuning.wearEnabled ? world.tuning.inheritedRoadCondition : 1;
 }
+
+/**
+ * Where the building chain is broken, for a town short of cement: the move
+ * depends on it (OpenCode playtest, 2026-10-23: both quarries worked out,
+ * cement fell to 2%, and the only advice was to carry cement from a works
+ * that had none to give).
+ *   - idle: the works hasn't been restored;
+ *   - no-quarry: no quarry is working -- the next opens about `nextDay` (game
+ *     day); imported cement comes through the silo where there is one;
+ *   - quarry: a quarry is working but little of its limestone reaches the
+ *     works -- connect it (road and yard, or track);
+ *   - carry: the works makes enough; it isn't reaching the town.
+ */
+export type CementBreak =
+  | { kind: "idle" }
+  | { kind: "no-quarry"; nextDay: number; siloId: string | null }
+  | { kind: "quarry"; quarryId: string }
+  | { kind: "carry" };
+
+export function cementBreak(world: SliceWorld): CementBreak | null {
+  const cement = world.cement;
+  if (!cement) return null;
+  if (!cement.working) return { kind: "idle" };
+  const capacity = worksCapacity(world);
+  if (capacity > 0 && worksOutput(world) >= 0.6 * capacity) return { kind: "carry" };
+  const quarries = [...world.industries.values()].filter((industry) => industry.kind === "quarry" && world.towns.has(industry.id));
+  if (quarries.length === 0) {
+    const nextDay = Math.ceil((world.industrySchedule.nextAtSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1;
+    return { kind: "no-quarry", nextDay, siloId: cement.siloId };
+  }
+  // The quarry sending the works least of what it makes: the one to connect.
+  const sent = (id: string) => {
+    const outcome = world.goods.outcomes.get(flowKey({ from: id, to: cement.worksId, kind: "supplies" }));
+    return (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+  };
+  const worst = quarries.sort((p, q) => sent(p.id) - sent(q.id))[0]!;
+  return { kind: "quarry", quarryId: worst.id };
+}

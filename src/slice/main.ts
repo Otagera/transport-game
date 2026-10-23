@@ -66,7 +66,7 @@ import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/sli
 import { siteProduction, type SiteLimit } from "@engine/slice/production";
 import { exportsArriving, farmland, farmTowns, flourCapacity, flourOutput, flourServed, flourWant, foodActive, foodServed, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/slice/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/slice/workers";
-import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput } from "@engine/slice/cement";
+import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput, cementBreak } from "@engine/slice/cement";
 import { isYourRoad } from "@engine/slice/upkeep";
 import { goneAt, restoreCost as restoreRoadCost } from "@engine/slice/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/slice/problems";
@@ -1843,7 +1843,14 @@ function problemText(townId: string): string {
   const town = world.towns.get(townId);
   if (growth && town && world.cement && growth.cementHeld > growth.base * 0.05 && town.population >= growth.target * 0.97) {
     const works = townName(world.cement.worksId);
-    return `<p class="callout hook"><span class="k">The problem here</span>${townName(townId)} can't grow: no cement. It gets ${pct(cementServed(world, townId))} of what it wants; all of it would grow it ${Math.round(growth.cementHeld)}k more. Carry cement from ${works}: ${haulierMove("a lorry (<kbd>L</kbd>), or a freight train on track.", `build a haulage yard (<kbd>Y</kbd>) at ${works} so hauliers reach it, or a freight train on track.`)}${world.cement.working ? "" : ` Or restore ${works}.`}</p>`;
+    // The move depends on where the chain is broken (cement.ts cementBreak).
+    const broken = cementBreak(world);
+    const move =
+      broken?.kind === "idle" ? `Restore ${works}, then bring it limestone.`
+      : broken?.kind === "no-quarry" ? `No quarry is working, so ${works} has no limestone: the next opens about day ${broken.nextDay} -- give it a road and a haulage yard (<kbd>Y</kbd>) when it does.${broken.siloId ? ` Meanwhile imported cement comes through ${townName(broken.siloId)}: a yard there lets hauliers reach further.` : ""}`
+      : broken?.kind === "quarry" ? `${works} is short of limestone: ${townName(broken.quarryId)} is working but little reaches it. Give the quarry a road (<kbd>R</kbd>) and a haulage yard (<kbd>Y</kbd>), or track for a freight train.`
+      : `Carry cement from ${works}: ${haulierMove("a lorry (<kbd>L</kbd>), or a freight train on track.", `build a haulage yard (<kbd>Y</kbd>) at ${works} so hauliers reach it, or a freight train on track.`)}`;
+    return `<p class="callout hook"><span class="k">The problem here</span>${townName(townId)} can't grow: no cement. It gets ${pct(cementServed(world, townId))} of what it wants; all of it would grow it ${Math.round(growth.cementHeld)}k more. ${move}</p>`;
   }
   // A worn road your vehicles pay for (brief, Revision 2: wear per corridor).
   const worn = wornRoadAt(world, townId);
