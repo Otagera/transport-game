@@ -46,6 +46,8 @@ export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oi
 export interface GameRoadDef {
   a: string;
   b: string;
+  /** The road's line between its towns, map cells (region.ts: the old highways, laid over the land); absent, straight. */
+  via?: Array<[number, number]>;
 }
 
 export interface GameRiverDef {

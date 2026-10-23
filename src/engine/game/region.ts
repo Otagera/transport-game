@@ -14,7 +14,6 @@ import {
   crosses,
   distance,
   generatedMapInfo,
-  isDryAround,
   shuffle,
   toSegment,
   townId,
@@ -81,6 +80,8 @@ export interface RegionInfo {
   home: GeneratedMapInfo;
   /** Each cluster's regional town, the home city first. */
   hubs: string[];
+  /** Where imports land from the sea: the home city on a coast, else the coast cluster's regional town (the home city is then a dry port). */
+  seaport: string;
   /** How many draws the guards rejected. */
   rejected: number;
 }
@@ -96,43 +97,122 @@ export function regionMap(base: GameMapDef, seed: number): GameMapDef {
 
 export function regionInfo(base: GameMapDef, seed: number): RegionInfo {
   const home = generatedMapInfo(base, seed);
-  if (seed === 0) return { map: home.map, home, hubs: [home.trunk[0]], rejected: 0 };
+  if (seed === 0) return { map: home.map, home, hubs: [home.trunk[0]], seaport: home.map.port!, rejected: 0 };
   const rng = createRng(seed + 3_000_017);
   for (let draw = 0; draw < MAX_DRAWS; draw += 1) {
     const result = drawRegion(rng, home);
     if (result) return { ...result, home, rejected: draw };
   }
-  return { map: home.map, home, hubs: [home.trunk[0]], rejected: MAX_DRAWS };
+  return { map: home.map, home, hubs: [home.trunk[0]], seaport: home.map.port!, rejected: MAX_DRAWS };
 }
 
-/** A river or sea carried on top to bottom past the box it was drawn in. */
-function runOn(river: GameRiverDef, ox: number, oy: number): GameRiverDef {
-  const points = river.points.map(([x, y]): [number, number] => [x + ox, y + oy]);
-  const first = points[0]!;
-  const last = points[points.length - 1]!;
-  const widths = river.widths ? [river.widths[0]!, ...river.widths, river.widths[river.widths.length - 1]!] : undefined;
-  return { ...river, points: [[first[0], -2], ...points, [last[0], REGION_HEIGHT + 2]], ...(widths ? { widths } : {}) };
+type Box = { x: number; y: number; width: number; height: number };
+
+/**
+ * Clear of the water by `clearance`, each river as wide as the terrain draws it
+ * at that point (generate.ts's isDryAround takes a river's widest, which on a
+ * coast that comes and goes would hold towns far off the shore).
+ */
+function dryOf(water: GameRiverDef[], p: Point, clearance: number): boolean {
+  for (const river of water) {
+    for (let k = 1; k < river.points.length; k += 1) {
+      const [ax, ay] = river.points[k - 1]!;
+      const [bx, by] = river.points[k]!;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lengthSq = dx * dx + dy * dy;
+      const t = lengthSq === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / lengthSq));
+      const width = river.widths ? river.widths[k - 1]! + (river.widths[k]! - river.widths[k - 1]!) * t : river.width;
+      if (Math.hypot(p.x - (ax + t * dx), p.y - (ay + t * dy)) <= width / 2 + clearance) return false;
+    }
+  }
+  return true;
 }
 
-/** A river from the region's top to its bottom, meandering about x = cx, with one ford. */
-function drawRiver(rng: Rng, cx: number): GameRiverDef {
-  const rows = [-2, 18, 38, 58, 78, 98, 118, 138, REGION_HEIGHT + 2];
-  let x = cx;
-  const points = rows.map((y): [number, number] => {
-    x = Math.round(Math.max(cx - 14, Math.min(cx + 14, x + between(rng, -7, 7))));
-    return [x, y];
-  });
-  const widths = rows.map(() => between(rng, 2.5, 5));
-  widths[1 + Math.floor(rng() * (rows.length - 2))] = 1.2;
-  return { points, width: 3, widths };
+/** A polyline's value along its run: x at row y (`across` false) or y at column x (true), between its points. */
+function along(points: Array<[number, number]>, at: number, across: boolean): number {
+  const [u, v] = across ? [0, 1] : [1, 0];
+  const sorted = [...points].sort((a, b) => a[u]! - b[u]!);
+  if (at <= sorted[0]![u]!) return sorted[0]![v]!;
+  for (let k = 1; k < sorted.length; k += 1) {
+    const a = sorted[k - 1]!;
+    const b = sorted[k]!;
+    if (at <= b[u]!) return a[v]! + ((b[v]! - a[v]!) * (at - a[u]!)) / (b[u]! - a[u]! || 1);
+  }
+  return sorted[sorted.length - 1]![v]!;
 }
 
-/** The sea along the west or east edge of the region, `depth` cells in. */
-function drawSea(rng: Rng, side: -1 | 1, depth: number): GameRiverDef {
+/**
+ * The sea along the west or east edge, drawn as a very wide river off the
+ * edge: its coast wanders 3-14 cells in, row by row, so the shore has bays
+ * and headlands. A coast home city's own sea is kept as the slice map drew it
+ * where the home box is.
+ */
+function drawCoast(rng: Rng, side: -1 | 1, depth: number, keep?: GameRiverDef): GameRiverDef {
   const offMap = 8;
   const edgeX = side < 0 ? -offMap : REGION_WIDTH - 1 + offMap;
-  const rows = [-2, 30, 60, 90, 120, REGION_HEIGHT + 2];
-  return { points: rows.map((y): [number, number] => [Math.round(edgeX + side * between(rng, -1.5, 1.5)), y]), width: 2 * (offMap + depth) };
+  const out = keep ? keep.points.map((p, i) => ({ p, w: keep.widths?.[i] ?? keep.width })) : [];
+  const top = out.length > 0 ? Math.min(...out.map((o) => o.p[1])) - 8 : Infinity;
+  const bottom = out.length > 0 ? Math.max(...out.map((o) => o.p[1])) + 8 : -Infinity;
+  let d = depth;
+  for (let y = -2; y <= REGION_HEIGHT + 2; y += 10) {
+    if (y >= top && y <= bottom) continue;
+    d = Math.max(3, Math.min(14, d + between(rng, -3.5, 3.5)));
+    out.push({ p: [Math.round(edgeX + side * between(rng, -1, 1)), y], w: 2 * (offMap + d) });
+  }
+  out.sort((a, b) => a.p[1] - b.p[1]);
+  return { points: out.map((o) => o.p), width: 2 * (offMap + depth), widths: out.map((o) => o.w) };
+}
+
+/** The coast's line at row y: the first dry column in from the sea's edge. */
+function coastAt(coast: GameRiverDef, side: -1 | 1, y: number): number {
+  const centre = along(coast.points, y, false);
+  const width = along(coast.points.map(([, py], i): [number, number] => [coast.widths?.[i] ?? coast.width, py]), y, false);
+  return centre - (side * width) / 2;
+}
+
+/**
+ * The big river (the Niger, the Benue): in from the region's inland edge,
+ * meandering across to the sea, beside the home box rather than through it
+ * (the home map's water is its own), widening as it goes, with two fords.
+ */
+function drawMainRiver(rng: Rng, seaSide: -1 | 1, coast: GameRiverDef, box: Box): GameRiverDef {
+  const above: [number, number] = [12, box.y - 12];
+  const below: [number, number] = [box.y + box.height + 12, REGION_HEIGHT - 12];
+  const band = above[1] - above[0] >= below[1] - below[0] ? above : below;
+  const nearBox = (x: number) => x >= box.x - 28 && x <= box.x + box.width + 28;
+  const points: Array<[number, number]> = [];
+  let y = between(rng, band[0], band[1]);
+  for (let x = seaSide < 0 ? REGION_WIDTH + 2 : -2; ; x += seaSide * 14) {
+    y = Math.max(10, Math.min(REGION_HEIGHT - 10, y + between(rng, -9, 9)));
+    if (nearBox(x)) y = Math.max(band[0], Math.min(band[1], y));
+    const shore = coastAt(coast, seaSide, y);
+    if (seaSide < 0 ? x <= shore : x >= shore) {
+      points.push([Math.round(Math.max(0, Math.min(REGION_WIDTH - 1, shore + seaSide * 6))), Math.round(y)]);
+      break;
+    }
+    points.push([Math.round(x), Math.round(y)]);
+  }
+  const widths = points.map((_, i) => 2.5 + (3 * i) / Math.max(1, points.length - 1));
+  for (const k of shuffle(rng, points.map((_, i) => i).slice(1, -2)).slice(0, 2)) widths[k] = 1.2;
+  return { points, width: 4, widths };
+}
+
+/** A river's run from one point to another: a meander every ~10 cells, `from` to `to` wide. */
+function meander(rng: Rng, a: Point, b: Point, from: number, to: number): GameRiverDef {
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const steps = Math.max(2, Math.round(length / 10));
+  const [nx, ny] = [-(b.y - a.y) / (length || 1), (b.x - a.x) / (length || 1)];
+  const points: Array<[number, number]> = [];
+  const widths: number[] = [];
+  let off = 0;
+  for (let k = 0; k <= steps; k += 1) {
+    const t = k / steps;
+    off = k === 0 || k === steps ? 0 : Math.max(-6, Math.min(6, off + between(rng, -3, 3)));
+    points.push([Math.round(a.x + (b.x - a.x) * t + nx * off), Math.round(a.y + (b.y - a.y) * t + ny * off)]);
+    widths.push(from + (to - from) * t);
+  }
+  return { points, width: to, widths };
 }
 
 /** Distance from a point to a box (0 inside it). */
@@ -159,17 +239,48 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
   const roads: GameRoadDef[] = home.map.roads.map((r) => ({ ...r }));
   const rails: GameRoadDef[] = (home.map.rails ?? []).map((r) => ({ ...r }));
   const hills: GameHillDef[] = (home.map.terrain?.hills ?? []).map((h) => ({ ...h, x: h.x + ox, y: h.y + oy }));
-  const water: GameRiverDef[] = homeRivers.map((r) => runOn(r, ox, oy));
+  // The water drains: the sea along one edge, its coast wandering; the big river in
+  // from the inland edge and out to it; the home river joining the big river at one
+  // end and rising just past the home box at the other; a tributary or two.
+  const shift = (r: GameRiverDef): GameRiverDef => ({ ...r, points: r.points.map(([x, y]): [number, number] => [x + ox, y + oy]) });
   const seaDepth = Math.round(between(rng, ...SEA_DEPTH));
-  if (!homeSea) water.push(drawSea(rng, seaSide, seaDepth));
+  const coast = drawCoast(rng, seaSide, seaDepth, homeSea ? shift(homeSea) : undefined);
+  const main = drawMainRiver(rng, seaSide, coast, { x: ox, y: oy, width: HOME_WIDTH, height: HOME_HEIGHT });
+  const water: GameRiverDef[] = [coast, main];
+  const mainAt = (x: number) => along(main.points, x, true);
+  for (const r of homeRivers.filter((r) => r !== homeSea)) {
+    const run = shift(r);
+    const widths = run.widths ?? run.points.map(() => run.width);
+    const mouthAtBottom = mainAt(run.points[0]![0]) > oy;
+    const [mouth, source] = mouthAtBottom ? [run.points.length - 1, 0] : [0, run.points.length - 1];
+    const end = run.points[mouth]!;
+    const join = meander(rng, { x: end[0], y: end[1] }, { x: end[0] + Math.round(between(rng, -6, 6)), y: Math.round(mainAt(end[0])) }, widths[mouth]!, widths[mouth]! + 0.5);
+    const rise = run.points[source]!;
+    const spring: [number, number] = [rise[0] + Math.round(between(rng, -3, 3)), rise[1] + (mouthAtBottom ? -10 : 10)];
+    const onwards = join.points.slice(1);
+    const points = mouthAtBottom ? [spring, ...run.points, ...onwards] : [...onwards.reverse(), ...run.points, spring];
+    const joinWidths = join.widths!.slice(1);
+    const allWidths = mouthAtBottom ? [1, ...widths, ...joinWidths] : [...joinWidths.reverse(), ...widths, 1];
+    water.push({ ...run, points, widths: allWidths });
+  }
   // One or two more rivers, in the region beyond the home box.
   const far = homeSide < 0 ? [HOME_WIDTH + 20, W - 40] : [40, W - HOME_WIDTH - 20];
   const extra = rng() < 0.5 ? 1 : 2;
-  for (let k = 0; k < extra; k += 1) water.push(drawRiver(rng, Math.round(far[0]! + ((far[1]! - far[0]!) * (k + 0.5 + between(rng, -0.25, 0.25))) / extra)));
+  for (let k = 0, tries = 0; k < extra && tries < 60; tries += 1) {
+    const s = { x: Math.round(between(rng, far[0]!, far[1]!)), y: Math.round(between(rng, 12, H - 12)) };
+    const into = Math.round(Math.max(4, Math.min(W - 5, s.x + seaSide * between(rng, 5, 25))));
+    const t = { x: into, y: Math.round(mainAt(into)) };
+    if (Math.abs(s.y - t.y) < 35 || Math.abs(s.x - coastAt(coast, seaSide, s.y)) < 40) continue;
+    const trib = meander(rng, s, t, 1.4, 3);
+    if (trib.points.some(([x, y]) => toBox({ x, y }, homeBox) < 8)) continue;
+    trib.widths![1 + Math.floor(rng() * (trib.points.length - 2))] = 1.2;
+    water.push(trib);
+    k += 1;
+  }
 
   const at = (id: string) => towns.find((t) => t.id === id)!;
   const inBounds = (p: Point) => p.x >= EDGE_MARGIN && p.x <= W - 1 - EDGE_MARGIN && p.y >= EDGE_MARGIN && p.y <= H - 1 - EDGE_MARGIN;
-  const dry = (p: Point) => isDryAround(water, p, WATER_CLEARANCE);
+  const dry = (p: Point) => dryOf(water, p, WATER_CLEARANCE);
   const spaced = (p: Point, others: Point[]) => others.every((q) => distance(p, q) >= MIN_SPACING);
 
   // Names: the rest of the home map's region's list, none the home cluster uses.
@@ -181,14 +292,13 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
   // Cluster centres, each its regional town. When the home city isn't on the coast,
   // the first cluster is on it, and its regional town is the port.
   const centres: Point[] = [];
-  const seaInner = seaSide < 0 ? seaDepth : W - 1 - seaDepth; // the coast line, roughly
   for (let attempt = 0; attempt < 3000 && centres.length < CLUSTERS; attempt += 1) {
     const port = !homeSea && centres.length === 0;
     const p = port
-      ? { x: Math.round(seaInner - seaSide * between(rng, 6, 9)), y: Math.round(between(rng, 20, H - 20)) }
+      ? ((y) => ({ x: Math.round(coastAt(coast, seaSide, y) - seaSide * between(rng, 6, 9)), y }))(Math.round(between(rng, 20, H - 20)))
       : { x: Math.round(between(rng, 20, W - 21)), y: Math.round(between(rng, 18, H - 19)) };
     if (!inBounds(p) || !dry(p) || toBox(p, homeBox) < HOME_GAP || centres.some((c) => distance(c, p) < CLUSTER_GAP)) continue;
-    if (port && isDryAround(water, p, WATER_CLEARANCE + 6)) continue; // a port is by the sea
+    if (port && dryOf(water, p, WATER_CLEARANCE + 6)) continue; // a port is by the sea
     centres.push(p);
   }
   if (centres.length < CLUSTERS) return null;
@@ -263,8 +373,11 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
   }
   if (groups.componentCount() !== 1) return null;
 
-  // The port: the home city's on a coast, else the coast cluster's regional town.
-  const port = homeSea ? home.map.port! : hubs[0]!.id;
+  // The port the chains use is the home city's, as on the slice map: on the coast a
+  // seaport, inland a dry port (Kaduna's, Ibadan's), its imports landing at the
+  // seaport -- the coast cluster's regional town -- and coming up the old railway.
+  const port = home.map.port!;
+  const seaport = homeSea ? port : hubs[0]!.id;
 
   // The old railway on: from the home city to the port's cluster (imports by rail), else
   // to the nearest regional town; straight, and through no town.
@@ -276,19 +389,31 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
   // A range of hills between two clusters, clear of every town.
   const pairs = shuffle(rng, [[homeBox.x + HOME_WIDTH / 2, homeBox.y + HOME_HEIGHT / 2], ...centres.map((c) => [c.x, c.y])].flatMap((a, i, all) => all.slice(i + 1).map((b) => [a, b] as const)));
   for (const [a, b] of pairs) {
+    // A range, not a row of knolls: hills overlapping along a bowed spine across the
+    // line between the two, highest in the middle, tapering at the ends.
     const range: GameHillDef[] = [];
-    for (let k = 0; k < 5; k += 1) {
-      const t = 0.32 + k * 0.09;
-      const side = between(rng, -5, 5);
-      const len = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!) || 1;
+    const len = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!) || 1;
+    const [ux, uy] = [(b[0]! - a[0]!) / len, (b[1]! - a[1]!) / len];
+    const [mx, my] = [(a[0]! + b[0]!) / 2, (a[1]! + b[1]!) / 2];
+    const span = Math.min(70, len * 0.9);
+    const bow = between(rng, -10, 10);
+    const tilt = between(rng, -0.35, 0.35);
+    const count = Math.round(span / 6);
+    for (let k = 0; k <= count; k += 1) {
+      const t = k / count - 0.5;
+      // Across the line between the clusters (so a road or track between them meets it), tilted a little.
+      const along = t * span;
+      const off = bow * (1 - 4 * t * t) + between(rng, -1.5, 1.5);
+      const [dx, dy] = [-uy + ux * tilt, ux + uy * tilt];
+      const peak = Math.cos(Math.PI * t);
       range.push({
-        x: Math.round(a[0]! + (b[0]! - a[0]!) * t + (-(b[1]! - a[1]!) / len) * side),
-        y: Math.round(a[1]! + (b[1]! - a[1]!) * t + ((b[0]! - a[0]!) / len) * side),
-        radius: Math.round(between(rng, 7, 10)),
-        height: Math.round(between(rng, 30, 42)) / 10,
+        x: Math.round(mx + dx * along + ux * off),
+        y: Math.round(my + dy * along + uy * off),
+        radius: Math.round(between(rng, 5, 7) + 3 * peak),
+        height: Math.round((2.2 + 2.2 * peak) * between(rng, 8.5, 11.5)) / 10,
       });
     }
-    if (range.every((h) => towns.every((t) => distance(t, h) >= h.radius + 2) && inBounds(h))) {
+    if (range.every((h) => towns.every((t) => distance(t, h) >= h.radius + 2) && inBounds(h) && toBox(h, homeBox) >= h.radius)) {
       hills.push(...range);
       break;
     }
@@ -306,9 +431,16 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
     home: homeBox,
   };
 
+  const terrain = buildGameTerrain(map);
+  // The roads beyond the home cluster laid over the land, as a road you build is:
+  // round the hills, over the rivers at their narrows -- not ruled straight across.
+  for (const road of roads.slice(home.map.roads.length)) {
+    const plan = planCorridor(terrain, [at(road.a), at(road.b)], "auto", new Set([0, 1]));
+    if (plan && plan.polyline.length > 2) road.via = plan.polyline.slice(1, -1).map((p): [number, number] => [p.x, p.y]);
+  }
+
   // Every town reachable by building roads: the inherited roads, plus every road
   // pathing can plan from a town to one of its three nearest.
-  const terrain = buildGameTerrain(map);
   const reach = new UnionFind(towns.map((t) => t.id));
   for (const road of roads) reach.union(road.a, road.b);
   for (const t of towns) {
@@ -320,5 +452,5 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
   }
   if (reach.componentCount() !== 1) return null;
 
-  return { map, hubs: [city.id, ...hubs.map((h) => h.id)] };
+  return { map, hubs: [city.id, ...hubs.map((h) => h.id)], seaport };
 }

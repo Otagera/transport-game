@@ -11,7 +11,7 @@ import { createBudgetTally, createRemittancePeriod } from "./budget";
 import { faresAlong, legFare } from "./fares";
 import { createDayLedger, forgetRoute, lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
-import type { OutcomeRates, GameMapDef, GameRoute, GameTown, GameTuning, GameWorld } from "./types";
+import type { OutcomeRates, GameMapDef, GameRoadDef, GameRoute, GameTown, GameTuning, GameWorld } from "./types";
 import { DEFAULT_GAME_TUNING, SWITCHED_OFF } from "./tuning";
 import { createSettlementState } from "./settlement";
 import { createGoodsState, lorryResale, lorrySummaries } from "./goods";
@@ -61,6 +61,14 @@ function roadSegment(id: string, a: string, b: string, provenance: Segment["prov
   return { id, corridorId: `corridor-${id}`, fromNodeId: a, toNodeId: b, type: "road", level: "ground", condition: 1, provenance, surface: "dirt" };
 }
 
+/** An inherited road's line through its `via` points, and its length along them. */
+function laidOver(def: GameMapDef, road: GameRoadDef): { polyline: Point[]; length: number } {
+  const at = (id: string) => def.towns.find((town) => town.id === id)!;
+  const polyline = [at(road.a), ...road.via!.map(([x, y]) => ({ x, y })), at(road.b)].map(({ x, y }) => ({ x, y }));
+  const length = polyline.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - polyline[i]!.x, p.y - polyline[i]!.y), 0);
+  return { polyline, length };
+}
+
 function buildMap(def: GameMapDef): GeneratedMap {
   const map: GeneratedMap = {
     seed: 0,
@@ -69,7 +77,7 @@ function buildMap(def: GameMapDef): GeneratedMap {
     corridors: [],
     segments: [],
   };
-  def.roads.forEach((road, i) => addRoadToMap(map, `inherited-${i}`, road.a, road.b, "inherited"));
+  def.roads.forEach((road, i) => addRoadToMap(map, `inherited-${i}`, road.a, road.b, "inherited", road.via ? laidOver(def, road) : undefined));
   // The def's towns are copied, not shared: emergent towns grow and the
   // def is the map's starting state, not live state.
   return map;

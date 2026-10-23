@@ -294,7 +294,8 @@ export function restoreRefinery(world: GameWorld): ActionResult & { charged?: nu
 
 export function dry(world: GameWorld, x: number, y: number, clearance: number): boolean {
   const { terrain } = world.simulation.map;
-  if (x < 3 || y < 3 || x > world.width - 4 || y > world.height - 4) return false;
+  const box = homeBox(world); // sites are the home cluster's (region.ts)
+  if (x < box.x + 3 || y < box.y + 3 || x > box.x + box.width - 4 || y > box.y + box.height - 4) return false;
   for (let dy = -clearance; dy <= clearance; dy += 1) for (let dx = -clearance; dx <= clearance; dx += 1) if (isWater(terrain, x + dx, y + dy)) return false;
   return true;
 }

@@ -2909,16 +2909,39 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     expect([...step.value.towns.values()].map((t) => t.population)).toEqual([...whole.towns.values()].map((t) => t.population));
   }, 30_000);
 
-  test("the chains are the home cluster's: every site in its box, or by the port (map 4882's oilfield sat in the region's far corner)", () => {
+  test("the chains are the home cluster's: every site in its box, the port the home city's (map 4882's oilfield sat in the region's far corner)", () => {
     for (const seed of [3, 11, 4882]) {
       const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
       const box = w.home!;
-      const port = w.towns.get(w.port!)!;
+      const info = regionInfo(GAME_MAP, seed);
+      expect(w.port).toBe(info.home.map.port!); // inland, a dry port
       const sites = [...w.towns.values()].filter((t) => t.industry);
       expect(sites.length).toBeGreaterThanOrEqual(4);
-      for (const s of sites) {
-        const inBox = s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height;
-        expect(inBox || Math.hypot(s.x - port.x, s.y - port.y) <= 13).toBe(true);
+      for (const s of sites) expect(s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height).toBe(true);
+    }
+  }, 60_000);
+
+  test("the water drains: the big river reaches the sea, the home river joins it, the seaport is on the coast; the hills stay out of the home box", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const { map, seaport } = regionInfo(GAME_MAP, seed);
+      const terrain = buildGameTerrain(map);
+      const [coast, main, homeRiver] = map.terrain!.rivers!;
+      const wet = (x: number, y: number) => terrain.water[Math.round(y) * map.width + Math.round(x)] === 1;
+      // The big river's mouth is in the sea; the home river's mouth is in the big river.
+      const mouth = main!.points.at(-1)!;
+      expect(wet(mouth[0], mouth[1])).toBe(true);
+      const ends = [homeRiver!.points[0]!, homeRiver!.points.at(-1)!];
+      expect(ends.some(([x, y]) => Math.abs(y - main!.points.reduce((best, p) => (Math.abs(p[0] - x) < Math.abs(best[0] - x) ? p : best))[1]) < 12)).toBe(true);
+      // The seaport within a few cells of the sea.
+      const port = map.towns.find((t) => t.id === seaport)!;
+      let nearSea = false;
+      for (let dx = -12; dx <= 12; dx += 1) if (wet(port.x + dx, port.y) && Math.abs(port.x + dx - (coast!.points[0]![0] < 0 ? 0 : map.width - 1)) < 30) nearSea = true;
+      expect(nearSea).toBe(true);
+      const box = map.home!;
+      for (const h of map.terrain!.hills!.slice(regionInfo(GAME_MAP, seed).home.map.terrain!.hills!.length)) {
+        const dx = Math.max(box.x - h.x, 0, h.x - (box.x + box.width));
+        const dy = Math.max(box.y - h.y, 0, h.y - (box.y + box.height));
+        expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(h.radius);
       }
     }
   }, 60_000);
