@@ -1071,3 +1071,27 @@ and roadPath lookups.
   milled into grain meal.
 - **On screen**: the mill's card (`renderMillSite`), the flour mill's (`renderFlourMillSite`, a wheat ear on the map), a Food or Farms line on town cards
   (`foodText`), Export payments in the budget, Food in the Treasury's chains; a sack glyph.
+
+### The late game (Revision 4, steps 4–5; 2026-10-21 to 23)
+
+- **The second refinery** (`fuel.ts`, `updateNewRefinery`) — `FuelState.newRefineryAt` is drawn
+  when the fuel sites are placed, from a hash of their positions (drawing from the industries'
+  rng would move every quarry of a game); at that day a `newrefinery` site opens 10–16 cells
+  from the port, as far from the crude source as fits, with no road, and emits
+  `refinery-opened`. It wants `newRefineryCrudeShare` × day 1's fuel need of crude, makes up to
+  `newRefineryShare` of it, fills what imports and the old refinery leave short (nearest it
+  first, by road) and sends the rest to the port. `crudeArriving(world, refineryId)` takes
+  either refinery.
+- **Growth reads service between towns** (`growth.ts`, `townShareBetweenTowns`;
+  `OutcomeIndex.fromToTowns`): a site's commutes are trips like any other in the headline and
+  "no seat", but a town's growth share leaves them out. With them in, a site opening with no
+  road counted every commute as unserved and shrank the town beside it (map 543: Opobo 155k ->
+  112k the week the second refinery opened). A site's own cost of unserved commutes is its
+  staffing (workers.ts).
+- **Motor parks** (`parks.ts`) — `world.parks`; `roadCapacity` multiplies the roads touching a
+  parked town by `1 + parkCapacityBoost` (`parkCapacityFactor`), and `sendInformal` takes the
+  agberos' cut at the departure town (`agberoCutAt`). Measured: the levy part is worth a few
+  naira a day; what a park buys is road capacity, for the danfos and you alike.
+- **Run files replay as played:** each change sits behind a tuning key a run file played
+  before it lacks (`newRefineryEnabled`, `exportsPaidOnce`, `growthIgnoresCommutes`,
+  `parksEnabled`), so undefined means the old behaviour.
