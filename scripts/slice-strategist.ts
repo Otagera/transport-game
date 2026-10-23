@@ -39,6 +39,7 @@ import { flowKey, goodsFlows, lorryEstimate, lorrySummaries } from "../src/engin
 import { siteProduction } from "../src/engine/slice/production";
 import { expandCost } from "../src/engine/slice/expand";
 import { checkBond } from "../src/engine/slice/bonds";
+import { parkLevyGain } from "../src/engine/slice/parks";
 import { crudeArriving, fuelSupply, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput } from "../src/engine/slice/fuel";
 import { townGrowth } from "../src/engine/slice/growth";
 import { marketFed, marketTowns } from "../src/engine/slice/food";
@@ -64,6 +65,8 @@ interface Day {
   income: number;
   /** Loading and yard levies to you, the day. */
   loading: number;
+  /** Park levies to you that day (motor parks raise them). */
+  levies: number;
   moves: number;
   /** Moves that build: not a lorry bought, a route sold, or a road kept up -- C14's "a move worth making". */
   builds: number;
@@ -226,6 +229,13 @@ function decide(world: SliceWorld, day: number, losing: Map<string, number>): { 
       if (did(act(world, day, { kind: "track", a: fuel.sourceId, b: second.id, alignment: "cheapest" }, "crude to the private refinery: rail"))) act(world, day, { kind: "freight", a: fuel.sourceId, b: second.id }, "a freight train for crude");
     }
   }
+  // Motor parks (Revision 4, 5): one every ten days at the town whose park would add the most
+  // levy, once that's worth its price back in under 60 days and a road into it is jammed.
+  if (world.tuning.parksEnabled && day % 10 === 0) {
+    const jammed = (id: string) => world.simulation.map.segments.some((seg) => (seg.fromNodeId === id || seg.toNodeId === id) && (world.segmentSpeed.get(seg.id) ?? 1) < 0.7);
+    const best = [...world.basePopulation.keys()].filter((id) => !world.parks.has(id) && jammed(id)).map((id) => ({ id, gain: parkLevyGain(world, id) })).sort((p, q) => q.gain - p.gain)[0];
+    if (best && best.gain * 60 >= world.tuning.parkCost && spend(world, world.tuning.parkCost)) did(act(world, day, { kind: "park", townId: best.id }, `a motor park: roads jammed, ~₦${Math.round(best.gain)}/day more levy`));
+  }
   // The works: restored once cement holds 10k people back.
   const cement = world.cement;
   if (cement && !cement.working) {
@@ -304,8 +314,9 @@ function play(seed: number): { seed: number; days: Day[]; world: SliceWorld } {
     const goods = b.goods - last.goods;
     const income = fares + goods + (b.tolls - last.tolls) + (b.levies - last.levies) + (b.loading - last.loading) + (b.allocation - last.allocation) + (b.exports - last.exports);
     const prevLoading = last.loading;
+    const prevLevies = last.levies;
     last = { ...b };
-    days.push({ day, funds: world.economy.funds, net: averageNet(world), trips: headline(world).tripsPerDay, people: pop(world), fares, goods, income, loading: b.loading - prevLoading, moves, builds, waiting });
+    days.push({ day, funds: world.economy.funds, net: averageNet(world), trips: headline(world).tripsPerDay, people: pop(world), fares, goods, income, loading: b.loading - prevLoading, levies: b.levies - prevLevies, moves, builds, waiting });
     // DIAG=from-to: every 10 days in that window, each original town's size against what limits it.
     const diag = process.env.DIAG?.split("-").map(Number);
     if (diag && day >= diag[0]! && day <= diag[1]! && day % 10 === 0) {
@@ -375,5 +386,6 @@ for (const seed of SEEDS) {
   const shortOfFuel = [...world.basePopulation.keys()].filter((id) => (fuelSupply(world, id)?.supplied ?? 1) < 0.6).length;
   console.log(`  second refinery (Revision 4, 4): ${second ? `opened day ${secondOpened ?? "?"} (${second.name}); crude in ${Math.round(crudeArriving(world, second.id) * D)} of ${Math.round(newRefineryCrude(world) * D)} t/day by rail ${railPath(world, world.fuel!.sourceId, second.id) ? "yes" : "no"}; fuel made ${Math.round(newRefineryOutput(world) * D)} of ${Math.round(newRefineryCapacity(world) * D)} t/day` : "not open"} | towns under 60% fuel: ${shortOfFuel}`);
   secondOpened = undefined;
+  console.log(`  motor parks (Revision 4, 5): ${world.parks.size} (${[...world.parks].map((id) => world.towns.get(id)?.name).join(", ")}); levies last 20 days ₦${Math.round(window(DAYS - 20, DAYS).reduce((s, d) => s + d.levies, 0) / 20)}/day`);
   console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);
 }

@@ -148,6 +148,14 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   serviceExpectBase: 0.15,
   serviceExpectPerThousand: 0.001,
   serviceExpectMax: 0.35,
+  // Motor parks (Revision 4, 5): danfos load in a park, not at the roadside,
+  // so the roads touching the town carry a quarter more before they jam, and
+  // the agberos keep 15% of the levy there instead of half. First guesses, to
+  // measure with the strategist.
+  parksEnabled: true,
+  parkCost: 20000,
+  parkCapacityBoost: 0.25,
+  parkAgberoCut: 0.15,
   yardsEnabled: true,
   yardCost: 6000,
   yardReachCells: 120,

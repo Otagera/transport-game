@@ -55,6 +55,7 @@ import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@e
 import { remittanceExpected } from "@engine/slice/budget";
 import { carryOver, sweepDue } from "@engine/slice/sweep";
 import { checkYard, yardGain } from "@engine/slice/yards";
+import { checkPark, parkLevyGain } from "@engine/slice/parks";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
@@ -88,7 +89,7 @@ import { shortVerdict } from "./verdicts";
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "track" | "train" | "freight" | "fix";
+type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "park" | "track" | "train" | "freight" | "fix";
 
 // Which systems run (tuning.ts). `?systems=all` turns every one on, for
 // comparing; `?goods=off` and `?wear=off` turn those off, so a playtest can
@@ -322,6 +323,7 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
       return { kind: current, a, b };
     case "fix":
     case "yard":
+    case "park":
       return null;
   }
 }
@@ -592,6 +594,7 @@ function toolOn(candidate: Tool): boolean {
   const t = world.tuning;
   if (candidate === "lorry") return t.goodsEnabled && !t.noPlayerLorries;
   if (candidate === "yard") return t.goodsEnabled && t.yardsEnabled;
+  if (candidate === "park") return t.parksEnabled;
   if (candidate === "freight") return t.goodsEnabled && t.railEnabled;
   if (candidate === "track" || candidate === "train") return t.railEnabled;
   if (candidate === "fix") return t.wearEnabled;
@@ -656,6 +659,15 @@ canvas.addEventListener("click", (event) => {
     const result = act({ label: "a haulage yard", towns: [town] }, { kind: "yard", townId: town });
     if (result.ok) say(`Haulage yard built at ${townName(town)} for ${naira(result.amount ?? world.tuning.yardCost)}: hauliers now reach ${world.tuning.yardReachCells} cells from here, and you take a levy on what they load.`);
     else say(`Can't build a yard: ${result.reason}`, true);
+    selectedTown = null;
+    renderPanel();
+    return;
+  }
+  // A motor park is one click on a town (parks.ts): its danfos load off the road, and pay you properly.
+  if (tool === "park") {
+    const result = act({ label: "a motor park", towns: [town] }, { kind: "park", townId: town });
+    if (result.ok) say(`Motor park built at ${townName(town)} for ${naira(result.amount ?? world.tuning.parkCost)}: its danfos load there, not on the road -- the roads into it carry ${pct(world.tuning.parkCapacityBoost)} more -- and the agberos keep ${pct(world.tuning.parkAgberoCut)} of their levy, not ${pct(world.tuning.agberoCut)}.`);
+    else say(`Can't build a park: ${result.reason}`, true);
     selectedTown = null;
     renderPanel();
     return;
@@ -771,6 +783,9 @@ window.addEventListener("keydown", (event) => {
     if (!world.tuning.noPlayerLorries) setTool("lorry");
   }
   else if (event.key === "y" || event.key === "Y") setTool("yard");
+  else if (event.key === "o" || event.key === "O") {
+    if (world.tuning.parksEnabled) setTool("park");
+  }
   else if (event.key === "k" || event.key === "K") setTool("track");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
@@ -871,6 +886,13 @@ function ghost(): Ghost | null {
     const work = waiting >= 5 ? `~${Math.round(waiting)} t/day wait here within its reach · levy ~${naira(waiting * world.tuning.yardLevyPerTonne * (1 - world.tuning.yardToutShare))}/day` : "little waits here for hauliers";
     const label = `Haulage yard ${naira(world.tuning.yardCost)} · ${work}`;
     return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Haulage yard ${naira(world.tuning.yardCost)}`) };
+  }
+  if (tool === "park") {
+    if (!hoverTown) return null;
+    const check = checkPark(world, hoverTown);
+    const at = toScreen(view, world.towns.get(hoverTown)!.x, world.towns.get(hoverTown)!.y);
+    const label = `Motor park ${naira(world.tuning.parkCost)} · roads into it +${pct(world.tuning.parkCapacityBoost)} · levies ~+${naira(parkLevyGain(world, hoverTown))}/day`;
+    return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Motor park ${naira(world.tuning.parkCost)}`) };
   }
   if (!selectedTown || !mouse) return null;
   // Track tool, back over the selected town: offer the halt if a line passes it.
@@ -1071,7 +1093,7 @@ function renderToolbar(): void {
         ...on(t.goodsEnabled, button("Freight", "G", tool === "freight", () => setTool("freight"))),
       ),
     ),
-    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track")))),
+    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track")))),
     ...on(t.straightAlignmentEnabled, group(t.railEnabled ? "Line (road, track)" : "Line", "setting", lineSwitch)),
     ...on(t.wearEnabled, group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix")))),
     group(
@@ -1154,7 +1176,7 @@ function renderPanel(): void {
   // Mid-action -- the first town of a road, track or route clicked -- the wings stay
   // tucked: a card coming out covers the other end you're about to click (playtest,
   // map 2418: a road from Vom Terminal to Kabba Refinery, a card over each end).
-  const placing = selectedTown !== null && tool !== "fix" && tool !== "yard";
+  const placing = selectedTown !== null && tool !== "fix" && tool !== "yard" && tool !== "park";
   townWing.classList.toggle("out", town !== null && !placing);
   // Pointing at a town the left wing would cover: the card comes out on the right instead.
   // It stays there while you read it (the pointer on the card), and goes home once you leave.
@@ -1735,6 +1757,7 @@ function renderTown(townId: string): void {
         ${biggestLine ? `<li>${biggestLine}</li>` : ""}
         <li>Of its trips: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</li>
         <li>Inside: ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day by keke and okada, not counted against you.</li>
+        ${world.parks.has(townId) ? `<li>Motor park: its danfos load there, not on the road; the agberos keep ${pct(world.tuning.parkAgberoCut)} of the levy.</li>` : ""}
       </ul>
       ${strikeBadge(laneAtTown(townId))}
       ${problemText(townId)}

@@ -220,6 +220,15 @@ export interface SliceTuning {
    * Haulage yards (yards.ts): on; what one costs; how far hauliers reach from one (cells); how much
    * faster they load there; the yard levy a tonne lifted, and the touts' share of it.
    */
+  /**
+   * Motor parks (parks.ts, Revision 4, 5): on; what one costs; how much more the roads touching
+   * a parked town carry before they jam; the agberos' cut of the levy on a departure from one.
+   * Run files without them replay with none.
+   */
+  parksEnabled: boolean;
+  parkCost: number;
+  parkCapacityBoost: number;
+  parkAgberoCut: number;
   yardsEnabled: boolean;
   yardCost: number;
   yardReachCells: number;
@@ -604,6 +613,8 @@ export interface SliceWorld {
   sweep: SweepState;
   /** Towns and sites with a haulage yard (yards.ts). */
   yards: Set<string>;
+  /** Towns with a motor park (parks.ts). */
+  parks: Set<string>;
   /** Times each site has been expanded (expand.ts), by its id. */
   expansions: Map<string, number>;
   /** The food chain's mill and crops (food.ts); null until placed, or with food off. */

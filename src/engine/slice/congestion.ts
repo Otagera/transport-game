@@ -4,6 +4,7 @@ import type { Vehicle } from "../simulation/types";
 import type { SliceWorld } from "./types";
 import { lineSpeed } from "./wear";
 import { laneEncroachment, struckSegments } from "./pushback";
+import { parkCapacityFactor } from "./parks";
 
 // Shared road (docs/principles.md §6, step 2). Your buses and the informal
 // sector slow each other down -- which closes the loop the hook depends on
@@ -56,7 +57,8 @@ export function roadCapacity(world: SliceWorld, segmentId: string, encroachment?
   if (!segment) return Infinity;
   const taken = segment.busLane ? (encroachment ?? laneEncroachment(world).get(segmentId) ?? 0) : 0;
   const lane = segment.busLane ? world.tuning.laneGeneralCapacity + (1 - world.tuning.laneGeneralCapacity) * taken : 1;
-  return world.tuning.roadFlowCapacity * (isDirt(segment) ? world.tuning.dirtRoadCapacity : 1) * lane;
+  // Danfos loading in a motor park, not at the roadside, leave the roads into it clearer (parks.ts).
+  return world.tuning.roadFlowCapacity * (isDirt(segment) ? world.tuning.dirtRoadCapacity : 1) * lane * parkCapacityFactor(world, segment.fromNodeId, segment.toNodeId);
 }
 
 /**

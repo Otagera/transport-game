@@ -11,6 +11,7 @@ import { restoreRefinery } from "./fuel";
 import { restoreWorks } from "./cement";
 import { expandSite } from "./expand";
 import { buildYard } from "./yards";
+import { buildPark } from "./parks";
 import { issueBond, type BondPurpose } from "./bonds";
 
 // Every player action as plain data. Data, not a closure, so it can be
@@ -35,6 +36,7 @@ export type ActionSpec =
   | { kind: "restoreWorks" }
   | { kind: "expand"; siteId: string }
   | { kind: "yard"; townId: string }
+  | { kind: "park"; townId: string }
   | { kind: "bond"; purpose: BondPurpose }
   | { kind: "sell"; routeId: string };
 
@@ -98,6 +100,10 @@ export function applyAction(world: SliceWorld, spec: ActionSpec): ActionOutcome 
     }
     case "yard": {
       const result = buildYard(world, spec.townId);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
+    case "park": {
+      const result = buildPark(world, spec.townId);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
     }
     case "expand": {

@@ -1001,6 +1001,22 @@ interface Box { x: number; y: number; w: number; h: number }
 let occupied: Box[] = [];
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
+// A motor park (parks.ts): a small danfo-yellow square with a P, at a town's top-right.
+function drawParkMark(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = COLORS.danfo;
+  ctx.strokeStyle = COLORS.kept;
+  ctx.lineWidth = 1;
+  ctx.fillRect(x, y, 9, 9);
+  ctx.strokeRect(x + 0.5, y + 0.5, 8, 8);
+  ctx.fillStyle = COLORS.kept;
+  ctx.font = "700 7px ui-monospace, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("P", x + 4.5, y + 5);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
 // A haulage yard (yards.ts): a small brown square at a town's or site's
 // top-left, where goods leave from and hauliers reach further.
 function drawYardMark(ctx: CanvasRenderingContext2D, x: number, y: number): void {
@@ -1061,6 +1077,7 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
     ctx.stroke();
   }
   if (world.yards.has(town.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
+  if (world.parks.has(town.id)) drawParkMark(ctx, p.x + r - 1, p.y - r - 6);
 
   drawWaiting(ctx, p.x + ringR + 8, p.y - ringR + 2, waitingAt(world, town.id));
 

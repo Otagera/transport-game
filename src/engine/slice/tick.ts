@@ -14,6 +14,7 @@ import { sampleTowns } from "./problems";
 import { dispatchTrucks, truckersPickUp } from "./truckers";
 import { updateRetired } from "./retire";
 import { updateIndustries } from "./industries";
+import { agberoCutAt } from "./parks";
 import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
@@ -516,12 +517,13 @@ function sendInformal(
     return { from: group.at, to: rider.destination, kind: "passengers" as const, amount: leaving * (1 - stayHome), trip: { origin: rider.origin, destination: rider.destination } };
   });
   takings.tolls += toll;
-  // The park levy, on every informal departure: the agberos keep their cut.
+  // The park levy, on every informal departure: the agberos keep their cut -- less at a motor park (parks.ts).
   const levy = tuning.levyPerSeat * spec.capacity;
-  takings.levies += levy * (1 - tuning.agberoCut);
-  takings.agberos += levy * tuning.agberoCut;
-  for (const key of corridorsAlong(world, run.path.segmentIds)) bump(takings.leviesByCorridor, key, levy * (1 - tuning.agberoCut));
-  if (world.lanes.length > 0) creditLanes(lanesBySegment(world), run.path.segmentIds, toll + levy * (1 - tuning.agberoCut));
+  const cut = agberoCutAt(world, group.at);
+  takings.levies += levy * (1 - cut);
+  takings.agberos += levy * cut;
+  for (const key of corridorsAlong(world, run.path.segmentIds)) bump(takings.leviesByCorridor, key, levy * (1 - cut));
+  if (world.lanes.length > 0) creditLanes(lanesBySegment(world), run.path.segmentIds, toll + levy * (1 - cut));
   simulation.vehicles.push(vehicle);
   informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode, released: 0 });
   for (const segmentId of run.path.segmentIds) bump(informal.segmentSpace, segmentId, spec.weight);

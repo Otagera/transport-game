@@ -37,6 +37,7 @@ import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors }
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
 import { generatedMapInfo, generatedSliceMap } from "@engine/slice/generate";
+import { agberoCutAt } from "@engine/slice/parks";
 import { indexOutcomes, townShare as shareOfTown, townShareBetweenTowns } from "@engine/slice/world";
 import { buildSliceTerrain } from "@engine/slice/terrain";
 import { SLICE_MAP } from "../src/slice/map";
@@ -3586,5 +3587,40 @@ describe("growth reads service between towns, not commutes to sites (2026-10-23)
       expect(townShareBetweenTowns(w, town).player).toBeCloseTo(0.6, 9);
       expect(shareOfTown(w, town).player).toBeCloseTo(0.15, 9);
     }
+  });
+});
+
+describe("Revision 4, step 5: motor parks for danfos (parks.ts)", () => {
+  const game = (tuning: Partial<SliceTuning> = {}) => startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0, ...tuning });
+
+  test("a park goes at a town, once, for its price; never at a site", () => {
+    const w = game();
+    const town = [...w.basePopulation.keys()][0]!;
+    const site = [...w.towns.values()].find((t) => t.industry)!.id;
+    w.economy.funds = w.tuning.parkCost - 1;
+    expect(applyAction(w, { kind: "park", townId: town }).ok).toBe(false);
+    w.economy.funds = 10 * w.tuning.parkCost;
+    expect(applyAction(w, { kind: "park", townId: site }).ok).toBe(false);
+    expect(applyAction(w, { kind: "park", townId: town }).ok).toBe(true);
+    expect(w.economy.funds).toBe(9 * w.tuning.parkCost);
+    expect(applyAction(w, { kind: "park", townId: town }).ok).toBe(false);
+    expect(game({ parksEnabled: false }).tuning.parksEnabled).toBe(false);
+    const off = game({ parksEnabled: false });
+    off.economy.funds = 1e6;
+    expect(applyAction(off, { kind: "park", townId: town }).ok).toBe(false);
+  });
+
+  test("the roads touching a parked town carry more before they jam; the agberos keep less of its levy", () => {
+    const w = game();
+    const town = [...w.basePopulation.keys()][0]!;
+    const touching = w.simulation.map.segments.find((s) => s.fromNodeId === town || s.toNodeId === town)!;
+    const elsewhere = w.simulation.map.segments.find((s) => s.fromNodeId !== town && s.toNodeId !== town && s.surface === touching.surface && !s.busLane)!;
+    const before = roadCapacity(w, touching.id);
+    expect(agberoCutAt(w, town)).toBe(w.tuning.agberoCut);
+    w.economy.funds = 1e6;
+    applyAction(w, { kind: "park", townId: town });
+    expect(roadCapacity(w, touching.id)).toBeCloseTo(before * (1 + w.tuning.parkCapacityBoost), 9);
+    expect(roadCapacity(w, elsewhere.id)).toBeCloseTo(roadCapacity(game(), elsewhere.id), 9);
+    expect(agberoCutAt(w, town)).toBe(w.tuning.parkAgberoCut);
   });
 });

@@ -132,6 +132,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     bonds: [],
     expansions: new Map(),
     yards: new Set(),
+    parks: new Set(),
     sweep: createSweepState(0, tuning.sweepPeriodDays ?? 60),
     food: null,
     segmentLoad: new Map(),
