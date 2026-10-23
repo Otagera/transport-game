@@ -131,6 +131,16 @@ const world = await (async () => {
   const loading = document.querySelector<HTMLElement>("#loading")!;
   loading.querySelector<HTMLElement>(".map")!.textContent = `Map ${seed}`;
   const bar = loading.querySelector<HTMLElement>(".bar i")!;
+  // A vehicle rides the bar, in the map's look (its pills): your bus, a danfo, or your train on track.
+  const ride = (["bus", "danfo", "train"] as const)[Math.floor(Math.random() * 3)]!;
+  const pill = (x: number, w: number, fill: string) => `<rect x="${x}" y="2" width="${w}" height="12" rx="5" style="fill:${fill}" stroke="#fff" stroke-width="1.5"/>${Array.from({ length: Math.floor((w - 8) / 6) }, (_, k) => `<rect x="${x + 4 + k * 6}" y="5" width="4" height="3.5" rx="1" fill="#fff" opacity="0.85"/>`).join("")}`;
+  const vehicle = ride === "train"
+    ? `<svg width="111" height="24" viewBox="0 0 74 16">${pill(1, 34, "var(--you)")}${pill(38, 34, "var(--you)")}</svg>`
+    : `<svg width="54" height="24" viewBox="0 0 36 16">${pill(1, ride === "bus" ? 34 : 26, ride === "bus" ? "var(--you)" : "var(--danfo)")}</svg>`;
+  const rider = loading.querySelector<HTMLElement>(".bar .vehicle")!;
+  rider.innerHTML = vehicle;
+  loading.querySelector<HTMLElement>(".bar")!.classList.toggle("rail", ride === "train");
+  if (ride === "danfo") bar.style.background = "var(--danfo)";
   const label = loading.querySelector<HTMLElement>(".progress")!;
   const days = DEFAULT_GAME_TUNING.warmUpDays;
   const steps = startRunSteps(GAME_MAP, seed, switches, devFunds);
@@ -143,6 +153,7 @@ const world = await (async () => {
     }
     if (performance.now() - since > 40) {
       bar.style.width = `${Math.round(step.value * 100)}%`;
+      rider.style.left = `${step.value * 100}%`;
       label.textContent = `Day ${Math.min(days, 1 + Math.floor(step.value * days))} of ${days} before you arrive`;
       await new Promise((resolve) => requestAnimationFrame(resolve));
       since = performance.now();

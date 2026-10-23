@@ -314,8 +314,12 @@
       #loading .title { font-size: 22px; font-weight: 700; }
       #loading .map { font-size: 13px; margin-bottom: 8px; }
       #loading p { margin: 0 0 14px; font-size: 13px; color: var(--ink-2); line-height: 1.45; }
-      #loading .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-      #loading .bar i { display: block; height: 100%; width: 0; background: var(--you); border-radius: 3px; transition: width 0.15s; }
+      #loading .bar { position: relative; height: 8px; margin: 22px 0 0; border-radius: 4px; background: #c3cbd4; }
+      #loading .bar.rail { height: 4px; background: repeating-linear-gradient(90deg, #3f4852 0 2px, transparent 2px 7px), linear-gradient(#3f4852, #3f4852) 0 50% / 100% 1.5px no-repeat; border-radius: 0; }
+      #loading .bar i { display: block; height: 100%; width: 0; background: var(--you); border-radius: 4px; transition: width 0.15s linear; }
+      #loading .bar.rail i { height: 2px; margin-top: 1px; }
+      #loading .bar .vehicle { position: absolute; left: 0; top: 50%; transform: translate(-92%, -50%); transition: left 0.15s linear; line-height: 0; filter: drop-shadow(0 1px 2px rgba(20, 30, 45, 0.25)); }
+      #loading .bar { margin-left: 10px; margin-right: 10px; display: block; overflow: visible; } /* not the panels' .bar (a clipped flex row) */
       #loading .progress { font-size: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
     </style>
   </head>
@@ -326,7 +330,8 @@
         <div class="title">Transport Game</div>
         <div class="map muted">&nbsp;</div>
         <p>The region runs a week before you arrive: the danfos are on the roads, the hauliers at the yards, the towns' trips settled.</p>
-        <div class="bar"><i></i></div>
+        <!-- The progress as a road (or a line) with a vehicle on it: which one, main.ts picks. -->
+        <div class="bar"><i></i><span class="vehicle"></span></div>
         <div class="progress muted">Drawing the map</div>
       </div>
     </div>
