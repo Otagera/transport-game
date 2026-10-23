@@ -58,6 +58,37 @@ export function parkLevyGain(world: SliceWorld, townId: string): number {
   return (out.poached + out.gaveUp) * SECONDS_PER_GAME_DAY * t.levyPerSeat * Math.max(0, t.agberoCut - t.parkAgberoCut);
 }
 
+/**
+ * Rolls each parked town's levy a second, yours and the agberos' (tick.ts,
+ * once a tick, from what its departures paid): what its card shows, so a park
+ * says what it's doing (OpenCode playtest, 2026-10-23: "I could see no change").
+ */
+export function rollParkTakings(world: SliceWorld, paid: ReadonlyMap<string, { yours: number; agberos: number }>, dt: number): void {
+  if (world.parks.size === 0) return;
+  const alpha = 1 - Math.exp(-dt / SECONDS_PER_GAME_DAY);
+  for (const townId of world.parks) {
+    const now = paid.get(townId) ?? { yours: 0, agberos: 0 };
+    const rolled = world.parkTakings.get(townId) ?? { yours: 0, agberos: 0 };
+    rolled.yours += (now.yours / dt - rolled.yours) * alpha;
+    rolled.agberos += (now.agberos / dt - rolled.agberos) * alpha;
+    world.parkTakings.set(townId, rolled);
+  }
+}
+
+/** What a park shows on its town's card: the roads into it, and its levy a day. */
+export function parkReport(world: SliceWorld, townId: string): { roadSpeed: number; yours: number; agberos: number; agberosWithout: number } | null {
+  if (!world.parks.has(townId)) return null;
+  const speeds = world.simulation.map.segments.filter((s) => s.fromNodeId === townId || s.toNodeId === townId).map((s) => world.segmentSpeed.get(s.id) ?? 1);
+  const rolled = world.parkTakings.get(townId) ?? { yours: 0, agberos: 0 };
+  const total = (rolled.yours + rolled.agberos) * SECONDS_PER_GAME_DAY;
+  return {
+    roadSpeed: speeds.length > 0 ? Math.min(...speeds) : 1,
+    yours: rolled.yours * SECONDS_PER_GAME_DAY,
+    agberos: rolled.agberos * SECONDS_PER_GAME_DAY,
+    agberosWithout: total * world.tuning.agberoCut,
+  };
+}
+
 /** The agberos' cut of the levy on a departure from this town. */
 export function agberoCutAt(world: SliceWorld, townId: string): number {
   return world.tuning.parksEnabled && world.parks.has(townId) ? world.tuning.parkAgberoCut : world.tuning.agberoCut;

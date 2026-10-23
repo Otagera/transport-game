@@ -14,7 +14,7 @@ import { sampleTowns } from "./problems";
 import { dispatchTrucks, truckersPickUp } from "./truckers";
 import { updateRetired } from "./retire";
 import { updateIndustries } from "./industries";
-import { agberoCutAt } from "./parks";
+import { agberoCutAt, rollParkTakings } from "./parks";
 import { runMetros } from "./metro";
 import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
@@ -264,8 +264,9 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   updateFuelShortage(world);
 
   // 4. The informal sector: danfos, then kekes and okadas.
-  const takings: Takings = { tolls: 0, levies: 0, agberos: 0, leviesByCorridor: new Map(), loading: 0, touts: 0 };
+  const takings: Takings = { tolls: 0, levies: 0, agberos: 0, leviesByCorridor: new Map(), leviesByTown: new Map(), loading: 0, touts: 0 };
   dispatchInformal(world, dt, lost, gaveUp, takings);
+  rollParkTakings(world, takings.leviesByTown, dt);
   // The state's allocation: a base, plus a share of the growth you caused (budget.ts).
   // And its export payment on cash crops reaching the port (food.ts): the state's, like the allocation.
   const exportsBefore = world.budget.exports;
@@ -526,6 +527,12 @@ function sendInformal(
   takings.levies += levy * (1 - cut);
   takings.agberos += levy * cut;
   for (const key of corridorsAlong(world, run.path.segmentIds)) bump(takings.leviesByCorridor, key, levy * (1 - cut));
+  if (world.parks.size > 0) {
+    const atTown = takings.leviesByTown.get(group.at) ?? { yours: 0, agberos: 0 };
+    atTown.yours += levy * (1 - cut);
+    atTown.agberos += levy * cut;
+    takings.leviesByTown.set(group.at, atTown);
+  }
   if (world.lanes.length > 0) creditLanes(lanesBySegment(world), run.path.segmentIds, toll + levy * (1 - cut));
   simulation.vehicles.push(vehicle);
   informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode, released: 0 });

@@ -23,6 +23,8 @@ export interface Takings {
   agberos: number;
   /** The levies reaching you, by the corridors the departure runs along (corridors.ts). */
   leviesByCorridor: Map<string, number>;
+  /** Park levies by the town the departure left from: yours, and the agberos' (parks.ts shows them). */
+  leviesByTown: Map<string, { yours: number; agberos: number }>;
   /** Loading levies on truckers' loads at markets and the port (truckers.ts): yours, and the touts' cut. */
   loading: number;
   touts: number;

@@ -55,7 +55,7 @@ import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@e
 import { remittanceExpected } from "@engine/slice/budget";
 import { carryOver, sweepDue } from "@engine/slice/sweep";
 import { checkYard, yardGain } from "@engine/slice/yards";
-import { checkPark, parkLevyGain } from "@engine/slice/parks";
+import { checkPark, parkLevyGain, parkReport } from "@engine/slice/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/slice/metro";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
@@ -1411,6 +1411,15 @@ function workersProblem(siteId: string): string {
   return `Its workers can't get here: ${why}, so it makes ${pct(staffFactor(world, siteId))} of what it could. ${isCutOff(world, siteId) ? "Build a road (<kbd>R</kbd>) to it." : "Run a bus (<kbd>B</kbd>) from the town most of them live in."}`;
 }
 
+// A town's motor park on its card (parks.ts): what it's doing, in numbers -- a park
+// that said nothing read as money wasted (OpenCode playtest, 2026-10-23).
+function parkItem(townId: string): string {
+  const report = parkReport(world, townId);
+  if (!report) return "";
+  const t = world.tuning;
+  return `<li>Motor park: its danfos load there, not on the road, so the roads into it carry ${pct(t.parkCapacityBoost)} more before they jam (the slowest runs at ${pct(report.roadSpeed)} of free speed). Levy here ${naira(report.yours)}/day to you, ${naira(report.agberos)} to the agberos; without the park they'd keep ${naira(report.agberosWithout)}.</li>`;
+}
+
 // A town's metro on its card (metro.ts, brief Revision 4, 6): what it carries and earns, and
 // the button for the first line or the next. Nothing on a town too small for one.
 function metroItem(townId: string): string {
@@ -1775,7 +1784,7 @@ function renderTown(townId: string): void {
         <li>Of its trips: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</li>
         <li>Inside: ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day by keke and okada, not counted against you.</li>
         ${metroItem(townId)}
-        ${world.parks.has(townId) ? `<li>Motor park: its danfos load there, not on the road; the agberos keep ${pct(world.tuning.parkAgberoCut)} of the levy.</li>` : ""}
+        ${parkItem(townId)}
       </ul>
       ${strikeBadge(laneAtTown(townId))}
       ${problemText(townId)}

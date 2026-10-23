@@ -630,6 +630,8 @@ export interface SliceWorld {
   yards: Set<string>;
   /** Towns with a motor park (parks.ts). */
   parks: Set<string>;
+  /** At each parked town, the park levy a second, rolling: yours, and the agberos' (parks.ts, the town card). */
+  parkTakings: Map<string, { yours: number; agberos: number }>;
   /** Metro lines built, by town (metro.ts). */
   metros: Map<string, number>;
   /** Times each site has been expanded (expand.ts), by its id. */

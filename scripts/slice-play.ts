@@ -35,6 +35,8 @@ import { checkBond, bondAmount, bondPerDay } from "../src/engine/slice/bonds";
 import { carryOver, sweepDue } from "../src/engine/slice/sweep";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { yardGain } from "../src/engine/slice/yards";
+import { parkLevyGain, parkReport } from "../src/engine/slice/parks";
+import { checkMetro, metroLines, metroPrice, metroRiders } from "../src/engine/slice/metro";
 
 interface Saved {
   world: SliceWorld;
@@ -87,6 +89,12 @@ function state(w: SliceWorld): string {
       const price = rung === "paved" ? null : rungPrice(w, full.road.a, full.road.b, rung);
       bits.push(`ITS ROAD IS FULL: next rung ${rung}${price ? ` (${k(price)})` : ""}`);
     }
+    const park = parkReport(w, id);
+    if (park) bits.push(`motor park: roads into it at ${pc(park.roadSpeed)} speed, levy ${k(park.yours)}/day to you (agberos ${k(park.agberos)}, would keep ${k(park.agberosWithout)} without it)`);
+    else if (w.tuning.parksEnabled) bits.push(`a park here: ~+${k(parkLevyGain(w, id))}/day levy, roads into it +${pc(w.tuning.parkCapacityBoost)} capacity -- ${j({ kind: "park", townId: id })}`);
+    const lines = metroLines(w, id);
+    if (lines > 0) bits.push(`metro ${lines} line(s), ${Math.round(metroRiders(w, id).riders)} riders/day`);
+    if (checkMetro(w, id).ok || (lines < w.tuning.metroMaxLines && t.population >= w.tuning.metroMinPopulation && w.tuning.metroEnabled)) bits.push(`${lines === 0 ? "a metro" : "another metro line"} ${k(metroPrice(w, id))}: ~${Math.round(w.tuning.metroLineShare * t.population * w.tuning.localTripsPerThousandPerDay)} riders/day -- ${j({ kind: "metro", townId: id })}`);
     out.push(`  ${id}: ${bits.join(" · ")}`);
   }
   const roadside = [...w.towns.values()].filter((t) => !t.industry && !w.basePopulation.has(t.id));

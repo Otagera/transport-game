@@ -37,7 +37,7 @@ import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors }
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
 import { generatedMapInfo, generatedSliceMap } from "@engine/slice/generate";
-import { agberoCutAt } from "@engine/slice/parks";
+import { agberoCutAt, parkReport } from "@engine/slice/parks";
 import { metroLines, metroRiders, runMetros } from "@engine/slice/metro";
 import { indexOutcomes, townShare as shareOfTown, townShareBetweenTowns } from "@engine/slice/world";
 import { buildSliceTerrain } from "@engine/slice/terrain";
@@ -3623,6 +3623,22 @@ describe("Revision 4, step 5: motor parks for danfos (parks.ts)", () => {
     expect(roadCapacity(w, touching.id)).toBeCloseTo(before * (1 + w.tuning.parkCapacityBoost), 9);
     expect(roadCapacity(w, elsewhere.id)).toBeCloseTo(roadCapacity(game(), elsewhere.id), 9);
     expect(agberoCutAt(w, town)).toBe(w.tuning.parkAgberoCut);
+  });
+});
+
+describe("a park says what it's doing (parks.ts parkReport, 2026-10-23)", () => {
+  test("after a day, its card has the levy paid there, yours and the agberos', and what they'd keep without it", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 3 });
+    const town = [...w.basePopulation.keys()].map((id) => w.towns.get(id)!).sort((p, q) => q.population - p.population)[0]!.id;
+    expect(parkReport(w, town)).toBeNull();
+    w.economy.funds = 1e6;
+    applyAction(w, { kind: "park", townId: town });
+    for (let i = 0; i < Math.round(SECONDS_PER_GAME_DAY / SIM_DT); i += 1) sliceTick(w, SIM_DT);
+    const report = parkReport(w, town)!;
+    expect(report.yours).toBeGreaterThan(0);
+    expect(report.agberos / (report.yours + report.agberos)).toBeCloseTo(w.tuning.parkAgberoCut, 6);
+    expect(report.agberosWithout).toBeGreaterThan(report.agberos);
+    expect(report.roadSpeed).toBeGreaterThan(0);
   });
 });
 
