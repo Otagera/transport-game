@@ -717,7 +717,7 @@ The order things come back, one per playtest, each with its own check (*supersed
 2. **Money late in the game.** Without the sweep, money piles up after day 200 (C16 fails: ₦120k-990k held by day 250 in the strategist). The metro takes some; the full game needs late-game decisions that cost.
 3. **Eras as vehicle generations** (your framing, 2026-10-23; calendar eras stay scrapped). You start with older public-transport models; newer ones arrive over time -- dearer, better, cheaper to run, carrying more -- so an old fleet becomes a decision: replace or keep running. And the informal sector has the same thing going for it: old danfos give way to newer ones, keke and okada waves come and go, so the rival changes too. Eras are what the two fleets look like over time, not a date.
 4. **Sea and river freight** (your question, 2026-10-23). A third freight mode: heavy, slow and cheap -- coastal shipping between ports, barges on a navigable river (the Niger and Benue, the Lagos lagoon). It needs a second port or a river that boats can use; the slice has one port and a river that's only an obstacle. In the full game: ports and jetties as places you build, the river as a route as well as a barrier, and the informal sector there too (canoe and boat operators).
-5. **Goods' share of growth, measured** (C11 amended: the chains at least a fifth of the original towns' growth by day 150). Never measured; measure it before the slice closes.
+5. **Goods' share of growth** (C11 amended: the chains at least a fifth of the original towns' growth by day 150). Measured 2026-10-23: 61-79% on three maps -- passes, largely because cement gates growth past a town's first 40%.
 
 ## Pass/fail checks: when slice zero is done
 

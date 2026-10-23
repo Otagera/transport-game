@@ -101,6 +101,11 @@ It makes only 23-46% of its capacity with crude arriving (probably its workers; 
   road ~240-260 at every rate; trips made 3,717 -> 3,798 -> 3,636 / 2,212 -> 2,324 -> 2,204. The
   trade-off is there but mild: dear earns 6-11% more from goods for 2-5% fewer trips. Hauliers
   carry most of a line's goods at any rate (its short hauls are theirs).
+- **C11 (amended) passes:** by day 150 the chains unlock 79% of the original towns' growth
+  on map 0 (357k of 450k), 61% on 543 (47k of 77k), 71% on 2411 (54k of 75k), against the 20%
+  wanted (strategist; each town's target with cement and food as delivered, against a copy
+  with none delivered). Read with care: cement gates growth past a town's first 40%, so much
+  of what it "unlocks" is growth it would otherwise hold back -- a gate, not only a gift.
 - **Revision 4 is built.** Before the slice closes (brief, Open question 8): the goods /
   passengers balance -- goods were 45-60% of income with your lorries, ~2-12% now -- and the
   carry-over plan.

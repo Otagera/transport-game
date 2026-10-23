@@ -325,6 +325,10 @@ function play(seed: number): { seed: number; days: Day[]; world: SliceWorld } {
     const prevLevies = last.levies;
     last = { ...b };
     days.push({ day, funds: world.economy.funds, net: averageNet(world), trips: headline(world).tripsPerDay, people: pop(world), fares, goods, income, loading: b.loading - prevLoading, levies: b.levies - prevLevies, moves, builds, waiting });
+    // C11 (amended): at day 150, the share of the original towns' growth since day 1 that the
+    // chains unlock -- each town's target with cement and food as delivered, against a copy
+    // with none delivered.
+    if (day === 150) c11Share = chainsGrowthShare(world);
     // DIAG=from-to: every 10 days in that window, each original town's size against what limits it.
     const diag = process.env.DIAG?.split("-").map(Number);
     if (diag && day >= diag[0]! && day <= diag[1]! && day % 10 === 0) {
@@ -352,6 +356,27 @@ function longestQuiet(days: Day[], from: number, to: number): { length: number; 
 }
 
 const k = (n: number) => `₦${Math.round(n / 1000)}k`;
+/** C11, measured at day 150 (null before). */
+let c11Share: { share: number; unlocked: number; grown: number } | null = null;
+
+function chainsGrowthShare(world: SliceWorld): { share: number; unlocked: number; grown: number } {
+  const without = structuredClone(world);
+  for (const flow of goodsFlows(without)) {
+    const site = without.towns.get(flow.from)?.industry;
+    if (site === "works" || site === "silo" || site === "mill" || site === "flourmill") without.goods.outcomes.delete(flowKey(flow));
+  }
+  let unlocked = 0;
+  let grown = 0;
+  for (const [id, base] of world.basePopulation) {
+    const town = world.towns.get(id);
+    const g = townGrowth(world, id);
+    const g0 = townGrowth(without, id);
+    if (!town || !g || !g0) continue;
+    grown += Math.max(0, town.population - base);
+    unlocked += Math.max(0, g.target - g0.target);
+  }
+  return { share: grown > 0 ? Math.min(1, unlocked / grown) : 0, unlocked, grown };
+}
 /** The day the private refinery was first seen open, this map (reset per map). */
 let secondOpened: number | undefined;
 for (const seed of SEEDS) {
@@ -379,6 +404,8 @@ for (const seed of SEEDS) {
     const r = s.type === "rail" ? "rail" : s.busLane ? "lane" : s.surface === "paved" ? "paved" : "dirt";
     rungs.set(r, (rungs.get(r) ?? 0) + 1);
   }
+  console.log(`  C11 (amended) the chains' share of the original towns' growth by day 150: ${c11Share ? `${Math.round(c11Share.share * 100)}% (${Math.round(c11Share.unlocked)}k of ${Math.round(c11Share.grown)}k grown; wanted >= 20%)` : "n/a (run to day 150)"}`);
+  c11Share = null;
   console.log(`  C11 goods share of income, days 80-100: ${Math.round(share(80, 100) * 100)}% (wanted 20-40%)`);
   console.log(`  C14 longest stretch with nothing built (lorries, selling, upkeep aside), days 60-150: ${q1.length} days from day ${q1.start} (wanted < 15); after 150: ${q2.length} from day ${q2.start}`);
   console.log(`  C2 days 20-60 waiting on money for a rung: ${waited} of 40 (wanted >= 10)`);
