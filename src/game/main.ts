@@ -58,7 +58,6 @@ import { checkYard, yardGain } from "@engine/game/yards";
 import { checkPark, parkLevyGain, parkReport } from "@engine/game/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/metro";
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
-import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/game/score";
 import { corridorSummaries } from "@engine/game/corridors";
 import { industryFlows, stoneServed } from "@engine/game/industries";
 import { cargoName, crudeArriving, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput, shortageAt } from "@engine/game/fuel";
@@ -72,9 +71,10 @@ import { isYourRoad } from "@engine/game/upkeep";
 import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
-import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
-import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
+import { averageBudget, averageNet } from "@engine/game/history";
+import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
+import { createScreen } from "./screen";
 import { shortVerdict } from "./verdicts";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -127,29 +127,45 @@ const world = startRun(GAME_MAP, seed, switches, devFunds);
 const recorder = createRunRecorder(world, seed, switches, devFunds, String(import.meta.env.VITE_GAME_BUILD ?? "unknown"));
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
-const strip = document.querySelector<HTMLDivElement>("#strip")!;
-const routesEl = document.querySelector<HTMLDivElement>("#routes")!;
-const treasuryEl = document.querySelector<HTMLElement>("#treasury")!;
-// The two wings (the design lab's pick): the town card left, your routes right.
-const townEl = document.querySelector<HTMLDivElement>("#town")!;
-const townWing = document.querySelector<HTMLElement>("#wing-town")!;
-const routesWing = document.querySelector<HTMLElement>("#wing-routes")!;
+// The old cards render into these, off the page: the screen (screen.ts, the information
+// lab's) shows them whole under its "More" folds, and the treasury on the revenue screen.
+const routesEl = document.createElement("div");
+const townEl = document.createElement("div");
+const screen = createScreen(world, recorder, {
+  townMore: (id) => {
+    renderTown(id);
+    return townEl.innerHTML;
+  },
+  routeMore: (id) => {
+    const summary = routeSummaries(world).find((s) => s.id === id);
+    return summary ? routeCard(summary) : "";
+  },
+  routesMore: () => (dev ? bestMovesHtml() + resultsHtml() : "") + lorryRows(false) + corridorsHtml() + shareHtml(),
+  moneyNote: () => moneyNote(),
+  treasuryMore: () => treasuryHtml(),
+});
+const panelEl = document.querySelector<HTMLElement>("#panel")!;
+const logEl = document.querySelector<HTMLElement>("#log")!;
+const revenueEl = document.querySelector<HTMLElement>("#revenue")!;
+const stripEl = document.querySelector<HTMLElement>("#strip")!;
 const toolbar = document.querySelector<HTMLDivElement>("#toolbar")!;
 const toast = document.querySelector<HTMLDivElement>("#toast")!;
 const hintEl = document.querySelector<HTMLDivElement>("#hint")!;
 // Which map this is, and a new one: the same address without its seed draws another.
+let mapLine = "";
 {
   const fresh = new URLSearchParams(params);
   fresh.delete("seed");
   const query = fresh.toString();
   // A new map keeps the switches: the next game of a playtest runs the same systems.
   const off = switchedOff.map((system) => ` · ${system} off`).join("");
-  document.querySelector<HTMLSpanElement>("#map-seed")!.innerHTML =
+  mapLine =
     `Map ${seed}${off}${world.cement && cementActive(world) ? ` · cement works ${world.cement.working ? "working" : "idle"} at the start` : ""} · <a href="${location.pathname}${query ? `?${query}` : ""}">New map</a> · <a href="#" id="save-run">Save run</a>`;
 }
 // The run so far as a file (runlog.ts): what you did and what each day looked
 // like, for reading by hand or with scripts/game-run.ts.
-document.querySelector<HTMLAnchorElement>("#save-run")!.addEventListener("click", (event) => {
+document.addEventListener("click", (event) => {
+  if (!(event.target as HTMLElement).closest("#save-run")) return;
   event.preventDefault();
   const file = runFile(recorder);
   const blob = new Blob([JSON.stringify(file)], { type: "application/json" });
@@ -180,8 +196,12 @@ function resize(): void {
   canvas.height = Math.round(window.innerHeight * dpr);
   canvas.style.width = `${window.innerWidth}px`;
   canvas.style.height = `${window.innerHeight}px`;
-  // The wings tuck to a spine at each edge: the map takes the width between them.
-  const spines = window.innerWidth > 900 ? 64 : 0;
+  // The map takes the room between the log (left) and the panel (right), under the strip.
+  const root = document.documentElement;
+  root.style.setProperty("--top", `${stripEl.offsetHeight}px`);
+  const cssPx = (name: string) => parseFloat(getComputedStyle(root).getPropertyValue(name)) || 0;
+  const left = cssPx("--left");
+  const right = cssPx("--right");
   // Keep the map clear of the strip above and of whatever sits below it --
   // the toolbar, and the key when it's open -- measured, not guessed: a
   // fixed inset left the open key over the map's corner (playtest).
@@ -195,11 +215,90 @@ function resize(): void {
       keyEl.style.bottom = `${below(toolbar) + 8}px`;
     }
   }
-  const treasury = document.querySelector<HTMLElement>("#treasury");
-  const bottomInset = Math.max(56, below(toolbar), below(keyEl), below(treasury)) + 8;
-  view = fitView(world, window.innerWidth, window.innerHeight, 24, 64, bottomInset, spines);
+  const bottomInset = Math.max(56, below(toolbar)) + 8;
+  fitted = fitView(world, window.innerWidth, window.innerHeight, 24, stripEl.offsetHeight, bottomInset, left, right);
+  applyZoom();
 }
 window.addEventListener("resize", resize);
+
+// Zoom and pan (the information lab, 2026-10-23): the wheel zooms toward the cursor, up to
+// MAX_ZOOM times the whole map; a drag pans once zoomed in; 0 or the Fit button shows it all.
+// The view keeps a zoom and the map point at the middle of the fitted map, so a resize (the
+// key opening, the window) keeps where you were looking.
+const MAX_ZOOM = 6;
+let fitted: View = { scale: 1, offsetX: 0, offsetY: 0, fit: 1 };
+let zoom = 1;
+let lookAt: { x: number; y: number } | null = null;
+function fittedMiddle(): { x: number; y: number } {
+  return { x: fitted.offsetX + (world.width * fitted.scale) / 2, y: fitted.offsetY + (world.height * fitted.scale) / 2 };
+}
+function applyZoom(): void {
+  if (zoom <= 1.0001 || !lookAt) {
+    zoom = 1;
+    lookAt = null;
+    view = fitted;
+  } else {
+    const scale = fitted.scale * zoom;
+    const middle = fittedMiddle();
+    view = { scale, fit: fitted.scale, offsetX: middle.x - lookAt.x * scale, offsetY: middle.y - lookAt.y * scale };
+  }
+  renderZoomControl();
+}
+/** Zoom by `factor` keeping the map point under (sx, sy) where it is on screen. */
+function zoomAt(sx: number, sy: number, factor: number): void {
+  const next = Math.max(1, Math.min(MAX_ZOOM, zoom * factor));
+  const under = { x: (sx - view.offsetX) / view.scale, y: (sy - view.offsetY) / view.scale };
+  const scale = fitted.scale * next;
+  const offsetX = sx - under.x * scale;
+  const offsetY = sy - under.y * scale;
+  const middle = fittedMiddle();
+  zoom = next;
+  lookAt = { x: (middle.x - offsetX) / scale, y: (middle.y - offsetY) / scale };
+  applyZoom();
+}
+function panBy(dx: number, dy: number): void {
+  if (zoom <= 1.0001 || !lookAt) return;
+  const scale = fitted.scale * zoom;
+  lookAt = { x: lookAt.x - dx / scale, y: lookAt.y - dy / scale };
+  applyZoom();
+}
+function renderZoomControl(): void {
+  let el = document.querySelector<HTMLDivElement>("#zoom-control");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "zoom-control";
+    document.body.appendChild(el);
+    el.addEventListener("click", (event) => {
+      const z = (event.target as HTMLElement).dataset.zoom;
+      if (z === "fit") { zoom = 1; applyZoom(); }
+      else if (z) zoomAt(window.innerWidth / 2, window.innerHeight / 2, z === "in" ? 1.5 : 1 / 1.5);
+    });
+  }
+  el.innerHTML = `<button data-zoom="in" title="Zoom in (or the wheel)">+</button><button data-zoom="out" title="Zoom out">−</button>${zoom > 1.0001 ? `<button data-zoom="fit" title="The whole map (0)">Fit · ${zoom.toFixed(1)}×</button>` : ""}`;
+}
+canvas.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  zoomAt(event.clientX, event.clientY, Math.exp(-event.deltaY * 0.0015));
+}, { passive: false });
+let dragging: { x: number; y: number; moved: boolean } | null = null;
+/** A drag that panned isn't also a click on whatever it ended over. */
+let suppressClick = false;
+canvas.addEventListener("mousedown", (event) => {
+  if (event.button === 0) dragging = { x: event.clientX, y: event.clientY, moved: false };
+});
+window.addEventListener("mousemove", (event) => {
+  if (!dragging || zoom <= 1.0001) return;
+  const dx = event.clientX - dragging.x;
+  const dy = event.clientY - dragging.y;
+  if (!dragging.moved && Math.hypot(dx, dy) < 5) return;
+  dragging = { x: event.clientX, y: event.clientY, moved: true };
+  canvas.style.cursor = "grabbing";
+  panBy(dx, dy);
+});
+window.addEventListener("mouseup", () => {
+  if (dragging?.moved) suppressClick = true;
+  dragging = null;
+});
 
 // The key opens only when there's room beside the toolbar (ten tools); on a
 // narrower window it starts closed, one click away, instead of covering the map.
@@ -634,6 +733,10 @@ function focusTown(): string | null {
 }
 
 canvas.addEventListener("click", (event) => {
+  if (suppressClick) {
+    suppressClick = false;
+    return;
+  }
   if (tool === "fix") {
     const road = roadAt(event.clientX, event.clientY);
     if (!road) return;
@@ -653,6 +756,9 @@ canvas.addEventListener("click", (event) => {
   }
   const town = townAt(event.clientX, event.clientY);
   if (!town) {
+    // Nothing but a road under the click: the road in the panel (the information lab).
+    const road = selectedTown === null ? roadAt(event.clientX, event.clientY) : null;
+    if (road && world.simulation.map.segments.some((s) => s.id === road)) screen.select({ kind: "segment", id: road });
     selectedTown = null;
     return;
   }
@@ -807,6 +913,10 @@ window.addEventListener("keydown", (event) => {
     }
     say(pauseOnStrike ? "At 4×, the game pauses when a strike is called or begins." : "At 4×, strikes no longer pause the game.");
   }
+  else if (event.key === "0") {
+    zoom = 1;
+    applyZoom();
+  }
   else if (event.key === "h" || event.key === "H") {
     hints.off = !hints.off;
     try {
@@ -815,7 +925,15 @@ window.addEventListener("keydown", (event) => {
       // Remembered for this game only.
     }
   }
-  else if (event.key === "Escape") selectedTown = null;
+  else if (event.key === "Escape") {
+    // Esc: the revenue screen shut, else a half-made build dropped, else back to the lists.
+    if (screen.revenueOpen()) screen.openRevenue(false);
+    else if (selectedTown) selectedTown = null;
+    else {
+      panelTown = null;
+      screen.select(null);
+    }
+  }
   else if (event.key === " ") {
     paused = !paused;
     event.preventDefault();
@@ -1127,80 +1245,23 @@ function renderToolbar(): void {
 // with its 5-day net. Chips with counts (design lab, "the brief, step 8"):
 // each is its own key, and each carries one number.
 function renderStrip(): void {
-  const h = averageHeadline(world);
-  const net = averageNet(world);
-  const n = (x: number) => Math.round(x).toLocaleString();
-  const signed = (x: number) => `${x < 0 ? "−" : "+"}₦${Math.abs(Math.round(x)).toLocaleString()}`;
-  // The score beside the money, marked like it (brief, After the ladder's
-  // playtest, 2): trips made with its trend over TREND_DAYS and a sparkline,
-  // and the people the region has gained since day 1.
-  const trend = tripsTrend(world);
-  const change = trend && Math.abs(trend.change) >= 1
-    ? `<span class="trend ${trend.change > 0 ? "good" : "bad"}" title="Change over the last ${TREND_DAYS} days (5-day averages)">${trend.change > 0 ? "▲" : "▼"} ${n(Math.abs(trend.change))}</span>`
-    : "";
-  const people = peopleSinceStart(world);
-  const k = (x: number) => `${x < 0 ? "−" : "+"}${Math.abs(Math.round(x)).toLocaleString()}k`;
-  strip.innerHTML = `
-    <div class="stat"><span class="k">Day</span><span class="v">${gameDay(world)}</span></div>
-    <div class="stat"><span class="k">Budget</span><span class="v ${world.economy.funds < 0 ? "bad" : ""}">${naira(world.economy.funds)}</span></div>
-    <div class="stat"><span class="k" title="Income less running costs and upkeep, a day, over the last 5 days">Net, 5-day average</span><span class="v ${net < 0 ? "bad" : "good"}">${signed(net)}</span></div>
-    <div class="stat"><span class="k" title="Trips between towns that happened, by anyone, a day: 5-day average">Trips made, a day</span><span class="v">${n(h.tripsPerDay)}${change}${trend ? sparkline(trend.series) : ""}</span></div>
-    <div class="stat"><span class="k" title="People the towns have gained since day 1, thousands: towns that shrank count against it, new towns count whole">People, since day 1</span><span class="v ${people <= -0.5 ? "bad" : people >= 0.5 ? "good" : ""}">${k(people)}</span></div>
-    <div class="chips">
-      <span class="chip" title="Trips your vehicles carried, a day"><b style="background:var(--player)"></b>Your riders <span class="num">${n(h.yourRidersPerDay)}</span></span>
-      <span class="chip" title="Trips danfos, kekes and okadas carried, a day"><b style="background:var(--danfo)"></b>Informal <span class="num">${n(h.tripsPerDay - h.yourRidersPerDay)}</span></span>
-      <span class="chip hatch" title="Stayed home: no road joins their towns. Falls when you build."><b></b>No road <span class="num">${n(h.noRoadPerDay)}</span></span>
-      <span class="chip" title="Stayed home: a road joins their towns, but nobody carried them. Falls when you run vehicles."><b style="background:var(--home)"></b>No seat <span class="num">${n(h.noSeatPerDay)}</span></span>
-    </div>`;
+  screen.renderStrip(mapLine);
 }
 
-/** Trips made since day 1, as a line the width of a word: the shape, not the numbers. */
-function sparkline(series: number[]): string {
-  const width = 56;
-  const height = 18;
-  const shown = series.slice(-60);
-  const lo = Math.min(...shown);
-  const hi = Math.max(...shown);
-  const span = Math.max(hi - lo, hi * 0.05, 1); // a flat line stays flat, not stretched to fill
-  const points = shown
-    .map((value, i) => `${((i / Math.max(1, shown.length - 1)) * width).toFixed(1)},${(height - 2 - ((value - lo) / span) * (height - 4)).toFixed(1)}`)
-    .join(" ");
-  return `<svg class="spark" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true"><polyline points="${points}" /></svg>`;
-}
 
-// The panel shows the focused town's trips when there is one, otherwise
-// your routes -- one home at a time, not both stacked.
+// The side panel (screen.ts): its lists, or the one thing picked. A town pointed at on the
+// map shows there, and stays when the pointer leaves for the panel -- except mid-action, the
+// first town of a road or route clicked: the panel stays on what it showed.
+let panelTown: string | null = null;
 function renderPanel(): void {
-  // Your routes always, in the right wing; the town you point at, or last pointed at, in the left.
-  renderRoutes();
-  const town = focusTown();
-  if (town) {
-    renderTown(town);
-    shownTown = town;
-  } else if (!townEl.innerHTML) {
-    townEl.innerHTML = `<p class="hint">Hover a town on the map to see it here: where its people want to go, and what it needs.</p>`;
-  }
-  // A town pointed at brings its wing out, tucked again when you look away (unless you're in it).
-  // Mid-action -- the first town of a road, track or route clicked -- the wings stay
-  // tucked: a card coming out covers the other end you're about to click (playtest,
-  // map 2418: a road from Vom Terminal to Kabba Refinery, a card over each end).
+  const town = hoverTown ?? null;
   const placing = selectedTown !== null && tool !== "fix" && tool !== "yard" && tool !== "park";
-  townWing.classList.toggle("out", town !== null && !placing);
-  // Pointing at a town the left wing would cover: the card comes out on the right instead.
-  // It stays there while you read it (the pointer on the card), and goes home once you leave.
-  const at = town ? world.towns.get(town) ?? world.ruins.get(town) : undefined;
-  if (at) townWing.classList.toggle("flip", toScreen(view, at.x, at.y).x < townWing.offsetWidth + 60);
-  else if (!townWing.matches(":hover")) townWing.classList.remove("flip");
-  const shown = shownTown ? world.towns.get(shownTown) ?? world.ruins.get(shownTown) : undefined;
-  townWing.querySelector(".spine")!.innerHTML = shown ? `<span class="k">${shown.industry ? "Site" : "Town"}</span> <b>${shown.name}</b>${shown.industry ? "" : ` <span class="num">${Math.round(shown.population)}k</span>`}` : `<span class="k">Towns</span>`;
-  const net = routeSummaries(world).reduce((sum, route) => sum + route.netPerDay, 0) + lorrySummaries(world).reduce((sum, route) => sum + route.netPerDay, 0);
-  routesWing.querySelector(".spine")!.innerHTML = `<span class="k">Your routes</span> <span class="num ${net < 0 ? "bad" : "good"}">${net < 0 ? "−" : "+"}₦${Math.abs(Math.round(net)).toLocaleString()}/day</span>`;
-  renderTreasury();
-}
-let shownTown: string | null = null;
-
-function renderTreasury(): void {
-  treasuryEl.innerHTML = treasuryHtml();
+  if (town && town !== panelTown && !placing && world.towns.has(town)) {
+    panelTown = town;
+    screen.select({ kind: world.towns.get(town)!.industry ? "site" : "town", id: town }, true);
+    return;
+  }
+  screen.renderPanel();
 }
 
 function changingText(townId: string): string {
@@ -1974,7 +2035,7 @@ function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
     : "";
   const signed = `${s.netPerDay < 0 ? "−" : "+"}₦${Math.abs(Math.round(s.netPerDay)).toLocaleString()}`;
   return `
-    <div class="route-card" title="${long.replace(/"/g, "&quot;")}">
+    <div class="route-card" data-route="${s.id}" title="${long.replace(/"/g, "&quot;")}">
       <div class="top"><span class="k">${vehicleCount(s.id, s.buses)} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</span><span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${signed}/day</span></div>
       <div class="name"><span class="swatch" style="background:${routeColor(index)}"></span>${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}
         <span class="buttons"><button data-add="${s.id}" title="Add one">+</button><button data-remove="${s.id}" title="Sell one">−</button></span></div>
@@ -2313,7 +2374,7 @@ function lorryRows(afterBuses: boolean): string {
         <small>${forGoodsVehicle(`goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full`, s.id)}</small>${freightRateRow(s.id)}`
       : "";
     return `
-      <div class="route">
+      <div class="route" data-route="${s.id}">
         <span class="swatch" style="background:var(--goods)"></span>
         <div class="name">${townName(s.a)} ↔ ${townName(s.b)}${isFreightRoute(s.id) ? ' <span class="muted">by rail</span>' : ""}<small>${s.lorries} ${isFreightRoute(s.id) ? `freight train${s.lorries === 1 ? "" : "s"}` : `lorr${s.lorries === 1 ? "y" : "ies"}`} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
         <span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${naira(s.netPerDay)}</span>
@@ -2425,23 +2486,45 @@ function moneyNote(): string {
   return `<p class="callout">${situation}${mend} ${exit}</p>`;
 }
 
-// The Treasury drawer's buttons (bonds, a project dropped) are the panel's: one handler.
-// A press held on a panel holds the panel still until it's released (frame(): a redraw
-// mid-click swallowed the click).
+// The panel's, the log's and the revenue screen's clicks: the screen's own first (tabs,
+// sorting, picking), then the old cards' buttons and the problem lines' moves, one handler.
+// A press held on a panel holds it still until it's released (frame(): a redraw mid-click
+// swallowed the click).
 let panelPressed = false;
-for (const panel of [routesEl, townEl, treasuryEl]) panel.addEventListener("pointerdown", () => (panelPressed = true));
+for (const panel of [panelEl, logEl, revenueEl, stripEl]) {
+  panel.addEventListener("pointerdown", () => (panelPressed = true));
+  panel.addEventListener("click", (event) => {
+    if (!screen.onClick(event.target as HTMLElement)) onPanelClick(event);
+  });
+}
 window.addEventListener("pointerup", () => (panelPressed = false));
 window.addEventListener("pointercancel", () => (panelPressed = false));
-treasuryEl.addEventListener("click", (event) => onPanelClick(event));
-townEl.addEventListener("click", (event) => onPanelClick(event));
-// A click on a wing's spine pins it out (and again unpins it): hover alone is no good on touch.
-for (const wing of [townWing, routesWing]) wing.querySelector(".spine")!.addEventListener("click", () => wing.classList.toggle("pinned"));
-routesEl.addEventListener("click", (event) => onPanelClick(event));
+// Focus (the information lab): a route's card or row hovered, or picked, fades the rest of the map.
+let focusRoute: string | null = null;
+panelEl.addEventListener("mouseover", (event) => {
+  focusRoute = (event.target as HTMLElement).closest<HTMLElement>("[data-route]")?.dataset.route ?? null;
+});
+panelEl.addEventListener("mouseleave", () => {
+  focusRoute = null;
+});
 function onPanelClick(event: MouseEvent): void {
-  const target = event.target as HTMLElement;
-  // The drawer's tab pins it open (and unpins it): hover alone is no good on touch.
-  if (target.closest("#treasury .tab")) {
-    treasuryEl.classList.toggle("pinned");
+  const target = (event.target as HTMLElement).closest<HTMLElement>("button, a, [data-select]") ?? (event.target as HTMLElement);
+  // A problem line's move (screen.ts): the named move itself, bought.
+  if (target.dataset.named !== undefined) {
+    const move = screen.namedMove(Number(target.dataset.named));
+    if (!move) return;
+    const towns = "a" in move.action && "b" in move.action ? [String(move.action.a), String(move.action.b)] : [];
+    const result = act({ label: move.label, towns }, move.action);
+    say(result.ok ? `${move.label.replace(/\s*\([^)]*\)$/, "")}: done, ${naira(move.price)}.${later}` : `Can't: ${result.reason}`, !result.ok);
+    renderPanel();
+    return;
+  }
+  // ...or the tool that does it: picked, for you to click on the map.
+  if (target.dataset.tool) {
+    tool = target.dataset.tool as Tool;
+    selectedTown = null;
+    renderToolbar();
+    say(`${target.textContent?.trim()}: click on the map.`);
     return;
   }
   // The named project: name it from a town's road-full line, or drop it.
@@ -2557,9 +2640,8 @@ function onPanelClick(event: MouseEvent): void {
   }
   // The town card's pager: the next town along, as if you'd clicked it.
   if (target.dataset.select) {
-    selectedTown = target.dataset.select;
-    hoverTown = null;
-    renderPanel();
+    const id = target.dataset.select;
+    screen.select({ kind: world.towns.get(id)?.industry ? "site" : "town", id });
     return;
   }
   const moveIndex = target.dataset.move;
@@ -2669,6 +2751,40 @@ const accumulator = new Accumulator(SIM_DT);
 let last = performance.now();
 let panelTimer = 0;
 
+// The map's overlays, one at a time (the information lab): the traffic map, or demand between
+// towns, trips with no seat, each corridor's informal share, or the biggest goods flows.
+let overlay: Overlay = "none";
+const overlaysEl = document.querySelector<HTMLDivElement>("#overlays")!;
+function renderOverlays(): void {
+  const opts: Array<[Overlay, string]> = [["none", "Traffic"], ["demand", "Demand"], ["noseat", "No seat"], ["informal", "Informal share"], ["goods", "Goods"]];
+  overlaysEl.innerHTML = opts.map(([id, label]) => `<button data-overlay="${id}" class="${overlay === id ? "on" : ""}">${label}</button>`).join("");
+}
+overlaysEl.addEventListener("click", (event) => {
+  const id = (event.target as HTMLElement).dataset.overlay as Overlay | undefined;
+  if (!id) return;
+  overlay = id;
+  renderOverlays();
+});
+renderOverlays();
+
+// The towns your routes serve whose card names a problem, for the map's mark (the information
+// lab). Only those: on day 2 every town had one (cut off, or riders with no seat), and a
+// mark on every town says nothing; a cut-off town has its "no road" label already. Rechecked
+// twice a second, not every frame -- problemText reads a good deal of the world.
+let problemTowns = new Set<string>();
+let problemsAt = -Infinity;
+function townsWithProblems(now: number): Set<string> {
+  if (now - problemsAt < 500) return problemTowns;
+  problemsAt = now;
+  const served = new Set<string>();
+  for (const route of [...world.routes, ...world.lorryRoutes]) {
+    for (const stop of world.simulation.vehicles.find((v) => v.id === route.vehicleIds[0])?.path ?? []) served.add(stop);
+  }
+  problemTowns = new Set([...served].filter((id) => world.towns.has(id) && !world.towns.get(id)!.industry && problemText(id) !== ""));
+  return problemTowns;
+}
+
+let revenueTimer = 0;
 function frame(now: number): void {
   const elapsed = (now - last) / 1000;
   last = now;
@@ -2684,7 +2800,12 @@ function frame(now: number): void {
       });
     }
   }
-  draw(ctx, world, view, { selectedTown, hoverTown, focusTown: focusTown(), ghost: ghost(), road: roadHover() });
+  const picked = screen.focus;
+  draw(ctx, world, view, {
+    selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay,
+    focusTown: focusTown() ?? (picked && picked.kind !== "route" && picked.kind !== "segment" ? picked.id : null),
+    focusRoute: focusRoute ?? (picked?.kind === "route" ? picked.id : null),
+  });
 
   panelTimer += elapsed;
   if (panelTimer > 0.25) {
@@ -2693,7 +2814,13 @@ function frame(now: number): void {
     // Not while a button in a panel is pressed: redrawing replaces the button under
     // the pointer, and a click needs the same one pressed and released (playtest:
     // "Keep it up" took several clicks -- the panel redraws every quarter second).
-    if (!panelPressed) renderPanel();
+    if (!panelPressed) {
+      renderPanel();
+      screen.renderLog();
+      // The revenue screen's charts are the days': once a second is plenty.
+      revenueTimer += 1;
+      if (screen.revenueOpen() && revenueTimer % 4 === 0) screen.renderRevenue();
+    }
   }
   // Every frame: a hint pinned to a town follows it, and hovering dismisses hint 1 at once.
   renderHint();
@@ -2701,9 +2828,10 @@ function frame(now: number): void {
 }
 
 renderToolbar();
-resize(); // again, now the toolbar exists to be measured
 renderStrip();
+resize(); // again, now the toolbar and the strip exist to be measured
 renderPanel();
+screen.renderLog(true);
 // The hints take the start from here (hint 1); the developer view keeps the old line.
 if (dev) say("Danfos, kekes and okadas are already carrying your passengers. Click a town, then another, to run a bus.");
 requestAnimationFrame(frame);

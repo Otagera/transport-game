@@ -466,3 +466,55 @@ terrain isn't applied: the map still draws shaded hills.
   the tool and towns to the same action the preview forecast).
 - **Minibus tool** (M) under On roads; minibuses draw smaller than buses; route rows,
   reasons and receipts name them ("2 minibuses", "Another minibus on …").
+
+### The map layer (2026-10-23): the information lab's map, ported
+
+`render.ts` is the lab's map (`info-lab.html`) on live state, as agreed -- not the lab's rules
+layered onto the old map (a first build did that, and kept the old map's look: the user, "this
+was not what you showed in the lab"). Roads by traffic (width by `roadFlowEMA` / `roadCapacity`,
+grey/orange/red by speed) with a white edge; your service as one blue line along them, as wide
+as your riders (`yourRidersOnRoads`); the other side as bands beside each road (yellow informal,
+brown trucks; `otherSideOnRoads`, rolled frame to frame) and its vehicles drawn on top only when
+there's room (below 4x, or zoomed in to 2x); your vehicles as the lab's pills, filled as full as
+they run; towns as the lab's (a share ring, name, size and trend, an amber `!` on towns you serve
+with a problem); sites as squares named on hover; the lab's terrain (a smoothed wash of water and
+hills). One overlay at a time (`Overlay`: demand, no seat, the informal share, the 25 biggest goods
+flows), cached a sim second. Focus (`focusOf`) fades what isn't part of the hovered town or route;
+zoom and pan in `main.ts`, with marks growing by the square root of the zoom (`growOf`).
+
+**Kept from the old map, in the lab's style** (the lab had no need to show them): the build
+preview and its price label, the fix tool's road, strike and TAKEN/LOST tags, wardens, the
+yard/park/metro marks, emptied towns, rail track. **Gone from the map** (the cards, the overlays
+and the log carry them): per-route colours (the routes list keeps a swatch each), surface dashes,
+cracks and centre lines, bridge decks, contours and ground names, waiting dots, fuel cans,
+milestone tags, desire lines (the Demand overlay replaces them).
+
+### The screen (2026-10-23): the information lab's strip, log, panel and revenue screen
+
+`screen.ts` is the rest of the lab (`info-lab.html`), ported whole on the live game. The lab
+read a saved run; the screen reads the world now and the days the run recorder keeps
+(`recorder.file.days`, plus `recorder.pending` for today's events), so its charts are the same
+data the lab drew. The page is the lab's layout: the strip on top, the log left (`--left`), the
+panel right (`--right`), the map fitted between them (`fitView`'s left and right insets).
+
+- **The strip**: day and map (New map, Save run), then trips made, your riders, no seat, net
+  and money, each with its change over ten days and a 30-day sparkline; Revenue opens the
+  revenue screen.
+- **The log**: the run's events as lines, filterable, a click shows the town or site it's about.
+  Redrawn only when an event arrives -- a redraw under the pointer swallows a click.
+- **The panel**: Routes, Towns, Sites tabs that sort by column, or one thing picked -- a row, a
+  log line, a town pointed at on the map (it stays when the pointer leaves for the panel; not
+  mid-build), a road clicked with nothing else under it. Each has the lab's tiles, a chart
+  over the days, and one problem line. Its button is real: a named move (`problems.ts`) is
+  bought (`data-named`), a route's is add or sell, the rest pick the tool that does it
+  (`data-tool`). A row hovered, or a thing picked from the panel, focuses the map; a town
+  shown because you pointed at it doesn't fade the map.
+- **"More"**: the old cards, whole, under a fold that stays open across redraws -- the town or
+  site card (trips, parks, metro, strikes, production, expand, restore), the route card, the
+  routes wing's rest (lorries, corridors, your share), and the Treasury drawer as a card on the
+  revenue screen (bonds, the named project, chains). Their buttons go through `onPanelClick`
+  as before: nothing the old cards could do was lost.
+- **The revenue screen**: the lab's -- heroes, income and costs stacked, what the treasury
+  took, net and money, totals since day 1, the routes table -- plus the treasury card.
+  Esc closes it.
+
