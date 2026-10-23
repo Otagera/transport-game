@@ -9,6 +9,31 @@ lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to 
 **581 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
+## The carry-over (2026-10-23)
+
+**The slice is the game.** On your answers: the original 3D game -- its three.js renderer,
+six-homes UI, dev studio, content schemas, calendar eras, save/scenarios and their tests --
+is retired from the build and the tree, kept whole under the git tag `original-3d`; the code
+is renamed from "slice" to "game" (`src/engine/game`, `src/game`, `index.html`, `GameWorld`,
+`gameTick`, `scripts/game-*.ts`, the `GAME_TUNING` override); `main` is the working branch
+again. Saved runs and your saved preferences keep their old names inside, so both still work.
+The engine's foundation (map, pathing, simulation, economy, paratransit) stays.
+
+**Next: the information design, layer by layer, each played before the next** (brief, the
+carry-over plan; settled in the information lab, `/info-lab.html`):
+
+1. **The map at a glance:** roads by traffic and how full (grey, orange, red), your service
+   and your vehicles' fill, the other side's vehicles as bands with individuals on top when
+   there's room (detail by speed and zoom), focus, zoom and pan, a town's biggest problem
+   as a mark, neutral greys.
+2. **Side panels:** one layout for every town, route, site and road -- tiles, a chart over
+   time, one problem line with its move -- and lists that sort.
+3. **The revenue screen,** in place of the Treasury drawer.
+4. **The log** of what happened.
+
+Then the open items for the full game (brief, the carry-over plan): roads with junctions,
+money late in the game, eras as vehicle generations, sea and river freight.
+
 ## Where things stand (2026-10-21)
 
 **The contract is [brief.md](brief.md); the slice is a mechanics lab** (principles §2: a
@@ -46,7 +71,7 @@ yards (Y; a yard at the crude source lets hauliers truck crude), towns expecting
 town card's Service line), the budget-year sweep as a trial (the Treasury's countdown). The
 strategist on maps 0 and 2411: money held peaks ₦139-175k (was ₦305k), the sweep took
 ₦85-196k, the bot already meets the expectations; late-game stretches with nothing built
-remain -- steps 4-6 (a second refinery, motor parks, a metro) are for that. `scripts/slice-play.ts`
+remain -- steps 4-6 (a second refinery, motor parks, a metro) are for that. `scripts/game-play.ts`
 plays the game from a terminal for an OpenCode player.
 
 **Revision 4, step 4, the second refinery** (merged 2026-10-21): a private refinery opens once,
@@ -111,31 +136,31 @@ It makes only 23-46% of its capacity with crude arriving (probably its workers; 
   carry-over plan.
 
 **Before that:** your playtest of expansion, exports at ₦20, the look.
-In a worktree meanwhile: **the strategist** (`scripts/slice-strategist.ts`), a long-game bot
+In a worktree meanwhile: **the strategist** (`scripts/game-strategist.ts`), a long-game bot
 that plays the ladder and the chains from the game's own advice and measures C2, C11 and C14
-on several maps -- the bots in `slice-bots.ts` predate rail and the chains. **Then the
+on several maps -- the bots in `game-bots.ts` predate rail and the chains. **Then the
 goods/passengers balance** (a decision for you). **Then the slice closes:** the carry-over plan
 (brief, Open question 8).
 
 ## How to run it
 
-- Play: `bun run dev`, open `/slice.html` (the original game is still `/`). `?seed=N` picks a
+- Play: `bun run dev`, open `/` (the game). `?seed=N` picks a
   map (0 is the hand-made one); `?dev=1` shows forecasts, receipts and best next moves;
   `?dev=1&funds=N` starts with money, for checks.
-- Bots and the brief's checks: `bun scripts/slice-bots.ts` (`BOTS=...`, `CHECKS=0`, `SEED=n`,
+- Bots and the brief's checks: `bun scripts/game-bots.ts` (`BOTS=...`, `CHECKS=0`, `SEED=n`,
   `BOTS_WORKERS=2` by default; 6 only on a machine that can take it).
 - One corridor up the ladder: `bun scripts/corridor-probe.ts [days]` (`SEED=n`,
   `REAL_MONEY=1`, `BRT=1`, `LAX=1`, ...).
-- A played game: "Save run" (beside "New map") downloads it; `bun scripts/slice-run.ts run.json`
+- A played game: "Save run" (beside "New map") downloads it; `bun scripts/game-run.ts run.json`
   prints the timeline, what you did, what the game announced and the last day (`--day N` for
   one day in full, `--verify` replays it and checks it reproduces). `?goods=off` and
   `?wear=off` switch those systems off.
-- Calibrate: `bun scripts/slice-probe.ts [days]`, with `SLICE_TUNING='{"fare":5}'` to try
+- Calibrate: `bun scripts/game-probe.ts [days]`, with `GAME_TUNING='{"fare":5}'` to try
   overrides.
 - Detail: [architecture/engine.md](architecture/engine.md) §slice/,
   [architecture/render-and-ui.md](architecture/render-and-ui.md) §7.
 
-## What's built (the original game, Modules 0–12)
+## What was built for the original 3D game (Modules 0–12; retired 2026-10-23, tag `original-3d`)
 
 The original rebuild plan's module order (Module 0 → 10) is complete, followed by two
 modules added after the plan was written (11, 12). Everything below has shipped and is

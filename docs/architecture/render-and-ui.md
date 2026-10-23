@@ -8,6 +8,8 @@ framework (principles.md §2) — the re-derive discipline is what a framework's
 reconciliation exists to solve, and this codebase doesn't have that problem to begin
 with.
 
+> **Retired 2026-10-23 with the 3D game** (§1-6: the three.js scene, the six homes, picking, profiles, overlays, ambient traffic; §7, the game's page, is current). Kept as history; the code is under the git tag `original-3d`. See [index.md](index.md).
+
 ## 1. Scene, camera, style
 
 `render/scene.ts`/`style.ts`: one mutable `StyleSpec` object holds every value that
@@ -189,8 +191,8 @@ draws it.
 
 ## 7. The slice's page (principles.md §6)
 
-`slice.html` + `src/slice/` — a separate page, flat 2D canvas, no three.js, no Preact. It
-reads `engine/slice` state every frame and keeps no display state of its own (the same
+`index.html` + `src/game/` — a separate page, flat 2D canvas, no three.js, no Preact. It
+reads `engine/game` state every frame and keeps no display state of its own (the same
 no-cached-view discipline as §2).
 
 **Slice zero's screen (brief steps 7-8, 2026-10-19).** Styled from the design lab's "The
@@ -212,7 +214,7 @@ terrain isn't applied: the map still draws shaded hills.
 - **Route cards** (`routeCard`): vehicles, in, cost and net a day; the pair with +/−; one
   verdict of at most 12 words naming one lever (`verdicts.ts` `shortVerdict`, tested), the
   long `reasonText` on the card's hover; the riders bar.
-- **The look** (the design lab's pick, applied 2026-10-20): two **wings** in `slice.html` --
+- **The look** (the design lab's pick, applied 2026-10-20): two **wings** in `index.html` --
   `#wing-town` left (the town or site card, `townEl`: every card renders there) and
   `#wing-routes` right (`#routes`: advice, routes, corridors, who carried trips) -- glass
   (68% panel, 20px blur, a blue glow), leaning 7° at rest and flat when used, tucked to a
@@ -237,7 +239,7 @@ terrain isn't applied: the map still draws shaded hills.
   only when hovered or selected, "idle · restore it" and "no road" always -- placed below,
   above, right or left of its square, whichever is free, else hidden until you point at it
   (playtest, map 2411: "the screen is getting too muddled").
-- **The Treasury drawer** (`treasuryHtml`, `#treasury` in `slice.html`; Revision 3, Money, 5,
+- **The Treasury drawer** (`treasuryHtml`, `#treasury` in `index.html`; Revision 3, Money, 5,
   the design lab's pick): a one-line tab above the control line (kept a day, levy, bond
   repayments, the worst chain), out on hover or focus, pinned by a click on the tab, into four
   columns built from `budgetParts`: income and spending lines a day over the last 5 days
@@ -364,7 +366,7 @@ terrain isn't applied: the map still draws shaded hills.
   buses' speed, and a jammed route says how much of the traffic is informal.
 - **Interchanges** — a town where at least 3 riders/day change buses draws with a second,
   inner outline (the Mini Metro convention), and its panel says how many change there.
-- **Town events** arrive from `sliceTick` and show as a longer toast. Ruins (abandoned
+- **Town events** arrive from `gameTick` and show as a longer toast. Ruins (abandoned
   emergent towns) draw as a grey dot with the name in italics.
 - **Toolbar** — captioned groups (`renderToolbar`'s `group`): On roads (Bus, Lorry; tan),
   On rail (Train, Freight; dark), Build (Road, Track), Line (road, track) — a
@@ -427,7 +429,7 @@ terrain isn't applied: the map still draws shaded hills.
 - **`main.ts`** — three tools (Bus `B`, Road `R`, Fix `F`): Bus and Road click a town, then another. The Road tool
   on two towns a dirt road already joins paves it instead (ghost: "Pave ₦… · carries 1.7×
   the traffic"); a jammed route on dirt names the roads to pave. Shift keeps
-  the first town selected. Refusals come back as `reason` strings from `engine/slice`
+  the first town selected. Refusals come back as `reason` strings from `engine/game`
   and show as a toast; the ghost previews the same `check*` result and `roadCost` before
   you click. The strip and panel are slice zero's (above). The routes panel is worst-first with
   +/− per route; a "healthy" route that loses money says its riders don't fill its buses
@@ -447,7 +449,7 @@ terrain isn't applied: the map still draws shaded hills.
 - **Halts** — with the Track tool, clicking a town twice builds a halt where a line passes
   it; back over the selected town, the preview offers it with distance and price. The town
   panel names the passing line and how to build the halt.
-- **Forecasts** — `src/slice/forecast.worker.ts` runs `forecast` off the frame. Every build
+- **Forecasts** — `src/game/forecast.worker.ts` runs `forecast` off the frame. Every build
   preview and the Fix hover asks for one; the label grows a second line ("Forecasting the
   next two days…", then the money, payback and biggest share move, green/red/grey). Cached by
   action, game day and an action counter that every `act()` bumps; only the latest request

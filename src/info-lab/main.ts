@@ -1,6 +1,6 @@
-import { buildSliceTerrain } from "@engine/slice/terrain";
-import { generatedSliceMap } from "@engine/slice/generate";
-import { SLICE_MAP } from "../slice/map";
+import { buildGameTerrain } from "@engine/game/terrain";
+import { generatedGameMap } from "@engine/game/generate";
+import { GAME_MAP } from "../game/map";
 import snapshotJson from "./snapshot.json";
 
 // The information lab (docs/brief.md, the carry-over plan: information
@@ -77,8 +77,8 @@ function dailyBudget(key: string | string[]): number[] {
 
 // --- Terrain ---------------------------------------------------------------
 
-const mapDef = generatedSliceMap(SLICE_MAP, S.seed);
-const terrain = buildSliceTerrain(mapDef);
+const mapDef = generatedGameMap(GAME_MAP, S.seed);
+const terrain = buildGameTerrain(mapDef);
 let terrainImage: HTMLCanvasElement | null = null;
 function bakeTerrain(): HTMLCanvasElement {
   const c = document.createElement("canvas");

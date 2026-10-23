@@ -4,8 +4,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "jsx": "react-jsx",
-    "jsxImportSource": "preact",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "esModuleInterop": true,
@@ -18,11 +16,7 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["node", "bun"],
     "paths": {
-      "@engine/*": ["./src/engine/*"],
-      "@content/*": ["./src/content/*"],
-      "@render/*": ["./src/render/*"],
-      "@ui/*": ["./src/ui/*"],
-      "@dev/*": ["./src/dev/*"]
+      "@engine/*": ["./src/engine/*"]
     }
   },
   "include": ["src", "test", "vite.config.ts"]

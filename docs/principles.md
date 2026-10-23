@@ -737,8 +737,8 @@ build went bottom-up — systems first, play last. The reset inverts that.
 impossible. The slice runs one present-day setting. The era code stays in the repo, unused
 by the slice.
 
-**The slice** lives beside the original game, not instead of it: `slice.html` +
-`src/slice/` (2D canvas, DOM panels) over `src/engine/slice/` (pure, tested), importing the
+**The slice** lives beside the original game, not instead of it: `index.html` +
+`src/game/` (2D canvas, DOM panels) over `src/engine/game/` (pure, tested), importing the
 existing engine modules — vehicles, routing, economy — rather than rewriting them. The rest
 of the codebase is a library to pull from as each step needs it.
 
@@ -1020,7 +1020,7 @@ Steps, each played before the next:
      connected; the rest of the map's needs didn't read as asks.
 
    **The same build, played by OpenCode** (free model, map 2411, to day 120, through
-   `scripts/slice-play.ts`): ended ₦50,000, 2,645 trips a day (yours 2,317), no seat 2,537;
+   `scripts/game-play.ts`): ended ₦50,000, 2,645 trips a day (yours 2,317), no seat 2,537;
    rail the standout (₦1,531 a day from two trains), the cement chain satisfying. Confused by:
    paving refused with "no road joins them" for served pairs, and "road is full: next rung
    paved" naming no road (days 30-35); a BRT on a ₦41,000 lane 8% full and losing while the
@@ -1033,11 +1033,11 @@ Rules for working this way:
 
 - **Every step is played before the next starts.** Every finding that mattered came from
   playing or from measuring the failing case.
-- **`scripts/slice-probe.ts` is the calibration instrument.** It runs real ticks headlessly
+- **`scripts/game-probe.ts` is the calibration instrument.** It runs real ticks headlessly
   and prints money, shares and per-route P&L for scripted strategies. Rerun it after any
   tuning change; record what the numbers were tuned *to* next to the numbers
-  (`engine/slice/tuning.ts`).
-- **Feel tests, not just mechanics tests.** `test/slice.test.ts` pins what the player should
+  (`engine/game/tuning.ts`).
+- **Feel tests, not just mechanics tests.** `test/game.test.ts` pins what the player should
   experience — queues settle, more buses have diminishing returns, enough of them lose
   money, a cut-off town only ever stays home.
 - **A parameter enters only when it creates a player decision.**

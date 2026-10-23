@@ -21,31 +21,31 @@
 //   WINDOW=66-105 prints trips made, "no seat" along the corridor and your
 //   money averaged over those days: run once with NO_LANE=1 and once with
 //   the lane for a twin that never got it (deterministic up to the lane).
-//   SLICE_TUNING='{"...":...}' overrides tuning, as the bots do.
+//   GAME_TUNING='{"...":...}' overrides tuning, as the bots do.
 //   SEED=n plays a generated map (generate.ts); the corridor defaults to its
 //   trunk's first leg (the dominant city to the middle town).
-import { SLICE_MAP } from "../src/slice/map";
-import { generatedMapInfo } from "../src/engine/slice/generate";
-import { affordable, namedMoves } from "../src/engine/slice/problems";
-import { startSliceGame } from "../src/engine/slice/start";
-import { sliceTick } from "../src/engine/slice/tick";
-import { addBrt, addBus, addBusLane, brtRouteId, findRoute, paveRoad, removeBus, roadChain, routeKey, routeSummaries } from "../src/engine/slice/world";
-import { roadFull, townGrowth } from "../src/engine/slice/growth";
-import { isDirt } from "../src/engine/slice/congestion";
-import { DEFAULT_SLICE_TUNING } from "../src/engine/slice/tuning";
-import { tollFor } from "../src/engine/slice/budget";
-import { informalSpec } from "../src/engine/slice/tick";
-import { setEnforcement, settlementPrice } from "../src/engine/slice/pushback";
-import { nameProject, rungPrice } from "../src/engine/slice/project";
-import { averageNet } from "../src/engine/slice/history";
-import { addTrain, buildTrack, railPath, railRouteId } from "../src/engine/slice/rail";
-import { setRoadMaintained } from "../src/engine/slice/wear";
-import type { SliceWorld } from "../src/engine/slice/types";
+import { GAME_MAP } from "../src/game/map";
+import { generatedMapInfo } from "../src/engine/game/generate";
+import { affordable, namedMoves } from "../src/engine/game/problems";
+import { startGame } from "../src/engine/game/start";
+import { gameTick } from "../src/engine/game/tick";
+import { addBrt, addBus, addBusLane, brtRouteId, findRoute, paveRoad, removeBus, roadChain, routeKey, routeSummaries } from "../src/engine/game/world";
+import { roadFull, townGrowth } from "../src/engine/game/growth";
+import { isDirt } from "../src/engine/game/congestion";
+import { DEFAULT_GAME_TUNING } from "../src/engine/game/tuning";
+import { tollFor } from "../src/engine/game/budget";
+import { informalSpec } from "../src/engine/game/tick";
+import { setEnforcement, settlementPrice } from "../src/engine/game/pushback";
+import { nameProject, rungPrice } from "../src/engine/game/project";
+import { averageNet } from "../src/engine/game/history";
+import { addTrain, buildTrack, railPath, railRouteId } from "../src/engine/game/rail";
+import { setRoadMaintained } from "../src/engine/game/wear";
+import type { GameWorld } from "../src/engine/game/types";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
 
 const DAYS = Number(process.argv[2] ?? 120);
-const generated = generatedMapInfo(SLICE_MAP, Number(process.env.SEED ?? 0));
+const generated = generatedMapInfo(GAME_MAP, Number(process.env.SEED ?? 0));
 const A = process.argv[3] ?? generated.trunk[0];
 const B = process.argv[4] ?? generated.trunk[1];
 const JAM_RISE = Number(process.env.JAM_RISE ?? 0.1);
@@ -54,8 +54,8 @@ const SETTLE_DAYS = 3;
 const FULL = 0.85;
 const MAX_BUSES = Number(process.env.MAX_BUSES ?? 30);
 
-const tuning = { ...DEFAULT_SLICE_TUNING, ...JSON.parse(process.env.SLICE_TUNING ?? "{}") };
-const world = startSliceGame(generated.map, tuning);
+const tuning = { ...DEFAULT_GAME_TUNING, ...JSON.parse(process.env.GAME_TUNING ?? "{}") };
+const world = startGame(generated.map, tuning);
 // REAL_MONEY=1 (C2): no top-ups, the treasury on, and the player saves for a
 // rung it can't afford -- a named project (project.ts), no other buying
 // while it saves -- then builds it. Prints what each rung cost in days of
@@ -75,7 +75,7 @@ const corridorTowns = (): Set<string> => {
 };
 
 /** Trips a day along the corridor (both ends on it): made, and no seat. */
-function along(w: SliceWorld): { made: number; noSeat: number } {
+function along(w: GameWorld): { made: number; noSeat: number } {
   const towns = corridorTowns();
   let made = 0;
   let noSeat = 0;
@@ -97,14 +97,14 @@ let railDay = 0;
 // both), for 10 days: the lane's tolls and levies against the twin's, and
 // when the first strike comes.
 const C3_DAYS = 10;
-let twin: SliceWorld | null = null;
+let twin: GameWorld | null = null;
 let laneDay = 0;
 let strikeDay: number | null = null;
 // The corridor's own takings: tolls and your share of levies from informal
 // departures whose path runs along it, counted as they set off. The whole
 // network's would mix in the lane's bigger towns' levies everywhere.
-const corridorTakings = new WeakMap<SliceWorld, { seen: Set<string>; total: number }>();
-function countTakings(w: SliceWorld): void {
+const corridorTakings = new WeakMap<GameWorld, { seen: Set<string>; total: number }>();
+function countTakings(w: GameWorld): void {
   let tally = corridorTakings.get(w);
   if (!tally) corridorTakings.set(w, (tally = { seen: new Set(w.informal.active.keys()), total: 0 }));
   const ids = new Set(chainOf(w).map((piece) => piece.id));
@@ -116,8 +116,8 @@ function countTakings(w: SliceWorld): void {
     tally.total += tollFor(w, trip.segmentIds, spec.weight) + w.tuning.levyPerSeat * spec.capacity * (1 - w.tuning.agberoCut);
   }
 }
-const chainOf = (w: SliceWorld) => roadChain(w, A, B) ?? [];
-const takings = (w: SliceWorld) => corridorTakings.get(w)?.total ?? 0;
+const chainOf = (w: GameWorld) => roadChain(w, A, B) ?? [];
+const takings = (w: GameWorld) => corridorTakings.get(w)?.total ?? 0;
 let c3: { lane: number; twin: number } | null = null;
 let corridorNet = 0;
 // C3 (2026-10-19: each enforcement choice wins somewhere): your money and
@@ -130,7 +130,7 @@ const windowStats = { days: 0, made: 0, noSeat: 0, money: 0 };
 // Strike days: does a strike cost you money, or earn it (riders flood your
 // buses)? At each strike, a twin with the strike called off, the same buses
 // in both, for the strike day and the day after: your money in each.
-let strikeTwin: SliceWorld | null = null;
+let strikeTwin: GameWorld | null = null;
 let strikeTwinDays = 0;
 let strikeGain = { struck: 0, calm: 0 };
 const strikeMoney: Array<{ day: number; struck: number; calm: number }> = [];
@@ -205,13 +205,13 @@ for (let day = 1; day <= DAYS; day += 1) {
   const twinning = twin !== null && day <= laneDay + C3_DAYS;
   if (twinning) twin!.economy.funds = 1e9;
   for (let i = 0; i < ticks; i += 1) {
-    for (const event of sliceTick(world, SIM_DT)) {
+    for (const event of gameTick(world, SIM_DT)) {
       if (event.kind === "strike" && strikeDay === null) strikeDay = day;
       if (event.kind === "strike-over") estimates.push(event.cost === null ? NaN : Math.round(event.cost));
     }
-    if (strikeTwin) sliceTick(strikeTwin, SIM_DT);
+    if (strikeTwin) gameTick(strikeTwin, SIM_DT);
     if (twinning) {
-      sliceTick(twin!, SIM_DT);
+      gameTick(twin!, SIM_DT);
       countTakings(world);
       countTakings(twin!);
     }

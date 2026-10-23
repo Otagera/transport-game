@@ -1,7 +1,8 @@
 # Transport game
 
-A transport-infrastructure game. The original module build order (0 through 12) is complete —
-see [docs/status.md](docs/status.md) for current state.
+A transport-infrastructure game, played on a flat 2D map. What began as "the slice" is now
+the game; the original 3D game (modules 0-12) was retired on 2026-10-23 and is kept under the
+git tag `original-3d`. See [docs/status.md](docs/status.md) for current state.
 
 **Read [docs/status.md](docs/status.md) first** to see where things stand, then
 **[docs/brief.md](docs/brief.md)**: the design contract for what the game is and what gets built

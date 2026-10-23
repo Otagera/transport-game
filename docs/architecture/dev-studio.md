@@ -4,6 +4,8 @@ Everything under `src/dev/`, plus `window.dev` (installed from `main.ts`). Both 
 DEV-only surfaces that must be dead-code-eliminated from the production bundle — see
 §3 below for how that's actually verified, and a real leak it caught.
 
+> **Retired 2026-10-23 with the 3D game** (§1-3: the studio and `window.dev`; §4-5, the labs, are current). Kept as history; the code is under the git tag `original-3d`. See [index.md](index.md).
+
 ## 1. The studio (`?studio=1`)
 
 One dev-only Preact surface, four tabs:
@@ -122,8 +124,8 @@ wing, a drawer above the toolbar, or a drop from the strip's budget -- and contr
   those, so any theme works with any pose or dock. Panel tilt and docking are one
   `transform` built from `--tilt-*` and `--dock-*`; hover, focus, a town hovered on the
   map, or a click on the spine (pin) brings a wing out and flat.
-- **Real map, made-up state.** Towns, roads, river and hills come from `src/slice/map.ts`;
-  contours are the engine's own terrain (`buildSliceTerrain`, on the map scaled 2× for
+- **Real map, made-up state.** Towns, roads, river and hills come from `src/game/map.ts`;
+  contours are the engine's own terrain (`buildGameTerrain`, on the map scaled 2× for
   half-cell resolution); trip counts are the engine's gravity demand. Shares, routes and
   money are a fixed mid-game mock: the lab judges looks, not numbers.
 - **Verdicts.** Each option takes Keep or Drop; picks and notes save in localStorage

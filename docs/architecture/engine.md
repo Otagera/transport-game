@@ -215,6 +215,9 @@ was fixed to match).
 
 ## eras/ — the compressed timeline
 
+> **Retired 2026-10-23 with the 3D game** (calendar eras and save/scenarios). Kept as history; the code is under the git tag `original-3d`. See [index.md](index.md).
+
+
 `timeline.ts`: `createEraTimeline`/`advanceEraTimeline`/`currentEra`. Four eras
 (Post-Independence → Oil Boom → Informal → Modern) advance on **real elapsed time**, not
 player action, and hold at the final era rather than looping. `advanceEraTimeline`
@@ -292,6 +295,9 @@ real weights (content, see [content.md](content.md)); `render/fleet.ts` threads 
 
 ## save/ — versioned snapshot and scenarios (Module 10)
 
+> **Retired 2026-10-23 with the 3D game** (calendar eras and save/scenarios). Kept as history; the code is under the git tag `original-3d`. See [index.md](index.md).
+
+
 `types.ts`/`snapshot.ts`: `createSnapshot`/`restoreIntoState` mutate the target
 `simulation`/`economy`/`paratransit`/`growth`/`eraTimeline` objects **in place** (same
 pattern as `applyPromotion`/`decaySegments`) rather than returning new ones —
@@ -351,9 +357,9 @@ content catalog `engine/` can't import). `main.ts` calls
 `fleetController.handleEraChanged()` once after a scenario/save is applied, which
 catches it for the *final* era reached, just not for eras passed through en route.
 
-## slice/ — the reset's loop (principles.md §6)
+## game/ — the game (was slice/, the reset's loop: principles.md §6)
 
-`engine/slice/` composes existing modules into the slice's tick rather than extending
+`engine/game/` composes existing modules into the slice's tick rather than extending
 `simulation/simulate.ts`'s `tick`. Two hooks in `simulation/` exist for it: `tickVehicle`
 takes an optional `Loader` that replaces the default boarding rule at each stop, and
 `LoadEntry` carries an optional `trip` (origin, final destination) that `DeliveryEvent`
@@ -362,14 +368,14 @@ hands back on unload. `nodesAhead` is exported and shared. It reuses `createVehi
 purchase, sale, operating-cost and income-EMA functions unchanged. It does not use eras,
 growth, decay, ambient traffic, or `paratransit/spawn.ts`.
 
-- **`world.ts`** — `createSliceWorld(def, tuning)` builds a `GeneratedMap` (blank terrain,
+- **`world.ts`** — `createGameWorld(def, tuning)` builds a `GeneratedMap` (blank terrain,
   every town a `settlement`, inherited roads as two-point corridors) and replaces the
   generated demand with **gravity demand** (`k · popA · popB / distance`, passengers only,
   reciprocal, between *every* pair whether or not a road joins them). Player actions —
   `buildRoad`, `addBus`, `removeBus` — return `{ ok, reason }` and each has a matching
   `check*` the UI uses for previews. `roadCost` is the only function that prices a road
   (hard rule 3). Road paths are cached per pair in `pathCache`, cleared on every road change.
-- **`tick.ts`** — `sliceTick`, in order: arrivals; **giving up** (each queue loses
+- **`tick.ts`** — `gameTick`, in order: arrivals; **giving up** (each queue loses
   `1 − e^(−dt/patience)` per tick into a motor-park pool, so a queue settles at
   rate × patience — no `QUEUE_CAP`); vehicle movement and fares; **danfo dispatch**; reap;
   operating cost; rolling rates; settlements. Every waiting rider remembers the trip
@@ -442,8 +448,8 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   `riders/s through it × populationPerFlow`; demand is regenerated once a day.
   Abandoning turns the node into a `junction` (the road keeps its bend), moves the town to
   `world.ruins` so its name stays on the map, and drops its queues, pools, demand and
-  outcomes. Original towns never change size and never fade. `sliceTick` returns these as
-  `SliceEvent`s.
+  outcomes. Original towns never change size and never fade. `gameTick` returns these as
+  `GameEvent`s.
 - **Bus placement** — `addBus` creates the vehicle without queues (no teleport-load) and
   places it at the midpoint of the largest gap between the route's existing buses
   (`cycleFraction` / `largestGapMidpoint`).
@@ -470,7 +476,7 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   by keke or okada (`pop / (pop + walkableTownPopulation)`), and that share of your riders
   starting or ending trips there (`pairOutcomes`, so riders changing buses aren't counted).
   Nothing in the tick reads it; it touches no share and no money (a test pins that).
-- **The seeded variation** (Revision 1, step 3; `variation.ts`) — `variedSliceMap(base, seed)`
+- **The seeded variation** (Revision 1, step 3; `variation.ts`) — `variedGameMap(base, seed)`
   returns a copy of the hand-made map with town sizes drawn (Ilase ×0.85-1.2 and always the
   largest; a town no inherited road reaches ×1/3-3, every other town ×0.5-2, log-uniform, capped at 70% of Ilase) and the river's course
   and widths drawn (interior points shifted up to 5 cells; widths 2.5-5 cells at each point,
@@ -481,7 +487,7 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   or draws one and writes it into the address so a reload replays the map ("Map N · New map"
   on the controls line). The bots take `SEED=`. Superseded on the page and in the bots by
   generated maps (below); kept for its `varyTownSizes`, which they share.
-- **Generated maps** (R1 7; `generate.ts`) — `generatedSliceMap(base, seed)` (and
+- **Generated maps** (R1 7; `generate.ts`) — `generatedGameMap(base, seed)` (and
   `generatedMapInfo`, which also names the setting, the trunk and the draws rejected): seed 0
   is the hand-made map; any other seed draws, on the hand-made map's 100×64:
   - the dominant city's **setting** (coast, river or inland, once per seed) and bank, then the
@@ -508,7 +514,7 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   (after 400 draws, to the variation), the slowest 102 ms. Town names come from a pool none of
   the hand-made map's names are in. The corridor probe takes `SEED=` too, its corridor
   defaulting to the trunk's first leg.
-- **Terrain and roads** (step 3; `terrain.ts`, `roads.ts`) — `buildSliceTerrain` turns the map
+- **Terrain and roads** (step 3; `terrain.ts`, `roads.ts`) — `buildGameTerrain` turns the map
   def's authored rivers (centre line + width, or a width per point that varies between them) and hills (smooth bumps; elevation unbounded,
   since water is explicit) into the same `TerrainField` engine/map makes, and hard-fails a
   town in water. `planRoad` runs `pathing/plan.ts`'s `planCorridor` in auto mode (terrain A*,
@@ -571,7 +577,7 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   and the danfos' road space blend back toward an unlaned road's, and your lane speed toward
   general traffic's. A strike is announced `strikeNoticeDays` ahead (`strikeAt`; relaxing a
   lane announced while strict calls it off), lasts `strikeDays`, and its cost is estimated
-  from the corridor's income (`creditLanes`, from your route fares along it in `sliceTick`
+  from the corridor's income (`creditLanes`, from your route fares along it in `gameTick`
   and its takings in `sendInformal`) on up to 3 normal days before, into `lastStrike` and
   `world.budget.struck`. Emits `strike-announced`, `strike-called-off`, `strike`,
   `strike-over` (with the cost) for the page.
@@ -644,7 +650,7 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   summed over their buses and their loss as the daily saving.
 - **`tuning.ts`** — every number, with what it was calibrated *to* written beside it.
 
-Tests: `test/slice.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,
+Tests: `test/game.test.ts` — feel invariants (principles.md §6), the diagnosis verdicts,
 town founding/abandonment rules, and `insertIntoPath`'s position-preserving split.
 
 ### Ledger, receipts, road chains (legibility, track 1)
@@ -704,7 +710,7 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   towns, corridors, lanes, industries, the day's events). "Save run" on the page downloads
   `runFile(recorder)` as JSON. `replayRun(base, file, untilTick)` rebuilds the world at any
   tick: the sim is deterministic (the seed is its only randomness), and a test pins that a
-  saved run replays to the same funds, headline and towns. `scripts/slice-run.ts` reads one.
+  saved run replays to the same funds, headline and towns. `scripts/game-run.ts` reads one.
 - **`forecast.ts`** — `forecast(world, action, spec)` copies the world and runs the receipt
   machinery on the copy (`perform`, then ticks until the receipt finishes): the receipt the
   action would get two days on, if nothing else changes. The real world is untouched. A test
@@ -721,8 +727,8 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
 
 ### Slice zero: systems behind switches
 
-`SliceTuning` has `wearEnabled`, `goodsEnabled`, `railEnabled` and
-`straightAlignmentEnabled`, all false in `DEFAULT_SLICE_TUNING` (docs/brief.md, Slice zero).
+`GameTuning` has `wearEnabled`, `goodsEnabled`, `railEnabled` and
+`straightAlignmentEnabled`, all false in `DEFAULT_GAME_TUNING` (docs/brief.md, Slice zero).
 Off is enforced in the engine, not hidden in the page: `tick.ts` skips road wear, the
 rough-road charge and goods production; the check functions (`checkLorry`, `checkFreight`,
 `checkTrack`, `checkHalt`, `checkTrain`, `setMaintained`/`setRoadMaintained`, and
@@ -792,21 +798,21 @@ The **treasury remittance** (`budget.ts` `remit`, step 6 pass 2): `world.remitta
 current period (`remittancePeriodDays`, 10) and its net -- income minus running costs, so
 purchases are never a deficit. At the period's end the state takes `remittanceShare` (0.8)
 of the funds above `remittanceReserve` (₦3,000), never more than the period's net; a
-deficit pays nothing. Called last in `sliceTick`, after the ledger: a remittance is neither
+deficit pays nothing. Called last in `gameTick`, after the ledger: a remittance is neither
 income nor running cost; `world.budget.remitted` keeps it, and the period carries `last`
 (what the previous period's end took, and when) for the panel. Day 1 starts a fresh period.
-`remit` returns what a period's end took (0 included) and `sliceTick` emits it as a
+`remit` returns what a period's end took (0 included) and `gameTick` emits it as a
 `remitted` event; `remittanceDue` is what would go if the period ended now, and
 `remittanceExpected(world, netPerDay)` what will go at its end if the net keeps coming at
 that rate (the panel's countdown, R1 4).
 
 The tally also keeps money out (step 7): `running` (your vehicles' running costs, rough
 roads included) and `upkeep` (routine, plus wear repairs when wear is on), split in
-`sliceTick` from the ledger's running cost; and `goods` apart from passenger `fares`. So
+`gameTick` from the ledger's running cost; and `goods` apart from passenger `fares`. So
 fares + goods + tolls + levies + allocation − running − upkeep is the ledger's net.
 
 The **score's marks** (`score.ts`, R1 5): `updateMilestones`, called at the end of
-`sliceTick`, emits a `milestone` event when an original town passes the next of `MILESTONES`
+`gameTick`, emits a `milestone` event when an original town passes the next of `MILESTONES`
 (+25%, +50%, ×2, ×3 of `startPopulation`); `world.milestones` keeps how many each town has
 passed, so each fires once a game (a town that shrinks and regrows doesn't earn it again;
 two at once is one event naming the higher). `start.ts` clears it at day 1. `history.trips`
@@ -818,7 +824,7 @@ change in people (unlike the allocation's `growthSinceStart`, which only pays on
 keyed `routeKey` of its ends; a segment→corridor map is cached per world and rebuilt when
 the roads change (segment count, roadside towns, ruins). `sendInformal` credits each
 departure's levy (your part) to every corridor on its path once (`Takings.leviesByCorridor`);
-`updateCorridors`, at the end of `sliceTick`, rolls each corridor's levy rate over 3 game
+`updateCorridors`, at the end of `gameTick`, rolls each corridor's levy rate over 3 game
 days and once a game day judges its share -- of the trips whose road path runs along it
 (`pairOutcomes` × `roadPath`), yours -- taking it at `corridorTakenShare` (0.4) and letting
 go below `corridorReleaseShare` (0.3), with `corridor-taken`/`-released` events. Levies lost
@@ -835,7 +841,7 @@ on the road the pair uses (`roadFull`, not when thin); else one more of the vehi
 there; else a new minibus (pair under 100 trips a day) or bus -- a `NamedMove` (`ActionSpec`,
 price, label). `shrinkCause` reads a shrinking town against its recent peak target from
 `history.towns` (`sampleTowns`, each original town's target, cap, service and your share at
-every day's end, the last 30; sampled from `sliceTick` when `recordDay` says a day ended):
+every day's end, the last 30; sampled from `gameTick` when `recordDay` says a day ended):
 your share below `growthMinPlayerShare` (and from what, on what day), its cap fallen (a lane the
 danfos have taken: enforce it), or its service fallen. `namedMoves` is every move the screen
 names; `affordable` is within funds plus 10 days of the 5-day net -- C5's measure, which the
@@ -849,11 +855,11 @@ default again; `problems.ts` `wornRoadAt` names a worn road your vehicles pay fo
 0.85, rough cost ≥ ₦1 a day) with "keep it up" as its move. The corridor probe keeps its
 corridor up once paved (`NO_KEEP=1` lets it wear).
 
-**Industries** (Revision 2; `industries.ts`): a site is a `SliceTown` with an `industry`
+**Industries** (Revision 2; `industries.ts`): a site is a `GameTown` with an `industry`
 kind and `industryWorkers` people, so roads, routing, yards and lorries treat it as a stop;
 it has no base population (no growth), and is kept out of markets and port supplies
 (`goods.ts`) and the people counts (`growthSinceStart`, `peopleSinceStart`).
-`updateIndustries` (end of `sliceTick`, goods and industries on) rolls each site's delivered
+`updateIndustries` (end of `gameTick`, goods and industries on) rolls each site's delivered
 stone, closes one with under `industryMinDeliveredPerDay` after `industryGraceDays` or past
 its life (`retireNode`, shared with an emptied town: the node becomes a junction, the site a
 ruin), and opens the next when `industrySchedule` says (a mulberry32 state kept as a number,
@@ -869,7 +875,7 @@ ahead in proportion to what waits for it.
 **Retiring a road** (Revision 2; `retire.ts`): `retireRoad` marks every piece of a road
 that `isYourRoad` with `segment.retiredAt` (a new optional `Segment` field, unset in the
 original game), drops its maintenance and any lane; `isYourRoad` then says no, so routine
-upkeep and tolls stop. `updateRetired` (end of `sliceTick`) decays retired pieces to the
+upkeep and tolls stop. `updateRetired` (end of `gameTick`) decays retired pieces to the
 floor over `retireGoneDays` and, past it, `removeRoads`: the segments and their corridors go,
 `rebuildNetworks`, and every road route is re-pathed with `findPath` both ways (each vehicle
 put back at its old `cycleFraction`), or sold vehicle by vehicle if nothing joins its towns
@@ -899,16 +905,16 @@ piece's count against `trackSlots`, and `checkTrain` / `checkFreight` refuse a f
 
 ### The warm-up, and day numbers
 
-`start.ts` `startSliceGame(map, tuning)` — the game as the player meets it: `createSliceWorld`,
-then `warmUpDays` (5) of `sliceTick` with nobody playing, then `world.startSeconds` marks day
+`start.ts` `startGame(map, tuning)` — the game as the player meets it: `createGameWorld`,
+then `warmUpDays` (5) of `gameTick` with nobody playing, then `world.startSeconds` marks day
 1 and the informal sector's earnings reset to 0. Funds are untouched (nothing of yours runs).
-The page and the bots start here; tests use `createSliceWorld` (cold, fast). Day numbers
+The page and the bots start here; tests use `createGameWorld` (cold, fast). Day numbers
 the player sees come from `world.ts` `gameDay(world, seconds?)`, counted from
 `startSeconds`; sim timers (settlement, receipts' `startedAt`, routes' `openedAtSeconds`)
 stay on raw `elapsedSeconds`.
 
 `history.ts` — a sample of the headline and the day's net at the end of every game day
-(`recordDay`, called last in `sliceTick`), the last five kept. `averageHeadline` averages
+(`recordDay`, called last in `gameTick`), the last five kept. `averageHeadline` averages
 them all, warm-up days included, so it is filled on day 1; `averageNet` averages only days
 after `startSeconds`, so the warm-up's zeros don't dilute your first days' money. Each
 sample also holds the day's budget by line (the tally's change since the last sample;
@@ -923,7 +929,7 @@ informal), stayed home split by `canTravel` into **no road** (nothing joins the 
 track counts) and **no seat** (joined, but nobody carried them), and your riders. Counts,
 not shares: a share hid success, because towns you grow make more trips than anyone carries
 and "stayed home" rose as a share while more people travelled. Read by the bots
-(`scripts/slice-bots.ts`) today and by the strip once the brief's step 8 lands.
+(`scripts/game-bots.ts`) today and by the strip once the brief's step 8 lands.
 
 ### The minibus
 
@@ -938,7 +944,7 @@ transfers, diagnosis, debt advice, receipts and forecasts treat it as any passen
   before the warm-up): a **tank farm** 7–9 cells from the port with an old road to it, an
   **idle refinery** 9–13 cells from the second city on its side away from the port, and a
   **crude source** on the map's edge as far from the refinery as it can be (≥30 cells): an
-  oilfield on a south-south map (`SliceMapDef.region`, set by `generate.ts`), a pipeline
+  oilfield on a south-south map (`GameMapDef.region`, set by `generate.ts`), a pipeline
   terminal elsewhere. They're towns with an `industry` kind, not entries in
   `world.industries`, so the quarry's open-and-close logic never touches them.
 - **Flows** (`fuelFlows`, added to `goodsFlows`): every town burns

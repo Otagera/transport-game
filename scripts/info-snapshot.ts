@@ -11,30 +11,30 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { SLICE_MAP } from "../src/slice/map";
-import { replayRun } from "../src/engine/slice/runlog";
-import { generatedSliceMap } from "../src/engine/slice/generate";
+import { GAME_MAP } from "../src/game/map";
+import { replayRun } from "../src/engine/game/runlog";
+import { generatedGameMap } from "../src/engine/game/generate";
 import { SECONDS_PER_GAME_DAY as D } from "../src/engine/economy/state";
-import { segmentPolyline } from "../src/engine/slice/roads";
-import { roadCapacity } from "../src/engine/slice/congestion";
-import { townGrowth, growthTrend, roadFull } from "../src/engine/slice/growth";
-import { townShare, routeSummaries, diagnoseRoute, roadPath } from "../src/engine/slice/world";
-import { lorrySummaries, goodsFlows, flowKey } from "../src/engine/slice/goods";
-import { siteProduction } from "../src/engine/slice/production";
-import { corridorSummaries } from "../src/engine/slice/corridors";
-import { namedMoves, noSeatPairs } from "../src/engine/slice/problems";
-import { cargoName, fuelSupply } from "../src/engine/slice/fuel";
-import { cementBreak, cementServed } from "../src/engine/slice/cement";
-import { railPath } from "../src/engine/slice/rail";
+import { segmentPolyline } from "../src/engine/game/roads";
+import { roadCapacity } from "../src/engine/game/congestion";
+import { townGrowth, growthTrend, roadFull } from "../src/engine/game/growth";
+import { townShare, routeSummaries, diagnoseRoute, roadPath } from "../src/engine/game/world";
+import { lorrySummaries, goodsFlows, flowKey } from "../src/engine/game/goods";
+import { siteProduction } from "../src/engine/game/production";
+import { corridorSummaries } from "../src/engine/game/corridors";
+import { namedMoves, noSeatPairs } from "../src/engine/game/problems";
+import { cargoName, fuelSupply } from "../src/engine/game/fuel";
+import { cementBreak, cementServed } from "../src/engine/game/cement";
+import { railPath } from "../src/engine/game/rail";
 
 const [runPath, outPath = "src/info-lab/snapshot.json"] = process.argv.slice(2);
 if (!runPath) throw new Error("usage: bun scripts/info-snapshot.ts run.json [out.json]");
 const file = JSON.parse(readFileSync(runPath, "utf8"));
-const world = replayRun(SLICE_MAP, file, file.ticks);
+const world = replayRun(GAME_MAP, file, file.ticks);
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const perDay = (x: number) => Math.round(x * D);
 
-const map = generatedSliceMap(SLICE_MAP, file.seed);
+const map = generatedGameMap(GAME_MAP, file.seed);
 const towns = [...world.towns.values()].map((t) => {
   const g = townGrowth(world, t.id);
   const share = townShare(world, t.id);

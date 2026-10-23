@@ -1,5 +1,7 @@
 # Content
 
+> **Retired 2026-10-23 with the 3D game** (the content schemas and loader). Kept as history; the code is under the git tag `original-3d`. See [index.md](index.md).
+
 `src/content/schema.ts` (Zod schemas) + `src/content/loader.ts` (fetch + parse) for
 everything under `public/content/*.json`. **Content is data** (hard rule 2 in
 [index.md](index.md)): new vehicles, eras, profiles or scenarios are new JSON, never new

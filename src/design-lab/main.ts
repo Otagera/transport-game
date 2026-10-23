@@ -1,9 +1,9 @@
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
-import { buildSliceTerrain } from "@engine/slice/terrain";
-import { DEFAULT_SLICE_TUNING } from "@engine/slice/tuning";
-import type { SliceMapDef, SliceTown } from "@engine/slice/types";
-import { gravityDemand } from "@engine/slice/world";
-import { SLICE_MAP } from "../slice/map";
+import { buildGameTerrain } from "@engine/game/terrain";
+import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
+import type { GameMapDef, GameTown } from "@engine/game/types";
+import { gravityDemand } from "@engine/game/world";
+import { GAME_MAP } from "../game/map";
 
 // Design lab (docs/brief.md, Information design; build step 8): a mock of the
 // slice's screen where every look is a token you can switch, so a look is
@@ -13,7 +13,7 @@ import { SLICE_MAP } from "../slice/map";
 // Mark each option Keep or Drop; Export turns the picks into markdown for the
 // brief, with the composed tokens.
 //
-// The map is the real one (src/slice/map.ts, engine/slice/terrain.ts for the
+// The map is the real one (src/game/map.ts, engine/game/terrain.ts for the
 // hills, the engine's gravity demand for trip counts). Everything else on the
 // stage -- shares, routes, money -- is a fixed, made-up mid-game state: the lab
 // judges looks, not numbers.
@@ -347,20 +347,20 @@ function composedTokens(state: LabState): Tokens {
 
 // ---- The mock world: the real map and demand, a made-up mid-game state on top.
 
-const towns = new Map(SLICE_MAP.towns.map((town) => [town.id, town]));
+const towns = new Map(GAME_MAP.towns.map((town) => [town.id, town]));
 const townIds = [...towns.keys()].sort((a, b) => towns.get(b)!.population - towns.get(a)!.population);
 const name = (id: string) => towns.get(id)!.name;
 
 /** Trips a day between two towns, both directions: the engine's own gravity demand. */
 const tripsBetween = new Map<string, number>();
-for (const pair of gravityDemand(SLICE_MAP.towns, DEFAULT_SLICE_TUNING.demandK)) {
+for (const pair of gravityDemand(GAME_MAP.towns, DEFAULT_GAME_TUNING.demandK)) {
   const key = [pair.from, pair.to].sort().join(":");
   tripsBetween.set(key, (tripsBetween.get(key) ?? 0) + pair.rate * SECONDS_PER_GAME_DAY);
 }
 const trips = (a: string, b: string) => tripsBetween.get([a, b].sort().join(":")) ?? 0;
 
 // Mid-game: you paved the trunk; two cut-off towns are still unreached.
-const roads = SLICE_MAP.roads.map((road) => ({ ...road, paved: road.a === "ilase" && road.b === "owode" }));
+const roads = GAME_MAP.roads.map((road) => ({ ...road, paved: road.a === "ilase" && road.b === "owode" }));
 const ROUTES = [
   { a: "ilase", b: "owode", label: "Route 01 · 2 buses", income: 271, cost: 144, verdict: "Full: riders left behind go to the danfos.",
     long: "Buses leave 100% full: more riders than seats. Another bus would carry the ones left behind.", stats: "53 riders/day · buses 100% full · 95% speed",
@@ -441,17 +441,17 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 /** The engine's own terrain at half-cell resolution: the same map scaled 2x, so hills come from terrain.ts. */
 function fineTerrain(): { elevation: Float32Array; width: number; height: number } {
-  const def: SliceMapDef = {
-    ...SLICE_MAP,
-    width: SLICE_MAP.width * 2,
-    height: SLICE_MAP.height * 2,
-    towns: SLICE_MAP.towns.map((town) => ({ ...town, x: town.x * 2, y: town.y * 2 })),
+  const def: GameMapDef = {
+    ...GAME_MAP,
+    width: GAME_MAP.width * 2,
+    height: GAME_MAP.height * 2,
+    towns: GAME_MAP.towns.map((town) => ({ ...town, x: town.x * 2, y: town.y * 2 })),
     terrain: {
-      rivers: (SLICE_MAP.terrain?.rivers ?? []).map((river) => ({ points: river.points.map(([x, y]) => [x * 2, y * 2] as [number, number]), width: river.width * 2 })),
-      hills: (SLICE_MAP.terrain?.hills ?? []).map((hill) => ({ ...hill, x: hill.x * 2, y: hill.y * 2, radius: hill.radius * 2 })),
+      rivers: (GAME_MAP.terrain?.rivers ?? []).map((river) => ({ points: river.points.map(([x, y]) => [x * 2, y * 2] as [number, number]), width: river.width * 2 })),
+      hills: (GAME_MAP.terrain?.hills ?? []).map((hill) => ({ ...hill, x: hill.x * 2, y: hill.y * 2, radius: hill.radius * 2 })),
     },
   };
-  const field = buildSliceTerrain(def);
+  const field = buildGameTerrain(def);
   return { elevation: field.elevation, width: def.width, height: def.height };
 }
 
@@ -497,7 +497,7 @@ const CONTOUR_LEVELS = [0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8];
 const contours = contourPaths(CONTOUR_LEVELS);
 const blobs = blobCells();
 
-function radius(town: SliceTown): number {
+function radius(town: GameTown): number {
   return Math.max(1.3, Math.sqrt(town.population) * 0.22);
 }
 
@@ -523,7 +523,7 @@ function ring(cls: string, cx: number, cy: number, r: number, from: number, shar
 }
 
 function drawMap(focus: string | null): string {
-  const river = (SLICE_MAP.terrain?.rivers ?? [])
+  const river = (GAME_MAP.terrain?.rivers ?? [])
     .map((r) => `<path class="river" stroke-width="${r.width}" d="M${r.points.map(([x, y]) => `${x} ${y}`).join("L")}"/>`)
     .join("");
   const roadLines = roads
@@ -623,8 +623,8 @@ function townPanel(id: string): string {
   const biggest = others[0]!;
   const unreachable = others.filter((other) => !reachable(id, other));
   const stayHome = unreachable.reduce((sum, other) => sum + trips(id, other), 0);
-  const role = id === SLICE_MAP.port ? "Port" : town.population >= DEFAULT_SLICE_TUNING.marketPopulation ? "Market town" : "Farm town";
-  const inside = fmt(town.population * DEFAULT_SLICE_TUNING.localTripsPerThousandPerDay);
+  const role = id === GAME_MAP.port ? "Port" : town.population >= DEFAULT_GAME_TUNING.marketPopulation ? "Market town" : "Farm town";
+  const inside = fmt(town.population * DEFAULT_GAME_TUNING.localTripsPerThousandPerDay);
   const problem = isCutOff(id)
     ? `No road reaches ${town.name}: ${fmt(stayHome)} trips a day stay home. The biggest is to ${name(biggest)}, ${fmt(trips(id, biggest))}/day.`
     : unreachable.length > 0
@@ -639,13 +639,13 @@ function townPanel(id: string): string {
       <h2>${town.name} · ${town.population}k people</h2>
       <p class="hint">Trips to and from ${town.name}, both directions, biggest first. Bar: you · informal · stayed home.</p>
       <p>Of everyone leaving ${town.name} for another town: you ${pct(share.you)}, informal ${pct(share.informal)}, stayed home ${pct(share.home)}.</p>
-      <p>${town.name} ${share.you >= DEFAULT_SLICE_TUNING.growthMinPlayerShare ? "is growing: you carry enough of its trips for it to develop" : `is steady at ${town.population}k. It only grows once you carry at least 10% of its trips (now ${pct(share.you)})`}.</p>
+      <p>${town.name} ${share.you >= DEFAULT_GAME_TUNING.growthMinPlayerShare ? "is growing: you carry enough of its trips for it to develop" : `is steady at ${town.population}k. It only grows once you carry at least 10% of its trips (now ${pct(share.you)})`}.</p>
       <div class="inside"><b>Inside ${town.name}:</b> ~${inside} short trips a day, all by keke and okada. Nothing you run reaches that finely, and it isn't counted against you.</div>
       ${tripRows(id, 8)}
     </div>`;
 
   const card = `<div class="town-card">
-      <div class="label">${role} · ${town.population}k people${share.you >= DEFAULT_SLICE_TUNING.growthMinPlayerShare ? " · ▲ growing" : ""}</div>
+      <div class="label">${role} · ${town.population}k people${share.you >= DEFAULT_GAME_TUNING.growthMinPlayerShare ? " · ▲ growing" : ""}</div>
       <div class="title">${town.name}</div>
       <ul>
         <li>Biggest trip: ${name(biggest)}, ${fmt(trips(id, biggest))}/day${pairShares(id, biggest).you > 0 ? `; you carry ${pct(pairShares(id, biggest).you)}` : ""}</li>
