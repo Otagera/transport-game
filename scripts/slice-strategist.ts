@@ -229,12 +229,12 @@ function decide(world: SliceWorld, day: number, losing: Map<string, number>): { 
       if (did(act(world, day, { kind: "track", a: fuel.sourceId, b: second.id, alignment: "cheapest" }, "crude to the private refinery: rail"))) act(world, day, { kind: "freight", a: fuel.sourceId, b: second.id }, "a freight train for crude");
     }
   }
-  // Motor parks (Revision 4, 5): one every ten days at the town whose park would add the most
-  // levy, once that's worth its price back in under 60 days and a road into it is jammed.
+  // Motor parks (Revision 4, 5): one every ten days at the biggest town (50k+) whose roads jam --
+  // what a park pays for is clearer roads; its levy gain is a few naira a day (measured 2026-10-23).
   if (world.tuning.parksEnabled && day % 10 === 0) {
-    const jammed = (id: string) => world.simulation.map.segments.some((seg) => (seg.fromNodeId === id || seg.toNodeId === id) && (world.segmentSpeed.get(seg.id) ?? 1) < 0.7);
-    const best = [...world.basePopulation.keys()].filter((id) => !world.parks.has(id) && jammed(id)).map((id) => ({ id, gain: parkLevyGain(world, id) })).sort((p, q) => q.gain - p.gain)[0];
-    if (best && best.gain * 60 >= world.tuning.parkCost && spend(world, world.tuning.parkCost)) did(act(world, day, { kind: "park", townId: best.id }, `a motor park: roads jammed, ~₦${Math.round(best.gain)}/day more levy`));
+    const slowest = (id: string) => Math.min(...world.simulation.map.segments.filter((seg) => seg.fromNodeId === id || seg.toNodeId === id).map((seg) => world.segmentSpeed.get(seg.id) ?? 1));
+    const best = [...world.basePopulation.keys()].filter((id) => !world.parks.has(id) && world.towns.get(id)!.population >= 50 && slowest(id) < 0.8).sort((p, q) => world.towns.get(q)!.population - world.towns.get(p)!.population)[0];
+    if (best && spend(world, world.tuning.parkCost)) did(act(world, day, { kind: "park", townId: best }, `a motor park: the roads into ${world.towns.get(best)!.name} jam (${Math.round(slowest(best) * 100)}% speed), ~₦${Math.round(parkLevyGain(world, best))}/day more levy`));
   }
   // The works: restored once cement holds 10k people back.
   const cement = world.cement;
