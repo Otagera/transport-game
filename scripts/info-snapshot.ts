@@ -26,6 +26,7 @@ import { namedMoves, noSeatPairs } from "../src/engine/game/problems";
 import { cargoName, fuelSupply } from "../src/engine/game/fuel";
 import { cementBreak, cementServed } from "../src/engine/game/cement";
 import { railPath } from "../src/engine/game/rail";
+import { farmTowns } from "../src/engine/game/food";
 
 const [runPath, outPath = "src/info-lab/snapshot.json"] = process.argv.slice(2);
 if (!runPath) throw new Error("usage: bun scripts/info-snapshot.ts run.json [out.json]");
@@ -182,6 +183,7 @@ const snapshot = {
   width: map.width,
   height: map.height,
   port: world.port,
+  farms: world.food ? farmTowns(world).map((t) => t.id) : [],
   towns,
   segments,
   routes,
