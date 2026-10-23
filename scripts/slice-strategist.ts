@@ -40,6 +40,7 @@ import { siteProduction } from "../src/engine/slice/production";
 import { expandCost } from "../src/engine/slice/expand";
 import { checkBond } from "../src/engine/slice/bonds";
 import { parkLevyGain } from "../src/engine/slice/parks";
+import { freightLineSplit } from "../src/engine/slice/freightrates";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "../src/engine/slice/metro";
 import { crudeArriving, fuelSupply, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput } from "../src/engine/slice/fuel";
 import { townGrowth } from "../src/engine/slice/growth";
@@ -393,6 +394,10 @@ for (const seed of SEEDS) {
   const shortOfFuel = [...world.basePopulation.keys()].filter((id) => (fuelSupply(world, id)?.supplied ?? 1) < 0.6).length;
   console.log(`  second refinery (Revision 4, 4): ${second ? `opened day ${secondOpened ?? "?"} (${second.name}); crude in ${Math.round(crudeArriving(world, second.id) * D)} of ${Math.round(newRefineryCrude(world) * D)} t/day by rail ${railPath(world, world.fuel!.sourceId, second.id) ? "yes" : "no"}; fuel made ${Math.round(newRefineryOutput(world) * D)} of ${Math.round(newRefineryCapacity(world) * D)} t/day` : "not open"} | towns under 60% fuel: ${shortOfFuel}`);
   secondOpened = undefined;
+  const lines = world.lorryRoutes.filter((r) => r.id.startsWith("freight:"));
+  const split = lines.reduce((sum, r) => { const x = freightLineSplit(world, r.id); return { yours: sum.yours + x.yours, hauliers: sum.hauliers + x.hauliers, spoiled: sum.spoiled + x.spoiled }; }, { yours: 0, hauliers: 0, spoiled: 0 });
+  const trucks = world.simulation.vehicles.filter((v) => String(v.id).startsWith("truck-")).length;
+  console.log(`  freight (rate ${world.tuning.freightRateDefault ?? "standard"}): ${lines.length} line(s); along them your trains ${Math.round(split.yours)} t/day, hauliers ${Math.round(split.hauliers)}, spoiling ${Math.round(split.spoiled)}; trucks on the road now ${trucks}; goods income ₦${Math.round(world.budget.goods / 1000)}k all game`);
   console.log(`  metros (Revision 4, 6): ${[...world.metros].map(([id, lines]) => `${world.towns.get(id)?.name} ${lines} line(s), ${Math.round(metroRiders(world, id).riders)} riders/day`).join("; ") || "none"}; metro fares ₦${Math.round(world.budget.metro / 1000)}k all game`);
   console.log(`  motor parks (Revision 4, 5): ${world.parks.size} (${[...world.parks].map((id) => world.towns.get(id)?.name).join(", ")}); levies last 20 days ₦${Math.round(window(DAYS - 20, DAYS).reduce((s, d) => s + d.levies, 0) / 20)}/day`);
   console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);

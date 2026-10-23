@@ -16,6 +16,7 @@ import { updateRetired } from "./retire";
 import { updateIndustries } from "./industries";
 import { agberoCutAt, rollParkTakings } from "./parks";
 import { runMetros } from "./metro";
+import { freightFareFactor } from "./freightrates";
 import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
@@ -239,7 +240,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
     // rider, or per tonne for a lorry.
     // Passengers pay by distance (fares.ts); goods by the tonne and the cell.
     const rail = world.railVehicles.has(vehicle.id);
-    const revenue = recordFares(world, vehicle.id, vehicle.carries === "goods" ? goodsFares(world, deliveries, rail) : passengerFares(world, deliveries, rail));
+    // A freight line earns at the rate you set it (freightrates.ts).
+    const revenue = recordFares(world, vehicle.id, vehicle.carries === "goods" ? goodsFares(world, deliveries, rail) * freightFareFactor(world, routeOf.get(vehicle.id)) : passengerFares(world, deliveries, rail));
     revenueThisTick += revenue;
     if (vehicle.carries === "passengers") world.budget.fares += revenue;
     else world.budget.goods += revenue;

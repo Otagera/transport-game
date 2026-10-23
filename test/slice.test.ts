@@ -39,6 +39,7 @@ import { variedSliceMap } from "@engine/slice/variation";
 import { generatedMapInfo, generatedSliceMap } from "@engine/slice/generate";
 import { agberoCutAt, parkReport } from "@engine/slice/parks";
 import { cementBreak } from "@engine/slice/cement";
+import { freightFareFactor, haulierPull } from "@engine/slice/freightrates";
 import { metroLines, metroRiders, runMetros } from "@engine/slice/metro";
 import { indexOutcomes, townShare as shareOfTown, townShareBetweenTowns } from "@engine/slice/world";
 import { buildSliceTerrain } from "@engine/slice/terrain";
@@ -3714,5 +3715,55 @@ describe("a cement shortage names where the chain breaks (cement.ts cementBreak,
     const opened = openQuarry(w);
     expect(opened).not.toBeNull();
     expect(cementBreak(w)).toEqual({ kind: "quarry", quarryId: (opened as { townId: string }).townId });
+  });
+});
+
+describe("freight rates (freightrates.ts, 2026-10-23)", () => {
+  const MAP2: SliceMapDef = {
+    width: 60,
+    height: 20,
+    towns: [
+      { id: "big", name: "Big", x: 5, y: 10, population: 120 },
+      { id: "mid", name: "Mid", x: 18, y: 10, population: 40 },
+      // Within the hauliers' reach by road (~25 cells), so the rate is what moves them.
+      { id: "far", name: "Far", x: 30, y: 10, population: 30 },
+    ],
+    roads: [{ a: "big", b: "mid" }, { a: "mid", b: "far" }],
+    port: "big",
+    rails: [{ a: "big", b: "far" }],
+  };
+  const world = () => {
+    const w = createSliceWorld(MAP2, { ...DEFAULT_SLICE_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0 });
+    buildTrack(w, "big", "far");
+    addFreightTrain(w, "big", "far");
+    return w;
+  };
+
+  test("a line's rate sets what it earns a tonne, and how keen the hauliers are on goods it could carry", () => {
+    const w = world();
+    const line = w.lorryRoutes.find((r) => r.id.startsWith("freight:"))!.id;
+    expect(freightFareFactor(w, line)).toBe(1);
+    expect(haulierPull(w, "big", "far")).toBe(1);
+    expect(applyAction(w, { kind: "freightRate", routeId: line, rate: "dear" }).ok).toBe(true);
+    expect(freightFareFactor(w, line)).toBe(w.tuning.freightRateDear);
+    expect(haulierPull(w, "big", "far")).toBeCloseTo(1 + w.tuning.freightHaulierPull, 9);
+    expect(haulierPull(w, "big", "mid")).toBe(1); // mid isn't on the line: no say there
+    expect(applyAction(w, { kind: "freightRate", routeId: line, rate: "cheap" }).ok).toBe(true);
+    expect(freightFareFactor(w, line)).toBe(w.tuning.freightRateCheap);
+    expect(haulierPull(w, "big", "far")).toBeLessThan(1);
+    expect(applyAction(w, { kind: "freightRate", routeId: "freight:nowhere", rate: "dear" }).ok).toBe(false);
+  });
+
+  test("dear, the hauliers take more of the goods waiting at its station; cheap, less", () => {
+    const taken = (rate: "cheap" | "standard" | "dear") => {
+      const w = world();
+      const line = w.lorryRoutes.find((r) => r.id.startsWith("freight:"))!.id;
+      applyAction(w, { kind: "freightRate", routeId: line, rate });
+      w.goods.yards.set("big", new Map([["far|supplies", 300]]));
+      for (let i = 0; i < 30; i += 1) truckersPickUp(w, SIM_DT);
+      return 300 - w.goods.yards.get("big")!.get("far|supplies")!;
+    };
+    expect(taken("dear")).toBeGreaterThan(taken("standard"));
+    expect(taken("standard")).toBeGreaterThan(taken("cheap"));
   });
 });

@@ -135,6 +135,7 @@ export function createSliceWorld(def: SliceMapDef, tuning: SliceTuning = DEFAULT
     parks: new Set(),
     parkTakings: new Map(),
     metros: new Map(),
+    freightRates: new Map(),
     sweep: createSweepState(0, tuning.sweepPeriodDays ?? 60),
     food: null,
     segmentLoad: new Map(),

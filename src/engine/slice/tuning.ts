@@ -438,6 +438,13 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // breaks even, both ways twice that: the gap kept as a ratio. Replayed:
   // 7 of 15 lorry routes pay by day 100 (3 at 0.1); goods ~29% of income.
   goodsFarePerTonneCell: 0.25,
+  // Freight rates (2026-10-23): a cheap line earns 0.6 of the goods fare, a
+  // dear one 1.6; against a dear line hauliers load and reach 1.5 times as
+  // far, against a cheap one two-thirds. First guesses, to measure.
+  freightRatesEnabled: true,
+  freightRateCheap: 0.6,
+  freightRateDear: 1.6,
+  freightHaulierPull: 0.5,
   lorryCapacity: 30,
   lorrySpeed: 2.5,
   lorryPurchaseCost: 550,

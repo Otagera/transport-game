@@ -35,6 +35,8 @@ import { checkBond, bondAmount, bondPerDay } from "../src/engine/slice/bonds";
 import { carryOver, sweepDue } from "../src/engine/slice/sweep";
 import type { SliceWorld } from "../src/engine/slice/types";
 import { yardGain } from "../src/engine/slice/yards";
+import { freightLineSplit, freightRate } from "../src/engine/slice/freightrates";
+import { isFreightRoute } from "../src/engine/slice/goods";
 import { cementBreak } from "../src/engine/slice/cement";
 import { parkLevyGain, parkReport } from "../src/engine/slice/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "../src/engine/slice/metro";
@@ -117,6 +119,17 @@ function state(w: SliceWorld): string {
     out.push(`  ${r.id}: ${r.buses} vehicle(s), net ${k(r.netPerDay)}/day, ${d?.verdict ?? "?"}${d ? `, ${Math.round(d.boardingsPerDay)} riders/day, ${pc(d.loadFactor)} full` : ""} -- sell one: ${j({ kind: "sell", routeId: r.id })}`);
   }
 
+  const freight = w.lorryRoutes.filter((r) => isFreightRoute(r.id));
+  if (freight.length > 0) {
+    out.push("", "YOUR FREIGHT LINES (the rate you charge, and who carries the goods along each)");
+    for (const r of freight) {
+      const split = freightLineSplit(w, r.id);
+      const rate = freightRate(w, r.id);
+      const others = (["cheap", "standard", "dear"] as const).filter((x) => x !== rate).map((x) => `${x}: ${j({ kind: "freightRate", routeId: r.id, rate: x })}`).join(" | ");
+      out.push(`  ${r.id}: ${r.vehicleIds.length} train(s), rate ${rate}; your trains ${Math.round(split.yours)} t/day, hauliers' trucks ${Math.round(split.hauliers)}${split.spoiled >= 1 ? `, ${Math.round(split.spoiled)} spoiling` : ""} -- set ${others}`);
+    }
+  }
+
   out.push("", "WHAT THE SCREEN NAMES (each with its price and its move)");
   for (const m of namedMoves(w).sort((a, b) => a.price - b.price).slice(0, 12)) out.push(`  ${m.label} · ${k(m.price)} -- ${j(m.action)}`);
   for (const p of noSeatPairs(w).slice(0, 5)) out.push(`  ${Math.round(p.perDay)} a day find no seat between ${name(w, p.a)} and ${name(w, p.b)} -- e.g. ${j({ kind: "bus", a: p.a, b: p.b })}`);
@@ -151,6 +164,7 @@ const HELP = `Moves (send one as JSON with "act"). Town and site ids are in "sta
   {"kind":"train"|"freight","a":ID,"b":ID}               a passenger or freight train on track
   {"kind":"fix","segmentId":SEGMENT_ID,"on":true}        keep a road up (from the moves the screen names)
   {"kind":"yard","townId":ID}                            a haulage yard: hauliers reach further from here
+  {"kind":"freightRate","routeId":ROUTE_ID,"rate":"cheap"|"standard"|"dear"}  what a freight line charges: dear earns more a tonne but hauliers take more of its goods by road
   {"kind":"metro","townId":ID}                           a metro in a big town (200k+), or another line: carries its inside trips
   {"kind":"park","townId":ID}                            a motor park: danfos load off the road (roads into the town carry more), and pay you more of their levy
   {"kind":"restoreRefinery"} {"kind":"restoreWorks"}     restore an idle site

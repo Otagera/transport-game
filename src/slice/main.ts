@@ -57,6 +57,7 @@ import { carryOver, sweepDue } from "@engine/slice/sweep";
 import { checkYard, yardGain } from "@engine/slice/yards";
 import { checkPark, parkLevyGain, parkReport } from "@engine/slice/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/slice/metro";
+import { freightLineSplit, freightRate, type FreightRate } from "@engine/slice/freightrates";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
@@ -2309,7 +2310,7 @@ function lorryRows(afterBuses: boolean): string {
           <i style="width:${pct(d.spoiled)};background:var(--home)"></i>
         </div>
         <div class="why why-${d.verdict === "healthy" ? "healthy" : d.verdict === "full" ? "full" : d.verdict === "worn" ? "worn" : "thin"}">${forGoodsVehicle(lorryReason(d, s.costPerDay / s.lorries), s.id)}</div>
-        <small>${forGoodsVehicle(`goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full`, s.id)}</small>`
+        <small>${forGoodsVehicle(`goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full`, s.id)}</small>${freightRateRow(s.id)}`
       : "";
     return `
       <div class="route">
@@ -2323,6 +2324,18 @@ function lorryRows(afterBuses: boolean): string {
   });
   const port = world.port ? `, supplies from ${townName(world.port)}, export to it` : "";
   return `<h2${afterBuses ? ' class="section"' : ""}>Your goods</h2><p class="hint">Goods go one way each: produce to market${port}. Bar: delivered · spoiled.</p>${rows.join("")}`;
+}
+
+// A freight line's rate (freightrates.ts): cheap, standard or dear, and what it's doing --
+// who carries the goods along the line, and what spoils.
+function freightRateRow(routeId: string): string {
+  if (!isFreightRoute(routeId) || !world.tuning.freightRatesEnabled) return "";
+  const rate = freightRate(world, routeId);
+  const t = world.tuning;
+  const split = freightLineSplit(world, routeId);
+  const button = (r: FreightRate, label: string) => `<button data-freight-rate="${routeId}|${r}" ${r === rate ? 'class="on" disabled' : ""}>${label}</button>`;
+  const effect = rate === "dear" ? `earns ×${t.freightRateDear} a tonne; hauliers reach ${pct(t.freightHaulierPull)} further for its goods` : rate === "cheap" ? `earns ×${t.freightRateCheap} a tonne; hauliers leave more of its goods to you` : "the standard goods fare";
+  return `<small>Rate: ${button("cheap", "Cheap")}${button("standard", "Standard")}${button("dear", "Dear")} -- ${effect}. Along it: your trains ${Math.round(split.yours)} t/day, hauliers' trucks ${Math.round(split.hauliers)}${split.spoiled >= 1 ? `, ${Math.round(split.spoiled)} spoiling` : ""}.</small>`;
 }
 
 // A freight route's reasons are a lorry route's with the vehicle renamed.
@@ -2436,6 +2449,13 @@ function onPanelClick(event: MouseEvent): void {
     const [a, b, rung] = target.dataset.project.split("|") as [string, string, ProjectRung];
     const result = act({ label: `saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, { kind: "project", a, b, rung });
     say(result.ok ? `Saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone while you save. Once you can afford it, build it within ${world.tuning.projectLapseDays} days, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.freightRate) {
+    const [routeId, rate] = target.dataset.freightRate.split("|") as [string, FreightRate];
+    const result = act({ label: `freight at the ${rate} rate`, towns: [], routeId }, { kind: "freightRate", routeId, rate });
+    say(result.ok ? `Freight on that line now at the ${rate} rate${rate === "dear" ? ": more a tonne, and hauliers will take more of its goods by road" : rate === "cheap" ? ": less a tonne, more of its goods by your trains, fewer trucks on the roads" : ""}.` : `Can't set the rate: ${result.reason}`, !result.ok, 7);
     renderPanel();
     return;
   }

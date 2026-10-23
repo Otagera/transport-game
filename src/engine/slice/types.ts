@@ -406,6 +406,16 @@ export interface SliceTuning {
   suppliesFare: number;
   /** Goods pay this per tonne per cell along the road or track (fares.ts goodsFares). */
   goodsFarePerTonneCell: number;
+  /**
+   * Freight rates (freightrates.ts): on; what a cheap and a dear line earn, as a multiple of the
+   * goods fare; how much keener the hauliers are against a dear line (and less against a cheap
+   * one); the rate every line starts at (for measuring). Run files without them replay as played.
+   */
+  freightRatesEnabled: boolean;
+  freightRateCheap: number;
+  freightRateDear: number;
+  freightHaulierPull: number;
+  freightRateDefault?: "cheap" | "standard" | "dear";
   lorryCapacity: number;
   lorrySpeed: number;
   lorryPurchaseCost: number;
@@ -634,6 +644,8 @@ export interface SliceWorld {
   parkTakings: Map<string, { yours: number; agberos: number }>;
   /** Metro lines built, by town (metro.ts). */
   metros: Map<string, number>;
+  /** Freight lines charging other than the standard rate (freightrates.ts), by route id. */
+  freightRates: Map<string, "cheap" | "dear">;
   /** Times each site has been expanded (expand.ts), by its id. */
   expansions: Map<string, number>;
   /** The food chain's mill and crops (food.ts); null until placed, or with food off. */

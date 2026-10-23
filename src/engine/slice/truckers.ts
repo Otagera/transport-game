@@ -4,6 +4,7 @@ import type { GoodsKind } from "./goods";
 import { roadPath } from "./world";
 import { tollFor, type Takings } from "./budget";
 import { hasYard } from "./yards";
+import { haulierPull } from "./freightrates";
 import { createOneShotVehicle } from "../simulation/vehicle";
 
 // Private truckers: the informal sector's freight rival (docs/brief.md,
@@ -56,13 +57,15 @@ export function truckersPickUp(world: SliceWorld, dt: number): void {
       if ((site === "oilfield" || site === "terminal") && !(tuning.yardsEnabled && hasYard(world, from))) continue;
       // From a haulage yard (yards.ts), hauliers reach further and load faster.
       const atYard = tuning.yardsEnabled && hasYard(world, from);
-      const reach = Math.max(isFuelSite(world.towns.get(from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells, atYard ? tuning.yardReachCells : 0);
+      // Against your freight line's rate (freightrates.ts): keener against a dear one, less against a cheap.
+      const pull = haulierPull(world, from, to);
+      const reach = Math.max(isFuelSite(world.towns.get(from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells, atYard ? tuning.yardReachCells : 0) * pull;
       // No more than a few loads held a destination (truckerHoldLoads): the rest stays at the
       // yard, where it shows as waiting and spoils if nobody comes (map 2418, day 233:
       // hauliers held 4,214 t of cement for Katsina-Ala, delivering none -- it vanished).
       const k = heldKey(from, to, kind);
       const room = Math.max(0, (tuning.truckerHoldLoads ?? Infinity) * tuning.truckLoad - (world.truckers.get(k) ?? 0));
-      const take = Math.min(amount, room, amount * pickup * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach));
+      const take = Math.min(amount, room, amount * Math.min(1, pickup * pull) * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach));
       if (take <= 0) continue;
       yard.set(key, amount - take);
       world.truckers.set(k, (world.truckers.get(k) ?? 0) + take);
