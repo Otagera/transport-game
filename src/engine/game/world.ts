@@ -199,9 +199,14 @@ export function emptyOutcome(): OutcomeRates {
 }
 
 export function roadPath(world: GameWorld, from: string, to: string): PathResult | null {
-  const key = pairKey(from, to);
-  if (!world.pathCache.has(key)) world.pathCache.set(key, findPath(world.simulation.routing, from, to));
-  return world.pathCache.get(key)!;
+  return roadPathByKey(world, pairKey(from, to), from, to);
+}
+
+/** roadPath with its key already made (`pairKey(from, to)`): the tick's hot loops keep theirs. */
+export function roadPathByKey(world: GameWorld, key: string, from: string, to: string): PathResult | null {
+  let path = world.pathCache.get(key);
+  if (path === undefined) world.pathCache.set(key, (path = findPath(world.simulation.routing, from, to)));
+  return path;
 }
 
 // --- Player actions -------------------------------------------------------
@@ -967,6 +972,9 @@ export interface OutcomeIndex {
   to: Map<string, { made: number; total: number }>;
 }
 
+/** A pair key's two towns, split once (indexOutcomes reads every pair every tick). */
+const pairEnds = new Map<string, [string, string]>();
+
 export function indexOutcomes(world: GameWorld): void {
   const from = new Map<string, OutcomeRates>();
   const fromToTowns = new Map<string, OutcomeRates>();
@@ -980,9 +988,12 @@ export function indexOutcomes(world: GameWorld): void {
     sum.lost += rates.lost;
   };
   for (const [key, rates] of world.pairOutcomes) {
-    const separator = key.indexOf(":");
-    const a = key.slice(0, separator);
-    const b = key.slice(separator + 1);
+    let ends = pairEnds.get(key);
+    if (!ends) {
+      const separator = key.indexOf(":");
+      pairEnds.set(key, (ends = [key.slice(0, separator), key.slice(separator + 1)]));
+    }
+    const [a, b] = ends;
     add(from, a, rates);
     if (!world.towns.get(b)?.industry) add(fromToTowns, a, rates);
     let arrive = to.get(b);
