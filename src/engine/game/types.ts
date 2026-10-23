@@ -80,6 +80,8 @@ export interface GameMapDef {
   port?: string;
   /** Step 4: inherited railway, straight and out of service until restored (rail.ts). */
   rails?: GameRoadDef[];
+  /** The region (region.ts): the home cluster's box, where you start and the camera frames. Absent: the whole map is home. */
+  home?: { x: number; y: number; width: number; height: number };
 }
 
 /** A player route: an A<->B shuttle, running however many buses. */
@@ -412,6 +414,12 @@ export interface GameTuning {
    * one); the rate every line starts at (for measuring). Run files without them replay as played.
    */
   freightRatesEnabled: boolean;
+  /**
+   * The region (region.ts; brief, The region): the seed's map as the home cluster of a region
+   * 2.5 times as wide and tall, with three more clusters, a coast and its port. Run files
+   * without it drew the slice map, and replay on it.
+   */
+  regionEnabled: boolean;
   freightRateCheap: number;
   freightRateDear: number;
   freightHaulierPull: number;
@@ -605,6 +613,8 @@ export interface GameTuning {
 }
 
 export interface GameWorld {
+  /** The home cluster's box on a region map (region.ts): where the camera starts. Absent: all of it. */
+  home?: { x: number; y: number; width: number; height: number };
   /** Money over the last game day: what the strip and route rows read (ledger.ts). */
   ledger: DayLedger;
   /** Sim time when the player's day 1 began: after the warm-up (start.ts), 0 for a cold world. */

@@ -101,6 +101,7 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
   const world: GameWorld = {
     width: def.width,
     height: def.height,
+    ...(def.home ? { home: { ...def.home } } : {}),
     towns: new Map(def.towns.map((town) => [town.id, { ...town }])),
     tuning,
     simulation,

@@ -1,5 +1,5 @@
 import { buildGameTerrain } from "@engine/game/terrain";
-import { generatedGameMap } from "@engine/game/generate";
+import { gameMap } from "@engine/game/region";
 import { GAME_MAP } from "../game/map";
 
 // The information lab (docs/brief.md, the carry-over plan: information
@@ -39,7 +39,7 @@ interface Day {
   towns: Array<{ id: string; name: string; population: number }>; events?: Array<Record<string, unknown> & { kind: string }>;
 }
 interface Snapshot {
-  seed: number; day: number; width: number; height: number; port: string | null; towns: Town[]; segments: Segment[]; routes: Route[];
+  seed: number; regionEnabled?: boolean; day: number; width: number; height: number; port: string | null; towns: Town[]; segments: Segment[]; routes: Route[];
   goodsLines: Array<{ id: string; a: string; b: string; vehicles: number; netPerDay: number; stops: string[] }>;
   flows: Flow[]; sites: Site[]; demand: Pair[]; corridors: Corridor[]; noSeatPairs: Array<{ a: string; b: string; perDay: number }>;
   moves: Array<{ label: string; price: number }>; cementBreak: { kind: string; nextDay?: number; quarryId?: string } | null; days: Day[];
@@ -83,7 +83,7 @@ function dailyBudget(key: string | string[]): number[] {
 
 // --- Terrain ---------------------------------------------------------------
 
-const mapDef = generatedGameMap(GAME_MAP, S.seed);
+const mapDef = gameMap(GAME_MAP, S.seed, { regionEnabled: S.regionEnabled });
 const terrain = buildGameTerrain(mapDef);
 let terrainImage: HTMLCanvasElement | null = null;
 function bakeTerrain(): HTMLCanvasElement {

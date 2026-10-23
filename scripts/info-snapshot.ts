@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { GAME_MAP } from "../src/game/map";
 import { replayRun } from "../src/engine/game/runlog";
-import { generatedGameMap } from "../src/engine/game/generate";
+import { gameMap } from "../src/engine/game/region";
 import { SECONDS_PER_GAME_DAY as D } from "../src/engine/economy/state";
 import { segmentPolyline } from "../src/engine/game/roads";
 import { roadCapacity } from "../src/engine/game/congestion";
@@ -34,7 +34,7 @@ const world = replayRun(GAME_MAP, file, file.ticks);
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const perDay = (x: number) => Math.round(x * D);
 
-const map = generatedGameMap(GAME_MAP, file.seed);
+const map = gameMap(GAME_MAP, file.seed, file.tuning ?? {});
 const towns = [...world.towns.values()].map((t) => {
   const g = townGrowth(world, t.id);
   const share = townShare(world, t.id);
@@ -176,6 +176,7 @@ const broken = cementBreak(world);
 
 const snapshot = {
   seed: file.seed,
+  regionEnabled: !!file.tuning?.regionEnabled,
   day: file.days.at(-1)?.day ?? null,
   savedAt: file.savedAt,
   width: map.width,

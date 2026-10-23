@@ -42,10 +42,10 @@ const HEIGHT = 64;
 /** The hand-made map's sizes, thousands: the dominant city, the second city, the trunk's middle, then the rest. */
 const SIZES = [120, 70, 45, 30, 25, 22, 18, 15, 12];
 /** No two towns closer than this, cells (the hand-made map's closest pair is ~18). */
-const MIN_SPACING = 15;
+export const MIN_SPACING = 15;
 /** Towns keep this far from the map's edge, and from water's edge. */
-const EDGE_MARGIN = 6;
-const WATER_CLEARANCE = 3;
+export const EDGE_MARGIN = 6;
+export const WATER_CLEARANCE = 3;
 /**
  * The hand-made trunk's legs: Ilase-Owode 25.5, Owode-Ado 38.1 cells. Each
  * leg within TRUNK_LENGTH_TOLERANCE of its own, not only their sum: the
@@ -59,12 +59,12 @@ const TRUNK_LENGTH_TOLERANCE = 0.25;
 const TRUNK_STRAIGHTNESS = 0.75;
 const MIN_TOWNS_A_BANK = 3;
 /** An inherited road keeps this far from towns it doesn't serve, cells. */
-const ROAD_CLEARANCE = 3;
+export const ROAD_CLEARANCE = 3;
 /** Draws before falling back to the seeded variation of the hand-made map (never seen in tests). */
 const MAX_DRAWS = 400;
 
 /** Names for generated towns: none of the hand-made map's, so a new map reads as new. The south-west's (Yoruba). */
-const NAMES = [
+export const NAMES = [
   "Iseyin", "Okeho", "Igboho", "Saki", "Iwo", "Ede", "Ejigbo", "Ikire", "Ilesa", "Owo", "Ikare", "Ota", "Ifo", "Epe",
   "Ijero", "Ido", "Ilobu", "Erin", "Igbeti", "Kisi", "Ipetu", "Ifon", "Ilero", "Agbara", "Itori", "Ilugun", "Oyan", "Ilora",
 ];
@@ -77,7 +77,7 @@ const NAMES = [
  */
 export type NameRegion = "southwest" | "north" | "northeast" | "middleBelt" | "southeast" | "southSouth";
 
-const REGION_NAMES: Record<Exclude<NameRegion, "southwest">, string[]> = {
+export const REGION_NAMES: Record<Exclude<NameRegion, "southwest">, string[]> = {
   north: [
     "Zaria", "Funtua", "Gusau", "Malumfashi", "Daura", "Kazaure", "Hadejia", "Gumel", "Rano", "Wudil", "Kankia", "Dutsin-Ma",
     "Bichi", "Gwarzo", "Dambatta", "Ringim", "Kiru", "Tsafe", "Zuru", "Bunza", "Argungu", "Jega", "Yauri", "Soba", "Ikara",
@@ -116,19 +116,19 @@ function nameRegion(seed: number, setting: CitySetting): NameRegion {
 }
 
 /** A town's id from its name: lower case, letters only ("Dutsin-Ma" -> "dutsinma"). */
-const townId = (name: string) => name.toLowerCase().replace(/[^a-z]/g, "");
+export const townId = (name: string) => name.toLowerCase().replace(/[^a-z]/g, "");
 
 export type CitySetting = "coast" | "river" | "inland";
 
-interface Point {
+export interface Point {
   x: number;
   y: number;
 }
 
-const between = (rng: Rng, lo: number, hi: number) => lo + (hi - lo) * rng();
-const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+export const between = (rng: Rng, lo: number, hi: number) => lo + (hi - lo) * rng();
+export const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
-function shuffle<T>(rng: Rng, items: T[]): T[] {
+export function shuffle<T>(rng: Rng, items: T[]): T[] {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i -= 1) {
     const j = Math.floor(rng() * (i + 1));
@@ -138,7 +138,7 @@ function shuffle<T>(rng: Rng, items: T[]): T[] {
 }
 
 /** Distance from a point to a segment. */
-function toSegment(p: Point, a: Point, b: Point): number {
+export function toSegment(p: Point, a: Point, b: Point): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const lengthSq = dx * dx + dy * dy;
@@ -147,7 +147,7 @@ function toSegment(p: Point, a: Point, b: Point): number {
 }
 
 /** Whether two segments cross (sharing an end doesn't count). */
-function crosses(a: Point, b: Point, c: Point, d: Point): boolean {
+export function crosses(a: Point, b: Point, c: Point, d: Point): boolean {
   const side = (p: Point, q: Point, r: Point) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
   if ([a, b].some((p) => (p.x === c.x && p.y === c.y) || (p.x === d.x && p.y === d.y))) return false;
   return side(a, b, c) !== side(a, b, d) && side(c, d, a) !== side(c, d, b);
@@ -186,7 +186,7 @@ function drawSea(rng: Rng, side: -1 | 1, depth: number): GameRiverDef {
 }
 
 /** The water's cell grid for a draw, to check towns against. */
-function isDryAround(water: GameRiverDef[], p: Point, clearance: number): boolean {
+export function isDryAround(water: GameRiverDef[], p: Point, clearance: number): boolean {
   for (const river of water) {
     for (let k = 1; k < river.points.length; k += 1) {
       const [ax, ay] = river.points[k - 1]!;

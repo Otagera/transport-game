@@ -2830,6 +2830,14 @@ function frame(now: number): void {
 renderToolbar();
 renderStrip();
 resize(); // again, now the toolbar and the strip exist to be measured
+// On a region (region.ts), the camera starts framed on the home cluster: the rest of the
+// region is there, a zoom out (0, or Fit), running without you (brief, The region).
+if (world.home) {
+  // A little short of the box, so towns at its edge sit clear of the panels and the toolbar.
+  zoom = 0.9 * Math.min(MAX_ZOOM, world.width / world.home.width, world.height / world.home.height);
+  lookAt = { x: world.home.x + world.home.width / 2, y: world.home.y + world.home.height / 2 };
+  applyZoom();
+}
 renderPanel();
 screen.renderLog(true);
 // The hints take the start from here (hint 1); the developer view keeps the old line.

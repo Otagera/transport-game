@@ -32,6 +32,15 @@ user: "go fully into the new lab design; if I play and miss something I will cal
    route, site or road with its problem line and a real move), the revenue screen. The old
    wings and Treasury drawer are gone; their cards live whole under each panel's "More".
 
+**The region** (brief, The region): step 2, the generator, built 2026-10-23 on branch
+`region`, **not yet played** (engine.md, The region): new games are drawn on a 250 × 160
+region -- the seed's slice map as the home cluster, three more clusters, a coast with the
+port, more rivers, a range, old highways and railway between clusters -- and the camera
+starts on the home cluster. Next: the gateways (step 3: the port and border crossings,
+imports and exports through them), then the strategist on regions (step 4). Speed: a tick
+costs ~5.4x the slice map's and the warm-up holds the page ~9 s -- with the optimisation
+work.
+
 Then the open items for the full game (brief, the carry-over plan): roads with junctions,
 money late in the game, eras as vehicle generations, sea and river freight.
 

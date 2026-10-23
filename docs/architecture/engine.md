@@ -1025,6 +1025,38 @@ so every figure is the same to the bit: map 2411's and 2791's run files replay e
 10 days: 5.4 s → 3.3 s. Next in line: the informal sector's pooling (`groupPool`, ~20%)
 and roadPath lookups.
 
+### The region (2026-10-23; brief, The region)
+
+`region.ts` draws the full game's map. `gameMap(base, seed, tuning)` is what a run starts
+on (`runlog.ts`): the region when `tuning.regionEnabled` (new games), else the seed's slice
+map -- a run file without the key, or without its tuning at all, draws the slice map and
+replays as played. Seed 0 stays the hand-made map, alone.
+
+- **The home cluster is the seed's slice map, exactly** (`generatedMapInfo`), moved into a
+  box against the region's west or east edge (`GameMapDef.home`, copied to `world.home`; the
+  page frames it at the start). Same towns, sizes, roads, trunk, ridge, old railway: the
+  ladder's prices, guarded on that trunk, land as measured, and the start reads like the
+  slice (C21). Its river and, on a coast map, its sea run on to the region's top and bottom.
+- **The rest from a stream of its own** (`seed + 3_000_017`), so the home cluster is the
+  same whatever is drawn round it: 250 × 160 cells; the sea on the home city's side when it's
+  a coast map, else down the far edge; one or two more rivers; three clusters, 62+ cells
+  apart and 36+ from the home box, each a regional town (70, 55, 45k -- the home city stays
+  dominant) and up to five towns within 24 cells, one left cut off, names from the rest of
+  the home map's region's list; old highways joining the clusters (a spanning tree,
+  shortest first, between towns already on roads, clear of towns and roads); the old
+  railway on from the home city (to the port's cluster when the home city isn't the port);
+  a range of five hills between two clusters. **The port** is the home city on a coast map,
+  else the regional town on the coast -- imports then come from across the region.
+- **Guards** as `generate.ts`'s: towns dry and 15 apart, roads clear of towns and of each
+  other, every town reachable by a road pathing can plan to one of its three nearest. 30
+  seeds tested; no seed has needed a second draw yet; a draw takes 30-110 ms.
+- **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
+  ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
+  7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of
+  towns (`gravityDemand`, rate / distance): about four times the pairs, and far pairs still
+  want trips. Optimisation is in other hands; the long-distance demand itself is to be
+  measured (brief, The region, step 4).
+
 ### Sites need people (Revision 3, steps 2b–2c)
 
 - **`workers.ts`** — `siteJobs` (thousands, by kind: `jobsRefinery`, `jobsWorks`,

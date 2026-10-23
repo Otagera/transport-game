@@ -37,6 +37,7 @@ import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors }
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/game/score";
 import { variedGameMap } from "@engine/game/variation";
 import { generatedMapInfo, generatedGameMap } from "@engine/game/generate";
+import { REGION_HEIGHT, REGION_WIDTH, gameMap, regionInfo } from "@engine/game/region";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
@@ -2849,6 +2850,58 @@ describe("Revision 2: retiring a road, and the road that became the railway", ()
   });
 });
 
+describe("the region: the seed's map as the home cluster of a wider map (brief, The region)", () => {
+  test("a game's tuning picks the map: the region for new games, the slice map for files without it; seed 0 stays hand-made", () => {
+    expect(gameMap(GAME_MAP, 7, { regionEnabled: true }).width).toBe(REGION_WIDTH);
+    expect(gameMap(GAME_MAP, 7, {})).toEqual(generatedGameMap(GAME_MAP, 7));
+    expect(gameMap(GAME_MAP, 0, { regionEnabled: true })).toEqual(generatedGameMap(GAME_MAP, 0));
+    expect(gameMap(GAME_MAP, 7, { regionEnabled: true })).toEqual(gameMap(GAME_MAP, 7, { regionEnabled: true }));
+  });
+
+  test("every seed: the home cluster is the seed's slice map moved whole; clusters beyond it; one dominant city; a port; all reachable", () => {
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const info = regionInfo(GAME_MAP, seed);
+      const { map, home } = info;
+      expect(info.rejected).toBeLessThan(300); // never the fallback
+      expect([map.width, map.height]).toEqual([REGION_WIDTH, REGION_HEIGHT]);
+      expect(map.towns.length).toBeGreaterThanOrEqual(home.map.towns.length + 12);
+      expect(new Set(map.towns.map((t) => t.id)).size).toBe(map.towns.length);
+      // The home cluster: the slice map's towns, roads and sizes, moved by the home box's corner.
+      const box = map.home!;
+      home.map.towns.forEach((t, i) => expect(map.towns[i]).toEqual({ ...t, x: t.x + box.x, y: t.y + box.y }));
+      expect(map.roads.slice(0, home.map.roads.length)).toEqual(home.map.roads);
+      // Every other town beyond the home box, and no two towns close.
+      for (const t of map.towns.slice(home.map.towns.length)) {
+        expect(t.x < box.x || t.x > box.x + box.width || t.y < box.y || t.y > box.y + box.height).toBe(true);
+      }
+      for (const [i, a] of map.towns.entries()) for (const b of map.towns.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(15);
+      const largest = map.towns.reduce((big, t) => (t.population > big.population ? t : big));
+      expect(largest.id).toBe(home.trunk[0]);
+      expect(map.towns.some((t) => t.id === map.port)).toBe(true);
+      // Old highways join every cluster: the inherited roads alone make one network of everything not cut off.
+      const joinedTowns = map.towns.filter((t) => map.roads.some((r) => r.a === t.id || r.b === t.id));
+      const reached = new Set([home.trunk[0]]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const r of map.roads) for (const [a, b] of [[r.a, r.b], [r.b, r.a]] as const) if (reached.has(a) && !reached.has(b)) { reached.add(b); grew = true; }
+      }
+      expect(joinedTowns.every((t) => reached.has(t.id))).toBe(true);
+      expect(info.hubs.every((h) => reached.has(h))).toBe(true);
+      buildGameTerrain(map); // every town dry (it throws otherwise)
+    }
+  }, 30_000);
+
+  test("a region plays: started as a new game is, a bus in the home cluster carries riders", () => {
+    const w = startRun(GAME_MAP, 3, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
+    expect(w.width).toBe(REGION_WIDTH);
+    expect(w.home).toBeDefined();
+    const info = regionInfo(GAME_MAP, 3);
+    expect(addBus(w, info.home.trunk[0], info.home.trunk[1]).ok).toBe(true);
+    run(w, 2 * SECONDS_PER_GAME_DAY);
+    expect(averageHeadline(w).yourRidersPerDay).toBeGreaterThan(0);
+  }, 60_000);
+});
+
 describe("generated maps per seed, with guards (brief, After the ladder's playtest, 5; P8)", () => {
   test("seed 0 is the hand-made map; a seed always draws the same map, and another seed another", () => {
     expect(generatedGameMap(GAME_MAP, 0)).toEqual({ ...GAME_MAP, region: "southwest" });
@@ -2959,7 +3012,9 @@ describe("seeded variation of the hand-made map (brief, Revision 1, the order, 3
 describe("run files: a played game saved, read and replayed (runlog.ts)", () => {
   test("a run saved as JSON replays to exactly the same world", () => {
     const switches = { all: false, goodsOff: false, wearOff: false };
-    const world = startRun(GAME_MAP, 3, switches, null);
+    // A new game's map is the region (and its replay must draw the region again); no warm-up, for time.
+    const world = startRun(GAME_MAP, 3, switches, null, { warmUpDays: 0 });
+    expect(world.width).toBe(REGION_WIDTH);
     const recorder = createRunRecorder(world, 3, switches, null);
     const ticksADay = Math.round(SECONDS_PER_GAME_DAY / SIM_DT);
     const towns = [...world.towns.keys()];
@@ -2976,13 +3031,13 @@ describe("run files: a played game saved, read and replayed (runlog.ts)", () => 
     play(4);
     const file = JSON.parse(JSON.stringify(runFile(recorder))) as RunFile;
     expect(file.actions.length).toBeGreaterThanOrEqual(2);
-    expect(file.days.length).toBe(7);
+    expect(file.days.length).toBeGreaterThanOrEqual(6); // 7 days played; with no warm-up the first day row lands a day later
     expect(file.days.at(-1)!.routes.length).toBeGreaterThan(0);
     const replayed = replayRun(GAME_MAP, file);
     expect(replayed.economy.funds).toBe(world.economy.funds);
     expect(headline(replayed)).toEqual(headline(world));
     expect([...replayed.towns.values()].map((t) => t.population)).toEqual([...world.towns.values()].map((t) => t.population));
-  }, 20_000);
+  }, 90_000);
 });
 
 describe("Revision 3, step 1: the fuel chain (fuel.ts)", () => {

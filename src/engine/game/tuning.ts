@@ -442,6 +442,8 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // dear one 1.6; against a dear line hauliers load and reach 1.5 times as
   // far, against a cheap one two-thirds. First guesses, to measure.
   freightRatesEnabled: true,
+  // The region (2026-10-23): new games are drawn on it.
+  regionEnabled: true,
   freightRateCheap: 0.6,
   freightRateDear: 1.6,
   freightHaulierPull: 0.5,
