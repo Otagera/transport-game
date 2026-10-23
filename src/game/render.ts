@@ -75,11 +75,11 @@ export interface View {
   fit?: number;
 }
 
-export function fitView(world: GameWorld, width: number, height: number, padding: number, topInset: number, bottomInset = 0, sideInset = 0): View {
+export function fitView(world: GameWorld, width: number, height: number, padding: number, topInset: number, bottomInset = 0, leftInset = 0, rightInset = leftInset): View {
   const usableH = height - topInset - bottomInset - padding * 2;
-  const usableW = width - padding * 2 - sideInset * 2;
+  const usableW = width - padding * 2 - leftInset - rightInset;
   const scale = Math.min(usableW / world.width, usableH / world.height);
-  return { scale, offsetX: (width - world.width * scale) / 2, offsetY: topInset + padding + (usableH - world.height * scale) / 2, fit: scale };
+  return { scale, offsetX: leftInset + padding + (usableW - world.width * scale) / 2, offsetY: topInset + padding + (usableH - world.height * scale) / 2, fit: scale };
 }
 
 export function toScreen(view: View, x: number, y: number): { x: number; y: number } {

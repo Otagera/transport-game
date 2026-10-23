@@ -11,8 +11,8 @@
         --ink: #1b2129;
         --muted: #7b8694;
         --line: #dde3ea;
-        --player: #2f6fdb;
-        --danfo: #f2c200;
+        --player: #2a78d6;
+        --danfo: #e0a400;
         --danfo-light: #f8e08a;
         --home: #a3abb5;
         --goods: #8a5a2b;
@@ -25,34 +25,33 @@
         --label-tracking: 0.12em;
         --radius: 16px;
         --chip-bg: rgba(255, 255, 255, 0.7);
+        /* The information lab's tokens (info-lab.html): the strip, log, panel and revenue screen. */
+        --surface: #ffffff;
+        --surface-2: #f3f5f8;
+        --ink-2: #4a5563;
+        --you: #2a78d6;
+        --informal: #e0a400;
+        --rail: #3f4852;
+        --warn: #c77700;
+        --s1: #2a78d6;
+        --s2: #eb6834;
+        --s3: #1baf7a;
+        --s4: #6250d6;
+        --s5: #e34948;
+        --shadow: rgba(20, 30, 45, 0.14);
+        /* The map sits between the log (left) and the panel (right), under the strip (--top, measured). */
+        --top: 92px;
+        --left: 240px;
+        --right: 360px;
       }
-      #overlays { position: fixed; left: 50%; transform: translateX(-50%); top: 70px; display: flex; gap: 4px; z-index: 4; background: var(--panel); padding: 5px; border-radius: 10px; box-shadow: 0 2px 10px rgba(20, 30, 45, 0.14); }
+      #overlays { position: fixed; left: calc(var(--left) + 12px); top: calc(var(--top) + 12px); display: flex; gap: 4px; z-index: 4; background: var(--panel); padding: 5px; border-radius: 10px; box-shadow: 0 2px 10px rgba(20, 30, 45, 0.14); }
       #overlays button { font: 600 12px system-ui, sans-serif; padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
       #overlays button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
-      #zoom-control { position: fixed; right: 80px; top: 76px; display: flex; gap: 4px; z-index: 4; }
+      #zoom-control { position: fixed; right: calc(var(--right) + 12px); top: calc(var(--top) + 12px); display: flex; gap: 4px; z-index: 4; }
       #zoom-control button { font: 600 13px system-ui, sans-serif; min-width: 30px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
       #zoom-control button:hover { border-color: var(--muted); }
       html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; font: 14px/1.4 system-ui, sans-serif; }
       #map { position: fixed; inset: 0; display: block; }
-      #strip {
-        position: fixed; left: 0; right: 0; top: 0; height: 56px;
-        display: flex; align-items: center; gap: 28px; padding: 0 20px;
-        background: var(--panel); border-bottom: 1px solid var(--line);
-      }
-      .stat { display: flex; flex-direction: column; }
-      .k { font-family: var(--label-font); font-size: 10px; text-transform: uppercase; letter-spacing: var(--label-tracking); color: var(--muted); }
-      .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-      .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; background: var(--chip-bg); border: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
-      .chip b { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-      .chip .num { font-weight: 650; font-variant-numeric: tabular-nums; }
-      .chip.hatch b { background: repeating-linear-gradient(45deg, var(--home) 0 2px, transparent 2px 4px); border: 1px solid var(--home); box-sizing: border-box; }
-      .stat .v { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; white-space: nowrap; }
-      .stat .v .trend { font-size: 12px; margin-left: 6px; }
-      .stat .v .spark { margin-left: 8px; }
-      .spark polyline { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; opacity: 0.55; }
-      .good { color: var(--good); }
-      .bad { color: var(--bad); }
-      .share { flex: 1; max-width: 460px; }
       /* A site's production (production.ts): one gauge a line, the binding one marked. */
       .production { margin: 6px 0 10px; display: grid; gap: 6px; }
       .production .prow { display: grid; grid-template-columns: 1fr auto; font-size: 12px; gap: 0 8px; }
@@ -64,38 +63,6 @@
       .bar i { display: block; height: 100%; transition: width 0.3s; }
       .legend { font-size: 12px; }
       .danfo-text { color: #9a7a00; }
-      /* Two wings (the design lab's pick, 2026-10-20: glass, leaning 7° at rest and flat when
-         used, tucked at the edge and out on hover, town left and routes right): a spine shows
-         at rest; hovering it, focusing it, a town hovered or selected on the map, or a click on
-         the spine (pinned) brings a wing out and flat. */
-      .wing {
-        --side: 1; --dock-now: 1; --tilt-now: 1;
-        position: fixed; top: 72px; bottom: 132px; width: 300px; box-sizing: border-box; overflow: hidden; z-index: 6;
-        background: rgb(255 255 255 / 0.68); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-        border: 1px solid var(--line); border-radius: var(--radius);
-        box-shadow: 0 0 0 1px rgb(120 180 255 / 0.25), 0 16px 48px rgb(40 110 220 / 0.18);
-        transform: perspective(1400px) translateX(calc(var(--side) * var(--dock-now) * (100% - 44px))) rotateY(calc(var(--side) * var(--tilt-now) * -7deg));
-        transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s;
-      }
-      .wing:hover, .wing:focus-within, .wing.out, .wing.pinned { --dock-now: 0; --tilt-now: 0; transition-delay: 0s; }
-      #wing-routes { right: 16px; transform-origin: right center; }
-      #wing-town { left: 16px; --side: -1; transform-origin: left center; }
-      /* A town under the left wing's space: its card opens from the right, over your routes,
-         so it never covers the town you're pointing at (playtest, map 2418). */
-      #wing-town.flip { left: auto; right: 16px; --side: 1; transform-origin: right center; z-index: 8; }
-      #wing-town.flip .spine { display: none; }
-      .wing-body { position: absolute; inset: 0; overflow-y: auto; padding: 12px 14px 12px 14px; transition: opacity 0.2s 0.15s; }
-      .wing:not(:hover):not(:focus-within):not(.out):not(.pinned) .wing-body { opacity: 0; }
-      .spine {
-        position: absolute; top: 0; bottom: 0; width: 44px; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 10px;
-        writing-mode: vertical-rl; cursor: pointer; background: rgb(255 255 255 / 0.96); transition: opacity 0.2s; font-size: 12px; white-space: nowrap;
-      }
-      .spine .k { font-size: 10px; }
-      .spine .num { font-weight: 650; }
-      #wing-routes .spine { left: 0; border-right: 1px solid var(--line); }
-      #wing-town .spine { right: 0; border-left: 1px solid var(--line); transform: rotate(180deg); }
-      .wing:hover .spine, .wing:focus-within .spine, .wing.out .spine, .wing.pinned .spine { opacity: 0; pointer-events: none; }
-      .wing.pinned { box-shadow: 0 0 0 2px var(--player), 0 16px 48px rgb(40 110 220 / 0.18); }
       .panel-body h2 { margin: 0; font-size: 14px; }
       .panel-body h2.section { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
       .panel-body .hint, .panel-body .empty { margin: 2px 0 8px; color: var(--muted); font-size: 12px; }
@@ -196,7 +163,7 @@
       .route button:hover { border-color: var(--ink); }
       #toolbar {
         /* Right of the key, left of the side panel: nine tools don't fit centred over a wide key. */
-        position: fixed; right: 316px; bottom: 16px;
+        position: fixed; right: calc(var(--right) + 16px); bottom: 16px;
         display: flex; gap: 4px; align-items: flex-end; padding: 4px; background: rgb(255 255 255 / 0.78); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--line); border-radius: var(--radius);
       }
       #toolbar button { border: 1px solid transparent; background: none; border-radius: 7px; padding: 6px 8px; font: inherit; cursor: pointer; color: var(--ink); white-space: nowrap; }
@@ -216,64 +183,139 @@
       /* Control hint line, over the toolbar (lab: "One line above the toolbar"). */
       #controls a { color: inherit; }
       #controls { position: fixed; right: 20px; top: 9px; max-width: 230px; text-align: right; font-size: 11px; line-height: 1.45; color: var(--muted); z-index: 3; }
-      body:not([data-dev="true"]) #toolbar { right: auto; left: 50%; transform: translateX(-50%); }
-      body:not([data-dev="true"]) #key { display: none; }
+      body:not([data-dev="true"]) #toolbar { right: auto; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); transform: translateX(-50%); }
       /* A hint: beside the town it's about, else over the control line. */
-      #hint { position: fixed; left: 50%; bottom: 160px; transform: translateX(-50%); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--player); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(20, 30, 45, 0.18); font-size: 13px; line-height: 1.35; }
+      #hint { position: fixed; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); bottom: 190px; transform: translateX(-50%); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--player); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(20, 30, 45, 0.18); font-size: 13px; line-height: 1.35; }
       #hint.anchored { bottom: auto; transform: none; }
       #hint[hidden] { display: none; }
       #hint button { flex: none; border: 1px solid var(--line); background: none; border-radius: 6px; padding: 1px 6px; cursor: pointer; font: 11px var(--label-font); color: var(--muted); }
       #hint button:hover { color: var(--ink); border-color: var(--ink); }
-      /* The Treasury drawer (brief, Revision 3, Money, 5; the design lab's pick): a tab over the
-         control line, out on hover or focus into four columns; a click pins it open. */
-      #treasury {
-        position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
-        width: min(1100px, calc(100% - 140px)); box-sizing: border-box; z-index: 5; overflow: hidden;
-        max-height: 34px; background: rgb(255 255 255 / 0.82); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--line); border-radius: var(--radius);
-        box-shadow: 0 6px 20px rgba(20, 30, 45, 0.12); transition: max-height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s;
-      }
-      #treasury:hover, #treasury:focus-within, #treasury.pinned { max-height: min(460px, calc(100vh - 220px)); overflow-y: auto; transition-delay: 0s; }
-      #treasury .tab { height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 14px; font-size: 12px; white-space: nowrap; cursor: pointer; }
-      #treasury .tab .k { font: 600 10px var(--label-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-      #treasury .tab .more { margin-left: auto; color: var(--muted); }
-      #treasury .drawer-body { padding: 2px 16px 14px; border-top: 1px solid var(--line); }
-      #treasury .tgrid { display: grid; grid-template-columns: 1.15fr 1fr 1.15fr 1.25fr; gap: 10px 18px; }
-      #treasury .tcol h3 { margin: 6px 0 4px; font: 600 10px var(--label-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-      #treasury .budget { font-size: 12px; }
-      #treasury .callout, #treasury .hint { font-size: 12px; margin: 4px 0; color: var(--muted); }
-      #treasury .callout { color: inherit; }
       .chain { margin: 0 0 6px; font-size: 12px; padding-left: 8px; border-left: 3px solid var(--line); }
       .chain.bad { border-color: var(--bad); }
       .chain.warn { border-color: var(--danfo); }
       .chain.good { border-color: var(--good); }
-      #treasury .tab .chain { margin: 0; }
-      @media (max-width: 900px) { #treasury { left: 50%; width: calc(100% - 32px); } #treasury .tgrid { grid-template-columns: 1fr 1fr; } }
       #toast {
-        position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); z-index: 7;
+        position: fixed; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); bottom: 90px; transform: translateX(-50%); z-index: 7;
         background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 8px; font-size: 13px;
         opacity: 0; transition: opacity 0.4s; pointer-events: none; max-width: calc(100% - 32px);
       }
       #toast[data-bad="true"] { background: var(--bad); }
-      #key { position: fixed; left: 16px; bottom: 16px; max-width: 470px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 11px; color: var(--muted); }
+      #key { position: fixed; left: calc(var(--left) + 12px); bottom: 16px; max-width: 470px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 11px; color: var(--muted); }
       #key b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
       #key summary { cursor: pointer; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
       #key:not([open]) { padding: 6px 12px; }
       @media (max-width: 1100px) { #key { display: none; } }
-      @media (max-width: 900px) { #toolbar { right: 16px; } body:not([data-dev="true"]) #toolbar, #hint:not(.anchored) { left: 50%; } }
-      @media (max-width: 900px) { .wing { display: none; } .stat:last-child { display: none; } }
+      
+      /* --- The information lab's screen (info-lab.html, agreed 2026-10-23), ported whole --- */
+      .num { font-variant-numeric: tabular-nums; }
+      .muted { color: var(--muted); }
+      .up { color: var(--good); } .down { color: var(--bad); }
+      #strip button, #log button, #panel > .tabs button, #panel .pane > .back, .problem button, .tile button, #revenue .top button, #overlays button {
+        font: 13px/1.4 system-ui, sans-serif; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line);
+        border-radius: 7px; padding: 4px 10px; cursor: pointer;
+      }
+      #strip button:hover, #log button:hover, #panel button:hover, #revenue button:hover { border-color: var(--ink-2); }
+      #log button.on, #panel > .tabs button.on, #revenue button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+      .tile button { padding: 0 7px; font-size: 13px; }
+      #strip {
+        position: fixed; left: 0; right: 0; top: 0; z-index: 5;
+        display: flex; align-items: stretch; gap: 8px; padding: 10px 14px; background: var(--surface);
+        border-bottom: 1px solid var(--line); overflow-x: auto; font-size: 13px;
+      }
+      .stat { min-width: 132px; padding: 2px 12px 2px 0; border-right: 1px solid var(--line); }
+      .stat:last-of-type { border-right: 0; }
+      .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+      .stat .v { font-size: 20px; font-weight: 650; }
+      .stat .d { font-size: 11px; }
+      .stat .d a { color: inherit; }
+      .stat svg { display: block; margin-top: 2px; }
+      #strip .spacer { flex: 1; }
+      #strip .actions { display: flex; gap: 6px; align-items: center; }
+      #log, #panel { position: fixed; top: var(--top); bottom: 0; background: var(--surface); overflow-y: auto; z-index: 5; font-size: 13px; }
+      #log { left: 0; width: var(--left); border-right: 1px solid var(--line); padding: 10px 12px; box-sizing: border-box; }
+      #panel { right: 0; width: var(--right); border-left: 1px solid var(--line); box-sizing: border-box; }
+      #tip {
+        position: fixed; pointer-events: none; background: var(--ink); color: var(--surface); padding: 6px 8px;
+        border-radius: 6px; font-size: 12px; display: none; z-index: 20; max-width: 280px;
+      }
+      #log h2, #panel .pane > h2, #panel .pane > .chart + h2, #panel .pane h2:not(.panel-body h2) { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+      #log h2:first-child { margin-top: 0; }
+      .event { display: grid; grid-template-columns: 34px 1fr; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+      .event:hover { background: var(--surface-2); }
+      .event .day { color: var(--muted); font-variant-numeric: tabular-nums; }
+      .event.bad .what { color: var(--bad); }
+      .event.good .what { color: var(--good); }
+      #logfilter { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+      #logfilter button { padding: 2px 7px; font-size: 11px; }
+      .tabs { display: flex; gap: 4px; padding: 10px 12px 0; }
+      .pane { padding: 10px 12px 16px; }
+      #panel table, #revenue table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      #panel th, #revenue th { text-align: right; font-weight: 600; color: var(--muted); padding: 4px 4px; cursor: pointer; white-space: nowrap; border-bottom: 1px solid var(--line); }
+      #panel th:first-child, #panel td:first-child, #revenue th:first-child, #revenue td:first-child { text-align: left; }
+      #panel th.sorted, #revenue th.sorted { color: var(--ink); }
+      #panel td, #revenue td { text-align: right; padding: 5px 4px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+      tr.row { cursor: pointer; }
+      tr.row:hover td { background: var(--surface-2); }
+      .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+      .head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+      .head .title { font-size: 17px; font-weight: 650; }
+      .kicker { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+      .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+      .tile { background: var(--surface-2); border-radius: 9px; padding: 8px 10px; }
+      .tile .k { font-size: 11px; color: var(--muted); }
+      .tile .v { font-size: 17px; font-weight: 650; }
+      .problem {
+        margin: 10px 0; padding: 9px 10px; border-radius: 9px; background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+        border-left: 3px solid var(--warn); display: flex; gap: 8px; align-items: center; justify-content: space-between;
+      }
+      .problem { flex-wrap: wrap; }
+      .problem > span { flex: 1 1 180px; }
+      .problem button { flex: none; max-width: 100%; }
+      .problem.none { background: var(--surface-2); border-left-color: var(--good); }
+      .back { margin-bottom: 8px; }
+      .bar3 { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--surface); }
+      .bar3 i { display: block; height: 100%; }
+      .chart { margin: 6px 0 12px; }
+      .chart .t { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+      .chart-empty { font-size: 12px; padding: 10px 0; }
+      /* The old cards, whole, under a fold: everything the lab didn't show, buttons working. */
+      details.more { margin: 14px 0 0; border-top: 1px solid var(--line); padding-top: 8px; }
+      details.more > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+      details.more > .panel-body { padding-top: 8px; }
+      .panel-body .k { font-family: var(--label-font); font-size: 10px; text-transform: uppercase; letter-spacing: var(--label-tracking); color: var(--muted); }
+      #revenue {
+        position: fixed; inset: 0; background: var(--bg); z-index: 10; display: none; overflow-y: auto; padding: 18px 22px 40px; font-size: 13px;
+      }
+      #revenue.open { display: block; }
+      #revenue .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+      #revenue .top .title { font-size: 20px; font-weight: 700; }
+      .heroes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+      .hero { background: var(--surface); border-radius: 12px; padding: 12px 14px; }
+      .hero .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+      .hero .v { font-size: 26px; font-weight: 700; }
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .card { background: var(--surface); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+      .card h3 { margin: 0 0 2px; font-size: 14px; }
+      .card .sub { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+      .card.wide { grid-column: 1 / -1; }
+      .keyrow { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+      .keyrow span { display: inline-flex; align-items: center; gap: 5px; }
+      .keyrow i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+      .ranges { display: flex; gap: 4px; }
+      .card.treasury .tab { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }
+      .card.treasury .tab .more { display: none; }
+      .card.treasury .tgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 18px; }
+      .card.treasury .tcol h3 { margin: 6px 0 4px; font: 600 10px var(--label-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      @media (max-width: 1100px) { .card.treasury .tgrid { grid-template-columns: 1fr 1fr; } }
+      @media (max-width: 1100px) { :root { --left: 0px; } #log { display: none; } }
+      @media (max-width: 900px) { :root { --right: 300px; } .heroes, .cards { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
     <canvas id="map"></canvas>
-    <div id="strip"></div>
-    <section class="wing" id="wing-town" tabindex="0" aria-label="Town">
-      <div class="spine" data-spine="town"></div>
-      <div class="wing-body panel-body" id="town"></div>
-    </section>
-    <section class="wing" id="wing-routes" tabindex="0" aria-label="Your routes">
-      <div class="spine" data-spine="routes"></div>
-      <div class="wing-body panel-body" id="routes"></div>
-    </section>
+    <header id="strip"></header>
+    <aside id="log"></aside>
+    <aside id="panel"></aside>
     <details id="key" open><summary>Key</summary>
       Road: width = traffic · <b style="background:#c3cbd4"></b>free <b style="background:#e8742c"></b>busy <b style="background:#c92a2a"></b>jammed · <b style="background:var(--player)"></b>your riders<br />
       Beside it: <b style="background:var(--danfo)"></b>danfos, kekes, okadas <b style="background:var(--goods)"></b>trucks (wider, more)<br />
@@ -281,11 +323,11 @@
       ! a problem (its card says the move) · ▲▼ growing · wheel to zoom, drag to pan, 0 to fit
     </details>
     <div id="overlays"></div>
-    <div id="controls"><span id="map-seed"></span></div>
     <div id="hint" hidden></div>
-    <section id="treasury" tabindex="0" aria-label="Treasury"></section>
     <div id="toolbar"></div>
     <div id="toast"></div>
+    <section id="revenue" aria-label="Revenue"></section>
+    <div id="tip"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>

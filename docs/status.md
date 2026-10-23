@@ -19,18 +19,18 @@ is renamed from "slice" to "game" (`src/engine/game`, `src/game`, `index.html`, 
 again. Saved runs and your saved preferences keep their old names inside, so both still work.
 The engine's foundation (map, pathing, simulation, economy, paratransit) stays.
 
-**Next: the information design, layer by layer, each played before the next** (brief, the
-carry-over plan; settled in the information lab, `/info-lab.html`):
+**Next: play the information design** (brief, the carry-over plan; settled in the information
+lab, `/info-lab.html`). Built 2026-10-23 on branch `map-layer`, all three layers at once (the
+user: "go fully into the new lab design; if I play and miss something I will call it out"),
+**not yet played**:
 
-1. **The map at a glance** -- built 2026-10-23 on branch `map-layer`, **not yet played**
-   (render-and-ui.md §7, the map layer): roads by traffic and how full (grey, orange, red), your service
-   and your vehicles' fill, the other side's vehicles as bands with individuals on top when
-   there's room (detail by speed and zoom), focus, zoom and pan, a town's biggest problem
-   as a mark, neutral greys.
-2. **Side panels:** one layout for every town, route, site and road -- tiles, a chart over
-   time, one problem line with its move -- and lists that sort.
-3. **The revenue screen,** in place of the Treasury drawer.
-4. **The log** of what happened.
+1. **The map at a glance** (render-and-ui.md §7, the map layer): roads by traffic and how
+   full (grey, orange, red), your service and your vehicles' fill, the other side's vehicles
+   as bands with individuals on top when there's room, focus, zoom and pan, problem marks.
+2. **The screen** (render-and-ui.md §7, the screen): the lab's strip with ten-day trends,
+   the log on the left, the side panel on the right (lists that sort; one layout for a town,
+   route, site or road with its problem line and a real move), the revenue screen. The old
+   wings and Treasury drawer are gone; their cards live whole under each panel's "More".
 
 Then the open items for the full game (brief, the carry-over plan): roads with junctions,
 money late in the game, eras as vehicle generations, sea and river freight.
