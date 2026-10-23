@@ -141,6 +141,8 @@ let markScale = 1;
 const FADED = 0.18;
 interface Focus { segments: Set<string>; routes: Set<string>; towns: Set<string> }
 let focus: Focus | null = null;
+/** The towns whose name fits this frame (labelled, below). */
+let labelled = new Set<string>();
 
 /** A town's roads and the routes that stop there; or a route and the roads it runs on. */
 function focusOf(world: GameWorld, state: DrawState): Focus | null {
@@ -252,6 +254,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
   drawVehicles(ctx, world, view, oneByOne);
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
+  labelled = labelledTowns(world, view, state);
   for (const town of [...world.towns.values()].sort((p, q) => p.population - q.population)) {
     if (town.industry) drawSite(ctx, world, view, town, state);
     else drawTown(ctx, world, view, town, state);
@@ -636,6 +639,29 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
 
 // --- Towns and sites (the lab's) ------------------------------------------------------------
 
+/**
+ * Which towns get their name and size this frame: the towns the map was made with, biggest
+ * first, each only where its label clears the ones already placed -- zoomed out over the
+ * region, names sat on each other (Auchi on Bonny). The town you point at or picked always.
+ */
+function labelledTowns(world: GameWorld, view: View, state: DrawState): Set<string> {
+  const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
+  const out = new Set<string>();
+  const towns = [...world.towns.values()].filter((t) => !t.industry);
+  const lit = (t: GameTown) => state.selectedTown === t.id || state.hoverTown === t.id;
+  for (const town of towns.sort((p, q) => Number(lit(q)) - Number(lit(p)) || q.population - p.population)) {
+    if (!world.basePopulation.has(town.id) && !lit(town)) continue;
+    const p = toScreen(view, town.x, town.y);
+    const r = townRadius(town, view);
+    const half = Math.max(24, town.name.length * 3.6);
+    const box = { x0: p.x - half, y0: p.y - r - 2, x1: p.x + half, y1: p.y + r + 34 };
+    if (!lit(town) && placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+    placed.push(box);
+    out.add(town.id);
+  }
+  return out;
+}
+
 function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, town: GameTown, state: DrawState): void {
   const p = toScreen(view, town.x, town.y);
   const r = townRadius(town, view);
@@ -684,8 +710,7 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
     ctx.fillText("!", mx, my + 0.5);
   }
   // Name and size for the towns the map was made with; a roadside town's name when you point at it.
-  const roadside = !world.basePopulation.has(town.id);
-  if (!roadside || lit) {
+  if (labelled.has(town.id)) {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     // A white halo under each label, so a road under it doesn't make it hard to read.

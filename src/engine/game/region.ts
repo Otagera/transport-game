@@ -59,13 +59,13 @@ const HOME_HEIGHT = 64;
 /** Clusters beyond the home one. */
 const CLUSTERS = 3;
 /** A cluster's towns sit within this of its regional town, cells. */
-const CLUSTER_RADIUS = 24;
+const CLUSTER_RADIUS = 20;
 /** Towns in a cluster, its regional town included (fewer when the names run out, never under MIN_CLUSTER). */
 const CLUSTER_TOWNS = 6;
 const MIN_CLUSTER = 4;
 /** Cluster centres at least this far apart, and this far from the home box, cells. */
 const CLUSTER_GAP = 62;
-const HOME_GAP = 36;
+const HOME_GAP = 40;
 /** The regional towns, thousands: all well under the home city (100k+), so it stays dominant. */
 const HUB_SIZES = [70, 55, 45];
 /** The rest of a cluster's towns, thousands (log-uniform between). */
@@ -328,15 +328,24 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
 
   // Cluster centres, each its regional town. When the home city isn't on the coast,
   // the first cluster is on it, and its regional town is the port.
+  // Each the best of a few spots that fit, the one farthest from the home box and the
+  // clusters already placed, so they spread over the region instead of bunching and
+  // leaving a quarter of it empty.
   const centres: Point[] = [];
-  for (let attempt = 0; attempt < 3000 && centres.length < CLUSTERS; attempt += 1) {
+  const room = (p: Point) => Math.min(toBox(p, homeBox) + CLUSTER_GAP - HOME_GAP, ...centres.map((c) => distance(c, p)));
+  for (let attempt = 0; attempt < 3000 && centres.length < CLUSTERS; ) {
     const port = !homeSea && centres.length === 0;
-    const p = port
-      ? ((y) => ({ x: Math.round(coastAt(coast, seaSide, y) - seaSide * between(rng, 6, 9)), y }))(Math.round(between(rng, 20, H - 20)))
-      : { x: Math.round(between(rng, 20, W - 21)), y: Math.round(between(rng, 18, H - 19)) };
-    if (!inBounds(p) || !dry(p) || toBox(p, homeBox) < HOME_GAP || centres.some((c) => distance(c, p) < CLUSTER_GAP)) continue;
-    if (port && dryOf(water, p, WATER_CLEARANCE + 6)) continue; // a port is by the sea
-    centres.push(p);
+    let best: Point | null = null;
+    for (let fits = 0; fits < 12 && attempt < 3000; attempt += 1) {
+      const p = port
+        ? ((y) => ({ x: Math.round(coastAt(coast, seaSide, y) - seaSide * between(rng, 6, 9)), y }))(Math.round(between(rng, 20, H - 20)))
+        : { x: Math.round(between(rng, 20, W - 21)), y: Math.round(between(rng, 18, H - 19)) };
+      if (!inBounds(p) || !dry(p) || toBox(p, homeBox) < HOME_GAP || centres.some((c) => distance(c, p) < CLUSTER_GAP)) continue;
+      if (port && dryOf(water, p, WATER_CLEARANCE + 6)) continue; // a port is by the sea
+      fits += 1;
+      if (!best || room(p) > room(best)) best = p;
+    }
+    if (best) centres.push(best);
   }
   if (centres.length < CLUSTERS) return null;
 

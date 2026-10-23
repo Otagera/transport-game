@@ -478,7 +478,11 @@ brown trucks; `otherSideOnRoads`, rolled frame to frame) and its vehicles drawn 
 there's room (below 4x, or zoomed in to 2x); your vehicles as the lab's pills, filled as full as
 they run; towns as the lab's (a share ring, name, size and trend, an amber `!` on towns you serve
 with a problem); sites as squares named on hover; the lab's terrain (a smoothed wash of water and
-hills). One overlay at a time (`Overlay`: demand, no seat, the informal share, the 25 biggest goods
+hills -- since 2026-10-23 the water drawn from the map's own river and sea lines,
+`world.waterLines`, smooth at any zoom, and the hills in relief lit from the north-west with five
+contours to the highest: the cells' staircase and a grey wash didn't read on the region). Names
+go to the biggest towns first where they clear the ones placed (`labelledTowns`), so zoomed out
+over the region they don't sit on each other. One overlay at a time (`Overlay`: demand, no seat, the informal share, the 25 biggest goods
 flows), cached a sim second. Focus (`focusOf`) fades what isn't part of the hovered town or route;
 zoom and pan in `main.ts`, with marks growing by the square root of the zoom (`growOf`).
 
@@ -486,7 +490,7 @@ zoom and pan in `main.ts`, with marks growing by the square root of the zoom (`g
 preview and its price label, the fix tool's road, strike and TAKEN/LOST tags, wardens, the
 yard/park/metro marks, emptied towns, rail track. **Gone from the map** (the cards, the overlays
 and the log carry them): per-route colours (the routes list keeps a swatch each), surface dashes,
-cracks and centre lines, bridge decks, contours and ground names, waiting dots, fuel cans,
+cracks and centre lines, bridge decks, ground names (contours came back with the region's relief), waiting dots, fuel cans,
 milestone tags, desire lines (the Demand overlay replaces them).
 
 ### The screen (2026-10-23): the information lab's strip, log, panel and revenue screen

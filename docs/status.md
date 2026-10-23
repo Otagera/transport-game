@@ -36,7 +36,12 @@ user: "go fully into the new lab design; if I play and miss something I will cal
 `region`, **not yet played** (engine.md, The region): new games are drawn on a 250 × 160
 region -- the seed's slice map as the home cluster, three more clusters, a coast with the
 port, more rivers, a range, old highways and railway between clusters -- and the camera
-starts on the home cluster. Next: the gateways (step 3: the port and border crossings,
+starts on the home cluster. **Reworked 2026-10-23 on branch `region-map`** (the user: "look
+at the state of this"; engine.md, The region): the chains placed in the home cluster (an
+oilfield had sat in the far corner), an inland home city a dry port, water that drains (a
+wandering coast, a big river to the sea, the home river joining it, tributaries), a hill range,
+highways laid over the land, clusters spread apart; on the screen, smooth water, hills in
+relief with contours, labels that don't overlap. Next: the gateways (step 3: the port and border crossings,
 imports and exports through them), then the strategist on regions (step 4). Speed: a tick
 costs ~5.4x the slice map's and the warm-up holds the page ~9 s -- with the optimisation
 work.

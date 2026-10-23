@@ -1036,20 +1036,34 @@ replays as played. Seed 0 stays the hand-made map, alone.
   box against the region's west or east edge (`GameMapDef.home`, copied to `world.home`; the
   page frames it at the start). Same towns, sizes, roads, trunk, ridge, old railway: the
   ladder's prices, guarded on that trunk, land as measured, and the start reads like the
-  slice (C21). Its river and, on a coast map, its sea run on to the region's top and bottom.
+  slice (C21). Its river rises just past the box and runs on to join the big river; on a
+  coast map its sea is the region's coast where the box is.
 - **The rest from a stream of its own** (`seed + 3_000_017`), so the home cluster is the
-  same whatever is drawn round it: 250 × 160 cells; the sea on the home city's side when it's
-  a coast map, else down the far edge; one or two more rivers; three clusters, 62+ cells
-  apart and 36+ from the home box, each a regional town (70, 55, 45k -- the home city stays
-  dominant) and up to five towns within 24 cells, one left cut off, names from the rest of
-  the home map's region's list; old highways joining the clusters (a spanning tree,
-  shortest first, between towns already on roads, clear of towns and roads); the old
-  railway on from the home city (to the port's cluster when the home city isn't the port);
-  a range of five hills between two clusters. **The port** is the home city on a coast map,
-  else the regional town on the coast -- imports then come from across the region.
+  same whatever is drawn round it: 250 × 160 cells. **The water drains** (2026-10-23, the
+  user: "look at the state of this"): the sea on the home city's side when it's a coast map,
+  else down the far edge, its coast wandering 3-14 cells in (`drawCoast`); a big river in
+  from the inland edge and out to the sea beside the home box, widening, two fords
+  (`drawMainRiver`); the home river joining it; one or two tributaries rising inland. Three
+  clusters, 62+ cells apart and 40+ from the home box, each centre the best of twelve spots
+  that fit (farthest from what's placed, so they spread instead of leaving a quarter
+  empty), each a regional town (70, 55, 45k -- the home city stays dominant) and up to five
+  towns within 20 cells, one left cut off, names from the rest of the home map's region's
+  list; old highways joining the clusters (a spanning tree, shortest first, between towns
+  already on roads, clear of towns and roads), **laid over the land** as a built road is
+  (`GameRoadDef.via`, the planned line with A*'s kinks straightened where that adds no water
+  crossing); the old railway on from the home city, straight; **a range** of overlapping
+  hills across the line between two clusters, highest in the middle, never on the home box.
+- **The chains are the home cluster's.** Every site is placed in the home box (`fuel.ts`
+  `homeBox`/`inHome`; `dry` bounds to it), so they land where the slice map put them: map
+  4882's oilfield had sat in the region's far corner, ~200 cells from its refinery. **The
+  port** the chains use is the home city, as on the slice map: on a coast a seaport, inland a
+  dry port, with `RegionInfo.seaport` the coast cluster's regional town up the old railway
+  (the gateways, step 3, use it).
 - **Guards** as `generate.ts`'s: towns dry and 15 apart, roads clear of towns and of each
-  other, every town reachable by a road pathing can plan to one of its three nearest. 30
-  seeds tested; no seed has needed a second draw yet; a draw takes 30-110 ms.
+  other, every town reachable by a road pathing can plan to one of its three nearest. Tested:
+  30 seeds for the guards, 20 for the water draining and the hills off the home box, three
+  for every site in the home box; over 200 seeds the most draws needed is two.
+  `scripts/region-sheet.ts` draws a dozen seeds on one page, to judge the generator by eye.
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of
