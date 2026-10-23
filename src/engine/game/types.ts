@@ -12,6 +12,7 @@ import type { MilestoneState } from "./score";
 import type { CorridorState } from "./corridors";
 import type { FuelState } from "./fuel";
 import type { CementState } from "./cement";
+import type { SteelState } from "./steel";
 import type { SitesState } from "./workers";
 import type { Bond } from "./bonds";
 import type { FoodState } from "./food";
@@ -41,7 +42,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport";
 
 export interface GameRoadDef {
   a: string;
@@ -420,6 +421,23 @@ export interface GameTuning {
    * without it drew the slice map, and replay on it.
    */
   regionEnabled: boolean;
+  /**
+   * The steel chain (steel.ts; brief, More industries, more chains): on; steel a town wants,
+   * tonnes per thousand people a day; the works' capacity and the port's imports as shares of
+   * day 1's want; tonnes of ore a tonne of steel takes; what the mine digs a day; restoring the
+   * idle works; how far past its start a town grows before it needs steel; jobs at the works,
+   * the mine and the terminal, thousands. Run files without it replay without steel.
+   */
+  steelEnabled: boolean;
+  steelPerThousandPerDay: number;
+  steelWorksShare: number;
+  steelImportShare: number;
+  orePerSteel: number;
+  mineOutputPerDay: number;
+  steelRestoreCost: number;
+  steelFreeShare: number;
+  jobsSteelworks: number;
+  jobsMine: number;
   freightRateCheap: number;
   freightRateDear: number;
   freightHaulierPull: number;
@@ -640,6 +658,8 @@ export interface GameWorld {
   fuel: FuelState | null;
   /** The building chain's works and state (cement.ts); null until placed, or with it off. */
   cement: CementState | null;
+  /** The steel chain (steel.ts); null until placed, with it off, or in a run file from before it. */
+  steel: SteelState | null;
   /** Each site's staffed days and the camp at its gate (workers.ts). */
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */

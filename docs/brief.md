@@ -795,7 +795,7 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 
 | Chain | Sites and flow | Unlocks | Regions |
 | --- | --- | --- | --- |
-| **Steel** | iron ore mine → steel works (**idle at the start**, restored like the refinery: the Ajaokuta story) → towns | Past +80% of its day-1 size a town needs steel as well as cement (cement gates +40%): the big towns' last growth | Middle Belt; elsewhere imported |
+| **Steel** | iron ore mine → steel works (**idle at the start**, restored like the refinery: the Ajaokuta story) → towns | Past +80% of its day-1 size a town needs steel as well as cement (cement gates +40%): the big towns' last growth | Middle Belt (Ajaokuta) and South-South (Delta Steel, Aladja); elsewhere imported |
 | **Palm oil** | oil-palm plantations → palm-oil mill → markets, and export | Feeds markets (as the food chain does) and pays an export; a fed market draws trade | South-South, South-East |
 | **Cocoa** | cocoa farms → the port, for export | The simplest chain: export payments, and farm towns that grow on what you carry out | South-West |
 | **Cotton** | cotton farms → textile mill → markets | The textile mill employs more than any site: a big draw of commuters (workers.ts), camps at its gate | North |

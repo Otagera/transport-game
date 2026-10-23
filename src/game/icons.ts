@@ -30,6 +30,7 @@ export type Glyph =
   | "quarry" | "works" | "silo"
   | "mill" | "flourmill"
   // The chains agreed next.
+  | "steelport"
   | "ironmine" | "steelworks" | "plantation" | "palmmill" | "cottonfarm" | "textilemill" | "ranch" | "abattoir" | "cocoa" | "coalmine" | "powerstation" | "warehouse";
 
 export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }> = {
@@ -43,8 +44,9 @@ export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }
   silo: { family: "building", name: "Cement import silo" },
   mill: { family: "food", name: "Food mill" },
   flourmill: { family: "food", name: "Flour mill" },
-  ironmine: { family: "building", name: "Iron ore mine", next: true },
-  steelworks: { family: "building", name: "Steel works", next: true },
+  ironmine: { family: "building", name: "Iron ore mine" },
+  steelworks: { family: "building", name: "Steel works (Ajaokuta)" },
+  steelport: { family: "building", name: "Steel import terminal" },
   plantation: { family: "food", name: "Oil-palm plantation", next: true },
   palmmill: { family: "food", name: "Palm-oil mill", next: true },
   cottonfarm: { family: "food", name: "Cotton farms", next: true },
@@ -182,6 +184,14 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
     case "ironmine": // a pick
       path(() => { ctx.moveTo(-7, -4); ctx.quadraticCurveTo(0, -10, 7, -4); }, false);
       path(() => { ctx.moveTo(0, -7); ctx.lineTo(0, 8); }, false);
+      break;
+    case "steelport": // an I-beam by the sea
+      ctx.fillRect(-6, -8, 12, 2.6);
+      ctx.fillRect(-6, -0.6, 12, 2.6);
+      ctx.fillRect(-1.3, -5.6, 2.6, 5);
+      ctx.beginPath();
+      wave(ctx, 6.5);
+      ctx.stroke();
       break;
     case "steelworks": // an I-beam
       ctx.fillRect(-7, -7, 14, 3.2);

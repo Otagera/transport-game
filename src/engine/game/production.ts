@@ -3,6 +3,7 @@ import { flowKey, goodsFlows, type GoodsFlow } from "./goods";
 import { crudeArriving, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput } from "./fuel";
 import { siteScale } from "./expand";
 import { cementImports, limestoneArriving, worksCapacity, worksOutput } from "./cement";
+import { mineOutput, oreArriving, steelCapacity, steelImports, steelOutput } from "./steel";
 import { flourCapacity, flourOutput, millCapacity, millOutput, stapleArriving, wheatArriving } from "./food";
 import { siteJobs, staffFactor, staffing } from "./workers";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
@@ -119,6 +120,25 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
       product = "imported cement";
       capacity = cement ? t.cementImportShare * cement.baseDemand : 0;
       made = cementImports(world);
+      break;
+    // The steel chain (steel.ts).
+    case "steelworks":
+      product = "steel";
+      capacity = steelCapacity(world);
+      made = steelOutput(world);
+      inputs = [{ name: "iron ore", arriving: oreArriving(world), needed: capacity * t.orePerSteel }];
+      idle = !world.steel?.working;
+      break;
+    case "ironmine":
+      product = "iron ore";
+      capacity = world.steel?.working ? t.mineOutputPerDay / SECONDS_PER_GAME_DAY : 0;
+      made = mineOutput(world);
+      idle = !world.steel?.working;
+      break;
+    case "steelport":
+      product = "imported steel";
+      capacity = world.steel ? t.steelImportShare * world.steel.baseDemand : 0;
+      made = steelImports(world);
       break;
     case "oilfield":
     case "terminal":

@@ -38,6 +38,9 @@ import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopl
 import { variedGameMap } from "@engine/game/variation";
 import { generatedMapInfo, generatedGameMap } from "@engine/game/generate";
 import { REGION_HEIGHT, REGION_WIDTH, gameMap, regionInfo } from "@engine/game/region";
+import { restoreSteel, steelDemand, steelFlows, steelServed } from "@engine/game/steel";
+import { issueBond as issueSteelBond } from "@engine/game/bonds";
+import { flowKey as goodsKey } from "@engine/game/goods";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
@@ -2918,6 +2921,64 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     run(w, 2 * SECONDS_PER_GAME_DAY);
     expect(averageHeadline(w).yourRidersPerDay).toBeGreaterThan(0);
   }, 60_000);
+});
+
+describe("the steel chain (steel.ts; brief, More industries, more chains)", () => {
+  // Seed 4 is a South-South region (a works and its mine), seed 1 the South-West (imports only).
+  const game = (seed: number, tuning: Partial<typeof DEFAULT_GAME_TUNING> = {}) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, ...tuning });
+
+  test("a South-South map has an idle works, its mine far out with no road to it, and a terminal by the port; a South-West map only the terminal", () => {
+    const w = game(4);
+    expect(regionInfo(GAME_MAP, 4).home.region).toBe("southSouth");
+    const steel = w.steel!;
+    expect(steel.working).toBe(false);
+    const works = w.towns.get(steel.worksId!)!;
+    const mine = w.towns.get(steel.mineId!)!;
+    expect([works.industry, mine.industry, w.towns.get(steel.terminalId!)!.industry]).toEqual(["steelworks", "ironmine", "steelport"]);
+    expect(Math.hypot(works.x - mine.x, works.y - mine.y)).toBeGreaterThanOrEqual(40);
+    // The ore's way to the works is yours to build: no road joins them directly.
+    expect(w.simulation.map.segments.some((s) => [s.fromNodeId, s.toNodeId].includes(mine.id) && [s.fromNodeId, s.toNodeId].includes(works.id))).toBe(false);
+    const sw = game(1).steel!;
+    expect(sw.worksId).toBeNull();
+    expect(sw.terminalId).not.toBeNull();
+  }, 30_000);
+
+  test("idle, the mine digs nothing and the port's imports are split over the towns; restored, ore is wanted", () => {
+    const w = game(4);
+    const steel = w.steel!;
+    const flows = steelFlows(w);
+    expect(flows.some((f) => f.from === steel.mineId)).toBe(false);
+    const imported = flows.filter((f) => f.from === steel.terminalId).reduce((sum, f) => sum + f.rate, 0);
+    expect(imported).toBeCloseTo(w.tuning.steelImportShare * steel.baseDemand, 6);
+    w.economy.funds = w.tuning.steelRestoreCost;
+    expect(restoreSteel(w).ok).toBe(true);
+    expect(w.economy.funds).toBe(0);
+    expect(steelFlows(w).find((f) => f.from === steel.mineId && f.to === steel.worksId)!.rate).toBeGreaterThan(0);
+    expect(restoreSteel(w).ok).toBe(false); // already working
+  }, 30_000);
+
+  test("past +80% of its start a town grows only as far as its steel lets it", () => {
+    // Cement off, and room to grow far past +80%, so only steel can hold the town back.
+    const w = game(1, { cementEnabled: false, townGrowthCap: 20 });
+    const town = [...w.towns.values()].filter((t) => !t.industry && w.basePopulation.has(t.id)).sort((p, q) => q.population - p.population)[0]!;
+    const base = w.basePopulation.get(town.id)!;
+    const key = goodsKey({ from: w.steel!.terminalId!, to: town.id, kind: "supplies" });
+    w.goods.outcomes.set(key, { delivered: 0, spoiled: 0, trucked: 0 });
+    expect(steelServed(w, town.id)).toBe(0);
+    expect(townGrowth(w, town.id)!.cap).toBeCloseTo(base * (1 + w.tuning.steelFreeShare), 6);
+    w.goods.outcomes.set(key, { delivered: steelDemand(w, town.id), spoiled: 0, trucked: 0 });
+    expect(steelServed(w, town.id)).toBe(1);
+    expect(townGrowth(w, town.id)!.cap).toBeGreaterThan(base * (1 + w.tuning.steelFreeShare) * 2);
+  }, 30_000);
+
+  test("a bond can restore the works; a run file without steel has none", () => {
+    const w = game(4);
+    w.economy.incomeRateEMA = 1_000_000; // income enough to carry the repayments
+    expect(issueSteelBond(w, "steel").ok).toBe(true);
+    expect(w.steel!.working).toBe(true);
+    const old = game(4, { steelEnabled: undefined as unknown as boolean });
+    expect(old.steel).toBeNull();
+  }, 30_000);
 });
 
 describe("generated maps per seed, with guards (brief, After the ladder's playtest, 5; P8)", () => {

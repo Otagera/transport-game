@@ -213,6 +213,8 @@ export function cargoName(world: GameWorld, from: string, kind: "produce" | "sup
   if (site === "oilfield" || site === "terminal") return "crude";
   if (site === "depot" || site === "refinery" || site === "newrefinery") return "fuel";
   if (site === "works" || site === "silo") return "cement";
+  if (site === "steelworks" || site === "steelport") return "steel";
+  if (site === "ironmine") return "iron ore";
   if (site === "quarry") return world.cement && world.tuning.cementEnabled ? "limestone" : "stone";
   return kind;
 }
