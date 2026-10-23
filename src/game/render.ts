@@ -307,14 +307,20 @@ function strokeOffset(ctx: CanvasRenderingContext2D, view: View, line: Point[], 
 
 // --- Ground ------------------------------------------------------------------------------
 
-// The lab's terrain: water, and hills as a smooth wash by height; one pixel a cell, smoothed.
+// The terrain, drawn once a world at TERRAIN_PX pixels a cell: the river's edge where the
+// interpolated water crosses a half (a crisp, smooth line, a pixel of antialiasing), the hills a
+// wash by interpolated height. One pixel a cell stretched to the screen read as a blur (playtest,
+// 2026-10-23: "why is the background blurs?"); unsmoothed, as blocks.
+const TERRAIN_PX = 12;
 let terrainImage: { world: GameWorld; canvas: HTMLCanvasElement } | null = null;
 function terrainCanvas(world: GameWorld): HTMLCanvasElement {
   if (terrainImage?.world === world) return terrainImage.canvas;
   const { terrain } = world.simulation.map;
+  const W = terrain.width;
+  const H = terrain.height;
   const c = document.createElement("canvas");
-  c.width = terrain.width;
-  c.height = terrain.height;
+  c.width = W * TERRAIN_PX;
+  c.height = H * TERRAIN_PX;
   const g = c.getContext("2d")!;
   const img = g.createImageData(c.width, c.height);
   const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -322,11 +328,28 @@ function terrainCanvas(world: GameWorld): HTMLCanvasElement {
   const water = hex(COLORS.water);
   const hill = hex(COLORS.hill);
   const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
-  for (let i = 0; i < terrain.width * terrain.height; i += 1) {
-    const wet = terrain.water[i] === 1;
-    const base = wet ? water : land;
-    const k = wet ? 0 : Math.min(0.35, (terrain.elevation[i]! / top) * 0.35);
-    img.data.set([base[0]! * (1 - k) + hill[0]! * k, base[1]! * (1 - k) + hill[1]! * k, base[2]! * (1 - k) + hill[2]! * k, 255], i * 4);
+  const at = (field: ArrayLike<number>, x: number, y: number) => field[Math.max(0, Math.min(H - 1, y)) * W + Math.max(0, Math.min(W - 1, x))]!;
+  const bilinear = (field: ArrayLike<number>, fx: number, fy: number) => {
+    const x0 = Math.floor(fx);
+    const y0 = Math.floor(fy);
+    const tx = fx - x0;
+    const ty = fy - y0;
+    const top0 = at(field, x0, y0) * (1 - tx) + at(field, x0 + 1, y0) * tx;
+    const bot0 = at(field, x0, y0 + 1) * (1 - tx) + at(field, x0 + 1, y0 + 1) * tx;
+    return top0 * (1 - ty) + bot0 * ty;
+  };
+  for (let py = 0; py < c.height; py += 1) {
+    for (let px = 0; px < c.width; px += 1) {
+      // Cell centres sit on integer coordinates, the canvas cell's middle.
+      const fx = (px + 0.5) / TERRAIN_PX - 0.5;
+      const fy = (py + 0.5) / TERRAIN_PX - 0.5;
+      const wet = bilinear(terrain.water, fx, fy);
+      const k = Math.min(0.35, (bilinear(terrain.elevation, fx, fy) / top) * 0.35);
+      const dry = [land[0]! * (1 - k) + hill[0]! * k, land[1]! * (1 - k) + hill[1]! * k, land[2]! * (1 - k) + hill[2]! * k];
+      // A sharp edge at half: a pixel's worth of blend either side of it.
+      const m = Math.max(0, Math.min(1, (wet - 0.5) * TERRAIN_PX * 0.5 + 0.5));
+      img.data.set([dry[0]! * (1 - m) + water[0]! * m, dry[1]! * (1 - m) + water[1]! * m, dry[2]! * (1 - m) + water[2]! * m, 255], (py * c.width + px) * 4);
+    }
   }
   g.putImageData(img, 0, 0);
   terrainImage = { world, canvas: c };
