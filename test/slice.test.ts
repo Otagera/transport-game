@@ -726,7 +726,10 @@ describe("slice: paving a dirt road", () => {
   test("it refuses what isn't a dirt road between neighbours, and refusals cost nothing", () => {
     const w = world();
     const before = w.economy.funds;
-    expect(checkPave(w, "big", "far")).toEqual({ ok: false, reason: "no road joins them" });
+    // Joined only through another town: the refusal names the roads to pave instead (OpenCode playtests).
+    const through = checkPave(w, "big", "far");
+    expect(through.ok).toBe(false);
+    expect(through.reason).toMatch(/^no one road joins them: the way runs .+–.+ \(dirt\), .+–.+/);
     expect(paveRoad(w, "mid", "cut")).toEqual({ ok: false, reason: "no road joins them" });
     expect(w.economy.funds).toBe(before);
     paveRoad(w, "big", "mid");

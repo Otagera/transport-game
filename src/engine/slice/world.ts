@@ -284,9 +284,30 @@ export function chainOf(world: SliceWorld, segmentId: string): { a: string; b: s
   return { a: back.end, b: forward.end, pieces: [...back.pieces.reverse(), piece, ...forward.pieces] };
 }
 
+/**
+ * Why there's no one road to pave or lane between two towns, in words that
+ * say what to do instead: the roads the way between them runs along, town to
+ * town, and which are still dirt. Two OpenCode players were told "no road
+ * joins them" for towns their own route ran between (the way passes through
+ * another town), and guessed which piece to pave.
+ */
+export function noOneRoad(world: SliceWorld, a: string, b: string): string {
+  const path = roadPath(world, a, b);
+  const name = (id: string) => world.towns.get(id)?.name ?? world.ruins.get(id)?.name ?? id;
+  if (!path) return "no road joins them";
+  // The towns the way stops at, roadside towns a road just passes through left out.
+  const stops = path.nodeIds.filter((id, i) => i === 0 || i === path.nodeIds.length - 1 || !isPassThrough(world, id));
+  const legs = stops.slice(1).map((to, i) => {
+    const chain = roadChain(world, stops[i]!, to);
+    const dirt = chain?.some(isDirt) ?? false;
+    return `${name(stops[i]!)}–${name(to)}${dirt ? " (dirt)" : ""}`;
+  });
+  return `no one road joins them: the way runs ${legs.join(", ")} -- pave or lane each road`;
+}
+
 export function checkPave(world: SliceWorld, a: string, b: string): ActionResult {
   const chain = roadChain(world, a, b);
-  if (!chain) return { ok: false, reason: "no road joins them" };
+  if (!chain) return { ok: false, reason: noOneRoad(world, a, b) };
   if (!chain.some(isDirt)) return { ok: false, reason: "already paved" };
   if (!canAfford(world.economy, paveCost(world, a, b))) return { ok: false, reason: "can't afford it" };
   return { ok: true };
@@ -319,7 +340,7 @@ export function laneCost(world: SliceWorld, a: string, b: string): number {
 
 export function checkLane(world: SliceWorld, a: string, b: string): ActionResult {
   const chain = roadChain(world, a, b);
-  if (!chain) return { ok: false, reason: "no road joins them" };
+  if (!chain) return { ok: false, reason: noOneRoad(world, a, b) };
   if (chain.some(isDirt)) return { ok: false, reason: "pave it first" };
   if (chain.every((piece) => piece.busLane)) return { ok: false, reason: "it already has a bus lane" };
   if (!canAfford(world.economy, laneCost(world, a, b))) return { ok: false, reason: "can't afford it" };
