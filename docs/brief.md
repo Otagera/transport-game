@@ -785,6 +785,42 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 | C20 | The way out matters | Connecting a second gateway moves at least a fifth of a chain's exports to it |
 | C21 | It still reads | At the start, framed on the home cluster, the screen reads like today's map (your playtest: "I knew where to start") |
 
+## More industries, more chains (agreed 2026-10-23)
+
+**Your ask, 2026-10-23:** "we need more industries and more product chains"; the seven below, "chains look good". Built one at a time after the icons (icons.ts already draws every one), each measured with the strategist and played.
+
+**The rule the slice settled stays:** goods matter through **growth**, not money (the carry-over plan). A chain is worth building because a town can't grow, or a site can't run, without what it carries. Each chain below says what it unlocks.
+
+**Which chains a map has.** The fuel, building and food chains are on every map. Each map adds the chains of its part of the country (its name region, `generate.ts`), so two maps play differently: you learn a map by what it makes. Where a region lacks a chain's raw material, the finished good comes in through the port, dearer -- as cement does now.
+
+| Chain | Sites and flow | Unlocks | Regions |
+| --- | --- | --- | --- |
+| **Steel** | iron ore mine → steel works (**idle at the start**, restored like the refinery: the Ajaokuta story) → towns | Past +80% of its day-1 size a town needs steel as well as cement (cement gates +40%): the big towns' last growth | Middle Belt (Ajaokuta) and South-South (Delta Steel, Aladja); elsewhere imported |
+| **Palm oil** | oil-palm plantations → palm-oil mill → markets, and export | Feeds markets (as the food chain does) and pays an export; a fed market draws trade | South-South, South-East |
+| **Cocoa** | cocoa farms → the port, for export | The simplest chain: export payments, and farm towns that grow on what you carry out | South-West |
+| **Cotton** | cotton farms → textile mill → markets | The textile mill employs more than any site: a big draw of commuters (workers.ts), camps at its gate | North |
+| **Cattle** | herds at a cattle market → an abattoir by a big town → markets | Meat for the big towns' markets; long hauls, historically by rail -- and the herders already walk them (the informal sector, again) | North, Middle Belt |
+| **Coal** | coal mine → power station | Power: every site within reach of a working station makes more (an interlock: one chain lifts the others) | South-East |
+| **General cargo** | imports in through the port → a cargo depot → towns | Big towns grow faster with cargo; leads into the trade gateways (The region) | Every map |
+
+**Chains feed each other.** Steel and cement together gate the big towns; power lifts every site near it; palm oil and cattle join food at the markets; cotton's mill pulls workers the way the cement works does. The aim is a web, not seven side-by-side lines.
+
+### The order
+
+1. **Steel** first: it reuses the refinery's idle-and-restore and cement's growth gate, so it's the cheapest to build and to check.
+2. **Palm oil** and **cocoa** (export chains, the south's).
+3. **Cotton** and **cattle** (the north's).
+4. **Coal** and power (the interlock).
+5. **General cargo**, with the trade gateways.
+
+### Checks for the chains
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C22 | Each chain unlocks something you can see | In the strategist, carrying a chain changes a town's growth or a site's output by at least a tenth, against a twin without it |
+| C23 | Maps differ by what they make | Two maps from different regions: the strategist's first goods move is on a different chain |
+| C24 | The idle steel works is a decision | Restored by day 100 in a good game, and worth it (net and growth, against a twin that never restores it) |
+
 ## Pass/fail checks: when slice zero is done
 
 **Slice zero is done when every check below passes; until then nothing new gets built and nothing moves to the full game.** Measured checks run in the probe (`scripts/game-probe.ts`) and become tests where they can. Played checks come from your sessions; AI checks from the harness (see Playtest protocol).

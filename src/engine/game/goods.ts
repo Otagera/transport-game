@@ -10,6 +10,7 @@ import { lineSlots, railPath } from "./rail";
 import { industryFlows } from "./industries";
 import { fuelFlows, isFuelSite, shortageAt } from "./fuel";
 import { cementFlows, isCementSite } from "./cement";
+import { isSteelSite, steelFlows } from "./steel";
 import { haulShare } from "./truckers";
 import { foodActive, foodFlows } from "./food";
 
@@ -126,6 +127,8 @@ export function goodsFlows(world: GameWorld): GoodsFlow[] {
   flows.push(...cementFlows(world));
   // The food chain (food.ts): staple to the mill, cash crops to the port, food to the markets.
   flows.push(...foodFlows(world));
+  // The steel chain (steel.ts): ore to the works, steel to the towns.
+  flows.push(...steelFlows(world));
   return flows;
 }
 
@@ -144,7 +147,7 @@ export function produceAndSpoil(world: GameWorld, dt: number): void {
     const waiting = (yard.get(key) ?? 0) + flow.rate * dt;
     // Bagged cement keeps, as fuel does (a week, not two days).
     const from = world.towns.get(flow.from);
-    const lost = waiting * (isFuelSite(from) || isCementSite(from) || from?.industry === "mill" || from?.industry === "flourmill" ? leak : spoil);
+    const lost = waiting * (isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill" ? leak : spoil);
     yard.set(key, waiting - lost);
     spoiled.set(flowKey(flow), lost);
   }

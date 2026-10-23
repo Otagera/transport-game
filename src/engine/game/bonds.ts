@@ -4,6 +4,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { restoreRefinery } from "./fuel";
 import { restoreWorks } from "./cement";
+import { restoreSteel } from "./steel";
 import { heldForProject } from "./project";
 
 // Bonds (docs/brief.md, Revision 3, money, from the step 2 playtest): borrow
@@ -23,7 +24,7 @@ import { heldForProject } from "./project";
 //   - Bounded: all repayments together at most `bondIncomeCap` of what you
 //     take in a day, so a bond can't buy the game.
 
-export type BondPurpose = "refinery" | "works" | "project";
+export type BondPurpose = "refinery" | "works" | "steel" | "project";
 
 export interface Bond {
   id: string;
@@ -42,6 +43,7 @@ export function bondAmount(world: GameWorld, purpose: BondPurpose): number | nul
   const t = world.tuning;
   if (purpose === "refinery") return world.fuel && !world.fuel.restored ? t.refineryRestoreCost : null;
   if (purpose === "works") return world.cement && !world.cement.working ? t.worksRestoreCost : null;
+  if (purpose === "steel") return world.steel?.worksId && !world.steel.working ? t.steelRestoreCost : null;
   const project = world.project;
   if (!project) return null;
   const short = Math.ceil(project.price - heldForProject(world));
@@ -92,6 +94,10 @@ export function issueBond(world: GameWorld, purpose: BondPurpose): ActionResult 
     const done = restoreWorks(world);
     if (!done.ok) return undo(world, lent, done.reason);
     label = `restoring ${world.towns.get(world.cement!.worksId)?.name ?? "the cement works"}`;
+  } else if (purpose === "steel") {
+    const done = restoreSteel(world);
+    if (!done.ok) return undo(world, lent, done.reason);
+    label = `restoring ${world.towns.get(world.steel!.worksId!)?.name ?? "the steel works"}`;
   } else {
     const p = world.project!;
     label = `the ${p.rung === "lane" ? "bus lane" : "rail line"} on ${world.towns.get(p.a)?.name} – ${world.towns.get(p.b)?.name}`;

@@ -1075,6 +1075,29 @@ replays as played. Seed 0 stays the hand-made map, alone.
   it to the end in one go, the page a slice at a time (~40 ms, then a frame) under a loading
   card in `index.html`. The same ticks in the same order: the same world (tested).
 
+### The steel chain (2026-10-23; brief, More industries, more chains)
+
+`steel.ts`, built on cement's pattern (`cement.ts`) so its numbers sit where cement's were
+measured. **Cement lets a town build its first growth, steel its last:** in `townGrowth` the
+room above `cementFreeShare` (+40%) is scaled by cement served, then the room above
+`steelFreeShare` (+80%) by steel served (`steelHeld` beside `cementHeld`).
+
+- **Sites** (`placeSteel`, after every other chain so existing sites stay put): on every map with
+  a port, a steel terminal 9-12 cells from it (`steelport`), landing `steelImportShare` of day 1's
+  want; on Middle Belt (Ajaokuta) and South-South (Delta Steel, Aladja) maps, a works by water
+  (`steelworks`, **always idle at the start**) and an iron ore mine on high ground 40-90 cells
+  from it (`ironmine`), each with an old road to its nearest town -- never to each other: the
+  ore's way is yours (road and yard, or track). About a third of seeds have a works.
+- **Flows** (`steelFlows`, in `goodsFlows`): ore from the mine only while the works runs; steel
+  split over the towns by what they still want, imports first, then the works to towns its
+  roads reach. Steel keeps while it waits, as cement and fuel do.
+- **Restoring** (`restoreSteel`, action `restoreSteel`; bond purpose `steel`): `steelRestoreCost`
+  ₦80,000, the dearest single move, a late-game money sink (C16, C24). The strategist restores
+  it once steel holds 10k people back.
+- **Behind `steelEnabled`**: a run file without it places no steel and replays as played.
+  First guesses to measure (C22, C24): 0.08 t a thousand a day, works 1.2x, ore 1.6 t a tonne,
+  a mine 180 t a day, imports 0.3.
+
 ### Sites need people (Revision 3, steps 2b–2c)
 
 - **`workers.ts`** — `siteJobs` (thousands, by kind: `jobsRefinery`, `jobsWorks`,

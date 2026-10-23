@@ -5,6 +5,7 @@ import { isDirt } from "./congestion";
 import { laneEncroachment } from "./pushback";
 import { stoneServed } from "./industries";
 import { cementActive, cementServed } from "./cement";
+import { steelActive, steelServed } from "./steel";
 import { jobsGrowth } from "./workers";
 import { foodGrowth } from "./food";
 import { stationTowns } from "./rail";
@@ -60,6 +61,8 @@ export interface TownGrowth {
   playerShare: number;
   /** Thousands of people its service would grow it to that cement is holding back (cement.ts); 0 when none. */
   cementHeld: number;
+  /** The same, held back by steel past `steelFreeShare` of its start (steel.ts); 0 when none. */
+  steelHeld: number;
   /** The share of its trips it expects you to carry (expectedShare); 0 for a town too small to expect any. */
   expected: number;
 }
@@ -136,7 +139,11 @@ export function townGrowth(world: GameWorld, townId: string): TownGrowth | null 
   // 2a): a town builds its first `cementFreeShare` of its start with local
   // materials; above that, its room is scaled by the cement it gets.
   const free = base * (1 + tuning.cementFreeShare);
-  const cap = building && roadCap > free ? free + (roadCap - free) * cementServed(world, townId) : roadCap;
+  const withCement = building && roadCap > free ? free + (roadCap - free) * cementServed(world, townId) : roadCap;
+  // Steel holds its last growth back (steel.ts): past `steelFreeShare` of its start, its room
+  // is scaled by the steel it gets as well -- cement first, then steel.
+  const freeOfSteel = base * (1 + (tuning.steelFreeShare ?? 0.8));
+  const cap = steelActive(world) && withCement > freeOfSteel ? freeOfSteel + (withCement - freeOfSteel) * steelServed(world, townId) : withCement;
   // A big town expects more of you (Revision 4, 2): short of the share it expects, it keeps
   // only part of what your service would grow it to -- half, carrying none of it.
   const expected = expectedShare(world, townId);
@@ -145,9 +152,11 @@ export function townGrowth(world: GameWorld, townId: string): TownGrowth | null 
     ? smoothstep((service - tuning.growthServiceFloor) / (tuning.growthServiceFull - tuning.growthServiceFloor))
     : 0) * (expected > 0 ? 0.5 + 0.5 * meets : 1);
   const target = base + (cap - base) * developed;
-  // What it would grow to with all the cement it wants: the gap is what cement is holding back.
-  const cementHeld = base + (roadCap - base) * developed - target;
-  return { base, cap, rung, target, service, playerShare: share.player, cementHeld, expected };
+  // What it would grow to with all the cement (and steel) it wants: the gaps are what each is holding back.
+  const withCementOnly = base + (withCement - base) * developed;
+  const cementHeld = base + (roadCap - base) * developed - withCementOnly;
+  const steelHeld = withCementOnly - target;
+  return { base, cap, rung, target, service, playerShare: share.player, cementHeld, steelHeld, expected };
 }
 
 /**
@@ -178,7 +187,7 @@ export function roadFull(world: GameWorld, townId: string): { rung: CorridorRung
   const town = world.towns.get(townId);
   if (!growth || !town || growth.cap <= growth.base) return null;
   // Held back by cement, not its road: a better road would add nothing (the town card says cement).
-  if (growth.cementHeld > growth.base * 0.02) return null;
+  if (growth.cementHeld > growth.base * 0.02 || growth.steelHeld > growth.base * 0.02) return null;
   const grown = growth.target > growth.base * (1 + ROAD_FULL_GROWN);
   const levelled = town.population >= growth.target * ROAD_FULL_SHARE;
   if (!grown || !levelled) return null;

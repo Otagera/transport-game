@@ -8,6 +8,7 @@ import { siteProduction } from "@engine/game/production";
 import { corridorSummaries } from "@engine/game/corridors";
 import { cargoName, fuelSupply } from "@engine/game/fuel";
 import { cementBreak, cementServed } from "@engine/game/cement";
+import { steelBreak, steelServed } from "@engine/game/steel";
 import { railPath } from "@engine/game/rail";
 import { roadCapacity } from "@engine/game/congestion";
 import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
@@ -120,9 +121,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return {
       id, name: t.name, population: t.population, base: world.basePopulation.get(id) ?? null, industry: t.industry ?? null,
       roadside: !t.industry && !world.basePopulation.has(id), trend: growthTrend(world, id), target: g?.target ?? null,
-      cementHeld: g?.cementHeld ?? 0, expected: g?.expected ?? 0,
+      cementHeld: g?.cementHeld ?? 0, steelHeld: g?.steelHeld ?? 0, expected: g?.expected ?? 0,
       share: { you: share.player, informal: share.informal, lost: share.lost },
-      fuel: fuelSupply(world, id)?.supplied ?? null, cement: world.cement ? cementServed(world, id) : null,
+      fuel: fuelSupply(world, id)?.supplied ?? null, cement: world.cement ? cementServed(world, id) : null, steel: world.steel ? steelServed(world, id) : null,
       roadFull: full && full.road ? { next: full.next, thin: !!full.thin } : null,
     };
   }
@@ -162,6 +163,15 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         : toolButton("yard", "Yard at the works (Y)");
       return { text: `Short of cement (${pct(t.cement ?? 0)} of what it needs): ${int(t.cementHeld)}k fewer people than your service would grow it to`, button };
     }
+    // Steel past +80% (steel.ts): the big towns' last growth.
+    if (t.steelHeld >= Math.max(5, 0.05 * t.population)) {
+      const b = steelBreak(world);
+      const button = b?.kind === "idle" ? `<button data-restore-steel="1">Restore the steel works · ${nairaK(world.tuning.steelRestoreCost)}</button>`
+        : b?.kind === "ore" ? toolButton("yard", `Yard at ${nameOf(b.mineId)} (Y)`)
+        : b?.kind === "carry" ? toolButton("yard", `Yard at ${nameOf(b.from)} (Y)`)
+        : "";
+      return { text: `Short of steel (${pct(t.steel ?? 0)} of what it needs): ${int(t.steelHeld)}k fewer people than your service would grow it to`, button };
+    }
     if (t.fuel !== null && t.fuel < 0.6) return { text: `Fuel short: ${pct(t.fuel)} supplied`, button: toolButton("yard", "Yard at the tank farm (Y)") };
     const shrink = shrinkCause(world, t.id);
     if (shrink) return { text: `Shrinking: ${shrink.why}`, button: moveButton(shrink.move ?? undefined, "") };
@@ -186,6 +196,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
   }
   function siteProblem(s: Site): Problem {
+    if (world.towns.get(s.id)?.industry === "steelworks" && world.steel && !world.steel.working) {
+      return { text: "Idle: built, never run. Restore it and its mine starts digging", button: `<button data-restore-steel="1">Restore it · ${nairaK(world.tuning.steelRestoreCost)}</button>` };
+    }
     if (!(s.capacity > 0 && s.made < 0.6 * s.capacity)) return null;
     const button = s.limit === "workers" ? toolButton("bus", "A bus for its workers (B)") : s.limit === "input" ? toolButton("yard", "A yard, or a lorry (Y, L)") : `<span class="muted">See More</span>`;
     return { text: `Makes ${pct(s.made / s.capacity)} of what it could: held back by its ${s.limit}`, button };
@@ -391,7 +404,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         </div>
         <div class="bar3"><i style="width:${pct(t.share.you)};background:var(--you)"></i><i style="width:${pct(t.share.informal)};background:var(--informal)"></i><i style="width:${pct(t.share.lost)};background:var(--home)"></i></div>
         <div class="chart"><div class="t"><span>People, thousands</span><span>${t.target ? `heading for ${int(t.target)}k` : ""}</span></div>${chartSvg([{ name: "People (k)", color: css("--ink-2"), values: pop }], { height: 90 })}</div>
-        ${t.fuel !== null || t.cement !== null ? `<div class="tiles">${t.fuel !== null ? tile("Fuel supplied", pct(t.fuel)) : ""}${t.cement !== null ? tile("Cement supplied", pct(t.cement), t.cementHeld > 1 ? `${int(t.cementHeld)}k fewer people for it` : "") : ""}</div>` : ""}
+        ${t.fuel !== null || t.cement !== null ? `<div class="tiles">${t.fuel !== null ? tile("Fuel supplied", pct(t.fuel)) : ""}${t.cement !== null ? tile("Cement supplied", pct(t.cement), t.cementHeld > 1 ? `${int(t.cementHeld)}k fewer people for it` : "") : ""}${t.steel !== null ? tile("Steel supplied", pct(t.steel), t.steelHeld > 1 ? `${int(t.steelHeld)}k fewer people for it` : "past +80% of its start") : ""}</div>` : ""}
         <h2>Your routes here · ${here.length}</h2>
         <table><tbody>${here.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:var(${KIND_COLOR[r.kind] ?? "--you"})"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
         ${fold("town", "More: its trips, parks, metro, strikes", hooks.townMore(t.id))}`;

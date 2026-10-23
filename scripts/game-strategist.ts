@@ -253,6 +253,15 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
       else if (checkBond(world, "works").ok) did(act(world, day, { kind: "bond", purpose: "works" }, "cement short: borrow for the works"));
     }
   }
+  // The steel works (steel.ts): restored once steel holds 10k people back, as the cement works is.
+  const steel = world.steel;
+  if (steel?.worksId && !steel.working) {
+    const held = [...world.basePopulation.keys()].reduce((s, id) => s + (townGrowth(world, id)?.steelHeld ?? 0), 0);
+    if (held >= 10) {
+      if (spend(world, world.tuning.steelRestoreCost)) did(act(world, day, { kind: "restoreSteel" }, "steel short: restore the steel works"));
+      else if (checkBond(world, "steel").ok) did(act(world, day, { kind: "bond", purpose: "steel" }, "steel short: borrow for the steel works"));
+    }
+  }
   // Every working site and open quarry gets a road to the network.
   for (const site of [...world.towns.values()].filter((t) => t.industry && t.industry !== "oilfield" && t.industry !== "terminal")) siteRoads(world, day, site.id, did);
 

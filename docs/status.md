@@ -46,6 +46,12 @@ imports and exports through them), then the strategist on regions (step 4). Spee
 costs ~5.4x the slice map's and the warm-up holds the page ~9 s -- with the optimisation
 work.
 
+**More chains** (brief, More industries, more chains): **steel** built 2026-10-23 on branch
+`region`, not yet played or measured (engine.md, The steel chain) -- an idle works and its far
+mine on Middle Belt and South-South maps, a steel terminal by every port, steel gating towns
+past +80%. Next: measure C22/C24 with the strategist, then palm oil and cocoa. The icons
+(render-and-ui.md §7, Icons) are in the game.
+
 Then the open items for the full game (brief, the carry-over plan): roads with junctions,
 money late in the game, eras as vehicle generations, sea and river freight.
 

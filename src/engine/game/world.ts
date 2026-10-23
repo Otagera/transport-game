@@ -138,6 +138,7 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
     industrySchedule: createIndustrySchedule(tuning, def.towns.reduce((sum, town) => sum * 31 + Math.round(town.x * 7 + town.y * 13 + town.population), 17)),
     fuel: null,
     cement: null,
+    steel: null,
     sites: createSitesState(),
     bonds: [],
     expansions: new Map(),

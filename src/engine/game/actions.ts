@@ -9,6 +9,7 @@ import { dropProject, nameProject, type ProjectRung } from "./project";
 import { restoreRoad, retireRoad } from "./retire";
 import { restoreRefinery } from "./fuel";
 import { restoreWorks } from "./cement";
+import { restoreSteel } from "./steel";
 import { expandSite } from "./expand";
 import { buildYard } from "./yards";
 import { buildPark } from "./parks";
@@ -36,6 +37,7 @@ export type ActionSpec =
   | { kind: "dropProject" }
   | { kind: "restoreRefinery" }
   | { kind: "restoreWorks" }
+  | { kind: "restoreSteel" }
   | { kind: "expand"; siteId: string }
   | { kind: "yard"; townId: string }
   | { kind: "park"; townId: string }
@@ -122,6 +124,10 @@ export function applyAction(world: GameWorld, spec: ActionSpec): ActionOutcome {
     }
     case "restoreWorks": {
       const result = restoreWorks(world);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
+    case "restoreSteel": {
+      const result = restoreSteel(world);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
     }
     case "bond": {

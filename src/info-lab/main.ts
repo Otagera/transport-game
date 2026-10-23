@@ -1,6 +1,7 @@
 import { buildGameTerrain } from "@engine/game/terrain";
 import { gameMap } from "@engine/game/region";
 import { GAME_MAP } from "../game/map";
+import { BADGE_NAME, FAMILY_COLOR, FAMILY_NAME, GLYPHS, TIER_NAME, drawBadge, drawSite, drawTown, tierOf, tierRadius, type Badge, type Family, type Glyph, type SiteState, type Tier } from "../game/icons";
 
 // The information lab (docs/brief.md, the carry-over plan: information
 // design). A mock of the full game's three layers, on a game you played (a
@@ -39,7 +40,7 @@ interface Day {
   towns: Array<{ id: string; name: string; population: number }>; events?: Array<Record<string, unknown> & { kind: string }>;
 }
 interface Snapshot {
-  seed: number; regionEnabled?: boolean; day: number; width: number; height: number; port: string | null; towns: Town[]; segments: Segment[]; routes: Route[];
+  seed: number; regionEnabled?: boolean; farms?: string[]; day: number; width: number; height: number; port: string | null; towns: Town[]; segments: Segment[]; routes: Route[];
   goodsLines: Array<{ id: string; a: string; b: string; vehicles: number; netPerDay: number; stops: string[] }>;
   flows: Flow[]; sites: Site[]; demand: Pair[]; corridors: Corridor[]; noSeatPairs: Array<{ a: string; b: string; perDay: number }>;
   moves: Array<{ label: string; price: number }>; cementBreak: { kind: string; nextDay?: number; quarryId?: string } | null; days: Day[];
@@ -176,7 +177,21 @@ const zoom = () => view.scale / fit.scale;
 /** Marks grow with the zoom, but slower than the map (its square root): room opens between them. */
 const grow = () => Math.sqrt(zoom());
 const toScreen = (x: number, y: number) => ({ x: view.ox + x * view.scale, y: view.oy + y * view.scale });
-const townRadius = (t: Town) => (t.industry ? 6 : Math.max(5, Math.sqrt(t.population) * 1.1)) * grow();
+// The icon mock (icons.ts): towns by tier, sites by glyph. Off shows the lab as agreed, to compare.
+let iconsOn = true;
+const cityId = S.towns.filter((t) => !t.industry).reduce((big, t) => (t.population > big.population ? t : big)).id;
+const tierOfTown = (t: Town): Tier => tierOf(t.population, t.id === cityId);
+const SITE_SIZE = 17;
+const townRadius = (t: Town) => (t.industry ? (iconsOn ? SITE_SIZE / 2 : 6) : iconsOn ? tierRadius(tierOfTown(t), t.population) : Math.max(5, Math.sqrt(t.population) * 1.1)) * grow();
+function siteState(id: string): SiteState {
+  const s = siteById.get(id);
+  if (!s || s.capacity <= 0 || s.made < 0.5) return "idle";
+  return s.made < 0.6 * s.capacity ? "short" : "working";
+}
+/** The port always; a farm town only zoomed in or pointed at (most small towns farm: a badge on each was clutter). */
+function badgesOf(t: Town, close: boolean): Badge[] {
+  return [...(t.id === S.port ? ["port" as const] : []), ...(close && S.farms?.includes(t.id) ? ["farm" as const] : [])];
+}
 
 function resize(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -589,6 +604,23 @@ function draw(): void {
     const r = townRadius(t);
     const isSel = selected?.id === t.id || hover?.id === t.id;
     ctx.globalAlpha = towns && !towns.has(t.id) ? 0.3 : 1;
+    if (t.industry && iconsOn) {
+      drawSite(ctx, p.x, p.y, r * 2, (t.industry in GLYPHS ? t.industry : "quarry") as Glyph, siteState(t.id), css("--surface"));
+      if (isSel) {
+        ctx.strokeStyle = css("--ink");
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x - r - 4, p.y - r - 4, r * 2 + 8, r * 2 + 8);
+      }
+      // A site's name on hover or zoomed in: what it is, without a label on every square.
+      if (isSel || zoom() >= 2) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.font = "600 11px ui-sans-serif, system-ui";
+        ctx.fillStyle = css("--ink-2");
+        ctx.fillText(t.name, p.x, p.y + r + 5);
+      }
+      continue;
+    }
     if (t.industry) {
       const site = siteById.get(t.id);
       ctx.fillStyle = css("--surface");
@@ -598,13 +630,20 @@ function draw(): void {
       ctx.strokeRect(p.x - r, p.y - r, r * 2, r * 2);
       continue;
     }
+    const tier = tierOfTown(t);
+    if (iconsOn) {
+      drawTown(ctx, p.x, p.y, r, tier, t.share, { surface: css("--surface"), ink: css("--ink"), you: css("--you"), informal: css("--informal"), home: css("--home") });
+      badgesOf(t, isSel || zoom() >= 2).forEach((b, k) => drawBadge(ctx, p.x - r * 0.85 - k * 15, p.y + r * 0.85, 15, b, css("--surface")));
+    }
+    if (!iconsOn) {
     ctx.fillStyle = css("--surface");
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
     ctx.fill();
+    }
     // The ring: you, informal, stayed home -- clockwise from the top.
     let start = -Math.PI / 2;
-    for (const [share, color] of [[t.share.you, "--you"], [t.share.informal, "--informal"], [t.share.lost, "--home"]] as const) {
+    for (const [share, color] of iconsOn ? [] : [[t.share.you, "--you"], [t.share.informal, "--informal"], [t.share.lost, "--home"]] as const) {
       const end = start + share * Math.PI * 2;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r + 2.5, start, end);
@@ -632,11 +671,13 @@ function draw(): void {
       ctx.textBaseline = "middle";
       ctx.fillText("!", p.x + r * 0.8, p.y - r * 0.8 + 0.5);
     }
-    // Name and size for the towns that matter; every name on hover.
-    if (!t.roadside || isSel) {
+    // Name and size for the towns that matter; every name on hover. With icons, a village's
+    // name waits for the zoom (or the pointer): the region's many small places stay quiet.
+    const named = iconsOn ? (tier !== "village" || isSel || zoom() >= 2) : !t.roadside || isSel;
+    if (named) {
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.font = "600 12px ui-sans-serif, system-ui";
+      ctx.font = iconsOn && (tier === "city" || tier === "regional") ? "700 13px ui-sans-serif, system-ui" : "600 12px ui-sans-serif, system-ui";
       ctx.fillStyle = css("--ink");
       ctx.fillText(t.name, p.x, p.y + r + 7);
       const arrow = t.trend === "growing" ? "▲" : t.trend === "shrinking" ? "▼" : "";
@@ -658,7 +699,62 @@ function renderLegend(): void {
     : overlay === "informal" ? `<div class="row"><span><i style="background:var(--informal)"></i> the informal share of each corridor (wider, more)</span></div>`
     : overlay === "chains" ? `<div class="row">${CARGO_GROUPS.map((g) => `<span><i style="background:var(${g.color})"></i> ${g.name}</span>`).join("")}<span class="muted">· width: t/day · the 25 biggest flows</span></div>`
     : "";
-  el.innerHTML = base + extra;
+  const icons = iconsOn ? `<div class="row"><span class="muted">Icons:</span>${(Object.keys(FAMILY_COLOR) as Family[]).map((f) => `<span><i style="background:${FAMILY_COLOR[f]};width:10px;height:10px;border-radius:3px"></i> ${FAMILY_NAME[f]}</span>`).join("")}<span class="muted">· solid working, hollow idle, amber corner held back · Icon sheet for the rest</span></div>` : "";
+  el.innerHTML = base + extra + icons;
+}
+
+// --- The icon sheet: every icon, at map size and large --------------------------------------
+
+function openSheet(open: boolean): void {
+  const el = document.querySelector<HTMLElement>("#sheet")!;
+  el.classList.toggle("open", open);
+  if (open) renderSheet();
+}
+
+function renderSheet(): void {
+  const el = document.querySelector<HTMLElement>("#sheet")!;
+  const cell = (id: string, label: string, note = "") => `<div class="icon"><canvas data-icon="${id}" width="132" height="56"></canvas><div class="name">${esc(label)}</div>${note ? `<div class="muted note">${esc(note)}</div>` : ""}</div>`;
+  const glyphs = Object.entries(GLYPHS) as Array<[Glyph, (typeof GLYPHS)[Glyph]]>;
+  const byFamily = (next: boolean) => (Object.keys(FAMILY_COLOR) as Family[]).map((f) => {
+    const items = glyphs.filter(([, g]) => g.family === f && !!g.next === next);
+    return items.length ? `<h3><i style="background:${FAMILY_COLOR[f]}"></i>${FAMILY_NAME[f]}</h3><div class="icons">${items.map(([id, g]) => cell(`site:${id}`, g.name)).join("")}</div>` : "";
+  }).join("");
+  el.innerHTML = `<div class="top"><div class="title">Icon sheet</div><button id="close-sheet">Back to the map ✕</button></div>
+    <div class="cards">
+      <div class="card"><h3>Towns, by tier</h3><div class="sub">Size still says how many people; the rim says what kind of place. The ring: who carries its trips.</div>
+        <div class="icons">${(["village", "town", "regional", "city"] as Tier[]).map((t) => cell(`tier:${t}`, TIER_NAME[t])).join("")}</div>
+        <h3 style="margin-top:12px">Badges</h3><div class="sub">What a town is besides a town.</div>
+        <div class="icons">${(Object.keys(BADGE_NAME) as Badge[]).map((b) => cell(`badge:${b}`, BADGE_NAME[b], b === "border" ? "with the gateways" : "")).join("")}</div>
+        <h3 style="margin-top:12px">A site's state</h3><div class="sub">The same glyph: running, idle (built for another age, not running), or held back (under 60% of what it could make).</div>
+        <div class="icons">${(["working", "idle", "short"] as SiteState[]).map((st) => cell(`state:${st}`, st === "working" ? "Working" : st === "idle" ? "Idle" : "Held back")).join("")}</div>
+      </div>
+      <div class="card"><h3>Sites on the map today</h3><div class="sub">The glyph says what it is; the colour which family of chain.</div>${byFamily(false)}</div>
+      <div class="card wide"><h3>The chains agreed next</h3><div class="sub">Steel, palm oil, cotton, cattle, cocoa, coal, general cargo: drawn now, so the language holds when they come.</div>${byFamily(true)}</div>
+    </div>`;
+  el.querySelector("#close-sheet")!.addEventListener("click", () => openSheet(false));
+  const colors = { surface: css("--surface"), ink: css("--ink"), you: css("--you"), informal: css("--informal"), home: css("--home") };
+  const share = { you: 0.35, informal: 0.45, lost: 0.2 };
+  const dpr = window.devicePixelRatio || 1;
+  el.querySelectorAll<HTMLCanvasElement>("canvas[data-icon]").forEach((c) => {
+    c.style.width = `${c.width}px`;
+    c.style.height = `${c.height}px`;
+    c.width *= dpr;
+    c.height *= dpr;
+    const g = c.getContext("2d")!;
+    g.scale(dpr, dpr);
+    const [kind, id] = c.dataset.icon!.split(":") as [string, string];
+    // Left: as on the map at fit; right: large (as at 4x zoom).
+    for (const [x, k] of [[30, 1], [92, 2]] as const) {
+      if (kind === "site") drawSite(g, x, 28, SITE_SIZE * k, id as Glyph, "working", colors.surface);
+      else if (kind === "state") drawSite(g, x, 28, SITE_SIZE * k, "refinery", id as SiteState, colors.surface);
+      else if (kind === "badge") drawBadge(g, x, 28, 15 * k, id as Badge, colors.surface);
+      else {
+        const pop = id === "village" ? 9 : id === "town" ? 25 : id === "regional" ? 60 : 130;
+        const r = tierRadius(id as Tier, pop) * (k === 1 ? 1 : 1.25);
+        drawTown(g, x, 28, Math.min(r, 20), id as Tier, share, colors);
+      }
+    }
+  });
 }
 
 function hitTest(mx: number, my: number): Selection {
@@ -824,8 +920,15 @@ function renderStrip(): void {
     ${stat("Net a day", naira(lastDay.netPerDay), lastDay.netPerDay, ten.netPerDay, recent.map((d) => d.netPerDay), naira)}
     ${stat("Money", nairaK(lastDay.funds), lastDay.funds, ten.funds, recent.map((d) => d.funds), nairaK)}
     <div class="spacer"></div>
-    <div class="actions"><button id="open-revenue">Revenue ▸</button><button id="theme" title="Light or dark">◐</button></div>`;
+    <div class="actions"><button id="icons-on" class="${iconsOn ? "on" : ""}" title="The icon mock: towns by tier, sites by glyph (off: the lab as agreed)">Icons</button><button id="open-sheet" title="Every icon, at map size and large">Icon sheet</button><button id="open-revenue">Revenue ▸</button><button id="theme" title="Light or dark">◐</button></div>`;
   document.querySelector("#open-revenue")!.addEventListener("click", () => openRevenue(true));
+  document.querySelector("#open-sheet")!.addEventListener("click", () => openSheet(true));
+  document.querySelector("#icons-on")!.addEventListener("click", () => {
+    iconsOn = !iconsOn;
+    renderStrip();
+    renderLegend();
+    draw();
+  });
   document.querySelector("#theme")!.addEventListener("click", () => {
     const dark = document.documentElement.dataset.theme === "dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.dataset.theme = dark ? "light" : "dark";
@@ -1150,7 +1253,8 @@ function renderRevenue(): void {
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    if (document.querySelector("#revenue")!.classList.contains("open")) openRevenue(false);
+    if (document.querySelector("#sheet")!.classList.contains("open")) openSheet(false);
+    else if (document.querySelector("#revenue")!.classList.contains("open")) openRevenue(false);
     else select(null);
   }
 });

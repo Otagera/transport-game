@@ -522,3 +522,17 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   took, net and money, totals since day 1, the routes table -- plus the treasury card.
   Esc closes it.
 
+### Icons (2026-10-23): towns by tier, sites by glyph
+
+`icons.ts` is the icon set agreed in the information lab (its icon sheet), drawn on canvas with
+no data, shared by the game (`render.ts`) and the lab. **Towns by tier** (`tierOf`): a village
+(under 15k) a small dot with a thin ring, named only zoomed in to 2x or pointed at; a town the
+lab's ring; a regional town (45k+) a heavier rim and a bold name; the region's biggest town, the
+city, a second outer ring. **Sites** as a rounded tile with a glyph (`GLYPHS`): the glyph says
+what it is, the colour which family of chain -- energy, building, food and crops, trade; four
+colours checked for colour-blind separation, never colour alone. Solid working, hollow with a
+dashed rim idle (making under half a tonne a day), an amber corner held back (under 60% of
+capacity). **Badges**: the port's anchor always; a farm town's furrows zoomed in or pointed at
+(most small towns farm: a badge on each at fit was clutter). The sheet already draws the chains
+agreed next (steel, palm oil, cotton, cattle, cocoa, coal, general cargo).
+

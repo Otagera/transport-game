@@ -3,6 +3,7 @@ import { placeFuelSites } from "./fuel";
 import { inheritedRoad, placeCementWorks } from "./cement";
 import { openQuarry } from "./industries";
 import { placeMill } from "./food";
+import { placeSteel } from "./steel";
 import { rebuildNetworks } from "./rail";
 import { createGameWorld } from "./world";
 import { createBudgetTally, createRemittancePeriod } from "./budget";
@@ -53,6 +54,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   }
   // And the food chain's mill (food.ts), among the farm towns: placed last, so the others sit where they did.
   placeMill(world, map.region);
+  // And the steel chain (steel.ts): after the rest, so every other site sits where it did.
+  placeSteel(world, map.region);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) {
     gameTick(world, SIM_DT);

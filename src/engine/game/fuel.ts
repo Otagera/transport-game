@@ -213,6 +213,8 @@ export function cargoName(world: GameWorld, from: string, kind: "produce" | "sup
   if (site === "oilfield" || site === "terminal") return "crude";
   if (site === "depot" || site === "refinery" || site === "newrefinery") return "fuel";
   if (site === "works" || site === "silo") return "cement";
+  if (site === "steelworks" || site === "steelport") return "steel";
+  if (site === "ironmine") return "iron ore";
   if (site === "quarry") return world.cement && world.tuning.cementEnabled ? "limestone" : "stone";
   return kind;
 }
@@ -294,8 +296,7 @@ export function restoreRefinery(world: GameWorld): ActionResult & { charged?: nu
 
 export function dry(world: GameWorld, x: number, y: number, clearance: number): boolean {
   const { terrain } = world.simulation.map;
-  const box = homeBox(world); // sites are the home cluster's (region.ts)
-  if (x < box.x + 3 || y < box.y + 3 || x > box.x + box.width - 4 || y > box.y + box.height - 4) return false;
+  if (x < 3 || y < 3 || x > world.width - 4 || y > world.height - 4) return false;
   for (let dy = -clearance; dy <= clearance; dy += 1) for (let dx = -clearance; dx <= clearance; dx += 1) if (isWater(terrain, x + dx, y + dy)) return false;
   return true;
 }
@@ -314,6 +315,12 @@ export function inHome(world: GameWorld, at: { x: number; y: number }): boolean 
   return at.x >= box.x && at.x < box.x + box.width && at.y >= box.y && at.y < box.y + box.height;
 }
 
+/** Inside the home box by the margin the slice map's edge had. */
+function inHomeBox(world: GameWorld, x: number, y: number): boolean {
+  const box = homeBox(world);
+  return x >= box.x + 3 && y >= box.y + 3 && x <= box.x + box.width - 4 && y <= box.y + box.height - 4;
+}
+
 export function nearestDistance(world: GameWorld, x: number, y: number): number {
   return Math.min(...[...world.towns.values()].map((town) => Math.hypot(town.x - x, town.y - y)));
 }
@@ -326,7 +333,8 @@ export function ringSpot(world: GameWorld, cx: number, cy: number, minR: number,
       const angle = (k / 24) * Math.PI * 2;
       const x = Math.round(cx + r * Math.cos(angle));
       const y = Math.round(cy + r * Math.sin(angle));
-      if (!dry(world, x, y, 1) || nearestDistance(world, x, y) < clear) continue;
+      // In the home cluster's box (region.ts): a ring round its second city can't spill out of it.
+      if (!dry(world, x, y, 1) || !inHomeBox(world, x, y) || nearestDistance(world, x, y) < clear) continue;
       const s = score(x, y);
       if (!best || s > best.s) best = { x, y, s };
     }
