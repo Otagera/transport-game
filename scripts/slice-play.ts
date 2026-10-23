@@ -135,7 +135,7 @@ function state(w: SliceWorld): string {
 const HELP = `Moves (send one as JSON with "act"). Town and site ids are in "state".
   {"kind":"road","a":ID,"b":ID,"alignment":"cheapest"}   build a dirt road between two towns or sites
   {"kind":"pave","a":ID,"b":ID}                          pave the road joining them
-  {"kind":"lane","a":ID,"b":ID}                          a bus lane on a paved road (then BRT buses)
+  {"kind":"lane","a":ID,"b":ID}                          a bus lane on a paved road (then BRT buses: 80 seats, worth it only where ~240+ riders a day want trips along it)
   {"kind":"bus"|"minibus"|"brt","a":ID,"b":ID}            a vehicle on a route (adds one if the route exists)
   {"kind":"sell","routeId":ROUTE_ID}                     sell a route's newest vehicle
   {"kind":"track","a":ID,"b":ID,"alignment":"cheapest"}  lay railway track

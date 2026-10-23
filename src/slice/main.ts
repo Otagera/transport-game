@@ -713,7 +713,10 @@ canvas.addEventListener("click", (event) => {
     const cost = laneCost(world, from, town);
     const result = act({ label: `a bus lane on ${townName(from)} – ${townName(town)}`, towns }, { kind: "lane", a: from, b: town });
     if (result.ok) {
-      say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic, and BRT buses (X) can run in it. No wardens yet (Road tool on it to enforce). The danfo union will answer the lane within days.${later}`, false, 8);
+      // A BRT fills only where enough travel along it (laneMinTripsPerDay): two OpenCode players ran them 5-10% full.
+      const wanted = demandAlong(world, from, town) * SECONDS_PER_GAME_DAY;
+      const brt = wanted >= world.tuning.laneMinTripsPerDay ? "BRT buses (X) can run in it" : `BRT buses (X) can run in it, but only ${Math.round(wanted)} riders a day want trips along it -- too few to fill an 80-seat bus`;
+      say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic, and ${brt}. No wardens yet (Road tool on it to enforce). The danfo union will answer the lane within days.${later}`, false, 8);
       renderToolbar();
     }
     else say(`Can't add a bus lane (${naira(cost)}): ${result.reason}`, true);
@@ -1010,7 +1013,10 @@ function ghost(): Ghost | null {
   const price = naira(brt ? world.tuning.brtPurchaseCost : mini ? world.tuning.minibusPurchaseCost : world.tuning.busPurchaseCost);
   // Every trip along its road, not just the two towns clicked: a bus from
   // Ilase to Ikole carries Ilase-Kuto and Kuto-Ikole riders too.
-  const along = `${Math.round(demandAlong(world, selectedTown, to) * SECONDS_PER_GAME_DAY)} riders/day want trips along it`;
+  const wanted = demandAlong(world, selectedTown, to) * SECONDS_PER_GAME_DAY;
+  // An 80-seat bus fills only on a busy corridor (the lane's own bar, laneMinTripsPerDay): say so before it's bought.
+  const thinForBrt = brt && wanted < world.tuning.laneMinTripsPerDay ? ` -- too few to fill an 80-seat bus: it would run mostly empty; a bus or minibus suits` : "";
+  const along = `${Math.round(wanted)} riders/day want trips along it${thinForBrt}`;
   // Drawn along the road it would take, not straight across: a bus to Ikole
   // from Ilase goes through Kuto.
   const path = shownPath(check, roadPath(world, selectedTown, to)?.nodeIds);
