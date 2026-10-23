@@ -91,6 +91,16 @@ It makes only 23-46% of its capacity with crude arriving (probably its workers; 
   an 80-seat bus (under 240 riders a day along it); a cement shortage names where the chain
   breaks (works idle, no quarry working and when the next opens, a quarry not connected, or
   cement not reaching the town).
+- **Freight rates** (`freightrates.ts`, branch `r5-freight`; the freight line's card, or
+  `{"kind":"freightRate"}`): each freight line cheap, standard or dear -- 0.6x, 1x or 1.6x the
+  goods fare; against a dear line hauliers load faster and reach 1.5x as far for its goods,
+  against a cheap one two-thirds. Strategist, every line at one rate, maps 0 / 2411 at day 250,
+  cheap -> standard -> dear: your trains carry 92 -> 71 -> 45 / 109 -> 86 -> 56 t a day along the
+  line, hauliers 228 -> 281 -> 328 / 232 -> 283 -> 337; goods income ₦90k -> ₦115k -> ₦122k /
+  ₦41k -> ₦54k -> ₦60k all game; spoiling 21 -> 14 -> 10 / 20 -> 14 -> 10 t a day; trucks on the
+  road ~240-260 at every rate; trips made 3,717 -> 3,798 -> 3,636 / 2,212 -> 2,324 -> 2,204. The
+  trade-off is there but mild: dear earns 6-11% more from goods for 2-5% fewer trips. Hauliers
+  carry most of a line's goods at any rate (its short hauls are theirs).
 - **Revision 4 is built.** Before the slice closes (brief, Open question 8): the goods /
   passengers balance -- goods were 45-60% of income with your lorries, ~2-12% now -- and the
   carry-over plan.

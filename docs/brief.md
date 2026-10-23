@@ -696,6 +696,29 @@ The order things come back, one per playtest, each with its own check (*supersed
 4. **The straight alignment.** A refinement of road building. *Check:* you use it at least once and can say what it bought you.
 5. **Goods:** lorries first, then freight trains and export. The deepest system and the least played. *Check:* you run goods both ways on purpose.
 
+## The carry-over plan (proposed 2026-10-23): what the slice hands the full game
+
+**Proposed, for you to mark up** (Open question 8). Revision 4 is built; before the slice closes, what it proved, what it dropped, and what stays open for the full game. Your answers of 2026-10-23 are in it: goods matter through growth, not money (with freight priced by you); eras are vehicle generations, not calendar ages; sea freight to consider.
+
+**Proven here -- carry over as built** (each played or measured; status.md has the numbers):
+
+- **The corridor's ladder:** dirt → paved → bus lane → rail, each rung buying growth (C1), priced against the surplus it arrives in (C2).
+- **The informal sector as rival, revenue and interest group:** danfos, kekes and okadas; the union's strikes against a lane, announced and answerable (settle, relax); enforcement as a real choice (C3); private hauliers as the freight rival; motor parks -- managed, not fought.
+- **Goods in chains, mattering through growth:** fuel (tank farm, refinery, crude; a second private refinery mid-game), building (limestone, cement), food (staples, mills, markets, exports); haulage yards; freight rail yours, road freight the hauliers' -- with the rate you charge on each freight line deciding who carries what (built 2026-10-23: dear earns 6-11% more from goods and hands hauliers ~40% more of the line's goods, for 2-5% fewer trips; status.md).
+- **Problems named with their move:** a town's or site's card says what's wrong and what fixes it (the road is full, the chain breaks here, the corridor is too thin for a BRT).
+- **Generated maps with guards;** industries that open and close; towns that grow along busy roads; towns expecting service as they grow; the metro for the biggest towns.
+- **Money as a budget:** fares, tolls, levies, the state allocation, the treasury's 10% levy, bonds, named projects.
+
+**Dropped -- kept behind their switches, not carried over:** your own lorries (busywork; road freight is the hauliers'); the 80% remittance and the budget-year sweep (each a confusing tax on progress -- C17 failed in play).
+
+**Open -- for the full game, not this slice:**
+
+1. **Road networks with junctions and intersections.** Roads join only at towns here; where two cross they pass over each other. The full game needs real networks: roads that meet, junctions as places, and traffic that slows where roads meet.
+2. **Money late in the game.** Without the sweep, money piles up after day 200 (C16 fails: ₦120k-990k held by day 250 in the strategist). The metro takes some; the full game needs late-game decisions that cost.
+3. **Eras as vehicle generations** (your framing, 2026-10-23; calendar eras stay scrapped). You start with older public-transport models; newer ones arrive over time -- dearer, better, cheaper to run, carrying more -- so an old fleet becomes a decision: replace or keep running. And the informal sector has the same thing going for it: old danfos give way to newer ones, keke and okada waves come and go, so the rival changes too. Eras are what the two fleets look like over time, not a date.
+4. **Sea and river freight** (your question, 2026-10-23). A third freight mode: heavy, slow and cheap -- coastal shipping between ports, barges on a navigable river (the Niger and Benue, the Lagos lagoon). It needs a second port or a river that boats can use; the slice has one port and a river that's only an obstacle. In the full game: ports and jetties as places you build, the river as a route as well as a barrier, and the informal sector there too (canoe and boat operators).
+5. **Goods' share of growth, measured** (C11 amended: the chains at least a fifth of the original towns' growth by day 150). Never measured; measure it before the slice closes.
+
 ## Pass/fail checks: when slice zero is done
 
 **Slice zero is done when every check below passes; until then nothing new gets built and nothing moves to the full game.** Measured checks run in the probe (`scripts/slice-probe.ts`) and become tests where they can. Played checks come from your sessions; AI checks from the harness (see Playtest protocol).
@@ -796,6 +819,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-23 | Goods matter through growth, not money (C11 amended stands); you set what each freight line charges -- cheap, standard or dear -- and face the consequences: dear earns more a tonne and the hauliers take more of its goods by road. Eras are vehicle generations on both sides (your fleet's models and the informal sector's), not calendar ages. Sea and river freight, roads with junctions and money late in the game are for the full game (the carry-over plan, proposed) | Agreed 2026-10-23 (the carry-over plan itself proposed) |
 | 2026-10-20 | Revision 3: goods that feel real, in chains -- sites with inputs and outputs that make nothing without their input (fuel, building, food), cargo by the map's region, long legs in hundreds of tonnes a day for freight rail, a brownfield refinery; built in order (fuel chain first), each measured and played | Agreed 2026-10-20 |
 | 2026-10-20 | Fuel reaches the passenger game: a town short of fuel raises its danfo fares, thins its danfos and raises your running costs there; roadside sellers appear where it runs dry (C12) | Agreed 2026-10-20 |
 | 2026-10-21 | Revision 4, the late game: no player lorries (haulage yards you build, hauliers licensed there; freight rail stays yours); towns expect better service as they grow; the budget-year sweep as a trial; a second refinery; motor parks for danfos; a metro, last. C11 amended to goods' growth effect; C16, C17 added; an OpenCode player | Agreed 2026-10-21 |
@@ -861,7 +885,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 5. **Regulation verbs:** ban okadas from a highway, reserve a bus lane. *Revision 1 (agreed) answers the bus lane as a rung of the ladder.* True (from memory, Lagos restricted okadas on major roads in 2020) and powerful, but principles.md §1 makes power framing, not a fantasy. *Answered by:* after pushback is played: does the game want a stick, or are tolls and levies enough?
 6. **Hints and "no onboarding".** principles.md §2 rules out onboarding; you want hints at the start. *Answered by:* your call on amending §2 to "up to six state-triggered hints, no tutorial".
 7. **Do levies soften the antagonist?** If danfos become too valuable to you, the hook goes slack. *Answered by:* M5, and the levy target (20–40% of what you gain by taking a corridor).
-8. **The full game: what carries over first?** The 3D map, eras and studio wait. *Answered by:* a separate plan for moving over, written after slice zero passes.
+8. **The full game: what carries over first?** The 3D map, eras and studio wait. *Answered by:* a separate plan for moving over, written after slice zero passes. Drafted 2026-10-23: "The carry-over plan" above (proposed).
 9. **Who pays for what: one budget, or capital and operations apart?** Truer to a state transport agency: capital (roads, paving, track, vehicles) comes from the state budget, and fares cover operations. Today one pot pays for both, so a profitable fleet funds its own expansion (the snowball M10 measures). Splitting them would make the allocation the capital budget and fares the operating account. The reported definition of the surplus a corporation remits -- revenue above approved spending -- also supports a later action: **save for a named project**, money set aside for an approved project that the remittance doesn't take. *Answered by:* whether the treasury remittance (Decisions log) fixes M10 without it; if it doesn't, or the split reads truer in play, build it. *Revision 1 (agreed) takes the named project: savings for a named rung aren't remitted, and lapse to the treasury after about 30 days unbuilt.*
 
 ## Glossary
