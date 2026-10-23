@@ -5,7 +5,7 @@ import { lorrySummaries } from "./goods";
 import { averageHeadline, averageNet } from "./history";
 import { peopleSinceStart } from "./score";
 import type { GameEvent } from "./settlement";
-import { startGame } from "./start";
+import { startGame, startGameSteps } from "./start";
 import { gameTick } from "./tick";
 import { ALL_SYSTEMS_ON, DEFAULT_GAME_TUNING } from "./tuning";
 import type { GameMapDef, GameTuning, GameWorld } from "./types";
@@ -104,6 +104,13 @@ export function runTuning(switches: RunSwitches, overrides: Partial<GameTuning> 
 /** A new game as the page starts it: the seed's map, the switches, the warm-up, any dev funds. */
 export function startRun(base: GameMapDef, seed: number, switches: RunSwitches, devFunds: number | null, overrides: Partial<GameTuning> = {}): GameWorld {
   return startRunWith(base, seed, runTuning(switches, overrides), devFunds);
+}
+
+/** startRun a little at a time, for a loading screen (start.ts startGameSteps): the same world. */
+export function* startRunSteps(base: GameMapDef, seed: number, switches: RunSwitches, devFunds: number | null, overrides: Partial<GameTuning> = {}): Generator<number, GameWorld, void> {
+  const world = yield* startGameSteps(gameMap(base, seed, runTuning(switches, overrides)), runTuning(switches, overrides));
+  if (devFunds !== null) world.economy.funds = devFunds;
+  return world;
 }
 
 function startRunWith(base: GameMapDef, seed: number, tuning: GameTuning, devFunds: number | null): GameWorld {

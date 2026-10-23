@@ -765,6 +765,8 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 - **Goods choose their way out**: an export goes to whichever gateway is cheapest from where it's made, by what's built. Connecting a border post, or growing the port, moves where the money and the trucks go.
 - Coastal shipping between ports and barges on a navigable river (Open item 4) come after the gateways, on the same rules.
 
+**A loading screen** (your ask, 2026-10-23, after the region's cold start held the page blank ~9 s): the warm-up week shown as it runs -- "Day 3 of 7 before you arrive" -- not a blank page.
+
 **Kept from the slice, unchanged:** the generator's guards (every town reachable; prices land as measured; the dominant city dominant); seed 0 the hand-made map; a run file replays as played -- a game started on the region records it in its tuning, and an old file draws the old map.
 
 ### The order

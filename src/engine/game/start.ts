@@ -22,6 +22,22 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 // day 1 begins.
 
 export function startGame(map: GameMapDef, tuning: GameTuning = DEFAULT_GAME_TUNING): GameWorld {
+  const steps = startGameSteps(map, tuning);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+  }
+}
+
+/** Warm-up ticks between the progress startGameSteps reports: one game second. */
+const WARM_UP_STEP = Math.round(1 / SIM_DT);
+
+/**
+ * startGame a little at a time (2026-10-23: the region's warm-up held the page ~9 s blank):
+ * it yields how far through the warm-up it is (0 to 1), so the page can draw a loading
+ * screen between steps. The same ticks in the same order: the world is the same to the bit.
+ */
+export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GAME_TUNING): Generator<number, GameWorld, void> {
   const world = createGameWorld(map, tuning);
   // The fuel chain's sites are there before you are (fuel.ts; brief, Revision 3).
   placeFuelSites(world, map.region);
@@ -38,7 +54,10 @@ export function startGame(map: GameMapDef, tuning: GameTuning = DEFAULT_GAME_TUN
   // And the food chain's mill (food.ts), among the farm towns: placed last, so the others sit where they did.
   placeMill(world, map.region);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
-  for (let i = 0; i < ticks; i += 1) gameTick(world, SIM_DT);
+  for (let i = 0; i < ticks; i += 1) {
+    gameTick(world, SIM_DT);
+    if ((i + 1) % WARM_UP_STEP === 0) yield (i + 1) / ticks;
+  }
   world.startSeconds = world.economy.elapsedSeconds;
   // The strip's "informal sector earned" counts from when you arrived, and
   // so does your budget; the allocation pays on growth from day 1.

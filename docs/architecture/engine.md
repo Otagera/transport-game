@@ -1056,6 +1056,10 @@ replays as played. Seed 0 stays the hand-made map, alone.
   towns (`gravityDemand`, rate / distance): about four times the pairs, and far pairs still
   want trips. Optimisation is in other hands; the long-distance demand itself is to be
   measured (brief, The region, step 4).
+- **The loading screen** (`start.ts startGameSteps`, `runlog.ts startRunSteps`): the start as a
+  generator that yields how far through the warm-up it is every game second; `startGame` runs
+  it to the end in one go, the page a slice at a time (~40 ms, then a frame) under a loading
+  card in `index.html`. The same ticks in the same order: the same world (tested).
 
 ### Sites need people (Revision 3, steps 2b–2c)
 

@@ -45,9 +45,10 @@ import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, goodsFlows, isLorr
 import type { RouteDiagnosis } from "@engine/game/world";
 import type { GameEvent } from "@engine/game/settlement";
 import { GAME_MAP } from "./map";
+import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 import type { ForecastLine } from "./render";
 import { applyAction, type ActionOutcome, type ActionSpec } from "@engine/game/actions";
-import { createRunRecorder, recordAction, recordTick, runFile, startRun, type RunSwitches } from "@engine/game/runlog";
+import { createRunRecorder, recordAction, recordTick, runFile, startRunSteps, type RunSwitches } from "@engine/game/runlog";
 import { vehicleMoves } from "@engine/game/moves";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/game/upkeep";
 import { isDirt } from "@engine/game/congestion";
@@ -123,7 +124,31 @@ const fundsParam = Number(params.get("funds"));
 const devFunds = dev && params.has("funds") && Number.isFinite(fundsParam) ? fundsParam : null;
 // Started as a replay would start it (runlog.ts), and recorded as it goes:
 // "Save run" writes the file a script can read or replay.
-const world = startRun(GAME_MAP, seed, switches, devFunds);
+// The world runs its week before you arrive (start.ts) -- on a region, seconds of work: a
+// loading screen says so and shows how far it's got, the warm-up run a slice at a time
+// between frames (startRunSteps: the same world, tick for tick).
+const world = await (async () => {
+  const loading = document.querySelector<HTMLElement>("#loading")!;
+  loading.querySelector<HTMLElement>(".map")!.textContent = `Map ${seed}`;
+  const bar = loading.querySelector<HTMLElement>(".bar i")!;
+  const label = loading.querySelector<HTMLElement>(".progress")!;
+  const days = DEFAULT_GAME_TUNING.warmUpDays;
+  const steps = startRunSteps(GAME_MAP, seed, switches, devFunds);
+  let since = performance.now();
+  for (;;) {
+    const step = steps.next();
+    if (step.done) {
+      loading.remove();
+      return step.value;
+    }
+    if (performance.now() - since > 40) {
+      bar.style.width = `${Math.round(step.value * 100)}%`;
+      label.textContent = `Day ${Math.min(days, 1 + Math.floor(step.value * days))} of ${days} before you arrive`;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      since = performance.now();
+    }
+  }
+})();
 const recorder = createRunRecorder(world, seed, switches, devFunds, String(import.meta.env.VITE_GAME_BUILD ?? "unknown"));
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;

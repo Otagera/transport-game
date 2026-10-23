@@ -47,7 +47,7 @@ import { buildGameTerrain } from "@engine/game/terrain";
 import { GAME_MAP } from "../src/game/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
 import { applyAction } from "@engine/game/actions";
-import { createRunRecorder, recordAction, recordTick, replayRun, runFile, startRun, type RunFile } from "@engine/game/runlog";
+import { createRunRecorder, recordAction, recordTick, replayRun, runFile, startRun, startRunSteps, type RunFile } from "@engine/game/runlog";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/game/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/game/settlement";
@@ -2889,6 +2889,24 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       expect(info.hubs.every((h) => reached.has(h))).toBe(true);
       buildGameTerrain(map); // every town dry (it throws otherwise)
     }
+  }, 30_000);
+
+  test("a start a slice at a time (the loading screen's) builds the same world as one in a go", () => {
+    const switches = { all: false, goodsOff: false, wearOff: false };
+    const overrides = { regionEnabled: false, warmUpDays: 2 };
+    const steps = startRunSteps(GAME_MAP, 5, switches, null, overrides);
+    const progress: number[] = [];
+    let step = steps.next();
+    while (!step.done) {
+      progress.push(step.value);
+      step = steps.next();
+    }
+    const whole = startRun(GAME_MAP, 5, switches, null, overrides);
+    expect(progress.length).toBeGreaterThan(10);
+    expect(progress.at(-1)).toBe(1);
+    expect(step.value.economy.elapsedSeconds).toBe(whole.economy.elapsedSeconds);
+    expect(averageHeadline(step.value)).toEqual(averageHeadline(whole));
+    expect([...step.value.towns.values()].map((t) => t.population)).toEqual([...whole.towns.values()].map((t) => t.population));
   }, 30_000);
 
   test("a region plays: started as a new game is, a bus in the home cluster carries riders", () => {
