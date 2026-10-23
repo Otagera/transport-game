@@ -1,7 +1,6 @@
 import { buildGameTerrain } from "@engine/game/terrain";
 import { generatedGameMap } from "@engine/game/generate";
 import { GAME_MAP } from "../game/map";
-import snapshotJson from "./snapshot.json";
 
 // The information lab (docs/brief.md, the carry-over plan: information
 // design). A mock of the full game's three layers, on a game you played (a
@@ -47,7 +46,14 @@ interface Snapshot {
   /** Vehicles on each road piece at the last tick, by kind (the game's real crowding). */
   traffic?: Record<string, { danfo: number; keke: number; okada: number; truck: number; yours: number }>;
 }
-const S = snapshotJson as unknown as Snapshot;
+// Fetched, not imported: the snapshot is generated and kept out of git, so an import broke
+// the typecheck on any fresh checkout (CI included).
+const response = await fetch("/src/info-lab/snapshot.json");
+if (!response.ok) {
+  document.body.innerHTML = `<p style="padding:24px;font:14px system-ui">No snapshot yet. Make one from a saved run: <code>bun scripts/info-snapshot.ts run.json</code>, then reload.</p>`;
+  throw new Error("info-lab: src/info-lab/snapshot.json is missing");
+}
+const S = (await response.json()) as Snapshot;
 const townById = new Map(S.towns.map((t) => [t.id, t]));
 const siteById = new Map(S.sites.map((s) => [s.id, s]));
 const nameOf = (id: string) => townById.get(id)?.name ?? id;
