@@ -1421,9 +1421,10 @@ function metroItem(townId: string): string {
   const check = checkMetro(world, townId);
   const price = metroPrice(world, townId);
   const button = lines < t.metroMaxLines ? ` <button data-metro="${townId}" ${check.ok ? "" : `disabled title="${check.reason}"`}>${lines === 0 ? "Build a metro" : "Add a line"}: ${naira(price)}</button>` : "";
-  if (lines === 0) return `<li>Big enough for a metro: it would carry up to ${Math.round(Math.min(t.metroLineRiders, t.metroMaxShare * town.population * t.localTripsPerThousandPerDay)).toLocaleString()} of its inside trips a day, at ${naira(t.metroFare)} each, and let it grow further.${button}</li>`;
+  const perLine = Math.round(t.metroLineShare * town.population * t.localTripsPerThousandPerDay);
+  if (lines === 0) return `<li>Big enough for a metro: a line would carry ~${perLine.toLocaleString()} of its inside trips a day at ${naira(t.metroFare)} each, and let it grow further.${button}</li>`;
   const { riders, share } = metroRiders(world, townId);
-  return `<li>Metro: ${lines} line${lines > 1 ? "s" : ""}, ${Math.round(riders).toLocaleString()} riders a day (${pct(share)} of its inside trips), ${naira(riders * t.metroFare - lines * t.metroRunningPerLine)}/day after running costs.${button}</li>`;
+  return `<li>Metro: ${lines} line${lines > 1 ? "s" : ""}, ${Math.round(riders).toLocaleString()} riders a day (${pct(share)} of its inside trips), ${naira(riders * t.metroFare - lines * t.metroRunningPerLine)}/day after running costs.${lines < t.metroMaxLines ? ` Another line: ~${perLine.toLocaleString()} more.` : ""}${button}</li>`;
 }
 
 // A fuel site's card (brief, Revision 3, the fuel chain): what it does, what

@@ -227,17 +227,16 @@ export interface SliceTuning {
    */
   /**
    * A metro (metro.ts, Revision 4, 6): on; the smallest town (thousands); the first line's
-   * price and each more's; most lines; riders a day a line; the most of a town's inside trips it
-   * carries; fare a rider; running cost a line a day; how far it lifts growth, as a share of the
-   * town's start. Run files without them replay with none.
+   * price and each more's; most lines; the share of a town's inside trips a line carries; fare a
+   * rider; running cost a line a day; how far all its lines lift growth, as a share of the town's
+   * start. Run files without them replay with none.
    */
   metroEnabled: boolean;
   metroMinPopulation: number;
   metroCost: number;
   metroLineCost: number;
   metroMaxLines: number;
-  metroLineRiders: number;
-  metroMaxShare: number;
+  metroLineShare: number;
   metroFare: number;
   metroRunningPerLine: number;
   metroCapShare: number;

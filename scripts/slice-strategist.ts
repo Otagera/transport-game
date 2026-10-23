@@ -237,11 +237,10 @@ function decide(world: SliceWorld, day: number, losing: Map<string, number>): { 
     const best = [...world.basePopulation.keys()].filter((id) => !world.parks.has(id) && world.towns.get(id)!.population >= 50 && slowest(id) < 0.8).sort((p, q) => world.towns.get(q)!.population - world.towns.get(p)!.population)[0];
     if (best && spend(world, world.tuning.parkCost)) did(act(world, day, { kind: "park", townId: best }, `a motor park: the roads into ${world.towns.get(best)!.name} jam (${Math.round(slowest(best) * 100)}% speed), ~₦${Math.round(parkLevyGain(world, best))}/day more levy`));
   }
-  // A metro (Revision 4, 6): the biggest town that can take one, a line at a time, once the
-  // lines it has run full -- every five days at most.
+  // A metro (Revision 4, 6): the biggest town that can take one, a line at a time, every five
+  // days at most.
   if (world.tuning.metroEnabled && day % 5 === 0) {
-    const full = (id: string) => metroLines(world, id) === 0 || metroRiders(world, id).riders >= 0.95 * metroLines(world, id) * world.tuning.metroLineRiders;
-    const town = [...world.towns.values()].filter((t) => !t.industry && full(t.id) && checkMetro(world, t.id).ok).sort((p, q) => q.population - p.population)[0];
+    const town = [...world.towns.values()].filter((t) => !t.industry && checkMetro(world, t.id).ok).sort((p, q) => q.population - p.population)[0];
     if (town && spend(world, metroPrice(world, town.id))) did(act(world, day, { kind: "metro", townId: town.id }, `${town.name} (${Math.round(town.population)}k): ${metroLines(world, town.id) === 0 ? "a metro" : "another metro line"}`));
   }
   // The works: restored once cement holds 10k people back.

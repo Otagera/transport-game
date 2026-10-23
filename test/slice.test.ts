@@ -3647,26 +3647,27 @@ describe("Revision 4, step 6: a metro (metro.ts)", () => {
     expect(metroLines(w, town.id)).toBe(t.metroMaxLines);
   });
 
-  test("it carries a share of the town's inside trips, by its lines; pays fares, costs its running; lifts growth", () => {
+  test("each line carries its share of the town's inside trips; pays fares, costs its running; each lifts growth", () => {
     // Cement off: past its free stretch a town's growth waits on cement (cement.ts), metro or not.
     const w = game({ cementEnabled: false });
     const t = w.tuning;
     const town = biggest(w);
     town.population = 400;
     w.economy.funds = 1e7;
-    const capBefore = townGrowth(w, town.id)!.cap;
-    applyAction(w, { kind: "metro", townId: town.id });
     const inside = 400 * t.localTripsPerThousandPerDay;
-    expect(metroRiders(w, town.id).riders).toBeCloseTo(Math.min(t.metroLineRiders, t.metroMaxShare * inside), 6);
-    applyAction(w, { kind: "metro", townId: town.id });
-    applyAction(w, { kind: "metro", townId: town.id });
-    expect(metroRiders(w, town.id).share).toBeCloseTo(t.metroMaxShare, 9); // never more than its share
+    let cap = townGrowth(w, town.id)!.cap;
+    for (let line = 1; line <= t.metroMaxLines; line += 1) {
+      applyAction(w, { kind: "metro", townId: town.id });
+      expect(metroRiders(w, town.id).riders).toBeCloseTo(line * t.metroLineShare * inside, 6);
+      const next = townGrowth(w, town.id)!.cap;
+      expect(next).toBeGreaterThan(cap); // every line lifts it
+      cap = next;
+    }
     const funds = w.economy.funds;
     const paid = runMetros(w, SECONDS_PER_GAME_DAY);
-    expect(paid.fares).toBeCloseTo(t.metroMaxShare * inside * t.metroFare, 6);
-    expect(paid.running).toBeCloseTo(3 * t.metroRunningPerLine, 6);
+    expect(paid.fares).toBeCloseTo(t.metroMaxLines * t.metroLineShare * inside * t.metroFare, 6);
+    expect(paid.running).toBeCloseTo(t.metroMaxLines * t.metroRunningPerLine, 6);
     expect(w.economy.funds).toBeCloseTo(funds + paid.fares - paid.running, 6);
-    expect(townGrowth(w, town.id)!.cap).toBeGreaterThan(capBefore);
   });
 
   test("switched off, it never runs", () => {

@@ -12,13 +12,15 @@ import { SWITCHED_OFF } from "./tuning";
 //   - Built at a town of `metroMinPopulation` thousand or more, a line at a
 //     time: the first `metroCost`, each more `metroLineCost`, up to
 //     `metroMaxLines`.
-//   - Riders a day: each line carries up to `metroLineRiders`, and the metro
-//     at most `metroMaxShare` of the town's inside trips -- people still
-//     walk, and the keke still takes them to the station.
+//   - Riders a day: each line carries `metroLineShare` of the town's inside
+//     trips (three lines, 45%) -- people still walk, and the keke still takes
+//     them to the station. Each line is its own decision: at first the share
+//     was capped across the metro, and in a town under ~430k a second line
+//     carried nobody more (the strategist never bought one).
 //   - Money: `metroFare` a rider, `metroRunningPerLine` a day a line.
 //   - Growth (growth.ts): a town whose metro carries its inside trips grows
-//     past its road's limit, like a station town: up to `metroCapShare` of
-//     its start, in proportion to the share it carries.
+//     past its road's limit, like a station town: `metroCapShare` of its
+//     start with every line built, in proportion to the lines.
 //
 // Its riders stay out of the trips-made headline, which counts trips between
 // towns: every check measured on it still compares.
@@ -39,8 +41,8 @@ export function metroRiders(world: SliceWorld, townId: string): { riders: number
   const lines = metroLines(world, townId);
   const inside = insideTrips(world, townId);
   if (lines <= 0 || inside <= 0) return { riders: 0, share: 0 };
-  const riders = Math.min(lines * world.tuning.metroLineRiders, world.tuning.metroMaxShare * inside);
-  return { riders, share: riders / inside };
+  const share = lines * world.tuning.metroLineShare;
+  return { riders: share * inside, share };
 }
 
 /** What the next line at a town costs: the first, or another. */
@@ -89,5 +91,5 @@ export function runMetros(world: SliceWorld, dt: number): { fares: number; runni
 export function metroGrowthShare(world: SliceWorld, townId: string): number {
   const t = world.tuning;
   if (!t.metroEnabled || metroLines(world, townId) === 0) return 0;
-  return t.metroCapShare * Math.min(1, metroRiders(world, townId).share / t.metroMaxShare);
+  return (t.metroCapShare * metroLines(world, townId)) / t.metroMaxLines;
 }
