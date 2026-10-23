@@ -598,12 +598,18 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   if (!roadside || lit) {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
+    // A white halo under each label, so a road under it doesn't make it hard to read.
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = COLORS.surface;
+    ctx.lineWidth = 3.5;
     ctx.font = "600 12px system-ui, sans-serif";
+    ctx.strokeText(town.name, p.x, p.y + r + 7);
     ctx.fillStyle = COLORS.ink;
     ctx.fillText(town.name, p.x, p.y + r + 7);
     const trend = growthTrend(world, town.id);
     const arrow = trend === "growing" ? "▲" : trend === "shrinking" ? "▼" : "";
     ctx.font = "11px system-ui, sans-serif";
+    ctx.strokeText(`${Math.round(town.population)}k ${arrow}`, p.x, p.y + r + 21);
     ctx.fillStyle = trend === "growing" ? COLORS.grow : trend === "shrinking" ? COLORS.jammed : COLORS.muted;
     ctx.fillText(`${Math.round(town.population)}k ${arrow}`, p.x, p.y + r + 21);
   }
@@ -629,6 +635,10 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.font = "600 11px system-ui, sans-serif";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = COLORS.surface;
+    ctx.lineWidth = 3.5;
+    ctx.strokeText(site.name, p.x, p.y + r + 5);
     ctx.fillStyle = COLORS.ink;
     ctx.fillText(site.name, p.x, p.y + r + 5);
     ctx.textBaseline = "alphabetic";

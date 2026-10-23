@@ -17,9 +17,9 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 export type HintId = 1 | 2 | 3 | 4 | 5 | 6;
 
 export const HINT_TEXT: Record<HintId, string> = {
-  1: "Demand (top left) shows where people want to go; hover a town to see its roads and routes.",
-  2: "A bus runs between two towns a road joins. The thickest line with a road under it is a good start.",
-  3: "Dashed lines have no road. Build one (R) and danfos will come; run a bus and you will.",
+  1: "Demand (top) shows where people want to go; hover a town to see its roads and routes.",
+  2: "A bus runs between two towns a road joins. Demand (top) shows where most people want to go: the thickest arc along a road is a good start.",
+  3: "A town marked \"no road\" has nothing reaching it. Build one (R) and danfos will come; run a bus and you will.",
   4: "Your bus leaves full: riders left behind go to the danfos.",
   5: "Money is low. Selling a losing vehicle returns most of its price (− on the route).",
   6: "Danfos on a road you built pay its toll and charge their riders more.",
