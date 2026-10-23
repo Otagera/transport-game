@@ -299,6 +299,20 @@ export function dry(world: GameWorld, x: number, y: number, clearance: number): 
   return true;
 }
 
+/**
+ * Where a new game's sites go: the home cluster's box on a region map
+ * (region.ts) -- the chains are the home map's, placed as on the slice map --
+ * else the whole map.
+ */
+export function homeBox(world: GameWorld): { x: number; y: number; width: number; height: number } {
+  return world.home ?? { x: 0, y: 0, width: world.width, height: world.height };
+}
+
+export function inHome(world: GameWorld, at: { x: number; y: number }): boolean {
+  const box = homeBox(world);
+  return at.x >= box.x && at.x < box.x + box.width && at.y >= box.y && at.y < box.y + box.height;
+}
+
 export function nearestDistance(world: GameWorld, x: number, y: number): number {
   return Math.min(...[...world.towns.values()].map((town) => Math.hypot(town.x - x, town.y - y)));
 }
@@ -339,7 +353,7 @@ export function placeFuelSites(world: GameWorld, region: string | undefined): vo
   if (!world.tuning.fuelEnabled || !world.tuning.goodsEnabled || world.fuel) return;
   const port = world.port ? world.towns.get(world.port) : undefined;
   if (!port) return;
-  const second = [...world.towns.values()].filter((town) => town.id !== port.id && !town.industry).sort((p, q) => q.population - p.population)[0];
+  const second = [...world.towns.values()].filter((town) => town.id !== port.id && !town.industry && inHome(world, town)).sort((p, q) => q.population - p.population)[0];
   if (!second) return;
   const fromPort = (x: number, y: number) => Math.hypot(x - port.x, y - port.y);
   // Far enough from the port that their names don't sit on each other.
@@ -348,15 +362,16 @@ export function placeFuelSites(world: GameWorld, region: string | undefined): vo
   const refineryAt = ringSpot(world, second.x, second.y, 9, 13, 8, fromPort);
   if (!refineryAt) return;
   let sourceAt: { x: number; y: number; s: number } | null = null;
-  for (let x = 3; x <= world.width - 4; x += 2) {
-    for (const y of [3, world.height - 4]) {
+  const box = homeBox(world);
+  for (let x = box.x + 3; x <= box.x + box.width - 4; x += 2) {
+    for (const y of [box.y + 3, box.y + box.height - 4]) {
       if (!dry(world, x, y, 1) || nearestDistance(world, x, y) < 8) continue;
       const s = Math.hypot(x - refineryAt.x, y - refineryAt.y);
       if (!sourceAt || s > sourceAt.s) sourceAt = { x, y, s };
     }
   }
-  for (let y = 3; y <= world.height - 4; y += 2) {
-    for (const x of [3, world.width - 4]) {
+  for (let y = box.y + 3; y <= box.y + box.height - 4; y += 2) {
+    for (const x of [box.x + 3, box.x + box.width - 4]) {
       if (!dry(world, x, y, 1) || nearestDistance(world, x, y) < 8) continue;
       const s = Math.hypot(x - refineryAt.x, y - refineryAt.y);
       if (!sourceAt || s > sourceAt.s) sourceAt = { x, y, s };

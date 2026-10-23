@@ -2909,6 +2909,20 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     expect([...step.value.towns.values()].map((t) => t.population)).toEqual([...whole.towns.values()].map((t) => t.population));
   }, 30_000);
 
+  test("the chains are the home cluster's: every site in its box, or by the port (map 4882's oilfield sat in the region's far corner)", () => {
+    for (const seed of [3, 11, 4882]) {
+      const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
+      const box = w.home!;
+      const port = w.towns.get(w.port!)!;
+      const sites = [...w.towns.values()].filter((t) => t.industry);
+      expect(sites.length).toBeGreaterThanOrEqual(4);
+      for (const s of sites) {
+        const inBox = s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height;
+        expect(inBox || Math.hypot(s.x - port.x, s.y - port.y) <= 13).toBe(true);
+      }
+    }
+  }, 60_000);
+
   test("a region plays: started as a new game is, a bus in the home cluster carries riders", () => {
     const w = startRun(GAME_MAP, 3, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
     expect(w.width).toBe(REGION_WIDTH);
