@@ -197,9 +197,89 @@ function resize(): void {
   }
   const treasury = document.querySelector<HTMLElement>("#treasury");
   const bottomInset = Math.max(56, below(toolbar), below(keyEl), below(treasury)) + 8;
-  view = fitView(world, window.innerWidth, window.innerHeight, 24, 64, bottomInset, spines);
+  fitted = fitView(world, window.innerWidth, window.innerHeight, 24, 64, bottomInset, spines);
+  applyZoom();
 }
 window.addEventListener("resize", resize);
+
+// Zoom and pan (the information lab, 2026-10-23): the wheel zooms toward the cursor, up to
+// MAX_ZOOM times the whole map; a drag pans once zoomed in; 0 or the Fit button shows it all.
+// The view keeps a zoom and the map point at the middle of the fitted map, so a resize (the
+// key opening, the window) keeps where you were looking.
+const MAX_ZOOM = 6;
+let fitted: View = { scale: 1, offsetX: 0, offsetY: 0, fit: 1 };
+let zoom = 1;
+let lookAt: { x: number; y: number } | null = null;
+function fittedMiddle(): { x: number; y: number } {
+  return { x: fitted.offsetX + (world.width * fitted.scale) / 2, y: fitted.offsetY + (world.height * fitted.scale) / 2 };
+}
+function applyZoom(): void {
+  if (zoom <= 1.0001 || !lookAt) {
+    zoom = 1;
+    lookAt = null;
+    view = fitted;
+  } else {
+    const scale = fitted.scale * zoom;
+    const middle = fittedMiddle();
+    view = { scale, fit: fitted.scale, offsetX: middle.x - lookAt.x * scale, offsetY: middle.y - lookAt.y * scale };
+  }
+  renderZoomControl();
+}
+/** Zoom by `factor` keeping the map point under (sx, sy) where it is on screen. */
+function zoomAt(sx: number, sy: number, factor: number): void {
+  const next = Math.max(1, Math.min(MAX_ZOOM, zoom * factor));
+  const under = { x: (sx - view.offsetX) / view.scale, y: (sy - view.offsetY) / view.scale };
+  const scale = fitted.scale * next;
+  const offsetX = sx - under.x * scale;
+  const offsetY = sy - under.y * scale;
+  const middle = fittedMiddle();
+  zoom = next;
+  lookAt = { x: (middle.x - offsetX) / scale, y: (middle.y - offsetY) / scale };
+  applyZoom();
+}
+function panBy(dx: number, dy: number): void {
+  if (zoom <= 1.0001 || !lookAt) return;
+  const scale = fitted.scale * zoom;
+  lookAt = { x: lookAt.x - dx / scale, y: lookAt.y - dy / scale };
+  applyZoom();
+}
+function renderZoomControl(): void {
+  let el = document.querySelector<HTMLDivElement>("#zoom-control");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "zoom-control";
+    document.body.appendChild(el);
+    el.addEventListener("click", (event) => {
+      const z = (event.target as HTMLElement).dataset.zoom;
+      if (z === "fit") { zoom = 1; applyZoom(); }
+      else if (z) zoomAt(window.innerWidth / 2, window.innerHeight / 2, z === "in" ? 1.5 : 1 / 1.5);
+    });
+  }
+  el.innerHTML = `<button data-zoom="in" title="Zoom in (or the wheel)">+</button><button data-zoom="out" title="Zoom out">−</button>${zoom > 1.0001 ? `<button data-zoom="fit" title="The whole map (0)">Fit · ${zoom.toFixed(1)}×</button>` : ""}`;
+}
+canvas.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  zoomAt(event.clientX, event.clientY, Math.exp(-event.deltaY * 0.0015));
+}, { passive: false });
+let dragging: { x: number; y: number; moved: boolean } | null = null;
+/** A drag that panned isn't also a click on whatever it ended over. */
+let suppressClick = false;
+canvas.addEventListener("mousedown", (event) => {
+  if (event.button === 0) dragging = { x: event.clientX, y: event.clientY, moved: false };
+});
+window.addEventListener("mousemove", (event) => {
+  if (!dragging || zoom <= 1.0001) return;
+  const dx = event.clientX - dragging.x;
+  const dy = event.clientY - dragging.y;
+  if (!dragging.moved && Math.hypot(dx, dy) < 5) return;
+  dragging = { x: event.clientX, y: event.clientY, moved: true };
+  canvas.style.cursor = "grabbing";
+  panBy(dx, dy);
+});
+window.addEventListener("mouseup", () => {
+  if (dragging?.moved) suppressClick = true;
+  dragging = null;
+});
 
 // The key opens only when there's room beside the toolbar (ten tools); on a
 // narrower window it starts closed, one click away, instead of covering the map.
@@ -634,6 +714,10 @@ function focusTown(): string | null {
 }
 
 canvas.addEventListener("click", (event) => {
+  if (suppressClick) {
+    suppressClick = false;
+    return;
+  }
   if (tool === "fix") {
     const road = roadAt(event.clientX, event.clientY);
     if (!road) return;
@@ -806,6 +890,10 @@ window.addEventListener("keydown", (event) => {
       // Remembered for this game only.
     }
     say(pauseOnStrike ? "At 4×, the game pauses when a strike is called or begins." : "At 4×, strikes no longer pause the game.");
+  }
+  else if (event.key === "0") {
+    zoom = 1;
+    applyZoom();
   }
   else if (event.key === "h" || event.key === "H") {
     hints.off = !hints.off;
@@ -1974,7 +2062,7 @@ function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
     : "";
   const signed = `${s.netPerDay < 0 ? "−" : "+"}₦${Math.abs(Math.round(s.netPerDay)).toLocaleString()}`;
   return `
-    <div class="route-card" title="${long.replace(/"/g, "&quot;")}">
+    <div class="route-card" data-route="${s.id}" title="${long.replace(/"/g, "&quot;")}">
       <div class="top"><span class="k">${vehicleCount(s.id, s.buses)} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</span><span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${signed}/day</span></div>
       <div class="name"><span class="swatch" style="background:${routeColor(index)}"></span>${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}
         <span class="buttons"><button data-add="${s.id}" title="Add one">+</button><button data-remove="${s.id}" title="Sell one">−</button></span></div>
@@ -2313,7 +2401,7 @@ function lorryRows(afterBuses: boolean): string {
         <small>${forGoodsVehicle(`goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full`, s.id)}</small>${freightRateRow(s.id)}`
       : "";
     return `
-      <div class="route">
+      <div class="route" data-route="${s.id}">
         <span class="swatch" style="background:var(--goods)"></span>
         <div class="name">${townName(s.a)} ↔ ${townName(s.b)}${isFreightRoute(s.id) ? ' <span class="muted">by rail</span>' : ""}<small>${s.lorries} ${isFreightRoute(s.id) ? `freight train${s.lorries === 1 ? "" : "s"}` : `lorr${s.lorries === 1 ? "y" : "ies"}`} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
         <span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${naira(s.netPerDay)}</span>
@@ -2437,6 +2525,14 @@ townEl.addEventListener("click", (event) => onPanelClick(event));
 // A click on a wing's spine pins it out (and again unpins it): hover alone is no good on touch.
 for (const wing of [townWing, routesWing]) wing.querySelector(".spine")!.addEventListener("click", () => wing.classList.toggle("pinned"));
 routesEl.addEventListener("click", (event) => onPanelClick(event));
+// Focus (the information lab): hovering a route's card fades everything on the map but it.
+let focusRoute: string | null = null;
+routesEl.addEventListener("mouseover", (event) => {
+  focusRoute = (event.target as HTMLElement).closest<HTMLElement>("[data-route]")?.dataset.route ?? null;
+});
+routesEl.addEventListener("mouseleave", () => {
+  focusRoute = null;
+});
 function onPanelClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   // The drawer's tab pins it open (and unpins it): hover alone is no good on touch.
@@ -2669,6 +2765,23 @@ const accumulator = new Accumulator(SIM_DT);
 let last = performance.now();
 let panelTimer = 0;
 
+// The towns your routes serve whose card names a problem, for the map's mark (the information
+// lab). Only those: on day 2 every town had one (cut off, or riders with no seat), and a
+// mark on every town says nothing; a cut-off town has its "no road" label already. Rechecked
+// twice a second, not every frame -- problemText reads a good deal of the world.
+let problemTowns = new Set<string>();
+let problemsAt = -Infinity;
+function townsWithProblems(now: number): Set<string> {
+  if (now - problemsAt < 500) return problemTowns;
+  problemsAt = now;
+  const served = new Set<string>();
+  for (const route of [...world.routes, ...world.lorryRoutes]) {
+    for (const stop of world.simulation.vehicles.find((v) => v.id === route.vehicleIds[0])?.path ?? []) served.add(stop);
+  }
+  problemTowns = new Set([...served].filter((id) => world.towns.has(id) && !world.towns.get(id)!.industry && problemText(id) !== ""));
+  return problemTowns;
+}
+
 function frame(now: number): void {
   const elapsed = (now - last) / 1000;
   last = now;
@@ -2684,7 +2797,7 @@ function frame(now: number): void {
       });
     }
   }
-  draw(ctx, world, view, { selectedTown, hoverTown, focusTown: focusTown(), ghost: ghost(), road: roadHover() });
+  draw(ctx, world, view, { selectedTown, hoverTown, focusTown: focusTown(), ghost: ghost(), road: roadHover(), gameSpeed: speed, focusRoute, problems: townsWithProblems(now) });
 
   panelTimer += elapsed;
   if (panelTimer > 0.25) {

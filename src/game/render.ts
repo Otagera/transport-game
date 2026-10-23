@@ -8,7 +8,7 @@ import { freshMilestone } from "@engine/game/score";
 import { corridorChanges } from "@engine/game/corridors";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat } from "@engine/game/problems";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/game/roads";
-import { isDirt } from "@engine/game/congestion";
+import { isDirt, roadCapacity } from "@engine/game/congestion";
 import { laneEncroachment, struckSegments } from "@engine/game/pushback";
 import { newRefineryOutput, refineryOutput, shortageAt } from "@engine/game/fuel";
 import { cementActive, cementImports, worksCapacity, worksOutput } from "@engine/game/cement";
@@ -16,40 +16,92 @@ import { flourCapacity, flourOutput, millCapacity, millOutput } from "@engine/ga
 import { siteProduction } from "@engine/game/production";
 import { goodsFlows, type GoodsFlow } from "@engine/game/goods";
 
+/**
+ * How much bigger marks draw than at the whole-map view: the square root of the zoom, so
+ * zoomed in they spread apart rather than shrink to specks (the information lab). Set by
+ * draw() each frame from the view.
+ */
+let markScale = 1;
+
+/**
+ * Focus (the information lab): hover or select a town, or hover a route's card, and what
+ * isn't part of it draws faded. `fadeNow` is the fade of whatever is being drawn; every
+ * transparency the map sets goes through alpha() so it fades with it.
+ */
+let fadeNow = 1;
+const alpha = (x: number) => x * fadeNow;
+const FADED = 0.22;
+interface Focus { segments: Set<string>; routes: Set<string> }
+let focus: Focus | null = null;
+
+/** A town's roads and the routes that stop there; or a route and the roads it runs on. */
+function focusOf(world: GameWorld, state: DrawState): Focus | null {
+  if (!state.focusTown && !state.focusRoute) return null;
+  const segments = new Set<string>();
+  const routes = new Set<string>();
+  const addRoute = (route: { id: string; vehicleIds: string[] }) => {
+    routes.add(route.id);
+    const vehicle = world.simulation.vehicles.find((v) => v.id === route.vehicleIds[0]);
+    if (!vehicle) return;
+    const routing = routingFor(world, vehicle);
+    vehicle.path.forEach((to, i) => {
+      const from = vehicle.path[(i - 1 + vehicle.path.length) % vehicle.path.length]!;
+      const id = routing.graph.get(from)?.find((edge) => edge.to === to)?.segmentId;
+      if (id) segments.add(id);
+    });
+  };
+  const all = [...world.routes, ...world.lorryRoutes];
+  if (state.focusRoute) {
+    const route = all.find((r) => r.id === state.focusRoute);
+    if (route) addRoute(route);
+  } else if (state.focusTown) {
+    const town = state.focusTown;
+    for (const seg of world.simulation.map.segments) if (seg.fromNodeId === town || seg.toNodeId === town) segments.add(seg.id);
+    for (const route of all) {
+      const vehicle = world.simulation.vehicles.find((v) => v.id === route.vehicleIds[0]);
+      if (vehicle?.path.includes(town)) addRoute(route);
+    }
+  }
+  return { segments, routes };
+}
+const segmentFade = (id: string) => (focus && !focus.segments.has(id) ? FADED : 1);
+
 // Flat, top-down, legibility first (docs/principles.md §6): every fact the
 // loop runs on is drawn, not hidden behind an overlay -- who is waiting,
 // where they ended up, which roads you run buses on, and the informal
 // sector (danfos, kekes, okadas).
 
 export const COLORS = {
-  ground: "#efe7d4",
+  ground: "#f4f6f3",
   water: "#a9cbd9",
   waterEdge: "#8bb6c8",
-  hill: "#b5a27a",
-  bridge: "#7d7466",
-  crack: "#4a3b2a",
-  rail: "#3a3632",
+  hill: "#8f99a3",
+  bridge: "#6f7782",
+  crack: "#3d4652",
+  rail: "#3f4852",
   grow: "#2b8a3e",
   goods: "#8a5a2b",
-  kept: "#fffdf8",
-  groundEdge: "#d9ccae",
+  kept: "#ffffff",
+  groundEdge: "#dde3ea",
   dirtRoad: "#c4ab7c",
-  builtRoad: "#5d5a55",
-  town: "#fffdf8",
-  townEdge: "#2b2925",
-  label: "#2b2925",
-  labelMuted: "#7a7368",
+  builtRoad: "#5f6874",
+  town: "#ffffff",
+  townEdge: "#1b2129",
+  label: "#1b2129",
+  labelMuted: "#7b8694",
   player: "#2f6fdb",
   danfo: "#f2c200",
   danfoStripe: "#1d1b18",
   keke: "#2b8a3e",
   forecastGood: "#2b8a3e",
-  slow: "#f08c00",
-  jam: "#d9480f",
-  home: "#a59d90",
-  waiting: "#2b2925",
+  slow: "#e8742c",
+  jam: "#c92a2a",
+  /** A road running free: a pale grey casing, as wide as its traffic. */
+  free: "#c3cbd4",
+  home: "#a3abb5",
+  waiting: "#1b2129",
   selection: "#d9480f",
-  ghostOk: "#2b2925",
+  ghostOk: "#1b2129",
   ghostBad: "#c92a2a",
   strike: "#c92a2a",
 };
@@ -60,6 +112,8 @@ export interface View {
   scale: number;
   offsetX: number;
   offsetY: number;
+  /** The scale that shows the whole map (fitView sets it); zoomed in, `scale` is bigger. */
+  fit?: number;
 }
 
 export function fitView(world: GameWorld, width: number, height: number, padding: number, topInset: number, bottomInset = 0, sideInset = 0): View {
@@ -70,6 +124,7 @@ export function fitView(world: GameWorld, width: number, height: number, padding
     scale,
     offsetX: (width - world.width * scale) / 2,
     offsetY: topInset + padding + (usableH - world.height * scale) / 2,
+    fit: scale,
   };
 }
 
@@ -78,7 +133,9 @@ export function toScreen(view: View, x: number, y: number): { x: number; y: numb
 }
 
 export function townRadius(town: GameTown, view: View): number {
-  return Math.max(7, Math.sqrt(town.population) * view.scale * 0.22);
+  // Sized at the whole-map scale, then grown by the square root of the zoom, as every mark is.
+  const fit = view.fit ?? view.scale;
+  return Math.max(7, Math.sqrt(town.population) * fit * 0.22) * Math.sqrt(view.scale / fit);
 }
 
 export function routeColor(index: number): string {
@@ -113,6 +170,12 @@ export interface DrawState {
   ghost: Ghost | null;
   /** The fix tool's hovered road, and what to say about it. */
   road?: { segmentId: string; at: { x: number; y: number }; label: string; forecast?: ForecastLine } | null;
+  /** How fast the game runs (1, 2, 4): at 4x and zoomed out, the other side's vehicles are drawn as bands only. */
+  gameSpeed?: number;
+  /** A route whose card is hovered: it and its roads in focus, the rest faded. */
+  focusRoute?: string | null;
+  /** Towns whose card names a problem: an amber mark on the map (the information lab). */
+  problems?: ReadonlySet<string>;
 }
 
 export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, state: DrawState): void {
@@ -122,14 +185,21 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
+  markScale = view.fit ? Math.sqrt(view.scale / view.fit) : 1;
+  focus = focusOf(world, state);
+  // The other side's vehicles -- danfos, kekes, okadas, the hauliers' trucks -- as bands
+  // beside each road, always; drawn one by one too only when there's room for them: at 1x or
+  // 2x, or zoomed in to 2x (the information lab: at 4x the swarm was unreadable in play).
+  const zoom = markScale * markScale;
+  const oneByOne = (state.gameSpeed ?? 1) < 4 || zoom >= 2;
   drawGround(ctx, world, view);
   drawNoSeat(ctx, world, view);
-  drawRoads(ctx, world, view);
+  drawRoads(ctx, world, view, otherSideOnRoads(world));
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawRouteLines(ctx, world, view);
   if (state.focusTown) drawDesireLines(ctx, world, view, state.focusTown);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
-  drawVehicles(ctx, world, view);
+  drawVehicles(ctx, world, view, oneByOne);
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   // Towns first, biggest first, so their labels claim the space; then the
   // sites, whose names go where there's room (playtest, map 2411: "the
@@ -243,7 +313,7 @@ function drawContours(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
   // Corners: top-left 8, top-right 4, bottom-right 2, bottom-left 1. Edges: 0 top, 1 right, 2 bottom, 3 left.
   const CASES: number[][] = [[], [3, 2], [2, 1], [3, 1], [0, 1], [3, 0, 2, 1], [0, 2], [3, 0], [3, 0], [0, 2], [3, 2, 0, 1], [0, 1], [3, 1], [2, 1], [3, 2], []];
   ctx.save();
-  ctx.strokeStyle = "rgba(120, 90, 50, 0.45)";
+  ctx.strokeStyle = "rgba(80, 95, 110, 0.4)";
   for (let k = 1; k <= 7; k += 1) {
     const level = (peak * k) / 8;
     ctx.lineWidth = k % 2 === 0 ? 1.6 : 1;
@@ -276,7 +346,7 @@ function drawGroundNames(ctx: CanvasRenderingContext2D, world: GameWorld, view: 
   const { terrain } = world.simulation.map;
   const { width, height } = terrain;
   ctx.save();
-  ctx.fillStyle = "rgba(122, 115, 104, 0.85)";
+  ctx.fillStyle = "rgba(110, 120, 132, 0.85)";
   ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
   ctx.textAlign = "center";
   const spaced = (text: string) => text.split("").join("\u2009");
@@ -399,12 +469,43 @@ function strokeOffset(ctx: CanvasRenderingContext2D, view: View, line: Point[], 
   ctx.stroke();
 }
 
-function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
+/**
+ * The other side's vehicles on each road now: danfos, kekes and okadas, and trucks -- rolled
+ * a little frame to frame (`band`), so a band doesn't jump each time a danfo leaves a road.
+ * The one piece of display state the renderer keeps; it's only how wide a band draws.
+ */
+const band = new Map<string, { informal: number; trucks: number }>();
+function otherSideOnRoads(world: GameWorld): Map<string, { informal: number; trucks: number }> {
+  const now = new Map<string, { informal: number; trucks: number }>();
+  for (const vehicle of world.simulation.vehicles) {
+    if (vehicle.lifecycle !== "one-shot") continue;
+    const length = vehicle.path.length;
+    if (length < 2 || vehicle.pathIndex >= length) continue;
+    const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length]!;
+    const id = world.simulation.routing.graph.get(from)?.find((edge) => edge.to === vehicle.path[vehicle.pathIndex])?.segmentId;
+    if (!id) continue;
+    const mode = world.informal.active.get(vehicle.id)?.mode ?? (vehicle.id.startsWith("truck-") ? "truck" : "danfo");
+    const count = now.get(id) ?? { informal: 0, trucks: 0 };
+    if (mode === "truck") count.trucks += 1;
+    else count.informal += 1;
+    now.set(id, count);
+  }
+  for (const id of new Set([...band.keys(), ...now.keys()])) {
+    const was = band.get(id) ?? { informal: 0, trucks: 0 };
+    const is = now.get(id) ?? { informal: 0, trucks: 0 };
+    band.set(id, { informal: was.informal + (is.informal - was.informal) * 0.08, trucks: was.trucks + (is.trucks - was.trucks) * 0.08 });
+  }
+  return band;
+}
+
+function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, crowd: ReadonlyMap<string, { informal: number; trucks: number }>): void {
   ctx.lineCap = "round";
   const struck = struckSegments(world);
   const encroached = laneEncroachment(world);
   for (const segment of world.simulation.map.segments) {
     const line = segmentPolyline(world.simulation.map, segment);
+    fadeNow = segmentFade(segment.id);
+    ctx.globalAlpha = fadeNow;
     if (segment.type === "rail") {
       const disused = world.railOutOfService.has(segment.id);
       const kept = !disused && world.maintained.has(segment.id);
@@ -425,17 +526,17 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
     // A retired road (retire.ts): faded and broken, until it's gone.
     if (segment.retiredAt !== undefined) {
       ctx.strokeStyle = COLORS.dirtRoad;
-      ctx.globalAlpha = 0.45;
+      ctx.globalAlpha = alpha(0.45);
       ctx.lineWidth = 4;
       ctx.setLineDash([3, 6]);
       strokeLine(ctx, view, line);
       ctx.setLineDash([]);
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = alpha(1);
       continue;
     }
     // A bridge deck under the road where it crosses water.
     ctx.strokeStyle = COLORS.bridge;
-    ctx.lineWidth = 13;
+    ctx.lineWidth = 13 * markScale;
     ctx.lineCap = "butt";
     ctx.setLineDash([]);
     for (const run of bridgeRuns(world, line)) strokeLine(ctx, view, run);
@@ -443,18 +544,18 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
     // Paved roads drawn solid, dirt dashed -- by surface, not by who built
     // it: since step 5 the roads you build are born dirt.
     const built = !isDirt(segment);
-    // Traffic: a slowing road gets a casing from amber to red, under the
-    // road itself -- the same speed that slows the buses on it.
+    // Traffic, under the road (the information lab, 2026-10-23): a casing as wide as the
+    // traffic it carries against what it can before it jams, coloured by how full it runs --
+    // grey free, orange busy, red jammed: the same speed that slows the buses on it. Yellow
+    // stays the informal sector's alone.
     const speed = world.segmentSpeed.get(segment.id) ?? 1;
-    if (speed < SLOW_ROAD_SPEED) {
-      const severity = Math.min(1, (SLOW_ROAD_SPEED - speed) / (SLOW_ROAD_SPEED - 0.4));
-      ctx.strokeStyle = severity > 0.5 ? COLORS.jam : COLORS.slow;
-      ctx.globalAlpha = 0.35 + 0.55 * severity;
-      ctx.lineWidth = 12 + 6 * severity;
-      ctx.setLineDash([]);
-      strokeLine(ctx, view, line);
-      ctx.globalAlpha = 1;
-    }
+    const load = Math.min(1.2, (world.roadFlowEMA.get(segment.id) ?? 0) / Math.max(1e-6, roadCapacity(world, segment.id)));
+    ctx.strokeStyle = speed < JAMMED_ROAD_SPEED ? COLORS.jam : speed < SLOW_ROAD_SPEED ? COLORS.slow : COLORS.free;
+    ctx.globalAlpha = alpha(speed < SLOW_ROAD_SPEED ? 0.85 : 0.7);
+    ctx.lineWidth = (8 + load * 7) * markScale;
+    ctx.setLineDash([]);
+    strokeLine(ctx, view, line);
+    ctx.globalAlpha = alpha(1);
     // A bus lane (Revision 1): a band of your colour under the road, wider
     // than a route line, so it reads as the road's, not a route's.
     // Encroachment fades it, and yellow dashes -- danfos in the lane -- grow
@@ -462,11 +563,11 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
     const taken = encroached.get(segment.id) ?? 0;
     if (segment.busLane) {
       ctx.strokeStyle = COLORS.player;
-      ctx.globalAlpha = 0.35 * (1 - 0.7 * taken);
-      ctx.lineWidth = 16;
+      ctx.globalAlpha = alpha(0.35 * (1 - 0.7 * taken));
+      ctx.lineWidth = 16 * markScale;
       ctx.setLineDash([]);
       strokeLine(ctx, view, line);
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = alpha(1);
       if (taken > 0.05) {
         ctx.strokeStyle = COLORS.danfo;
         ctx.lineWidth = 5;
@@ -476,9 +577,26 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
       }
     }
     ctx.strokeStyle = built ? COLORS.builtRoad : COLORS.dirtRoad;
-    ctx.lineWidth = built ? 7 : 6;
-    ctx.setLineDash(built ? [] : [10, 5]);
+    ctx.lineWidth = (built ? 7 : 6) * markScale;
+    ctx.setLineDash(built ? [] : [10 * markScale, 5 * markScale]);
     strokeLine(ctx, view, line);
+    ctx.setLineDash([]);
+    // The other side, as bands: the informal sector yellow on one side of the road, trucks
+    // brown on the other, each as wide as how many are on it.
+    const crowded = crowd.get(segment.id);
+    if (crowded) {
+      const edge = (8 + load * 7) * markScale / 2 + 1.5 * markScale;
+      if (crowded.informal >= 0.3) {
+        ctx.strokeStyle = COLORS.danfo;
+        ctx.lineWidth = Math.min(5, 1 + crowded.informal * 0.35) * markScale;
+        strokeOffset(ctx, view, line, -edge);
+      }
+      if (crowded.trucks >= 0.3) {
+        ctx.strokeStyle = COLORS.goods;
+        ctx.lineWidth = Math.min(5, 1 + crowded.trucks * 0.35) * markScale;
+        strokeOffset(ctx, view, line, edge);
+      }
+    }
     // A strike (pushback.ts): the road struck through in red, named where it happens.
     if (struck.has(segment.id)) {
       ctx.strokeStyle = COLORS.strike;
@@ -500,6 +618,8 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
       drawCracks(ctx, view, line, segment.condition);
     }
   }
+  fadeNow = 1;
+  ctx.globalAlpha = 1;
   ctx.setLineDash([]);
 }
 
@@ -594,7 +714,7 @@ function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view:
 // hue, tell road and rail apart (principles §3, Display). Derelict track is
 // faded, its sleepers broken up: on the map, but nothing runs on it.
 function drawTrack(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, line: Point[], derelict: boolean): void {
-  ctx.globalAlpha = derelict ? 0.45 : 1;
+  ctx.globalAlpha = alpha(derelict ? 0.45 : 1);
   ctx.strokeStyle = COLORS.bridge;
   ctx.lineWidth = 11;
   ctx.lineCap = "butt";
@@ -619,7 +739,7 @@ function drawTrack(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
   strokeLine(ctx, view, line);
   ctx.setLineDash([]);
   ctx.lineCap = "round";
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha(1);
 }
 
 function drawCracks(ctx: CanvasRenderingContext2D, view: View, line: Point[], condition: number): void {
@@ -628,7 +748,7 @@ function drawCracks(ctx: CanvasRenderingContext2D, view: View, line: Point[], co
   const wear = Math.min(1, (0.85 - condition) / 0.55);
   const spacing = 4 - 3 * wear;
   ctx.strokeStyle = COLORS.crack;
-  ctx.globalAlpha = 0.45 + 0.4 * wear;
+  ctx.globalAlpha = alpha(0.45 + 0.4 * wear);
   ctx.lineWidth = 1.5;
   for (let at = spacing / 2; at < length; at += spacing) {
     const [, rest] = splitPolyline(line, at);
@@ -641,7 +761,7 @@ function drawCracks(ctx: CanvasRenderingContext2D, view: View, line: Point[], co
     ctx.lineTo(s.x + Math.cos(angle) * 4, s.y + Math.sin(angle) * 4);
     ctx.stroke();
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha(1);
 }
 
 function drawRoadHighlight(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, segmentId: string): void {
@@ -657,6 +777,8 @@ function drawRoadHighlight(ctx: CanvasRenderingContext2D, world: GameWorld, view
 
 /** Roads slower than this share of free flow draw a traffic casing. */
 const SLOW_ROAD_SPEED = 0.9;
+/** Below this a road reads as jammed (red); between it and SLOW_ROAD_SPEED, busy (orange). */
+const JAMMED_ROAD_SPEED = 0.7;
 
 // Each route is drawn as a coloured line over the roads it runs on, offset
 // a little per route so two routes sharing a road both stay visible.
@@ -666,21 +788,21 @@ const SLOW_ROAD_SPEED = 0.9;
 // parallel to the road in its slot, road by road. Slots are counted in the
 // road's own direction, so a route keeps its side whichever way it runs.
 function drawRouteLines(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
-  const SPACING = 4;
-  const lines: Array<{ edges: Array<{ from: string; to: string; routing: RoutingContext }>; color: string; dashed: boolean }> = [];
+  const SPACING = 4 * markScale;
+  const lines: Array<{ id: string; edges: Array<{ from: string; to: string; routing: RoutingContext }>; color: string; dashed: boolean }> = [];
   world.routes.forEach((route, index) => {
     const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
     if (!vehicle) return;
     const half = halfPath(vehicle.path, route.a, route.b);
     const routing = routingFor(world, vehicle);
-    lines.push({ edges: half.slice(1).map((to, i) => ({ from: half[i]!, to, routing })), color: routeColor(index), dashed: false });
+    lines.push({ id: route.id, edges: half.slice(1).map((to, i) => ({ from: half[i]!, to, routing })), color: routeColor(index), dashed: false });
   });
   for (const route of world.lorryRoutes) {
     const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
     if (!vehicle) continue;
     const half = halfPath(vehicle.path, route.a, route.b);
     const routing = routingFor(world, vehicle);
-    lines.push({ edges: half.slice(1).map((to, i) => ({ from: half[i]!, to, routing })), color: COLORS.goods, dashed: true });
+    lines.push({ id: route.id, edges: half.slice(1).map((to, i) => ({ from: half[i]!, to, routing })), color: COLORS.goods, dashed: true });
   }
   // Each road's routes, in the order they're drawn: their slots across it.
   const segmentOf = (from: string, to: string, routing: RoutingContext) => routing.graph.get(from)?.find((edge) => edge.to === to)?.segmentId ?? `${from}>${to}`;
@@ -693,12 +815,13 @@ function drawRouteLines(ctx: CanvasRenderingContext2D, world: GameWorld, view: V
       onSegment.set(id, list);
     }
   });
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 3 * markScale;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   lines.forEach((line, k) => {
+    fadeNow = focus && !focus.routes.has(line.id) ? FADED : 1;
     ctx.strokeStyle = line.color;
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = alpha(0.85);
     ctx.setLineDash(line.dashed ? [8, 5] : []);
     for (const edge of line.edges) {
       const id = segmentOf(edge.from, edge.to, edge.routing);
@@ -711,8 +834,9 @@ function drawRouteLines(ctx: CanvasRenderingContext2D, world: GameWorld, view: V
       strokeParallel(ctx, points, offset * sign);
     }
   });
+  fadeNow = 1;
   ctx.setLineDash([]);
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha(1);
   ctx.lineCap = "butt";
 }
 
@@ -782,7 +906,7 @@ function drawDesireLines(ctx: CanvasRenderingContext2D, world: GameWorld, view: 
     ctx.font = "600 11px system-ui, sans-serif";
     const label = `${perDay}/day`;
     const w = ctx.measureText(label).width + 8;
-    ctx.fillStyle = "rgba(255,253,248,0.9)";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.beginPath();
     ctx.roundRect(mid.x - w / 2, mid.y - 9, w, 17, 4);
     ctx.fill();
@@ -847,7 +971,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, 
     const right = window.innerWidth > 900 ? window.innerWidth - 300 : window.innerWidth;
     const x = ghost.to.x + 12 + w > right - 8 ? Math.max(8, ghost.to.x - 12 - w) : ghost.to.x + 12;
     const y = ghost.to.y - 26 - (h - 22);
-    ctx.fillStyle = "rgba(255,253,248,0.95)";
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -876,20 +1000,36 @@ function vehiclePose(world: GameWorld, view: View, vehicle: Vehicle): { x: numbe
   const angle = next === here ? Math.atan2(here.y - prev.y, here.x - prev.x) : Math.atan2(next.y - here.y, next.x - here.x);
   const p = toScreen(view, here.x, here.y);
   // Keep right: opposite directions on one road don't overlap.
-  const side = 5;
+  const side = 5 * markScale;
   return { x: p.x - Math.sin(angle) * side, y: p.y + Math.cos(angle) * side, angle };
 }
 
-function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
+function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, oneByOne: boolean): void {
   const routeIndex = new Map<string, number>();
   world.routes.forEach((route, index) => route.vehicleIds.forEach((id) => routeIndex.set(id, index)));
+  const routeOf = new Map<string, string>();
+  for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
+  // Focus: a vehicle of a route out of focus, or on a road out of focus, draws faded.
+  const vehicleFade = (vehicle: Vehicle): number => {
+    if (!focus) return 1;
+    const route = routeOf.get(vehicle.id);
+    if (route) return focus.routes.has(route) ? 1 : FADED;
+    const length = vehicle.path.length;
+    const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length];
+    const id = from ? world.simulation.routing.graph.get(from)?.find((edge) => edge.to === vehicle.path[vehicle.pathIndex])?.segmentId : undefined;
+    return id && focus.segments.has(id) ? 1 : FADED;
+  };
 
   for (const vehicle of world.simulation.vehicles) {
+    // At 4x and zoomed out, the other side is its bands (drawRoads): only yours move.
+    if (!oneByOne && vehicle.lifecycle === "one-shot") continue;
     const pose = vehiclePose(world, view, vehicle);
     if (!pose) continue;
     ctx.save();
+    ctx.globalAlpha = vehicleFade(vehicle);
     ctx.translate(pose.x, pose.y);
     ctx.rotate(pose.angle);
+    ctx.scale(markScale, markScale);
     if (vehicle.lifecycle === "one-shot") {
       drawInformal(ctx, world.informal.active.get(vehicle.id)?.mode ?? "danfo");
     } else if (world.railVehicles.has(vehicle.id) && vehicle.carries === "goods") {
@@ -921,7 +1061,7 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
     } else if (vehicle.carries === "goods") {
       // A lorry: longer than a bus, brown, filled from the back by its load.
       const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
-      ctx.fillStyle = "#fffdf8";
+      ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = COLORS.goods;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -936,7 +1076,7 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
       const load = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / vehicle.capacity;
       // A minibus is drawn smaller than a bus, a BRT bus longer (articulated): the size is the seats.
       const half = vehicle.id.startsWith("minibus-") ? 6.5 : vehicle.id.startsWith("brt-") ? 15 : 10;
-      ctx.fillStyle = "#fffdf8";
+      ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -1095,6 +1235,23 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   }
   if (world.yards.has(town.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
   if (world.parks.has(town.id)) drawParkMark(ctx, p.x + r - 1, p.y - r - 6);
+  // A problem here (its card says what and the move): an amber mark at the town's top-right,
+  // inside its ring -- the map says where before any card is read.
+  if (state.problems?.has(town.id)) {
+    const mx = p.x + r * 0.72;
+    const my = p.y - r * 0.72;
+    ctx.fillStyle = COLORS.slow;
+    ctx.beginPath();
+    ctx.arc(mx, my, 6.5 * markScale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = `700 ${Math.round(10 * markScale)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("!", mx, my + 0.5);
+    ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+  }
   if ((world.metros.get(town.id) ?? 0) > 0) drawMetroMark(ctx, p.x - r - 7, p.y + r - 3, world.metros.get(town.id)!);
 
   drawWaiting(ctx, p.x + ringR + 8, p.y - ringR + 2, waitingAt(world, town.id));
@@ -1175,8 +1332,8 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
   ctx.rect(p.x - half, p.y - half, half * 2, half * 2);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = "#fffdf8";
-  ctx.strokeStyle = "#fffdf8";
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   if (town.industry === "depot") {
@@ -1263,7 +1420,7 @@ function drawIndustry(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
   if (production && production.capacity > 0) {
     const share = Math.min(1, production.made / production.capacity);
     const gy = p.y + half + 3;
-    ctx.fillStyle = "rgba(60, 45, 20, 0.18)";
+    ctx.fillStyle = "rgba(20, 30, 45, 0.18)";
     ctx.fillRect(p.x - half, gy, 2 * half, 3);
     ctx.fillStyle = production.limit === "idle" ? COLORS.home : share >= 0.8 ? COLORS.grow : share >= 0.4 ? COLORS.danfo : COLORS.ghostBad;
     ctx.fillRect(p.x - half, gy, 2 * half * Math.max(share, production.limit === "idle" ? 1 : 0.04), 3);

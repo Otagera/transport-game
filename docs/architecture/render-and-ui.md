@@ -466,3 +466,29 @@ terrain isn't applied: the map still draws shaded hills.
   the tool and towns to the same action the preview forecast).
 - **Minibus tool** (M) under On roads; minibuses draw smaller than buses; route rows,
   reasons and receipts name them ("2 minibuses", "Another minibus on …").
+
+### The map layer (2026-10-23; the information lab's rules, brief: the carry-over plan)
+
+- **Neutral greys** for the ground, panels and ink (`index.html` tokens, `render.ts` `COLORS`);
+  yellow is the informal sector's alone, so busy roads are orange (`COLORS.slow`).
+- **Roads by traffic** (`drawRoads`): every road gets a casing under its surface, as wide as
+  its flow against its capacity (`roadFlowEMA` / `roadCapacity`), coloured by its speed --
+  grey free, orange under `SLOW_ROAD_SPEED`, red under `JAMMED_ROAD_SPEED`. The surface on
+  top keeps the ladder: dirt dashed, paved solid, a lane's blue band.
+- **The other side as bands** (`otherSideOnRoads`): danfos, kekes and okadas on each road as
+  a yellow band on one side, the hauliers' trucks brown on the other, each as wide as how
+  many are on it, rolled a little frame to frame so a band doesn't jump (the one piece of
+  display state the renderer keeps). Drawn always; the vehicles themselves only when there's
+  room (`oneByOne`): below 4x, or zoomed in to 2x. At 4x the swarm was unreadable in play.
+- **Zoom and pan** (`main.ts`): the wheel zooms toward the cursor up to 6x, a drag pans once
+  zoomed (a drag never also clicks), `0` or Fit shows the whole map; the view keeps a zoom and
+  the map point it looks at, so a resize keeps your place. `View.fit` is the whole-map scale;
+  `markScale` (the square root of the zoom) grows roads, route lines, vehicles and towns
+  slower than the map, so they spread apart rather than shrink to specks.
+- **Focus** (`focusOf`): hovering or selecting a town, or hovering a route's card, keeps its
+  roads and routes (and the vehicles on them) at full strength and fades the rest; every
+  transparency the map sets goes through `alpha()` so it fades with it.
+- **A problem mark**: an amber `!` on each town your routes serve whose card names a problem
+  (`townsWithProblems`, rechecked twice a second). Only served towns: on day 2 every town had
+  one, and a cut-off town has its "no road" label.
+

@@ -22,7 +22,8 @@ The engine's foundation (map, pathing, simulation, economy, paratransit) stays.
 **Next: the information design, layer by layer, each played before the next** (brief, the
 carry-over plan; settled in the information lab, `/info-lab.html`):
 
-1. **The map at a glance:** roads by traffic and how full (grey, orange, red), your service
+1. **The map at a glance** -- built 2026-10-23 on branch `map-layer`, **not yet played**
+   (render-and-ui.md §7, the map layer): roads by traffic and how full (grey, orange, red), your service
    and your vehicles' fill, the other side's vehicles as bands with individuals on top when
    there's room (detail by speed and zoom), focus, zoom and pan, a town's biggest problem
    as a mark, neutral greys.

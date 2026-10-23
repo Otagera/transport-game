@@ -6,27 +6,29 @@
     <title>Transport Game</title>
     <style>
       :root {
-        --bg: #e6dcc5;
-        --panel: #fffdf8;
-        --ink: #2b2925;
-        --muted: #7a7368;
-        --line: #d9ccae;
+        --bg: #e9edf1;
+        --panel: #ffffff;
+        --ink: #1b2129;
+        --muted: #7b8694;
+        --line: #dde3ea;
         --player: #2f6fdb;
         --danfo: #f2c200;
         --danfo-light: #f8e08a;
-        --home: #a59d90;
+        --home: #a3abb5;
         --goods: #8a5a2b;
-        --home-text: #7a7368;
+        --home-text: #6b7581;
         --good: #2b8a3e;
         --bad: #c92a2a;
-        /* The design lab's "brief, step 8" look (src/design-lab/main.ts PRESETS.brief):
-           paper theme, blue, solid panels, mono labels, soft corners, chips headline,
-           town and route cards, a control hint line. */
+        /* Neutral cool greys (the information lab, 2026-10-23: the paper brown went);
+           otherwise the design lab's step 8 look: blue, mono labels, soft corners. */
         --label-font: ui-monospace, SFMono-Regular, Menlo, monospace;
         --label-tracking: 0.12em;
         --radius: 16px;
         --chip-bg: rgba(255, 255, 255, 0.7);
       }
+      #zoom-control { position: fixed; right: 80px; top: 76px; display: flex; gap: 4px; z-index: 4; }
+      #zoom-control button { font: 600 13px system-ui, sans-serif; min-width: 30px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+      #zoom-control button:hover { border-color: var(--muted); }
       html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; font: 14px/1.4 system-ui, sans-serif; }
       #map { position: fixed; inset: 0; display: block; }
       #strip {
@@ -66,7 +68,7 @@
       .wing {
         --side: 1; --dock-now: 1; --tilt-now: 1;
         position: fixed; top: 72px; bottom: 132px; width: 300px; box-sizing: border-box; overflow: hidden; z-index: 6;
-        background: rgb(255 253 248 / 0.68); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        background: rgb(255 255 255 / 0.68); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
         border: 1px solid var(--line); border-radius: var(--radius);
         box-shadow: 0 0 0 1px rgb(120 180 255 / 0.25), 0 16px 48px rgb(40 110 220 / 0.18);
         transform: perspective(1400px) translateX(calc(var(--side) * var(--dock-now) * (100% - 44px))) rotateY(calc(var(--side) * var(--tilt-now) * -7deg));
@@ -83,7 +85,7 @@
       .wing:not(:hover):not(:focus-within):not(.out):not(.pinned) .wing-body { opacity: 0; }
       .spine {
         position: absolute; top: 0; bottom: 0; width: 44px; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 10px;
-        writing-mode: vertical-rl; cursor: pointer; background: rgb(255 253 248 / 0.96); transition: opacity 0.2s; font-size: 12px; white-space: nowrap;
+        writing-mode: vertical-rl; cursor: pointer; background: rgb(255 255 255 / 0.96); transition: opacity 0.2s; font-size: 12px; white-space: nowrap;
       }
       .spine .k { font-size: 10px; }
       .spine .num { font-weight: 650; }
@@ -96,12 +98,12 @@
       .panel-body .hint, .panel-body .empty { margin: 2px 0 8px; color: var(--muted); font-size: 12px; }
       .panel-body .muted { color: var(--muted); font-weight: 400; }
       .panel-body .results { list-style: none; margin: 0 0 12px; padding: 0; font-size: 12px; line-height: 1.4; }
-      .panel-body .results li { padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; background: #f6f2e8; }
+      .panel-body .results li { padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; background: #f3f5f8; }
       .panel-body .results li.good { border-left: 3px solid var(--good); }
       .panel-body .results li.bad { border-left: 3px solid var(--bad); }
       .panel-body .results li.pending { color: var(--muted); font-style: italic; }
       .panel-body .moves { list-style: none; margin: 0 0 12px; padding: 0; font-size: 12px; line-height: 1.35; }
-      .panel-body .moves li { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; background: #f6f2e8; }
+      .panel-body .moves li { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; background: #f3f5f8; }
       .panel-body .moves li.good { border-left: 3px solid var(--good); }
       .panel-body .moves li.bad { border-left: 3px solid var(--bad); }
       .panel-body .moves li span { font-weight: 600; }
@@ -124,7 +126,7 @@
       .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--line); }
       .dots i.on { background: var(--player); }
       /* Route cards */
-      .route-card { margin: 0 0 8px; padding: 9px 11px; border: 1px solid var(--line); border-radius: calc(var(--radius) * 0.8); background: #fbf8f0; }
+      .route-card { margin: 0 0 8px; padding: 9px 11px; border: 1px solid var(--line); border-radius: calc(var(--radius) * 0.8); background: #f6f8fa; }
       .route-card .top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
       .route-card .net { font-weight: 650; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
       .route-card .name { display: flex; align-items: center; gap: 6px; font-weight: 650; font-size: 14px; margin: 2px 0; }
@@ -192,7 +194,7 @@
       #toolbar {
         /* Right of the key, left of the side panel: nine tools don't fit centred over a wide key. */
         position: fixed; right: 316px; bottom: 16px;
-        display: flex; gap: 4px; align-items: flex-end; padding: 4px; background: rgb(255 253 248 / 0.78); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--line); border-radius: var(--radius);
+        display: flex; gap: 4px; align-items: flex-end; padding: 4px; background: rgb(255 255 255 / 0.78); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--line); border-radius: var(--radius);
       }
       #toolbar button { border: 1px solid transparent; background: none; border-radius: 7px; padding: 6px 8px; font: inherit; cursor: pointer; color: var(--ink); white-space: nowrap; }
       #toolbar button.active { background: var(--ink); color: var(--panel); }
@@ -200,8 +202,8 @@
       #toolbar .group { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 4px 4px; border-radius: 8px; }
       #toolbar .cap { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
       #toolbar .row { display: flex; gap: 2px; align-items: center; }
-      #toolbar .group.road { background: rgba(196, 171, 124, 0.22); }
-      #toolbar .group.rail { background: rgba(58, 54, 50, 0.1); }
+      #toolbar .group.road { background: rgba(150, 160, 175, 0.22); }
+      #toolbar .group.rail { background: rgba(30, 40, 55, 0.1); }
       #toolbar .group.build { border: 1px dashed var(--line); }
       #toolbar .group.time { margin-left: 4px; }
       #toolbar .switch { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; padding: 1px; }
@@ -214,7 +216,7 @@
       body:not([data-dev="true"]) #toolbar { right: auto; left: 50%; transform: translateX(-50%); }
       body:not([data-dev="true"]) #key { display: none; }
       /* A hint: beside the town it's about, else over the control line. */
-      #hint { position: fixed; left: 50%; bottom: 160px; transform: translateX(-50%); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--player); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(60, 45, 20, 0.18); font-size: 13px; line-height: 1.35; }
+      #hint { position: fixed; left: 50%; bottom: 160px; transform: translateX(-50%); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--player); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(20, 30, 45, 0.18); font-size: 13px; line-height: 1.35; }
       #hint.anchored { bottom: auto; transform: none; }
       #hint[hidden] { display: none; }
       #hint button { flex: none; border: 1px solid var(--line); background: none; border-radius: 6px; padding: 1px 6px; cursor: pointer; font: 11px var(--label-font); color: var(--muted); }
@@ -224,8 +226,8 @@
       #treasury {
         position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
         width: min(1100px, calc(100% - 140px)); box-sizing: border-box; z-index: 5; overflow: hidden;
-        max-height: 34px; background: rgb(255 253 248 / 0.82); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--line); border-radius: var(--radius);
-        box-shadow: 0 6px 20px rgba(60, 45, 20, 0.12); transition: max-height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s;
+        max-height: 34px; background: rgb(255 255 255 / 0.82); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--line); border-radius: var(--radius);
+        box-shadow: 0 6px 20px rgba(20, 30, 45, 0.12); transition: max-height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s;
       }
       #treasury:hover, #treasury:focus-within, #treasury.pinned { max-height: min(460px, calc(100vh - 220px)); overflow-y: auto; transition-delay: 0s; }
       #treasury .tab { height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 14px; font-size: 12px; white-space: nowrap; cursor: pointer; }
