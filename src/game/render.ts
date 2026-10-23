@@ -307,10 +307,11 @@ function strokeOffset(ctx: CanvasRenderingContext2D, view: View, line: Point[], 
 
 // --- Ground ------------------------------------------------------------------------------
 
-// The terrain, drawn once a world at TERRAIN_PX pixels a cell: the river's edge where the
-// interpolated water crosses a half (a crisp, smooth line, a pixel of antialiasing), the hills a
-// wash by interpolated height. One pixel a cell stretched to the screen read as a blur (playtest,
-// 2026-10-23: "why is the background blurs?"); unsmoothed, as blocks.
+// The terrain, drawn once a world at TERRAIN_PX pixels a cell. The water from the map's own
+// river and sea lines (each a width from point to point, as terrain.ts makes its cells), so its
+// edge is a smooth curve at any zoom: interpolating the cells drew their staircase on the
+// region's long rivers (playtest, 2026-10-23). The hills in relief, lit from the north-west, so a
+// range reads as ground rising and falling, not a grey wash ("the hills too are not clear").
 const TERRAIN_PX = 12;
 let terrainImage: { world: GameWorld; canvas: HTMLCanvasElement } | null = null;
 function terrainCanvas(world: GameWorld): HTMLCanvasElement {
@@ -327,7 +328,6 @@ function terrainCanvas(world: GameWorld): HTMLCanvasElement {
   const land = hex(COLORS.ground);
   const water = hex(COLORS.water);
   const hill = hex(COLORS.hill);
-  const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
   const at = (field: ArrayLike<number>, x: number, y: number) => field[Math.max(0, Math.min(H - 1, y)) * W + Math.max(0, Math.min(W - 1, x))]!;
   const bilinear = (field: ArrayLike<number>, fx: number, fy: number) => {
     const x0 = Math.floor(fx);
@@ -338,20 +338,87 @@ function terrainCanvas(world: GameWorld): HTMLCanvasElement {
     const bot0 = at(field, x0, y0 + 1) * (1 - tx) + at(field, x0 + 1, y0 + 1) * tx;
     return top0 * (1 - ty) + bot0 * ty;
   };
+  // Relief a cell at a time, then interpolated: the slope facing the light (north-west) is lit,
+  // the far side shaded; scaled so the map's steepest slope is full shade.
+  const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
+  const relief = new Float32Array(W * H);
+  const slope = new Float32Array(W * H);
+  let steepest = 0;
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const dx = (at(terrain.elevation, x + 1, y) - at(terrain.elevation, x - 1, y)) / 2;
+      const dy = (at(terrain.elevation, x, y + 1) - at(terrain.elevation, x, y - 1)) / 2;
+      relief[y * W + x] = dx + dy;
+      slope[y * W + x] = Math.hypot(dx, dy);
+      steepest = Math.max(steepest, Math.abs(dx + dy));
+    }
+  }
+  // Contours: five to the highest hill, a line a pixel wide wherever the ground crosses one.
+  const interval = top / 5;
+  const lit = [255, 255, 255];
   for (let py = 0; py < c.height; py += 1) {
     for (let px = 0; px < c.width; px += 1) {
       // Cell centres sit on integer coordinates, the canvas cell's middle.
       const fx = (px + 0.5) / TERRAIN_PX - 0.5;
       const fy = (py + 0.5) / TERRAIN_PX - 0.5;
-      const wet = bilinear(terrain.water, fx, fy);
-      const k = Math.min(0.35, (bilinear(terrain.elevation, fx, fy) / top) * 0.35);
-      const dry = [land[0]! * (1 - k) + hill[0]! * k, land[1]! * (1 - k) + hill[1]! * k, land[2]! * (1 - k) + hill[2]! * k];
-      // A sharp edge at half: a pixel's worth of blend either side of it.
-      const m = Math.max(0, Math.min(1, (wet - 0.5) * TERRAIN_PX * 0.5 + 0.5));
-      img.data.set([dry[0]! * (1 - m) + water[0]! * m, dry[1]! * (1 - m) + water[1]! * m, dry[2]! * (1 - m) + water[2]! * m, 255], (py * c.width + px) * 4);
+      const height = bilinear(terrain.elevation, fx, fy) / top;
+      const shade = steepest > 0 ? Math.max(-1, Math.min(1, bilinear(relief, fx, fy) / steepest)) : 0;
+      // Darker the higher it is; lit faces toward white, shaded ones toward the hill grey.
+      const e = height * top;
+      const level = e / interval;
+      const toLine = (Math.abs(level - Math.round(level)) * interval) / Math.max(1e-6, bilinear(slope, fx, fy) / TERRAIN_PX);
+      const contour = level > 0.5 && toLine < 1 ? 0.35 * (1 - toLine) : 0;
+      const k = Math.min(0.2, height * 0.2) + (shade < 0 ? -shade * 0.35 : 0) + contour;
+      const l = shade > 0 ? shade * 0.5 : 0;
+      img.data.set([0, 1, 2].map((i) => land[i]! * (1 - k - l) + hill[i]! * k + lit[i]! * l).concat(255), (py * c.width + px) * 4);
     }
   }
   g.putImageData(img, 0, 0);
+  const lines = world.waterLines;
+  if (lines) {
+    // Each stretch a tapered capsule, as terrain.ts's cells are made: a disc at each point, the
+    // band between two widths, all one fill.
+    g.save();
+    g.scale(TERRAIN_PX, TERRAIN_PX);
+    g.translate(0.5, 0.5);
+    g.fillStyle = COLORS.water;
+    for (const river of lines) {
+      const widthAt = (k: number) => river.widths?.[k] ?? river.width;
+      river.points.forEach(([x, y], k) => {
+        g.beginPath();
+        g.arc(x, y, widthAt(k) / 2, 0, Math.PI * 2);
+        g.fill();
+      });
+      for (let k = 1; k < river.points.length; k += 1) {
+        const [ax, ay] = river.points[k - 1]!;
+        const [bx, by] = river.points[k]!;
+        const len = Math.hypot(bx - ax, by - ay) || 1;
+        const [nx, ny] = [-(by - ay) / len, (bx - ax) / len];
+        const [ra, rb] = [widthAt(k - 1) / 2, widthAt(k) / 2];
+        g.beginPath();
+        g.moveTo(ax + nx * ra, ay + ny * ra);
+        g.lineTo(bx + nx * rb, by + ny * rb);
+        g.lineTo(bx - nx * rb, by - ny * rb);
+        g.lineTo(ax - nx * ra, ay - ny * ra);
+        g.closePath();
+        g.fill();
+      }
+    }
+    g.restore();
+  } else {
+    // A world made without its lines (the run recorder's older snapshots): the cells, as before.
+    const cells = g.getImageData(0, 0, c.width, c.height);
+    for (let py = 0; py < c.height; py += 1) {
+      for (let px = 0; px < c.width; px += 1) {
+        const wet = bilinear(terrain.water, (px + 0.5) / TERRAIN_PX - 0.5, (py + 0.5) / TERRAIN_PX - 0.5);
+        const m = Math.max(0, Math.min(1, (wet - 0.5) * TERRAIN_PX * 0.5 + 0.5));
+        if (m <= 0) continue;
+        const o = (py * c.width + px) * 4;
+        for (let i = 0; i < 3; i += 1) cells.data[o + i] = cells.data[o + i]! * (1 - m) + water[i]! * m;
+      }
+    }
+    g.putImageData(cells, 0, 0);
+  }
   terrainImage = { world, canvas: c };
   return c;
 }

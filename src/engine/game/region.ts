@@ -1,4 +1,5 @@
 import type { GameHillDef, GameMapDef, GameRiverDef, GameRoadDef, GameTown } from "./types";
+import type { TerrainField } from "../map/types";
 import { createRng, type Rng } from "../map/random";
 import { UnionFind } from "../map/connectivity";
 import { planCorridor } from "../pathing/plan";
@@ -213,6 +214,42 @@ function meander(rng: Rng, a: Point, b: Point, from: number, to: number): GameRi
     widths.push(from + (to - from) * t);
   }
   return { points, width: to, widths };
+}
+
+/** Water cells a line from a to b passes over, sampled four times a cell. */
+function wetAlong(terrain: TerrainField, a: Point, b: Point): number {
+  const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 4));
+  let wet = 0;
+  for (let k = 0; k <= steps; k += 1) {
+    const x = Math.round(a.x + ((b.x - a.x) * k) / steps);
+    const y = Math.round(a.y + ((b.y - a.y) * k) / steps);
+    if (terrain.water[y * terrain.width + x] === 1) wet += 1;
+  }
+  return wet;
+}
+
+/**
+ * A planned road's line with the grid's kinks taken out (A* steps in eight
+ * directions, so a long road zigzags every few cells; playtest, 2026-10-23,
+ * "see this road"): points within ROAD_STRAIGHTEN cells of a straighter line
+ * are dropped, unless the straighter line would cross more water than the
+ * road did -- it still crosses where it was planned to.
+ */
+const ROAD_STRAIGHTEN = 2.5;
+function straightened(terrain: TerrainField, line: Point[]): Point[] {
+  if (line.length <= 2) return line;
+  const a = line[0]!;
+  const b = line[line.length - 1]!;
+  let far = 0;
+  let at = 1;
+  for (let k = 1; k < line.length - 1; k += 1) {
+    const d = toSegment(line[k]!, a, b);
+    if (d > far) [far, at] = [d, k];
+  }
+  let wetBefore = 0;
+  for (let k = 1; k < line.length; k += 1) wetBefore += wetAlong(terrain, line[k - 1]!, line[k]!);
+  if (far <= ROAD_STRAIGHTEN && wetAlong(terrain, a, b) <= wetBefore) return [a, b];
+  return [...straightened(terrain, line.slice(0, at + 1)), ...straightened(terrain, line.slice(at)).slice(1)];
 }
 
 /** Distance from a point to a box (0 inside it). */
@@ -436,7 +473,7 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
   // round the hills, over the rivers at their narrows -- not ruled straight across.
   for (const road of roads.slice(home.map.roads.length)) {
     const plan = planCorridor(terrain, [at(road.a), at(road.b)], "auto", new Set([0, 1]));
-    if (plan && plan.polyline.length > 2) road.via = plan.polyline.slice(1, -1).map((p): [number, number] => [p.x, p.y]);
+    if (plan && plan.polyline.length > 2) road.via = straightened(terrain, plan.polyline).slice(1, -1).map((p): [number, number] => [p.x, p.y]);
   }
 
   // Every town reachable by building roads: the inherited roads, plus every road

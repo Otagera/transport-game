@@ -617,6 +617,8 @@ export interface GameTuning {
 export interface GameWorld {
   /** The home cluster's box on a region map (region.ts): where the camera starts. Absent: all of it. */
   home?: { x: number; y: number; width: number; height: number };
+  /** The map's rivers and sea as drawn lines, for the screen to draw smooth (the terrain's water is their cells). */
+  waterLines?: GameRiverDef[];
   /** Money over the last game day: what the strip and route rows read (ledger.ts). */
   ledger: DayLedger;
   /** Sim time when the player's day 1 began: after the warm-up (start.ts), 0 for a cold world. */
