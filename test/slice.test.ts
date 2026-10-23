@@ -3434,7 +3434,8 @@ describe("Revision 4: towns expect service; the budget-year sweep", () => {
   });
 
   test("at the year's end, cash above the carry-over goes back; a named project's price and this year's borrowing are safe", () => {
-    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    // Off by default since C17 failed in play (2026-10-23); the mechanics stay, behind the switch.
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 0), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0, sweepEnabled: true });
     const t = w.tuning;
     w.economy.funds = t.sweepCarryMin + 30_000;
     expect(sweepDue(w)).toBeCloseTo(30_000, 6);

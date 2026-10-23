@@ -132,8 +132,11 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // guesses, to measure with the strategist (C16: money stays a decision).
   // The budget-year sweep (Revision 4, 3, a trial): every 60 days, cash above
   // the larger of ₦50k and your named project's price (plus this year's
-  // borrowing) lapses to the treasury.
-  sweepEnabled: true,
+  // borrowing) lapses to the treasury. Off since 2026-10-23: C17 failed in
+  // play ("I was waiting for the money to grow and it ate it" -- money saved
+  // for rail went), and the brief's trial said it comes out if it played like
+  // the 80% cut. Kept behind the switch, for the runs played with it.
+  sweepEnabled: false,
   sweepPeriodDays: 60,
   sweepCarryMin: 50000,
   serviceExpectEnabled: true,
