@@ -17,7 +17,7 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 export type HintId = 1 | 2 | 3 | 4 | 5 | 6;
 
 export const HINT_TEXT: Record<HintId, string> = {
-  1: "Hover a town: thick lines are where its people want to go.",
+  1: "Demand (top left) shows where people want to go; hover a town to see its roads and routes.",
   2: "A bus runs between two towns a road joins. The thickest line with a road under it is a good start.",
   3: "Dashed lines have no road. Build one (R) and danfos will come; run a bus and you will.",
   4: "Your bus leaves full: riders left behind go to the danfos.",

@@ -73,7 +73,7 @@ import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
 import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
-import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type View } from "./render";
+import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { shortVerdict } from "./verdicts";
 
@@ -2765,6 +2765,22 @@ const accumulator = new Accumulator(SIM_DT);
 let last = performance.now();
 let panelTimer = 0;
 
+// The map's overlays, one at a time (the information lab): the traffic map, or demand between
+// towns, trips with no seat, each corridor's informal share, or the biggest goods flows.
+let overlay: Overlay = "none";
+const overlaysEl = document.querySelector<HTMLDivElement>("#overlays")!;
+function renderOverlays(): void {
+  const opts: Array<[Overlay, string]> = [["none", "Traffic"], ["demand", "Demand"], ["noseat", "No seat"], ["informal", "Informal share"], ["goods", "Goods"]];
+  overlaysEl.innerHTML = opts.map(([id, label]) => `<button data-overlay="${id}" class="${overlay === id ? "on" : ""}">${label}</button>`).join("");
+}
+overlaysEl.addEventListener("click", (event) => {
+  const id = (event.target as HTMLElement).dataset.overlay as Overlay | undefined;
+  if (!id) return;
+  overlay = id;
+  renderOverlays();
+});
+renderOverlays();
+
 // The towns your routes serve whose card names a problem, for the map's mark (the information
 // lab). Only those: on day 2 every town had one (cut off, or riders with no seat), and a
 // mark on every town says nothing; a cut-off town has its "no road" label already. Rechecked
@@ -2797,7 +2813,7 @@ function frame(now: number): void {
       });
     }
   }
-  draw(ctx, world, view, { selectedTown, hoverTown, focusTown: focusTown(), ghost: ghost(), road: roadHover(), gameSpeed: speed, focusRoute, problems: townsWithProblems(now) });
+  draw(ctx, world, view, { selectedTown, hoverTown, focusTown: focusTown(), ghost: ghost(), road: roadHover(), gameSpeed: speed, focusRoute, problems: townsWithProblems(now), overlay });
 
   panelTimer += elapsed;
   if (panelTimer > 0.25) {
