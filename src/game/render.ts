@@ -11,6 +11,8 @@ import { roadCapacity } from "@engine/game/congestion";
 import { siteProduction } from "@engine/game/production";
 import { flowKey, goodsFlows } from "@engine/game/goods";
 import { cargoName } from "@engine/game/fuel";
+import { farmTowns } from "@engine/game/food";
+import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, tierOf, tierRadius, type Badge, type Glyph, type SiteState, type Tier } from "./icons";
 
 // The game's map, ported from the information lab (info-lab.html; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -89,9 +91,15 @@ export function toScreen(view: View, x: number, y: number): { x: number; y: numb
 /** Marks grow with the zoom, but slower than the map (its square root): room opens between them. */
 const growOf = (view: View) => (view.fit ? Math.sqrt(view.scale / view.fit) : 1);
 
-/** The lab's sizes: a town by its people, a site a small square; both grow with the zoom's square root. */
+/** The icons (icons.ts, agreed in the information lab 2026-10-23): a site's tile, this many px across at fit. */
+const SITE_SIZE = 17;
+/** The region's biggest town, the city (icons.ts tiers): set each draw. */
+let cityId: string | null = null;
+const tierOfTown = (town: GameTown): Tier => tierOf(town.population, town.id === cityId);
+
+/** The lab's sizes: a town by its tier and people, a site its tile; both grow with the zoom's square root. */
 export function townRadius(town: GameTown, view: View): number {
-  return (town.industry ? 6 : Math.max(5, Math.sqrt(town.population) * 1.1)) * growOf(view);
+  return (town.industry ? SITE_SIZE / 2 : tierRadius(tierOfTown(town), town.population)) * growOf(view);
 }
 
 /** A second line under a preview: what the action is forecast to do (forecast.ts). */
@@ -252,6 +260,8 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
   drawVehicles(ctx, world, view, oneByOne);
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
+  cityId = [...world.towns.values()].filter((t) => !t.industry).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id ?? null;
+  farms = world.food ? new Set(farmTowns(world).map((t) => t.id)) : new Set();
   for (const town of [...world.towns.values()].sort((p, q) => p.population - q.population)) {
     if (town.industry) drawSite(ctx, world, view, town, state);
     else drawTown(ctx, world, view, town, state);
@@ -569,28 +579,21 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
 
 // --- Towns and sites (the lab's) ------------------------------------------------------------
 
+let farms = new Set<string>();
+
 function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, town: GameTown, state: DrawState): void {
   const p = toScreen(view, town.x, town.y);
   const r = townRadius(town, view);
   const lit = state.selectedTown === town.id || state.hoverTown === town.id;
+  const tier = tierOfTown(town);
+  const close = lit || markScale * markScale >= 2;
   ctx.globalAlpha = focus && !focus.towns.has(town.id) ? 0.3 : 1;
-  ctx.fillStyle = COLORS.surface;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-  ctx.fill();
-  // The ring: you, informal, stayed home -- clockwise from the top.
+  // The town by its tier (icons.ts): body, the ring of who carries its trips, its rim.
   const share = townShare(world, town.id);
-  let start = -Math.PI / 2;
-  for (const [value, color] of [[share.player, COLORS.player], [share.informal, COLORS.danfo], [share.lost, COLORS.home]] as const) {
-    if (value <= 0) continue;
-    const end = start + value * Math.PI * 2;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r + 2.5 * markScale, start, end);
-    ctx.lineWidth = 4 * markScale;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-    start = end;
-  }
+  drawTownIcon(ctx, p.x, p.y, r, tier, { you: share.player, informal: share.informal, lost: share.lost }, { surface: COLORS.surface, ink: COLORS.ink, you: COLORS.player, informal: COLORS.danfo, home: COLORS.home });
+  // Badges: the port always; a farm town zoomed in or pointed at.
+  const badges: Badge[] = [...(town.id === world.port ? ["port" as const] : []), ...(close && farms.has(town.id) ? ["farm" as const] : [])];
+  badges.forEach((b, k) => drawBadge(ctx, p.x - r * 0.85 - k * 15, p.y + r * 0.85, 15, b, COLORS.surface));
   if (lit) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, r + 7 * markScale, 0, Math.PI * 2);
@@ -616,16 +619,15 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
     ctx.textBaseline = "middle";
     ctx.fillText("!", mx, my + 0.5);
   }
-  // Name and size for the towns the map was made with; a roadside town's name when you point at it.
-  const roadside = !world.basePopulation.has(town.id);
-  if (!roadside || lit) {
+  // Name and size for towns; a village's when zoomed in or pointed at (the region's small places stay quiet).
+  if (tier !== "village" || close) {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     // A white halo under each label, so a road under it doesn't make it hard to read.
     ctx.lineJoin = "round";
     ctx.strokeStyle = COLORS.surface;
     ctx.lineWidth = 3.5;
-    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.font = tier === "city" || tier === "regional" ? "700 13px system-ui, sans-serif" : "600 12px system-ui, sans-serif";
     ctx.strokeText(town.name, p.x, p.y + r + 7);
     ctx.fillStyle = COLORS.ink;
     ctx.fillText(town.name, p.x, p.y + r + 7);
@@ -646,15 +648,20 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   const r = townRadius(site, view);
   const lit = state.selectedTown === site.id || state.hoverTown === site.id;
   ctx.globalAlpha = focus && !focus.towns.has(site.id) ? 0.3 : 1;
+  // Its tile and glyph (icons.ts): solid working, hollow idle, an amber corner held back.
   const made = siteProduction(world, site.id);
-  ctx.fillStyle = COLORS.surface;
-  ctx.strokeStyle = made && made.capacity > 0 && made.made < 0.6 * made.capacity ? COLORS.warn : COLORS.goods;
-  ctx.lineWidth = lit ? 3 : 2;
-  ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
-  ctx.strokeRect(p.x - r, p.y - r, r * 2, r * 2);
-  if (world.yards.has(site.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
-  // Its name when you point at it (the lab's tooltip, as a label).
+  const perDay = (x: number) => x * SECONDS_PER_GAME_DAY;
+  const siteState: SiteState = !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
+  const glyph = (site.industry && site.industry in GLYPHS ? site.industry : "quarry") as Glyph;
+  drawSiteIcon(ctx, p.x, p.y, r * 2, glyph, siteState, COLORS.surface);
   if (lit) {
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(p.x - r - 4, p.y - r - 4, r * 2 + 8, r * 2 + 8);
+  }
+  if (world.yards.has(site.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
+  // Its name when you point at it, or zoomed in.
+  if (lit || markScale * markScale >= 2) {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.font = "600 11px system-ui, sans-serif";

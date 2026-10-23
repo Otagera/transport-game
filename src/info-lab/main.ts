@@ -1,7 +1,7 @@
 import { buildGameTerrain } from "@engine/game/terrain";
 import { gameMap } from "@engine/game/region";
 import { GAME_MAP } from "../game/map";
-import { BADGE_NAME, FAMILY_COLOR, FAMILY_NAME, GLYPHS, TIER_NAME, drawBadge, drawSite, drawTown, tierOf, tierRadius, type Badge, type Family, type Glyph, type SiteState, type Tier } from "./icons";
+import { BADGE_NAME, FAMILY_COLOR, FAMILY_NAME, GLYPHS, TIER_NAME, drawBadge, drawSite, drawTown, tierOf, tierRadius, type Badge, type Family, type Glyph, type SiteState, type Tier } from "../game/icons";
 
 // The information lab (docs/brief.md, the carry-over plan: information
 // design). A mock of the full game's three layers, on a game you played (a
