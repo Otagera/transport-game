@@ -75,7 +75,25 @@ It makes only 23-46% of its capacity with crude arriving (probably its workers; 
   353k; map 0 840k -> 798k (it built 3 lanes instead of 5: clearer roads for the danfos too).
   **The levy part is negligible:** all park levies come to ₦130-300 a day against a net of
   ₦2-13k, so a ₦20k park pays only through clearer roads. Yours: whether levies should matter.
-- Left in Revision 4: step 6, a metro.
+- **Step 6, a metro** (`metro.ts`; on the town card of a town of 200k+): a line at a time
+  (₦150k, then ₦100k, three at most), each carrying 15% of the town's inside trips -- the
+  kekes' and okadas' until now -- at ₦3 a rider, ₦300 a line a day to run, and lifting the
+  town's growth limit by a tenth of its start. (First cut capped the metro at 35% of inside
+  trips: a second line carried nobody in a town under ~430k.) Strategist, day 250, off -> on:
+  map 0 (Ilase, 3 lines) net ₦12.2k -> ₦18.9k a day, people 798k -> 891k, trips 3,129 -> 3,798;
+  map 2411 (Gusau, 2 lines) ₦10.6k -> ₦12.0k, money held ₦256k -> ₦18k; 543 has no town big
+  enough. Metro riders stay out of the trips-made headline.
+- **From the OpenCode playtest of 2026-10-23** (map 543 to day 151): the second refinery
+  noticed at once and a top earner; Opobo grew 108k -> 212k (no collapse with growth between
+  towns). Fixed since: a park now says what it's doing (its card: the roads into it, its levy
+  yours and the agberos'); pave and lane refusals name the roads to work on instead of "no
+  road joins them"; the BRT preview and the lane's toast say when a corridor is too thin for
+  an 80-seat bus (under 240 riders a day along it); a cement shortage names where the chain
+  breaks (works idle, no quarry working and when the next opens, a quarry not connected, or
+  cement not reaching the town).
+- **Revision 4 is built.** Before the slice closes (brief, Open question 8): the goods /
+  passengers balance -- goods were 45-60% of income with your lorries, ~2-12% now -- and the
+  carry-over plan.
 
 **Before that:** your playtest of expansion, exports at ₦20, the look.
 In a worktree meanwhile: **the strategist** (`scripts/slice-strategist.ts`), a long-game bot
