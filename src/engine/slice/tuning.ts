@@ -95,6 +95,8 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   millShare: 1.2,
   staplePerFood: 2,
   exportPayPerTonne: 20,
+  // Paid once: from the food chain (a4eeb21) to 2026-10-23 the tick paid them twice.
+  exportsPaidOnce: true,
   jobsMill: 1,
   marketTripBoost: 0.3,
   foodCapShare: 0.25,

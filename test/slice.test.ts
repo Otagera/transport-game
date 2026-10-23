@@ -3545,3 +3545,26 @@ describe("Revision 4, step 4: a second, private refinery (fuel.ts)", () => {
     expect(updateNewRefinery(old)).toBeNull();
   });
 });
+
+describe("exports are paid once (tick.ts, 2026-10-23)", () => {
+  test("a tick's funds rise by exactly the income it books, exports included", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const farm = farmTowns(w)[0]!;
+    // Hold the cash crop's arrival steady so the tick pays a known sum.
+    const key = flowKey({ from: farm.id, to: w.port!, kind: "produce" });
+    const paidTwice = (once: boolean) => {
+      const v = structuredClone(w);
+      v.tuning = { ...v.tuning, exportsPaidOnce: once, exportPayPerTonne: 1000 };
+      v.goods.outcomes.set(key, { delivered: 1, spoiled: 0 });
+      const funds = v.economy.funds;
+      const exports = v.budget.exports;
+      sliceTick(v, SIM_DT);
+      return { gained: v.economy.funds - funds, exported: v.budget.exports - exports };
+    };
+    const once = paidTwice(true);
+    const twice = paidTwice(false);
+    expect(once.exported).toBeGreaterThan(0);
+    // The old way paid the same exports in a second time.
+    expect(twice.gained - once.gained).toBeCloseTo(twice.exported, 6);
+  });
+});

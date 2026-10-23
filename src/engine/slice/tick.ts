@@ -267,9 +267,12 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // The state's allocation: a base, plus a share of the growth you caused (budget.ts).
   // And its export payment on cash crops reaching the port (food.ts): the state's, like the allocation.
   const exportsBefore = world.budget.exports;
-  const allocation = (allocationPerDay(world) * dt) / SECONDS_PER_GAME_DAY + payExports(world, dt);
+  const exported = payExports(world, dt);
+  const allocation = (allocationPerDay(world) * dt) / SECONDS_PER_GAME_DAY + exported;
   const otherIncome = takings.tolls + takings.levies + takings.loading + allocation;
-  economy.funds += otherIncome;
+  // payExports has already paid the exports in; until exportsPaidOnce they were paid again
+  // here (a4eeb21 to 2026-10-23), and run files played then replay that way.
+  economy.funds += otherIncome - (world.tuning.exportsPaidOnce ? exported : 0);
   revenueThisTick += otherIncome;
   world.budget.tolls += takings.tolls;
   world.budget.levies += takings.levies;

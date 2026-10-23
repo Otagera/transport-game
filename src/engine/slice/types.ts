@@ -164,6 +164,8 @@ export interface SliceTuning {
   millShare: number;
   staplePerFood: number;
   exportPayPerTonne: number;
+  /** Exports paid into funds once a tick (tick.ts). Run files without it replay paying them twice, as played. */
+  exportsPaidOnce: boolean;
   jobsMill: number;
   marketTripBoost: number;
   foodCapShare: number;
