@@ -49,21 +49,33 @@ strategist on maps 0 and 2411: money held peaks ₦139-175k (was ₦305k), the s
 remain -- steps 4-6 (a second refinery, motor parks, a metro) are for that. `scripts/slice-play.ts`
 plays the game from a terminal for an OpenCode player.
 
-**Revision 4, step 4, the second refinery: merged 2026-10-21 for your playtest, not yet
-settled.** A private refinery opens once, on a seeded day 90-120, by the port and far from the
-crude, working but with no road (`fuel.ts` `updateNewRefinery`; a toast that pauses the game
-once). It wants crude from the same source, fills what imports and the old refinery leave
-short, and sends the rest to the port. Strategist at day 250, without → with: maps 0 and 2411
-lay rail for its crude, net +₦0.9-1.4k a day, goods 5-12% of income where it was 0; **map 543
-collapses** (people 707k → 321k, trips 2,192 → 681) -- not from crude trucks (a refinery a
-twentieth the size collapses the same), but from the site: the strategist chases the commute
-to it next to Opobo with 53 minibuses, restores the old refinery (towns ran short of fuel, cause
-unknown), and never builds the lane, BRT and rail that grew 543 before. It also makes only
-23-46% of its capacity with crude arriving (probably its workers; unchecked). Open, also:
-cash-crop exports are paid twice a tick since `a4eeb21` (`payExports` adds to funds, and
-`tick.ts` adds it again through the allocation) -- yours to decide; and C17 failed in your
-2026-10-21 playtest (the sweep took money saved for rail), which the brief says takes the sweep
-out.
+**Revision 4, step 4, the second refinery** (merged 2026-10-21): a private refinery opens once,
+on a seeded day 90-120, by the port and far from the crude, working but with no road
+(`fuel.ts` `updateNewRefinery`; a toast that pauses the game once). It wants crude from the
+same source, fills what imports and the old refinery leave short, and sends the rest to the
+port. Strategist: maps 0 and 2411 lay rail for its crude, goods 5-12% of income where it was 0.
+It makes only 23-46% of its capacity with crude arriving (probably its workers; unchecked).
+
+**2026-10-23, on branch `r4-next` (not merged):**
+- **Exports paid once** (`exportsPaidOnce`): since `a4eeb21`, `payExports` paid cash-crop
+  exports into funds and `tick.ts` paid them again through the allocation.
+- **The sweep off** (`sweepEnabled: false`, kept behind its switch): C17 failed in your
+  2026-10-21 playtest -- it took money saved for rail. Without it money piles up again late
+  (the strategist holds ₦122k-995k by day 250): C16 fails, as it did before the trial.
+- **Growth reads service between towns, not commutes to sites** (`growthIgnoresCommutes`):
+  map 543's collapse after the second refinery was Opobo's share falling 43% -> 28% the day it
+  opened -- its 3,000 jobs' commutes, with no road, all counted as unserved -- and Opobo shrank
+  155k -> 112k. Day 250, fix off -> on: people 806k -> 840k (map 0), 326k -> 339k (543), 457k ->
+  518k (2411). 543 still trails the same branch without the second refinery (397k, 882 trips):
+  open.
+- **Step 5, motor parks** (`parks.ts`; the Park tool, O): a park at a town lets its danfos
+  load off the road -- roads touching it carry 25% more before they jam -- and the agberos keep
+  15% of its levy, not half. Strategist (a park where a big town's roads jam), day 250, off ->
+  on: map 2411 people 518k -> 752k, trips 1,100 -> 2,232, net ₦6.0k -> ₦10.6k; 543 339k ->
+  353k; map 0 840k -> 798k (it built 3 lanes instead of 5: clearer roads for the danfos too).
+  **The levy part is negligible:** all park levies come to ₦130-300 a day against a net of
+  ₦2-13k, so a ₦20k park pays only through clearer roads. Yours: whether levies should matter.
+- Left in Revision 4: step 6, a metro.
 
 **Before that:** your playtest of expansion, exports at ₦20, the look.
 In a worktree meanwhile: **the strategist** (`scripts/slice-strategist.ts`), a long-game bot
