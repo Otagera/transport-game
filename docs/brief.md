@@ -711,6 +711,20 @@ The order things come back, one per playtest, each with its own check (*supersed
 
 **Dropped -- kept behind their switches, not carried over:** your own lorries (busywork; road freight is the hauliers'); the 80% remittance and the budget-year sweep (each a confusing tax on progress -- C17 failed in play).
 
+**How the full game looks** (your answers, 2026-10-23):
+
+- **A flat map, as the slice plays it.** The 3D diorama (principles.md §3, Visual direction) waits until a good one is within reach; then it comes back as a look over the same game, not a rewrite. No 3D model pipeline (Blender or generated) until then.
+- **The look moves over with the mechanics,** not as a revision of its own after them.
+- **The information design gets a second look first:** the slice's wasn't good enough (your read). Subway Builder is the reference -- what you named from it: what you see at a glance, the side panels, and the revenue screen.
+
+**Information design for the full game (proposed 2026-10-23).** What the slice did badly: cards of up to eleven prose sections with the number buried in a sentence; problems found by hovering and reading, not seen; important changes (a strike, a refinery, a quarry closing) gone with their toast; no two cards phrased alike, so nothing compares. Three layers instead, each answering one question:
+
+1. **At a glance -- the map answers "where".** Everything that matters is drawn, not written: roads and lines by what they carry (width) and how full (colour); towns by size, with a mark when growing, shrinking or held back; problems as marks on the map where they are (a full road, a town short of cement, a corridor with riders left standing, a strike called). Overlays you switch on, one at a time: demand between towns, no seat, the informal share by corridor, each supply chain's flow. The strip at the top keeps a few numbers that move (trips made, your riders, net a day, money) with their trend.
+2. **Side panels -- the numbers answer "how much".** One panel a thing you click (town, route, line, site, corridor), every one of a kind laid out the same: a header with the few numbers that matter, a small chart of each over time, then its problem in one line with its move as a button. No paragraphs; the why on hover. Lists that sort (routes worst first, towns by growth) so you can compare.
+3. **The revenue screen -- the money answers "how am I doing".** A full screen, opened when you want it: income and costs by line (fares, goods, tolls, levies, allocation, metro; running, upkeep, fuel, levy to the treasury) over time as charts; each route and line's earnings in a sortable table; what the treasury and bonds take. The slice's Treasury drawer becomes this.
+
+Alongside: **a log of what happened** (strikes, sites opening and closing, milestones, corridors taken), kept and clickable, so a change doesn't vanish with its toast. The slice's tags and problem lines survive as map marks and one-line panel problems; its long cards and most toasts don't.
+
 **Open -- for the full game, not this slice:**
 
 1. **Road networks with junctions and intersections.** Roads join only at towns here; where two cross they pass over each other. The full game needs real networks: roads that meet, junctions as places, and traffic that slows where roads meet.
