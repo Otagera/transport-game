@@ -225,6 +225,22 @@ export interface SliceTuning {
    * a parked town carry before they jam; the agberos' cut of the levy on a departure from one.
    * Run files without them replay with none.
    */
+  /**
+   * A metro (metro.ts, Revision 4, 6): on; the smallest town (thousands); the first line's
+   * price and each more's; most lines; riders a day a line; the most of a town's inside trips it
+   * carries; fare a rider; running cost a line a day; how far it lifts growth, as a share of the
+   * town's start. Run files without them replay with none.
+   */
+  metroEnabled: boolean;
+  metroMinPopulation: number;
+  metroCost: number;
+  metroLineCost: number;
+  metroMaxLines: number;
+  metroLineRiders: number;
+  metroMaxShare: number;
+  metroFare: number;
+  metroRunningPerLine: number;
+  metroCapShare: number;
   parksEnabled: boolean;
   parkCost: number;
   parkCapacityBoost: number;
@@ -615,6 +631,8 @@ export interface SliceWorld {
   yards: Set<string>;
   /** Towns with a motor park (parks.ts). */
   parks: Set<string>;
+  /** Metro lines built, by town (metro.ts). */
+  metros: Map<string, number>;
   /** Times each site has been expanded (expand.ts), by its id. */
   expansions: Map<string, number>;
   /** The food chain's mill and crops (food.ts); null until placed, or with food off. */

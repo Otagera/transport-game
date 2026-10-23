@@ -38,6 +38,7 @@ import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopl
 import { variedSliceMap } from "@engine/slice/variation";
 import { generatedMapInfo, generatedSliceMap } from "@engine/slice/generate";
 import { agberoCutAt } from "@engine/slice/parks";
+import { metroLines, metroRiders, runMetros } from "@engine/slice/metro";
 import { indexOutcomes, townShare as shareOfTown, townShareBetweenTowns } from "@engine/slice/world";
 import { buildSliceTerrain } from "@engine/slice/terrain";
 import { SLICE_MAP } from "../src/slice/map";
@@ -3622,5 +3623,57 @@ describe("Revision 4, step 5: motor parks for danfos (parks.ts)", () => {
     expect(roadCapacity(w, touching.id)).toBeCloseTo(before * (1 + w.tuning.parkCapacityBoost), 9);
     expect(roadCapacity(w, elsewhere.id)).toBeCloseTo(roadCapacity(game(), elsewhere.id), 9);
     expect(agberoCutAt(w, town)).toBe(w.tuning.parkAgberoCut);
+  });
+});
+
+describe("Revision 4, step 6: a metro (metro.ts)", () => {
+  const game = (tuning: Partial<SliceTuning> = {}) => startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0, ...tuning });
+  const biggest = (w: SliceWorld) => [...w.basePopulation.keys()].map((id) => w.towns.get(id)!).sort((p, q) => q.population - p.population)[0]!;
+
+  test("only a big town gets one, a line at a time, up to its most, at the first line's price then the next's", () => {
+    const w = game();
+    const t = w.tuning;
+    const town = biggest(w);
+    w.economy.funds = 1e7;
+    town.population = t.metroMinPopulation - 1;
+    expect(applyAction(w, { kind: "metro", townId: town.id }).ok).toBe(false);
+    town.population = 400;
+    const funds = w.economy.funds;
+    expect(applyAction(w, { kind: "metro", townId: town.id }).ok).toBe(true);
+    expect(w.economy.funds).toBe(funds - t.metroCost);
+    for (let line = 2; line <= t.metroMaxLines; line += 1) expect(applyAction(w, { kind: "metro", townId: town.id }).ok).toBe(true);
+    expect(w.economy.funds).toBe(funds - t.metroCost - (t.metroMaxLines - 1) * t.metroLineCost);
+    expect(applyAction(w, { kind: "metro", townId: town.id }).ok).toBe(false);
+    expect(metroLines(w, town.id)).toBe(t.metroMaxLines);
+  });
+
+  test("it carries a share of the town's inside trips, by its lines; pays fares, costs its running; lifts growth", () => {
+    // Cement off: past its free stretch a town's growth waits on cement (cement.ts), metro or not.
+    const w = game({ cementEnabled: false });
+    const t = w.tuning;
+    const town = biggest(w);
+    town.population = 400;
+    w.economy.funds = 1e7;
+    const capBefore = townGrowth(w, town.id)!.cap;
+    applyAction(w, { kind: "metro", townId: town.id });
+    const inside = 400 * t.localTripsPerThousandPerDay;
+    expect(metroRiders(w, town.id).riders).toBeCloseTo(Math.min(t.metroLineRiders, t.metroMaxShare * inside), 6);
+    applyAction(w, { kind: "metro", townId: town.id });
+    applyAction(w, { kind: "metro", townId: town.id });
+    expect(metroRiders(w, town.id).share).toBeCloseTo(t.metroMaxShare, 9); // never more than its share
+    const funds = w.economy.funds;
+    const paid = runMetros(w, SECONDS_PER_GAME_DAY);
+    expect(paid.fares).toBeCloseTo(t.metroMaxShare * inside * t.metroFare, 6);
+    expect(paid.running).toBeCloseTo(3 * t.metroRunningPerLine, 6);
+    expect(w.economy.funds).toBeCloseTo(funds + paid.fares - paid.running, 6);
+    expect(townGrowth(w, town.id)!.cap).toBeGreaterThan(capBefore);
+  });
+
+  test("switched off, it never runs", () => {
+    const w = game({ metroEnabled: false });
+    w.economy.funds = 1e7;
+    const town = biggest(w);
+    town.population = 400;
+    expect(applyAction(w, { kind: "metro", townId: town.id }).ok).toBe(false);
   });
 });

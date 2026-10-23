@@ -8,6 +8,7 @@ import { cementActive, cementServed } from "./cement";
 import { jobsGrowth } from "./workers";
 import { foodGrowth } from "./food";
 import { stationTowns } from "./rail";
+import { metroGrowthShare } from "./metro";
 
 // The original towns grow (docs/principles.md §6, step 4: depth, one at a
 // time -- growth second, after decay). Served well, a town draws people;
@@ -128,7 +129,7 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   const stone = !building && tuning.goodsEnabled && tuning.industriesEnabled && world.industries.size > 0 ? stoneServed(world, townId) : 0;
   // A town a passenger train stops at grows past its rail rung (brief,
   // Revision 2: station towns grow) -- bounded, like every share, by its start.
-  const station = tuning.railEnabled && stationTowns(world).has(townId) ? tuning.stationCapShare : 0;
+  const station = (tuning.railEnabled && stationTowns(world).has(townId) ? tuning.stationCapShare : 0) + metroGrowthShare(world, townId);
   // Jobs at sites its people reach draw more (workers.ts, step 2c); new housing needs cement like any.
   const roadCap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone + station)) + jobsGrowth(world, townId) + foodGrowth(world, townId);
   // Cement holds growth back past a free stretch (brief, Revision 3, step

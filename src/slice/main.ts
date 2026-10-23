@@ -56,6 +56,7 @@ import { remittanceExpected } from "@engine/slice/budget";
 import { carryOver, sweepDue } from "@engine/slice/sweep";
 import { checkYard, yardGain } from "@engine/slice/yards";
 import { checkPark, parkLevyGain } from "@engine/slice/parks";
+import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/slice/metro";
 import { TREND_DAYS, peopleSinceStart, tripsTrend } from "@engine/slice/score";
 import { corridorSummaries } from "@engine/slice/corridors";
 import { industryFlows, stoneServed } from "@engine/slice/industries";
@@ -1410,6 +1411,21 @@ function workersProblem(siteId: string): string {
   return `Its workers can't get here: ${why}, so it makes ${pct(staffFactor(world, siteId))} of what it could. ${isCutOff(world, siteId) ? "Build a road (<kbd>R</kbd>) to it." : "Run a bus (<kbd>B</kbd>) from the town most of them live in."}`;
 }
 
+// A town's metro on its card (metro.ts, brief Revision 4, 6): what it carries and earns, and
+// the button for the first line or the next. Nothing on a town too small for one.
+function metroItem(townId: string): string {
+  const t = world.tuning;
+  const town = world.towns.get(townId);
+  if (!t.metroEnabled || !town || town.population < t.metroMinPopulation) return "";
+  const lines = metroLines(world, townId);
+  const check = checkMetro(world, townId);
+  const price = metroPrice(world, townId);
+  const button = lines < t.metroMaxLines ? ` <button data-metro="${townId}" ${check.ok ? "" : `disabled title="${check.reason}"`}>${lines === 0 ? "Build a metro" : "Add a line"}: ${naira(price)}</button>` : "";
+  if (lines === 0) return `<li>Big enough for a metro: it would carry up to ${Math.round(Math.min(t.metroLineRiders, t.metroMaxShare * town.population * t.localTripsPerThousandPerDay)).toLocaleString()} of its inside trips a day, at ${naira(t.metroFare)} each, and let it grow further.${button}</li>`;
+  const { riders, share } = metroRiders(world, townId);
+  return `<li>Metro: ${lines} line${lines > 1 ? "s" : ""}, ${Math.round(riders).toLocaleString()} riders a day (${pct(share)} of its inside trips), ${naira(riders * t.metroFare - lines * t.metroRunningPerLine)}/day after running costs.${button}</li>`;
+}
+
 // A fuel site's card (brief, Revision 3, the fuel chain): what it does, what
 // it needs, and the one thing holding it back -- idle, no crude, no road out.
 function renderFuelSite(townId: string): void {
@@ -1757,6 +1773,7 @@ function renderTown(townId: string): void {
         ${biggestLine ? `<li>${biggestLine}</li>` : ""}
         <li>Of its trips: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</li>
         <li>Inside: ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day by keke and okada, not counted against you.</li>
+        ${metroItem(townId)}
         ${world.parks.has(townId) ? `<li>Motor park: its danfos load there, not on the road; the agberos keep ${pct(world.tuning.parkAgberoCut)} of the levy.</li>` : ""}
       </ul>
       ${strikeBadge(laneAtTown(townId))}
@@ -2003,6 +2020,7 @@ function budgetParts() {
     ...(world.tuning.truckersEnabled && world.tuning.goodsEnabled ? [[`Loading levies <span class="muted">(touts kept ${naira(b.touts)})</span>`, b.loading] as [string, number]] : []),
     ["State allocation", b.allocation],
     ...(world.food && world.tuning.foodEnabled ? [["Export payments", b.exports] as [string, number]] : []),
+    ...(world.metros.size > 0 ? [["Metro fares", b.metro] as [string, number]] : []),
     ["Running costs", -b.running],
     ...(world.fuel && world.tuning.fuelEnabled ? [["Fuel above the pump price", -b.fuel] as [string, number]] : []),
     ["Road upkeep", -b.upkeep],
@@ -2395,6 +2413,16 @@ function onPanelClick(event: MouseEvent): void {
     const [a, b, rung] = target.dataset.project.split("|") as [string, string, ProjectRung];
     const result = act({ label: `saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, { kind: "project", a, b, rung });
     say(result.ok ? `Saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone while you save. Once you can afford it, build it within ${world.tuning.projectLapseDays} days, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.metro) {
+    const town = target.dataset.metro;
+    const first = metroLines(world, town) === 0;
+    const result = act({ label: first ? "a metro" : "another metro line", towns: [town] }, { kind: "metro", townId: town });
+    say(result.ok
+      ? `${first ? "Metro opened" : "Another metro line"} in ${townName(town)} for ${naira(result.amount ?? 0)}: it carries ${Math.round(metroRiders(world, town).riders).toLocaleString()} of the town's inside trips a day, at ${naira(world.tuning.metroFare)} each.`
+      : `Can't build it: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

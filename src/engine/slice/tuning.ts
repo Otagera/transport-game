@@ -152,6 +152,22 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   // so the roads touching the town carry a quarter more before they jam, and
   // the agberos keep 15% of the levy there instead of half. First guesses, to
   // measure with the strategist.
+  // A metro (Revision 4, 6): towns of 200k+, ₦150k for the first line and
+  // ₦100k each more, three at most; a line carries 1,500 riders a day, the
+  // metro at most 35% of the town's inside trips, at ₦2 a rider and ₦600 a
+  // line a day to run. Carrying all it can, it lifts the town's growth limit
+  // by 30% of its start. First guesses: a 400k town's inside trips are 4,000
+  // a day, so one line nets ~₦2,400 a day and pays back in ~two months.
+  metroEnabled: true,
+  metroMinPopulation: 200,
+  metroCost: 150000,
+  metroLineCost: 100000,
+  metroMaxLines: 3,
+  metroLineRiders: 1500,
+  metroMaxShare: 0.35,
+  metroFare: 2,
+  metroRunningPerLine: 600,
+  metroCapShare: 0.3,
   parksEnabled: true,
   parkCost: 20000,
   parkCapacityBoost: 0.25,

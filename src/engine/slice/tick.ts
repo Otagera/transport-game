@@ -15,6 +15,7 @@ import { dispatchTrucks, truckersPickUp } from "./truckers";
 import { updateRetired } from "./retire";
 import { updateIndustries } from "./industries";
 import { agberoCutAt } from "./parks";
+import { runMetros } from "./metro";
 import { corridorsAlong, updateCorridors } from "./corridors";
 import { recordMoney } from "./ledger";
 import { recordDay } from "./history";
@@ -309,6 +310,8 @@ export function sliceTick(world: SliceWorld, dt: number): SliceEvent[] {
   // Money. Running cost is whatever left the funds this tick that fares
   // didn't bring in -- buses, lorries, trains and road upkeep alike --
   // so the ledger never has to know every way money is spent.
+  // The metros' fares and running costs (metro.ts): fares are income; its running counts with the rest.
+  revenueThisTick += runMetros(world, dt).fares;
   applyOperatingCosts(economy, dt, 1, upkeep);
   updateIncomeRateEMA(economy, revenueThisTick, dt);
   const runningCost = revenueThisTick - (economy.funds - fundsAtStart);

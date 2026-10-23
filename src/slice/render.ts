@@ -1001,6 +1001,23 @@ interface Box { x: number; y: number; w: number; h: number }
 let occupied: Box[] = [];
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
+// A metro (metro.ts): a small round M at a town's bottom-left, a dot a line beside it.
+function drawMetroMark(ctx: CanvasRenderingContext2D, x: number, y: number, lines: number): void {
+  ctx.fillStyle = COLORS.player;
+  ctx.beginPath();
+  ctx.arc(x + 5, y + 5, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "700 7px ui-monospace, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("M", x + 5, y + 5.5);
+  ctx.fillStyle = COLORS.player;
+  for (let i = 0; i < lines; i += 1) ctx.fillRect(x + 12 + i * 4, y + 4, 2.5, 2.5);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
 // A motor park (parks.ts): a small danfo-yellow square with a P, at a town's top-right.
 function drawParkMark(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   ctx.fillStyle = COLORS.danfo;
@@ -1078,6 +1095,7 @@ function drawTown(ctx: CanvasRenderingContext2D, world: SliceWorld, view: View, 
   }
   if (world.yards.has(town.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
   if (world.parks.has(town.id)) drawParkMark(ctx, p.x + r - 1, p.y - r - 6);
+  if ((world.metros.get(town.id) ?? 0) > 0) drawMetroMark(ctx, p.x - r - 7, p.y + r - 3, world.metros.get(town.id)!);
 
   drawWaiting(ctx, p.x + ringR + 8, p.y - ringR + 2, waitingAt(world, town.id));
 

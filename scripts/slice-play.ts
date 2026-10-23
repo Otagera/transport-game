@@ -134,6 +134,7 @@ const HELP = `Moves (send one as JSON with "act"). Town and site ids are in "sta
   {"kind":"train"|"freight","a":ID,"b":ID}               a passenger or freight train on track
   {"kind":"fix","segmentId":SEGMENT_ID,"on":true}        keep a road up (from the moves the screen names)
   {"kind":"yard","townId":ID}                            a haulage yard: hauliers reach further from here
+  {"kind":"metro","townId":ID}                           a metro in a big town (200k+), or another line: carries its inside trips
   {"kind":"park","townId":ID}                            a motor park: danfos load off the road (roads into the town carry more), and pay you more of their levy
   {"kind":"restoreRefinery"} {"kind":"restoreWorks"}     restore an idle site
   {"kind":"expand","siteId":ID}                          another line at a site at capacity
