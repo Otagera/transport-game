@@ -725,6 +725,16 @@ The order things come back, one per playtest, each with its own check (*supersed
 
 Alongside: **a log of what happened** (strikes, sites opening and closing, milestones, corridors taken), kept and clickable, so a change doesn't vanish with its toast. The slice's tags and problem lines survive as map marks and one-line panel problems; its long cards and most toasts don't.
 
+**Settled in the information lab** (`/info-lab.html`, on your map-2418 game; agreed 2026-10-23, "all good"):
+
+- **Roads** drawn by traffic (width) and how full they run: free grey, busy orange, jammed red. Yellow means the informal sector and nothing else.
+- **Your service** as a blue line along the roads (width: your riders), and **your vehicles** filled as full as their route runs -- an empty bus reads as white.
+- **The other side's vehicles -- detail by speed and zoom:** danfos, kekes and okadas as a yellow band beside each road, trucks as a brown one, each as wide as how many are on it, at every speed and zoom; the vehicles themselves drawn on top whenever there's room (1x or 2x, or zoomed in to 2x or more at 4x). At 4x the swarm of individual vehicles was unreadable in play.
+- **Focus:** hover or select a town, route or road (on the map or in a list) and everything not part of it fades.
+- **Zoom and pan**, with marks growing slower than the map (its square root), so they spread apart rather than shrink to specks.
+- **A town's problem** is its biggest one, by what it costs, not the first kind on a list (a 3% cement shortage hid 480 trips a day with no seat).
+- **Neutral cool greys**, light and dark; no paper brown.
+
 **Open -- for the full game, not this slice:**
 
 1. **Road networks with junctions and intersections.** Roads join only at towns here; where two cross they pass over each other. The full game needs real networks: roads that meet, junctions as places, and traffic that slows where roads meet.

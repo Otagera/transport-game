@@ -131,3 +131,30 @@ wing, a drawer above the toolbar, or a drop from the strip's budget -- and contr
   markdown with the composed tokens for the brief or another session.
 - **Dev-only by construction.** It is not a `vite.config.ts` build input, so `vite build`
   never sees it; `verify:bundle` also forbids its storage key (§3).
+
+## 5. The information lab (`/info-lab.html`)
+
+A mock of the full game's information design ([brief.md](../brief.md), the carry-over plan:
+three layers after Subway Builder), started fresh beside the design lab: that one picks how the
+slice is styled, this one what the screen says. It runs on a game you played, not made-up
+numbers: `bun scripts/info-snapshot.ts run.json` replays a saved run to its last day and writes
+`src/info-lab/snapshot.json` -- the run file's own day-by-day summaries (money, the headline,
+the budget, routes, towns, events) plus the final map's state (road shapes and loads, town
+shares and growth, sites, goods flows, the moves the game names).
+
+- **At a glance** (the map): roads by traffic (width) and how full they run (free, busy,
+  jammed), your riders as a blue core along them, towns sized by people with a ring of who
+  carries their trips, trend, and an amber mark where there's a problem; overlays one at a
+  time (demand, no seat, the informal share, the 25 biggest goods flows); the strip's numbers
+  with their trend over 10 days.
+- **Side panels:** sortable lists (routes worst first, towns, sites), and one layout for
+  whatever you click -- a town, route, site or road: its numbers as tiles, a chart of it
+  over time, its problem in one line with its move as a button (a mock).
+- **The revenue screen:** income and running costs a day by line (stacked, 5-day average),
+  what the treasury took (its levy, and each sweep on its day), net and money held, totals
+  since day 1, and the routes' money as a sortable table.
+- **The log:** every event of the run, filtered by kind, clickable to its town or site.
+
+Charts follow the dataviz rules: one axis, a hover crosshair with every value, a legend with
+values (the light-mode aqua sits under 3:1 contrast, so labels carry it). Dev-only: not a
+`vite.config.ts` build input.

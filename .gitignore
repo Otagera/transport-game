@@ -4,3 +4,6 @@ dist/
 *.log
 .env
 .env.local
+
+# The information lab's data: rebuilt from a saved run (bun scripts/info-snapshot.ts run.json)
+src/info-lab/snapshot.json
