@@ -740,8 +740,48 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 1. **Road networks with junctions and intersections.** Roads join only at towns here; where two cross they pass over each other. The full game needs real networks: roads that meet, junctions as places, and traffic that slows where roads meet.
 2. **Money late in the game.** Without the sweep, money piles up after day 200 (C16 fails: ₦120k-990k held by day 250 in the strategist). The metro takes some; the full game needs late-game decisions that cost.
 3. **Eras as vehicle generations** (your framing, 2026-10-23; calendar eras stay scrapped). You start with older public-transport models; newer ones arrive over time -- dearer, better, cheaper to run, carrying more -- so an old fleet becomes a decision: replace or keep running. And the informal sector has the same thing going for it: old danfos give way to newer ones, keke and okada waves come and go, so the rival changes too. Eras are what the two fleets look like over time, not a date.
-4. **Sea and river freight** (your question, 2026-10-23). A third freight mode: heavy, slow and cheap -- coastal shipping between ports, barges on a navigable river (the Niger and Benue, the Lagos lagoon). It needs a second port or a river that boats can use; the slice has one port and a river that's only an obstacle. In the full game: ports and jetties as places you build, the river as a route as well as a barrier, and the informal sector there too (canoe and boat operators).
+4. **Sea and river freight** (your question, 2026-10-23; the gateways are in The region, below). A third freight mode: heavy, slow and cheap -- coastal shipping between ports, barges on a navigable river (the Niger and Benue, the Lagos lagoon). It needs a second port or a river that boats can use; the slice has one port and a river that's only an obstacle. In the full game: ports and jetties as places you build, the river as a route as well as a barrier, and the informal sector there too (canoe and boat operators).
 5. **Goods' share of growth** (C11 amended: the chains at least a fifth of the original towns' growth by day 150). Measured 2026-10-23: 61-79% on three maps -- passes, largely because cement gates growth past a town's first 40%.
+
+## The region (2026-10-23): the full game's map, and trade through its edges
+
+**Your answers, 2026-10-23:** the slice's map "felt like a metropolitan area, and as we played you get to the end game faster"; how the bigger map opens is open ("since we are playing with existing towns, not building afresh, we can't do the Cities: Skylines route"); sea freight now, "part of the idea is import and export through sea (and of course through land and rail)". Speed (the pairs of towns demand is worked over) goes to another agent.
+
+**What's wrong with today's map.** 100 × 64 cells, nine towns, one river, one ford: every town is a bus ride from every other, so one network of buses and a paved trunk covers it, and by day 150-250 there is nothing left to win (C16). It reads as one city's suburbs, not a country.
+
+**The region.** The same cell, the same prices per cell -- the ladder, fares by distance and the bus's economics stay as measured -- on a map about 2.5 times as wide and as tall (~250 × 160 cells), so distance itself becomes the new thing:
+
+- **Clusters, far apart.** Three to four clusters of towns, each about the size of today's map: one big city's (the start), two or three regional towns', with long empty roads between them (60-120 cells: four to eight of today's trunk legs). About 25-30 towns in all, sized city → regional towns → small towns.
+- **Inside a cluster, the game you know.** Buses, danfos, the ladder, a chain or two. **Between clusters, a different game.** A bus line 100 cells long is slow and dear and carries few; long distance is where paved highways, intercity coaches and rail -- passenger and freight -- earn their keep, and where the end game lives.
+- **Geography that matters.** A coastline along one edge, two or three rivers (one navigable, later), a range of hills rail must go round or through. The goods chains drawn twice, in different clusters, so where you connect decides what grows.
+- **The informal sector everywhere**, as now: the whole region runs from day one, and danfos and hauliers already work the far clusters before you get there.
+
+**How it opens (proposed; you weren't sure).** Nothing locked: the towns are there, as in life. You start as the home cluster's transport agency, the camera framed on it; the rest of the region is on the map, at a zoom out, running without you. What holds you to your cluster is money and distance, not a wall. If a free map turns out to be too open in play, a gate with a reason comes next (the state extending your remit to the next cluster, at a milestone) -- not first.
+
+**Trade through the region's edges** (import and export, by sea, road and rail):
+
+- **The seaport**, on the coast: imports land there (crude, wheat, cement, vehicles), exports leave (cash crops, refined fuel). The port is a place you grow: its handling (tonnes a day) is a rung like a road's.
+- **Border crossings**, one or two on land edges: trade with the next country by road (the hauliers') and, once you lay track to it, by rail. Slower and cheaper than the sea, a different mix of goods.
+- **Goods choose their way out**: an export goes to whichever gateway is cheapest from where it's made, by what's built. Connecting a border post, or growing the port, moves where the money and the trucks go.
+- Coastal shipping between ports and barges on a navigable river (Open item 4) come after the gateways, on the same rules.
+
+**Kept from the slice, unchanged:** the generator's guards (every town reachable; prices land as measured; the dominant city dominant); seed 0 the hand-made map; a run file replays as played -- a game started on the region records it in its tuning, and an old file draws the old map.
+
+### The order
+
+1. **This section, agreed or marked up.**
+2. **The generator:** the region (clusters, coast, rivers, hills, the inherited roads and an old railway between clusters), behind a tuning key; seed guards as now. The camera starts on the home cluster.
+3. **The gateways:** the port and the border crossings as places, imports and exports through them.
+4. **Re-measure:** the strategist on region maps to day 250 (C2, C11, C16 again), then your playtest.
+
+### Checks for the region
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C18 | The end game is far | In the strategist and your playtest, something worth building is still unbuilt at day 250 (C16's stretch with nothing built under 20 days, to day 250) |
+| C19 | Distance changes the vehicle | Between clusters, rail or coaches beat buses per naira on the strategist's best lines; inside one, buses still do |
+| C20 | The way out matters | Connecting a second gateway moves at least a fifth of a chain's exports to it |
+| C21 | It still reads | At the start, framed on the home cluster, the screen reads like today's map (your playtest: "I knew where to start") |
 
 ## Pass/fail checks: when slice zero is done
 
