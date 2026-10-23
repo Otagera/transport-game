@@ -166,6 +166,12 @@ export interface SliceTuning {
   exportPayPerTonne: number;
   /** Exports paid into funds once a tick (tick.ts). Run files without it replay paying them twice, as played. */
   exportsPaidOnce: boolean;
+  /**
+   * A town's growth reads your service on its trips to other towns, not its commutes to sites
+   * (growth.ts): a new site with no road counted every commute as unserved and shrank the town
+   * beside it (map 543, the second refinery). Run files without it replay as played.
+   */
+  growthIgnoresCommutes: boolean;
   jobsMill: number;
   marketTripBoost: number;
   foodCapShare: number;

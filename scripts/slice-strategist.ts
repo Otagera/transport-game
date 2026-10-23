@@ -306,6 +306,17 @@ function play(seed: number): { seed: number; days: Day[]; world: SliceWorld } {
     const prevLoading = last.loading;
     last = { ...b };
     days.push({ day, funds: world.economy.funds, net: averageNet(world), trips: headline(world).tripsPerDay, people: pop(world), fares, goods, income, loading: b.loading - prevLoading, moves, builds, waiting });
+    // DIAG=from-to: every 10 days in that window, each original town's size against what limits it.
+    const diag = process.env.DIAG?.split("-").map(Number);
+    if (diag && day >= diag[0]! && day <= diag[1]! && day % 10 === 0) {
+      const vehicles = world.routes.reduce((n, r) => n + r.vehicleIds.length, 0);
+      console.log(`  DIAG day ${day}: funds ${k(world.economy.funds)}, ${world.routes.length} routes, ${vehicles} vehicles, trips ${Math.round(headline(world).tripsPerDay)}`);
+      for (const id of world.basePopulation.keys()) {
+        const g = townGrowth(world, id)!;
+        const t = world.towns.get(id)!;
+        console.log(`    ${t.name.padEnd(12)} ${Math.round(t.population)}k -> target ${Math.round(g.target)}k cap ${Math.round(g.cap)}k (${g.rung}), service ${Math.round(g.service * 100)}% yours ${Math.round(g.playerShare * 100)}% expects ${Math.round(g.expected * 100)}%, fuel ${Math.round((fuelSupply(world, id)?.supplied ?? 1) * 100)}%, cement held ${Math.round(g.cementHeld)}k`);
+      }
+    }
   }
   return { seed, days, world };
 }

@@ -97,6 +97,10 @@ export const DEFAULT_SLICE_TUNING: SliceTuning = {
   exportPayPerTonne: 20,
   // Paid once: from the food chain (a4eeb21) to 2026-10-23 the tick paid them twice.
   exportsPaidOnce: true,
+  // Growth reads service between towns, not commutes to sites (2026-10-23: map
+  // 543's Opobo fell 155k -> 112k when the second refinery opened next to it
+  // with no road -- its 3,000 jobs' commutes all counted as unserved).
+  growthIgnoresCommutes: true,
   jobsMill: 1,
   marketTripBoost: 0.3,
   foodCapShare: 0.25,

@@ -37,6 +37,7 @@ import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors }
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/slice/score";
 import { variedSliceMap } from "@engine/slice/variation";
 import { generatedMapInfo, generatedSliceMap } from "@engine/slice/generate";
+import { indexOutcomes, townShare as shareOfTown, townShareBetweenTowns } from "@engine/slice/world";
 import { buildSliceTerrain } from "@engine/slice/terrain";
 import { SLICE_MAP } from "../src/slice/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/slice/history";
@@ -3567,5 +3568,23 @@ describe("exports are paid once (tick.ts, 2026-10-23)", () => {
     expect(once.exported).toBeGreaterThan(0);
     // The old way paid the same exports in a second time.
     expect(twice.gained - once.gained).toBeCloseTo(twice.exported, 6);
+  });
+});
+
+describe("growth reads service between towns, not commutes to sites (2026-10-23)", () => {
+  test("a site's unserved commutes lower the town's share overall, never the share its growth reads", () => {
+    const w = startSliceGame(generatedSliceMap(SLICE_MAP, 543), { ...DEFAULT_SLICE_TUNING, warmUpDays: 0 });
+    const town = [...w.basePopulation.keys()][0]!;
+    const other = [...w.basePopulation.keys()][1]!;
+    const site = [...w.towns.values()].find((t) => t.industry)!.id;
+    w.pairOutcomes.clear();
+    w.pairOutcomes.set(`${town}:${other}`, { player: 6, poached: 2, gaveUp: 0, lost: 2 });
+    w.pairOutcomes.set(`${town}:${site}`, { player: 0, poached: 0, gaveUp: 0, lost: 30 });
+    for (const indexed of [false, true]) {
+      w.outcomeIndex = null;
+      if (indexed) indexOutcomes(w);
+      expect(townShareBetweenTowns(w, town).player).toBeCloseTo(0.6, 9);
+      expect(shareOfTown(w, town).player).toBeCloseTo(0.15, 9);
+    }
   });
 });

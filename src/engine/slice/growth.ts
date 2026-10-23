@@ -1,5 +1,5 @@
 import type { SliceWorld } from "./types";
-import { chainOf, demandAlong, townShare } from "./world";
+import { chainOf, demandAlong, townShare, townShareBetweenTowns } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { isDirt } from "./congestion";
 import { laneEncroachment } from "./pushback";
@@ -116,7 +116,8 @@ export function townGrowth(world: SliceWorld, townId: string): TownGrowth | null
   const base = world.basePopulation.get(townId);
   if (base === undefined) return null; // emergent towns grow from traffic (settlement.ts)
   const { tuning } = world;
-  const share = townShare(world, townId);
+  // Between towns: a site's commutes have their own cost (a short-staffed site makes less, workers.ts).
+  const share = tuning.growthIgnoresCommutes ? townShareBetweenTowns(world, townId) : townShare(world, townId);
   const service = share.player + INFORMAL_SERVICE_WEIGHT * share.informal;
   const rung = bestRung(world, townId);
   // Stone feeds construction (brief, Revision 2): the stone delivered from

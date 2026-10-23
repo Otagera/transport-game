@@ -925,29 +925,36 @@ export function networkShare(world: SliceWorld): ShareSummary {
 export interface OutcomeIndex {
   /** Trips leaving each town, summed as townOutcomes sums them. */
   from: Map<string, OutcomeRates>;
+  /** The same, to towns only: commutes to sites left out (growth.ts, growthIgnoresCommutes). */
+  fromToTowns: Map<string, OutcomeRates>;
   /** Trips arriving at each town: made (yours, poached, gave up) and in all, summed as staffing sums them. */
   to: Map<string, { made: number; total: number }>;
 }
 
 export function indexOutcomes(world: SliceWorld): void {
   const from = new Map<string, OutcomeRates>();
+  const fromToTowns = new Map<string, OutcomeRates>();
   const to = new Map<string, { made: number; total: number }>();
-  for (const [key, rates] of world.pairOutcomes) {
-    const separator = key.indexOf(":");
-    const a = key.slice(0, separator);
-    const b = key.slice(separator + 1);
-    let sum = from.get(a);
-    if (!sum) from.set(a, (sum = emptyOutcome()));
+  const add = (into: Map<string, OutcomeRates>, id: string, rates: OutcomeRates) => {
+    let sum = into.get(id);
+    if (!sum) into.set(id, (sum = emptyOutcome()));
     sum.player += rates.player;
     sum.poached += rates.poached;
     sum.gaveUp += rates.gaveUp;
     sum.lost += rates.lost;
+  };
+  for (const [key, rates] of world.pairOutcomes) {
+    const separator = key.indexOf(":");
+    const a = key.slice(0, separator);
+    const b = key.slice(separator + 1);
+    add(from, a, rates);
+    if (!world.towns.get(b)?.industry) add(fromToTowns, a, rates);
     let arrive = to.get(b);
     if (!arrive) to.set(b, (arrive = { made: 0, total: 0 }));
     arrive.made += rates.player + rates.poached + rates.gaveUp;
     arrive.total += rates.player + rates.poached + rates.gaveUp + rates.lost;
   }
-  world.outcomeIndex = { from, to };
+  world.outcomeIndex = { from, fromToTowns, to };
 }
 
 /** Where passengers *leaving* this town ended up. */
@@ -958,6 +965,12 @@ export function townOutcomes(world: SliceWorld, townId: string): OutcomeRates {
 
 export function townShare(world: SliceWorld, townId: string): ShareSummary {
   return toShare(townOutcomes(world, townId));
+}
+
+/** A town's share of its trips to other towns only: commutes to sites left out (what growth reads, growthIgnoresCommutes). */
+export function townShareBetweenTowns(world: SliceWorld, townId: string): ShareSummary {
+  if (world.outcomeIndex) return toShare({ ...(world.outcomeIndex.fromToTowns.get(townId) ?? emptyOutcome()) });
+  return toShare(sumOutcomes(world, (from, to) => from === townId && !world.towns.get(to)?.industry));
 }
 
 /**
