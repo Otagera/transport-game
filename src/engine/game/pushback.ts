@@ -128,10 +128,19 @@ export function creditLanes(by: ReadonlyMap<string, LaneState>, segmentIds: read
 
 /** How far danfos have taken the lane, by road piece, 0..1 (pieces with no lane absent). */
 export function laneEncroachment(world: GameWorld): Map<string, number> {
+  // Kept while nothing it reads has changed: the time, the roads and every lane's ends and
+  // encroachment. It was rebuilt for every road the informal sector checked, every tick --
+  // a fifth of a tick in a game with four lanes (map 2418, day 83). Same answer, once.
+  const key = `${world.economy.elapsedSeconds}|${world.simulation.map.segments.length}|${world.lanes.map((lane) => `${lane.a}:${lane.b}:${lane.encroachment}`).join(",")}`;
+  const kept = encroachmentKept.get(world);
+  if (kept && kept.key === key) return kept.taken;
   const taken = new Map<string, number>();
   for (const lane of world.lanes) for (const piece of roadChain(world, lane.a, lane.b) ?? []) taken.set(piece.id, lane.encroachment);
+  encroachmentKept.set(world, { key, taken });
   return taken;
 }
+/** laneEncroachment's last answer (off the world, which is plain data). Read only: callers don't change it. */
+const encroachmentKept = new WeakMap<GameWorld, { key: string; taken: Map<string, number> }>();
 
 /**
  * Called every tick, after the corridor's income was credited: encroachment

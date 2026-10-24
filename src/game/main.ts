@@ -108,6 +108,11 @@ const switchedOff = (["goods", "wear"] as const).filter((system) => params.get(s
 // previews, receipts, best next moves -- you, calibrating; never the player.
 // Without it none of them runs: no forecast workers, no shadow worlds.
 const dev = params.get("dev") === "1";
+// The best-moves forecasts (dev only) run up to three workers, each copying the world and
+// playing ahead every move, every 3 game days: on the region at 4x, nearly non-stop (a
+// playtest's machine at 285% CPU, 2026-10-24). Asked for apart from dev (?moves=1), so the
+// design console doesn't bring them.
+const forecasting = dev && params.get("moves") === "1";
 document.body.dataset.dev = String(dev);
 // Each game is a generated map (generate.ts; the brief's P8, After the
 // ladder's playtest, 5): a new game draws a seed, kept in the address so a
@@ -178,7 +183,7 @@ const screen = createScreen(world, recorder, {
     const summary = routeSummaries(world).find((s) => s.id === id);
     return summary ? routeCard(summary) : "";
   },
-  routesMore: () => (dev ? bestMovesHtml() + resultsHtml() : "") + lorryRows(false) + corridorsHtml() + shareHtml(),
+  routesMore: () => (forecasting ? bestMovesHtml() + resultsHtml() : "") + lorryRows(false) + corridorsHtml() + shareHtml(),
   bond: (purpose) => bondButton(purpose),
   dev,
   moneyNote: () => moneyNote(),
@@ -487,7 +492,7 @@ function knownForecast(action: ActionSpec): Receipt | null | undefined {
 // in a small worker pool: one more vehicle on each route you run, and new
 // buses and minibuses on the pairs with the most trips along them.
 
-const POOL_SIZE = dev ? Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1)) : 0;
+const POOL_SIZE = forecasting ? Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1)) : 0;
 const pool = Array.from({ length: POOL_SIZE }, () => new Worker(new URL("./forecast.worker.ts", import.meta.url), { type: "module" }));
 const idle: Worker[] = [...pool];
 
@@ -2448,7 +2453,7 @@ function shareHtml(): string {
 
 function renderRoutes(): void {
   const summaries = routeSummaries(world);
-  const advice = dev ? bestMovesHtml() + resultsHtml() : "";
+  const advice = forecasting ? bestMovesHtml() + resultsHtml() : "";
   const header = `<h2>Your routes</h2><p class="hint">Worst first. Net over the last day; hover a card for why.</p>`;
   const routes = summaries.length === 0 && world.lorryRoutes.length === 0
     ? `${header}<p class="empty">No buses yet. Hover a town to see where its people want to go.</p>`
