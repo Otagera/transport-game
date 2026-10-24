@@ -1,3 +1,4 @@
+import { aWeekOnText, termVerdictText } from "@engine/game/term";
 import { Accumulator, SIM_DT } from "@engine/loop";
 import { gameTick } from "@engine/game/tick";
 import {
@@ -668,6 +669,14 @@ function announce(event: GameEvent): void {
   } else if (event.kind === "swept") {
     // The budget year's end (sweep.ts): only said when it took something.
     if (event.amount >= 1) say(`The budget year ended: ${naira(event.amount)} above what you may carry over went back to the treasury. Name a project to keep money for it.`, true, 9);
+  } else if (event.kind === "term-started") {
+    say(`Term ${event.number} begins: the state offers ${event.pledges.length} pledges, from what your towns need now. Pledge up to two, in the strip.`, false, 10);
+  } else if (event.kind === "pledge-kept") {
+    say(`Pledge kept: ${event.text}.`, false, 8);
+  } else if (event.kind === "term-ended") {
+    say(`${termVerdictText(event)}.`, event.missed.length > event.kept.length, 12);
+  } else if (event.kind === "a-week-on") {
+    say(`${aWeekOnText(world, event)}.`, false, 8);
   } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
   } else {
@@ -2653,6 +2662,13 @@ function onPanelClick(event: MouseEvent): void {
     const [routeId, rate] = target.dataset.freightRate.split("|") as [string, FreightRate];
     const result = act({ label: `freight at the ${rate} rate`, towns: [], routeId }, { kind: "freightRate", routeId, rate });
     say(result.ok ? `Freight on that line now at the ${rate} rate${rate === "dear" ? ": more a tonne, and hauliers will take more of its goods by road" : rate === "cheap" ? ": less a tonne, more of its goods by your trains, fewer trucks on the roads" : ""}.` : `Can't set the rate: ${result.reason}`, !result.ok, 7);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.pledge) {
+    const result = act({ label: "a pledge", towns: [] }, { kind: "pledge", id: target.dataset.pledge });
+    const pledge = world.term?.pledges.find((p) => p.id === target.dataset.pledge);
+    say(result.ok ? `Pledged: ${pledge?.text ?? ""}. It's on Waiting on you until it's kept; the term runs to day ${world.term ? gameDay(world, world.term.endsAtSeconds) - 1 : "?"}.` : `Can't pledge: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

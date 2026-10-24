@@ -140,6 +140,10 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // play ("I was waiting for the money to grow and it ate it" -- money saved
   // for rail went), and the brief's trial said it comes out if it played like
   // the 80% cut. Kept behind the switch, for the runs played with it.
+  // Terms and pledges (term.ts; brief, Revision 5, step 2): the probe -- pledges from the
+  // world's own problems, no grant and no penalty yet.
+  pledgesEnabled: true,
+  termDays: 120,
   sweepEnabled: false,
   sweepPeriodDays: 60,
   sweepCarryMin: 50000,

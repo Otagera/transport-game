@@ -1,3 +1,4 @@
+import { startTerms } from "./term";
 import type { GameMapDef, GameTuning, GameWorld } from "./types";
 import { placeFuelSites } from "./fuel";
 import { inheritedRoad, placeCementWorks } from "./cement";
@@ -62,6 +63,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
     if ((i + 1) % WARM_UP_STEP === 0) yield (i + 1) / ticks;
   }
   world.startSeconds = world.economy.elapsedSeconds;
+  // The first term opens as you arrive (term.ts).
+  startTerms(world);
   // The strip's "informal sector earned" counts from when you arrived, and
   // so does your budget; the allocation pays on growth from day 1.
   world.informal.earnings = 0;

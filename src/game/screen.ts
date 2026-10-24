@@ -1,3 +1,4 @@
+import { aWeekOnText, termVerdictText, pledgeProgress, MAX_COMMITTED } from "@engine/game/term";
 import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
 import type { GameWorld } from "@engine/game/types";
 import { diagnoseRoute, gameDay, roadPath, routeSummaries, townShare } from "@engine/game/world";
@@ -206,6 +207,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         } else items.push({ text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm (Y)"), at: [world.fuel.depotId], weight });
       }
     }
+    // Your pledges this term, not yet kept: first, with the town (its panel has the move).
+    for (const p of world.term?.pledges ?? []) {
+      if (!p.committed || p.kept) continue;
+      const kind = world.towns.get(p.townId)?.industry ? "site" : "town";
+      items.push({ text: `Your pledge: ${p.text} · ${pct(pledgeProgress(world, p))}`, button: `<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
+    }
     return items.sort((p, q) => q.weight - p.weight).slice(0, 5);
   }
   function waitingHtml(): string {
@@ -362,6 +369,29 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return { day: gameDay(world), tripsMade: h.tripsPerDay, yourRiders: h.yourRidersPerDay, noSeat: h.noSeatPerDay, netPerDay: averageNet(world), funds: world.economy.funds };
   }
 
+  /**
+   * The term owns the strip's first block (brief, Revision 5, step 2): its day, and the
+   * pledges on offer with how far each has got; pledge up to two. Without terms (a run
+   * played before them), the day, as before.
+   */
+  function termHtml(day: number, mapLine: string): string {
+    const term = world.term;
+    if (!term) return `<div class="stat"><div class="k">Day</div><div class="v num">${day}</div><div class="d muted">${mapLine}</div></div>`;
+    const length = world.tuning.termDays ?? 120;
+    const termDay = Math.min(length, Math.floor((world.economy.elapsedSeconds - term.startedAtSeconds) / D) + 1);
+    const committed = term.pledges.filter((p) => p.committed).length;
+    const rows = term.pledges.map((p) => {
+      const progress = pledgeProgress(world, p);
+      const can = !p.committed && committed < MAX_COMMITTED;
+      return `<div class="pledge${p.committed ? " on" : ""}${p.kept ? " kept" : ""}" title="${esc(p.text)}">
+        <span class="t">${p.kept ? "✓ " : p.committed ? "★ " : ""}${esc(p.text)}</span>
+        <i class="bar"><b style="width:${Math.round(progress * 100)}%"></b></i>
+        ${can ? `<button data-pledge="${esc(p.id)}">Pledge</button>` : `<button data-pick="${world.towns.get(p.townId)?.industry ? "site" : "town"}|${esc(p.townId)}">Show</button>`}
+      </div>`;
+    }).join("");
+    return `<div class="stat term"><div class="k">Day ${day} · Term ${term.number}, day ${termDay} of ${length}${committed < MAX_COMMITTED ? ` · pledge ${MAX_COMMITTED - committed}` : ""}</div>${rows || `<div class="d muted">Nothing to pledge this term</div>`}<div class="d muted">${mapLine}</div></div>`;
+  }
+
   function renderStrip(mapLine: string): void {
     const ds = days();
     const recent = ds.slice(-30);
@@ -373,8 +403,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const change = then === undefined ? `<div class="d muted">from day 10</div>` : `<div class="d ${cls}">${d >= 0 ? "▲" : "▼"} ${fmt(Math.abs(d))} in 10 days</div>`;
       return `<div class="stat" title="${title}"><div class="k">${k}</div><div class="v num">${v}</div>${change}${sparkline(values, color)}</div>`;
     };
+    // The original towns' people, the score (the review: it wasn't in the strip at all).
+    const base = (towns: Array<{ id: string; population: number }>) => towns.reduce((sum, t) => sum + (world.basePopulation.has(t.id) ? t.population : 0), 0);
+    const peopleNow = base([...world.towns.values()]);
     stripEl.innerHTML = `
-      <div class="stat"><div class="k">Day</div><div class="v num">${n.day}</div><div class="d muted">${mapLine}</div></div>
+      ${termHtml(n.day, mapLine)}
+      ${stat("People", "The towns you started with: their people now, thousands", `${int(peopleNow)}k`, peopleNow, ten ? base(ten.towns) : undefined, recent.map((d) => base(d.towns)), (x) => `${int(x)}k`, css("--good"))}
       ${stat("Trips made a day", "Trips between towns that happened, by anyone, a day: 5-day average", int(n.tripsMade), n.tripsMade, ten?.tripsMade, recent.map((d) => d.tripsMade), int)}
       ${stat("Your riders a day", "Trips your vehicles carried, a day", int(n.yourRiders), n.yourRiders, ten?.yourRiders, recent.map((d) => d.yourRiders), int, css("--you"))}
       ${stat("No seat a day", "Stayed home: a road joins their towns, but nobody carried them", int(n.noSeat), n.noSeat, ten?.noSeat, recent.map((d) => d.noSeat), int, css("--bad"))}
@@ -567,6 +601,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "project-lapse-warning": return { text: `${ab(e)}: the project money lapses soon`, tone: "bad", group: "money", select: { kind: "town", id: e.a } };
       case "project-lapsed": return { text: `${ab(e)}: the project lapsed, the treasury took ${nairaK(e.taken)}`, tone: "bad", group: "money", select: null };
       case "project-done": return { text: `${ab(e)}: the ${e.rung === "lane" ? "bus lane" : "rail"} is built`, tone: "good", group: "money", select: { kind: "town", id: e.a } };
+      case "term-started": return { text: `Term ${e.number} began: ${e.pledges.length} pledges on offer`, tone: "", group: "growth", select: null };
+      case "pledge-kept": return { text: `Pledge kept: ${e.text}`, tone: "good", group: "growth", select: { kind: "town", id: e.townId } };
+      case "term-ended": return { text: termVerdictText(e), tone: e.missed.length > e.kept.length ? "bad" : "good", group: "growth", select: null };
+      case "a-week-on": return { text: aWeekOnText(world, e), tone: e.tripsBy >= 1 ? "good" : "", group: "growth", select: e.towns[0] ? { kind: world.towns.get(e.towns[0])?.industry ? "site" : "town", id: e.towns[0] } : null };
       case "road-gone": return { text: `The road ${ab(e)} is gone${e.sold ? `: ${e.sold} routes sold` : ""}`, tone: "bad", group: "trouble", select: null };
       default: return null;
     }

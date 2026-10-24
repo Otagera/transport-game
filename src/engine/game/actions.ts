@@ -1,3 +1,4 @@
+import { commitPledge, noteAction } from "./term";
 import type { GameWorld } from "./types";
 import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
@@ -44,7 +45,8 @@ export type ActionSpec =
   | { kind: "metro"; townId: string }
   | { kind: "freightRate"; routeId: string; rate: "cheap" | "standard" | "dear" }
   | { kind: "bond"; purpose: BondPurpose }
-  | { kind: "sell"; routeId: string };
+  | { kind: "sell"; routeId: string }
+  | { kind: "pledge"; id: string };
 
 /** `amount`: money charged (a repair) or returned (a sale), where the caller wants to say it. */
 export interface ActionOutcome {
@@ -54,7 +56,16 @@ export interface ActionOutcome {
 }
 
 export function applyAction(world: GameWorld, spec: ActionSpec): ActionOutcome {
+  const outcome = apply(world, spec);
+  // A build starts its week, to say what it did (term.ts).
+  if (outcome.ok) noteAction(world, spec);
+  return outcome;
+}
+
+function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
   switch (spec.kind) {
+    case "pledge":
+      return commitPledge(world, spec.id);
     case "bus":
       return addBus(world, spec.a, spec.b);
     case "minibus":

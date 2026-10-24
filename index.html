@@ -229,6 +229,15 @@
       .stat .v { font-size: 20px; font-weight: 650; }
       .stat .d { font-size: 11px; }
       .stat .d a { color: inherit; }
+      .stat.term { min-width: 300px; max-width: 360px; }
+      .pledge { display: flex; align-items: center; gap: 6px; font-size: 11.5px; line-height: 1.5; }
+      .pledge .t { flex: 1 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-2); }
+      .pledge.on .t { color: var(--ink); font-weight: 600; }
+      .pledge.kept .t { color: var(--good); }
+      .pledge .bar { flex: none; width: 48px; height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+      .pledge .bar b { display: block; height: 100%; background: var(--you); }
+      .pledge.kept .bar b { background: var(--good); }
+      #strip .pledge button { flex: none; font-size: 11px; padding: 0 6px; line-height: 18px; }
       .stat svg { display: block; margin-top: 2px; }
       #strip .spacer { flex: 1; }
       #strip .actions { display: flex; gap: 6px; align-items: center; }

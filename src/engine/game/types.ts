@@ -1,3 +1,4 @@
+import type { TermState } from "./term";
 import type { LaneState } from "./pushback";
 import type { NamedProject } from "./project";
 import type { PathResult, RoutingContext, SimulationState } from "../simulation/types";
@@ -212,6 +213,9 @@ export interface GameTuning {
    * Towns expect better service as they grow (growth.ts expectedShare, Revision 4, 2): on; from
    * what size (thousands); the share expected there; added a thousand people; at most.
    */
+  /** Terms and pledges (term.ts, Revision 5, 2): on; a term's length, days. Absent in runs played before them: off. */
+  pledgesEnabled?: boolean;
+  termDays?: number;
   /** The budget-year sweep (sweep.ts, Revision 4, 3, a trial): on; the year, days; the least you may carry over. */
   sweepEnabled: boolean;
   sweepPeriodDays: number;
@@ -670,6 +674,8 @@ export interface GameWorld {
   bonds: Bond[];
   /** The budget year and its sweep (sweep.ts). */
   sweep: SweepState;
+  /** The term, its pledges and the record of terms past (term.ts); absent when pledges are off. */
+  term?: TermState;
   /** Towns and sites with a haulage yard (yards.ts). */
   yards: Set<string>;
   /** Towns with a motor park (parks.ts). */

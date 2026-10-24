@@ -1,3 +1,4 @@
+import { updateTerm } from "./term";
 import { chargeFuelPremium, shortageAt, updateFuelShortage, updateNewRefinery } from "./fuel";
 import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
@@ -390,6 +391,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   indexOutcomes(world);
 
   const events = [...updateSettlements(world, dt), ...lanes.events, ...projectEvents, ...updateMilestones(world), ...updateCorridors(world, dt, takings.leviesByCorridor), ...updateIndustries(world, dt), ...updateSites(world, dt, foundGateTown), ...updateRetired(world, dt)];
+  events.push(...updateTerm(world));
   const refinery = updateNewRefinery(world);
   if (refinery) events.push(refinery);
   if (remitted !== null) events.push({ kind: "remitted", amount: remitted });

@@ -49,7 +49,13 @@ export type GameEvent =
   | { kind: "refinery-opened"; townId: string; name: string; near: string; crude: number; fuel: number }
   | { kind: "industry-closed"; townId: string; name: string; reason: "worked out" | "nothing moved" }
   // A retired road gone from the map (retire.ts): routes that lost their way sold.
-  | { kind: "road-gone"; a: string; b: string; sold: number; refund: number };
+  | { kind: "road-gone"; a: string; b: string; sold: number; refund: number }
+  // Terms and pledges (term.ts): a term's start and its pledges on offer; a committed pledge
+  // met; the verdict at a term's end; a build a week on, and what it did.
+  | { kind: "term-started"; number: number; pledges: string[] }
+  | { kind: "pledge-kept"; number: number; text: string; townId: string }
+  | { kind: "term-ended"; number: number; kept: string[]; missed: string[]; peopleFrom: number; peopleTo: number }
+  | { kind: "a-week-on"; label: string; towns: string[]; tripsBy: number; grew: Array<{ id: string; by: number }> };
 
 export interface SettlementState {
   /** segmentId -> rolling riders per second passing a point on it. */

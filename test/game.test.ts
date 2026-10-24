@@ -1,3 +1,5 @@
+import type { GameEvent } from "@engine/game/settlement";
+import { pledgeProgress } from "@engine/game/term";
 import { describe, expect, test } from "bun:test";
 import { addBus, buildRoad, createGameWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/game/world";
 import { informalBudget, gameTick } from "@engine/game/tick";
@@ -3938,4 +3940,55 @@ describe("freight rates (freightrates.ts, 2026-10-23)", () => {
     expect(taken("dear")).toBeGreaterThan(taken("standard"));
     expect(taken("standard")).toBeGreaterThan(taken("cheap"));
   });
+});
+
+describe("terms and pledges (brief, Revision 5, step 2: the probe)", () => {
+  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 2418, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, ...overrides });
+
+  test("a term opens as play begins: up to three pledges from the world's problems, of different kinds and towns, the home cluster's first", () => {
+    const w = start();
+    const term = w.term!;
+    expect(term.number).toBe(1);
+    expect(term.pledges.length).toBeGreaterThanOrEqual(1);
+    expect(term.pledges.length).toBeLessThanOrEqual(3);
+    expect(new Set(term.pledges.map((p) => p.kind)).size).toBe(term.pledges.length);
+    expect(new Set(term.pledges.map((p) => p.townId)).size).toBe(term.pledges.length);
+    const box = w.home!;
+    for (const p of term.pledges) {
+      const t = w.towns.get(p.townId)!;
+      expect(t.x >= box.x && t.x < box.x + box.width && t.y >= box.y && t.y < box.y + box.height).toBe(true);
+      expect(pledgeProgress(w, p)).toBeGreaterThanOrEqual(0);
+    }
+  }, 60_000);
+
+  test("you pledge two at most, once each; it's an action, so a run file replays it", () => {
+    const w = start();
+    const [a, b, c] = w.term!.pledges;
+    expect(applyAction(w, { kind: "pledge", id: a!.id }).ok).toBe(true);
+    expect(applyAction(w, { kind: "pledge", id: a!.id }).ok).toBe(false);
+    if (b) expect(applyAction(w, { kind: "pledge", id: b.id }).ok).toBe(true);
+    if (c) expect(applyAction(w, { kind: "pledge", id: c.id })).toEqual({ ok: false, reason: "you've pledged 2 this term" });
+    expect(applyAction(w, { kind: "pledge", id: "nope" }).ok).toBe(false);
+  }, 60_000);
+
+  test("a term ends with a verdict and the next opens; a build is reported a week on", () => {
+    const w = start({ termDays: 10 });
+    applyAction(w, { kind: "pledge", id: w.term!.pledges[0]!.id });
+    const towns = [...w.basePopulation.keys()];
+    applyAction(w, { kind: "bus", a: towns[0]!, b: towns[1]! });
+    const events: GameEvent[] = [];
+    for (let i = 0; i < 11 * SECONDS_PER_GAME_DAY * 30; i += 1) events.push(...gameTick(w, SIM_DT));
+    const ended = events.find((e) => e.kind === "term-ended");
+    expect(ended && ended.kind === "term-ended" && ended.kept.length + ended.missed.length).toBe(1);
+    expect(events.some((e) => e.kind === "term-started" && e.number === 2)).toBe(true);
+    expect(w.term!.number).toBe(2);
+    expect(w.term!.history).toHaveLength(1);
+    const week = events.find((e) => e.kind === "a-week-on");
+    expect(week && week.kind === "a-week-on" && week.towns).toEqual([towns[0], towns[1]]);
+  }, 120_000);
+
+  test("a run played before terms (no pledgesEnabled in its tuning) has none", () => {
+    const w = start({ pledgesEnabled: undefined });
+    expect(w.term).toBeUndefined();
+  }, 60_000);
 });
