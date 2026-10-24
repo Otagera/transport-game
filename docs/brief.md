@@ -904,11 +904,58 @@ An outside senior game designer reviewed it. They read this brief and the princi
   - fork the save from day N.
 - Every console action is recorded in the run file as such.
 
-### Cuts, to make room (proposed)
+### The map: the builder's canvas (the review's section 7)
 
-- The treasury remittance and the budget-year sweep (both already off), and bonds: the term grant replaces all three.
-- Freight rates: a 6-11% effect isn't a decision.
-- Routine Fix clicking becomes an upkeep policy for each corridor, with wear showing up as a shock (a road fails), not a chore.
+Today the geography is scenery with a price on it, not a decision:
+- The pathfinder lays every road and track the cheapest way, and the choice of going straight or round is switched off (`straightAlignmentEnabled: false`).
+- On at least five of twelve seeds, the hill range sits in empty land away from any line between towns.
+- The old highways and railway have usually crossed the big river already.
+- The far clusters offer nothing to want. They have no sites, they're beyond the hauliers' 40-cell reach, and long bus routes lose money.
+
+The proposals:
+
+- **A reason for each far cluster.** It gets a chain's source the home cluster lacks (iron, coal, cash crops, a seaport) and its own union chairman. Pledges widen your reach from term 2 onward. There's no wall: what pulls you out is a pledge and a recipe, not a gate.
+- **Named crossings and hills worth climbing.**
+  - Each big river has four or five named crossing points: a ford, a narrows, a dear bridge beside a town.
+  - Fords close in the flood season, as the first shock.
+  - Minerals sit in the hills: limestone, iron, coal.
+  - Straight-or-round comes back, but only at rivers and ridges.
+- **The map ages with your story.**
+  - Towns are drawn as built-up areas that spread, not circles.
+  - Each rung of the ladder shows on the road.
+  - Corridors you've taken are drawn in your colour, against the danfos' yellow.
+  - Sites look alive or dead, and towns light up as you serve them.
+- **Your mark on it.** Cheapest first:
+  1. names and colours for your lines, bridges and corridors;
+  2. waypoints when you draw a road or track;
+  3. choosing the crossing, and round or over;
+  4. a term verdict that describes your play style back to you.
+- **A frontier.** Highways you build between clusters grow roadside towns, so the empty middle becomes country you settle.
+
+### Fewer systems the player has to hold (proposed: approve item by item)
+
+Each system is simple; the load is in their interactions, which grow faster than the systems themselves, and every system added has landed weaker and harder to read. About two dozen switches today. The aim is **eight things a player keeps in mind**:
+
+1. the ladder (dirt to rail);
+2. service (your routes and fleets);
+3. towns (growth, and what holds it back);
+4. the union (one party);
+5. the chains;
+6. the term's money;
+7. upkeep;
+8. shocks.
+
+Everything else folds into one of these or goes:
+
+| Item | Proposal | Into |
+| --- | --- | --- |
+| Treasury remittance, budget-year sweep (both off), bonds | Cut | The term's capital grant |
+| Freight rates (a 6-11% effect isn't a decision) | Cut | -- |
+| Levies, agberos, touts as separate lines; TAKEN/RELEASED; lane enforcement as a standalone toggle | Fold | The union |
+| The flour mill as its own site | Fold | Food: the mill handles imported wheat too |
+| The metro | Park until the late game asks for it | -- |
+| Routine Fix clicking | Fold | Upkeep: a policy for each corridor; a road failing is a shock, not a chore |
+| Motor parks, yards | Keep, shown as the union's and the hauliers' ground | The union, the chains |
 
 ### The order: one at a time, played between steps
 
@@ -919,11 +966,18 @@ An outside senior game designer reviewed it. They read this brief and the princi
    - the term's verdict;
    - the career record;
    - replacement after repeated failure;
-   - the design console with it.
+   - the design console with it;
+   - the cuts you approve, as the grant replaces them;
+   - **a reason for each far cluster**, reached through pledges (the map's first change).
 4. **Then and now, and the end-of-term report.**
 5. **The union as a party.**
-6. **Shocks with a window.**
-7. **Competing projects, with the gateways.**
+6. **Shocks with a window:**
+   - named crossings;
+   - flood-season fords as the first shock;
+   - minerals in the hills.
+7. **Competing projects, with the gateways:**
+   - highways that grow roadside towns;
+   - names, colours and waypoints for your network (can come earlier: it's cheap).
 
 ### Checks for Revision 5
 
@@ -934,6 +988,8 @@ An outside senior game designer reviewed it. They read this brief and the princi
 | C27 | A story to tell | After a session, your career record names at least three things you did that changed a place (and you'd tell them) |
 | C28 | Failure is possible, and fair | A strategist that ignores pledges is replaced within three terms; one that keeps them never is |
 | C29 | Nothing important hidden | Every move that unlocks a chain or answers a pledge or a demand is one click from Waiting on you |
+| C30 | Geography is a decision | In your playtest you can name a crossing or a route round the hills you chose, and why |
+| C31 | The far clusters pull | By the end of term 2, you've connected at least one far cluster because it had something you wanted (not because the map was there) |
 
 ||||||| 8f62abb
 ## Pass/fail checks: when slice zero is done
