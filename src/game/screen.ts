@@ -1,3 +1,4 @@
+import { privateLoad } from "@engine/game/private";
 import { aWeekOnText, termVerdictText, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
 import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
 import type { GameWorld } from "@engine/game/types";
@@ -583,7 +584,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const a = s.fromNodeId;
     const b = s.toNodeId;
     const cap = s.type === "rail" ? Infinity : roadCapacity(world, s.id);
-    const flow = world.roadFlowEMA.get(s.id) ?? 0;
+    const cars = privateLoad(world, s.id);
+    const flow = (world.roadFlowEMA.get(s.id) ?? 0) + cars;
     const load = Number.isFinite(cap) && cap > 0 ? flow / cap : 0;
     const speed = world.segmentSpeed.get(s.id) ?? 1;
     const condition = s.condition ?? 1;
@@ -597,6 +599,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${problemHtml(problem)}
       <div class="tiles">
         ${tile("Traffic", pct(load), "of what it carries before it jams")}
+        ${cars > 0 && flow > 0 ? tile("Private cars", pct(cars / flow), "of its traffic") : ""}
         ${tile("Speed", pct(speed))}
         ${tile("Your riders along it", int(yours))}
         ${tile("Condition", pct(condition))}

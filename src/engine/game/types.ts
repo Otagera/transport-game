@@ -214,6 +214,11 @@ export interface GameTuning {
    * what size (thousands); the share expected there; added a thousand people; at most.
    */
   /** Terms and pledges (term.ts, Revision 5, 2): on; a term's length, days. Absent in runs played before them: off. */
+  /** Private traffic (private.ts): on; the load a thousand people's cars make (danfo-equivalents a second), the share of a town's size that drives (its growth since day 1 drives whole), how far from a town it fades, cells. Absent in older runs: off. */
+  privateTrafficEnabled?: boolean;
+  privatePerThousand?: number;
+  privateBaseShare?: number;
+  privateReachCells?: number;
   /** Fuel goes only to towns its source reaches, by tanker or rail (fuel.ts; map 2418, day 230). Absent in older runs: off. */
   fuelWithinReach?: boolean;
   pledgesEnabled?: boolean;
@@ -718,6 +723,9 @@ export interface GameWorld {
   segmentLoad: Map<string, number>;
   /** segmentId -> rolling road space entering per second: what congests it. */
   roadFlowEMA: Map<string, number>;
+  /** Private cars on each road (private.ts), worked out once a game day; absent when private traffic is off. */
+  privateFlow?: Map<string, number>;
+  privateFlowAtSeconds?: number;
   /** segmentId -> rolling flow of your vehicles in a bus lane, and the speed it allows (congestion.ts). */
   laneFlowEMA: Map<string, number>;
   laneSpeed: Map<string, number>;

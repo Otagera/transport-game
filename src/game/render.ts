@@ -1,3 +1,4 @@
+import { privateLoad } from "@engine/game/private";
 import type { GameTown, GameWorld } from "@engine/game/types";
 import type { RoutingContext, Vehicle } from "@engine/simulation/types";
 import { routingFor } from "@engine/game/rail";
@@ -487,7 +488,8 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
     }
     // By what it carries (width) and how full it runs (colour): the lab's road.
     const speed = world.segmentSpeed.get(segment.id) ?? 1;
-    const load = Math.min(1.2, (world.roadFlowEMA.get(segment.id) ?? 0) / Math.max(1e-6, roadCapacity(world, segment.id)));
+    // Private cars count in how full it runs (private.ts): a growing city's approaches thicken.
+    const load = Math.min(1.2, ((world.roadFlowEMA.get(segment.id) ?? 0) + privateLoad(world, segment.id)) / Math.max(1e-6, roadCapacity(world, segment.id)));
     const w = (2 + load * 7) * markScale;
     ctx.strokeStyle = COLORS.surface;
     ctx.lineWidth = w + 2 * markScale;

@@ -1,3 +1,4 @@
+import { updatePrivateTraffic } from "./private";
 import { updateTerm } from "./term";
 import { chargeFuelPremium, shortageAt, updateFuelShortage, updateNewRefinery } from "./fuel";
 import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
@@ -165,6 +166,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
 
   // 3. Movement. Road speeds are computed once, before anything moves, so
   // every vehicle sees the same road this tick (congestion.ts).
+  updatePrivateTraffic(world); // once a game day: the towns' cars on their roads (private.ts)
   updateRoadSpeeds(world, dt);
   // Goods arrive at their yards, and some of what's waiting spoils (goods.ts).
   if (tuning.goodsEnabled) produceAndSpoil(world, dt);

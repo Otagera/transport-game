@@ -143,6 +143,12 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // Terms and pledges (term.ts; brief, Revision 5, step 2): the probe -- pledges from the
   // world's own problems, no grant and no penalty yet.
   fuelWithinReach: true,
+  // Private traffic (private.ts; your idea, 2026-10-24): a growing town's cars fill the roads
+  // near it. A city that grows by 100k fills its approaches by itself; one that doesn't adds little.
+  privateTrafficEnabled: true,
+  privatePerThousand: 0.1,
+  privateBaseShare: 0.05,
+  privateReachCells: 8,
   pledgesEnabled: true,
   termDays: 120,
   // The mandate (Revision 5, step 3; agreed 2026-10-24: "120 days is fine, sacking too"): a

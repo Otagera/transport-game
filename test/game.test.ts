@@ -1,3 +1,4 @@
+import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
 import { fuelReach } from "@engine/game/fuel";
 import type { GameEvent } from "@engine/game/settlement";
 import { pledgeProgress } from "@engine/game/term";
@@ -101,7 +102,8 @@ const noBudget: Partial<GameTuning> = { tollPerRoad: 0, levyPerSeat: 0, allocati
 const REMITTANCE: Partial<GameTuning> = { remittanceEnabled: true, levyEnabled: false };
 
 function world(overrides: Partial<GameTuning> = {}): GameWorld {
-  return createGameWorld(MAP, { ...DEFAULT_GAME_TUNING, ...ALL_SYSTEMS_ON, ...overrides });
+  // The small map's mechanics were measured without private cars (private.ts); a test of them opts in.
+  return createGameWorld(MAP, { ...DEFAULT_GAME_TUNING, ...ALL_SYSTEMS_ON, privateTrafficEnabled: false, ...overrides });
 }
 
 describe("slice: waiting passengers", () => {
@@ -434,7 +436,8 @@ describe("slice: the headline", () => {
 
 describe("slice: why a route earns what it does", () => {
   test("too many buses on a route reads as overcapacity", () => {
-    const w = world({ startingFunds: 1e6 });
+    // Without private cars: twelve buses on the short trunk is the point, not the town's traffic.
+    const w = world({ startingFunds: 1e6, privateTrafficEnabled: false });
     for (let i = 0; i < 12; i += 1) addBus(w, "big", "mid");
     run(w, 300);
     const d = diagnoseRoute(w, w.routes[0]!.id)!;
@@ -689,7 +692,7 @@ describe("slice: shared road", () => {
   });
 
   test("one bus never locks a road at the floor (congestion is stable)", () => {
-    const w = world({ startingFunds: 1e6 });
+    const w = world({ privateTrafficEnabled: false, startingFunds: 1e6 });
     addBus(w, "big", "mid");
     run(w, 600);
     for (const speed of w.segmentSpeed.values()) expect(speed).toBeGreaterThan(0.5);
@@ -752,7 +755,7 @@ describe("slice: paving a dirt road", () => {
 
   test("paving a road your buses jam lifts their speed, and the route stops listing it as dirt", () => {
     const run16 = (pave: boolean) => {
-      const w = world({ startingFunds: 1e6, maxEmergentTowns: 0 });
+      const w = world({ privateTrafficEnabled: false, startingFunds: 1e6, maxEmergentTowns: 0 });
       if (pave) paveRoad(w, "big", "mid");
       for (let i = 0; i < 16; i += 1) addBus(w, "big", "mid");
       run(w, 300);
@@ -1915,7 +1918,7 @@ describe("slice: a route too long for flat fares (playtest, day 31)", () => {
   test("full, but a full bus loses money: it says the route is too long, not to add a bus", () => {
     // Small buses so it runs full; the long run big-mid-far makes few trips a day.
     // At the wear rate this was written for: worn roads slow the bus, so it runs full.
-    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 6, wearPerFlow: 0.00045, dirtWearMultiplier: 3 });
+    const w = world({ startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, busCapacity: 6, wearPerFlow: 0.00045, dirtWearMultiplier: 3, privateTrafficEnabled: false });
     addBus(w, "big", "far");
     run(w, 600);
     const d = diagnoseRoute(w, w.routes[0]!.id)!;
@@ -4044,5 +4047,37 @@ describe("terms and pledges (brief, Revision 5, step 2: the probe)", () => {
   test("a run played before terms (no pledgesEnabled in its tuning) has none", () => {
     const w = start({ pledgesEnabled: undefined });
     expect(w.term).toBeUndefined();
+  }, 60_000);
+});
+
+describe("private traffic (private.ts; brief, Revision 5, Ideas parked)", () => {
+  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 2418, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, ...overrides });
+
+  test("a town's cars: a little for its size, all of its growth; heavier on the roads near it, and in its roads' speed", () => {
+    const w = start();
+    updatePrivateTraffic(w);
+    const city = [...w.basePopulation.keys()].sort((a, b) => w.towns.get(b)!.population - w.towns.get(a)!.population)[0]!;
+    const before = townCars(w, city);
+    const roads = w.simulation.map.segments.filter((s) => s.type === "road" && (s.fromNodeId === city || s.toNodeId === city));
+    const loadBefore = roads.reduce((sum, r) => sum + privateLoad(w, r.id), 0);
+    // It grows by half: its cars, and their load on its roads, jump.
+    w.towns.get(city)!.population *= 1.5;
+    w.privateFlowAtSeconds = undefined;
+    updatePrivateTraffic(w);
+    expect(townCars(w, city)).toBeGreaterThan(before * 5);
+    expect(roads.reduce((sum, r) => sum + privateLoad(w, r.id), 0)).toBeGreaterThan(loadBefore * 5);
+    // Fading with distance: a road whose middle is far from every town carries next to nothing from them.
+    const nodes = new Map(w.simulation.map.nodes.map((n) => [n.id, n]));
+    const far = w.simulation.map.segments.filter((s) => s.type === "road").find((s) => {
+      const a = nodes.get(s.fromNodeId)!, b = nodes.get(s.toNodeId)!;
+      return Math.hypot(a.x - b.x, a.y - b.y) > 60;
+    });
+    if (far) expect(privateLoad(w, far.id)).toBeLessThan(0.05);
+  }, 60_000);
+
+  test("a run played before it (no privateTrafficEnabled) has none", () => {
+    const w = start({ privateTrafficEnabled: undefined });
+    for (let i = 0; i < 60; i += 1) gameTick(w, SIM_DT);
+    expect(w.privateFlow).toBeUndefined();
   }, 60_000);
 });

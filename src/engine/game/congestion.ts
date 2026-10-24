@@ -1,3 +1,4 @@
+import { privateLoad } from "./private";
 import { computeSegmentLoads } from "../simulation/congestion";
 import type { Segment } from "../map/types";
 import type { Vehicle } from "../simulation/types";
@@ -164,7 +165,8 @@ export function updateRoadSpeeds(world: GameWorld, dt: number): void {
     world.roadFlowEMA.set(segment.id, flow);
     const previousHeavy = world.heavyFlowEMA.get(segment.id) ?? 0;
     world.heavyFlowEMA.set(segment.id, previousHeavy + ((heavy.get(segment.id) ?? 0) / dt - previousHeavy) * alpha);
-    world.segmentSpeed.set(segment.id, tuning.congestion ? speedFactor(flow, roadCapacity(world, segment.id, encroached.get(segment.id)), tuning.minSpeedFactor) : 1);
+    // Private cars share the road (private.ts): they slow it, and everything on it, as any traffic does.
+    world.segmentSpeed.set(segment.id, tuning.congestion ? speedFactor(flow + privateLoad(world, segment.id), roadCapacity(world, segment.id, encroached.get(segment.id)), tuning.minSpeedFactor) : 1);
   }
   // Your buses' speed in each lane: the lane's own capacity against their
   // flow -- and, as danfos encroach, worn toward general traffic's speed:
