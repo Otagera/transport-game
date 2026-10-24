@@ -42,6 +42,8 @@ export interface ScreenHooks {
   moneyNote(): string;
   /** The old Treasury drawer: bonds, chains, the named project, the budget lines. */
   treasuryMore(): string;
+  /** A bond for a restore, when you can't pay for it (main.ts bondButton); "" when none's on offer. */
+  bond(purpose: "works" | "refinery" | "steel"): string;
 }
 
 // --- Formatting ------------------------------------------------------------
@@ -148,6 +150,70 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   };
   const toolButton = (tool: string, label: string) => `<button data-tool="${tool}">${esc(label)}</button>`;
 
+  /** A restore as a real button, with the bond beside it when you're short (the cement works' was under More). */
+  function restoreButton(what: "works" | "refinery" | "steel"): string {
+    const t = world.tuning;
+    const cost = what === "works" ? t.worksRestoreCost : what === "refinery" ? t.refineryRestoreCost : t.steelRestoreCost;
+    const name = what === "works" ? "the cement works" : what === "refinery" ? "the refinery" : "the steel works";
+    return `<button data-restore-${what}="1">Restore ${name} · ${nairaK(cost)}</button>${world.economy.funds < cost ? hooks.bond(what) : ""}`;
+  }
+
+  // --- Waiting on you (brief, Revision 5, step 1) --------------------------------------
+  // Every move with a consequence, pinned at the top of the panel: the chain breaks that hold
+  // towns back, each with the move that answers it. Only these get the map's amber mark --
+  // on every town from day 1, it meant nothing, and the one that mattered (an idle cement
+  // works, its restore under More) went unseen for 482 days. Pledges and the union's demands
+  // join this list (steps 2 and 5).
+
+  type Waiting = { text: string; button: string; at: string[]; weight: number };
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  function waitingOnYou(): Waiting[] {
+    const items: Waiting[] = [];
+    const towns = homeTowns();
+    const held = (by: (t: Town) => number) => {
+      const hit = towns.filter((t) => by(t) >= Math.max(5, 0.05 * t.population));
+      return { towns: hit, people: hit.reduce((sum, t) => sum + by(t), 0) };
+    };
+    const cement = held((t) => t.cementHeld);
+    if (world.cement && cement.towns.length > 0) {
+      const b = cementBreak(world);
+      const who = `${int(cement.people)}k people held back in ${plural(cement.towns.length, "town")}`;
+      if (b?.kind === "idle") items.push({ text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
+      else if (b?.kind === "quarry") items.push({ text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} (Y)`), at: [b.quarryId], weight: cement.people });
+      else if (b?.kind === "carry") items.push({ text: `Cement short, ${who}: the works' cement isn't reaching them`, button: toolButton("yard", "Yard at the works (Y)"), at: [world.cement.worksId], weight: cement.people });
+    }
+    const steel = held((t) => t.steelHeld);
+    if (world.steel && steel.towns.length > 0) {
+      const b = steelBreak(world);
+      const who = `${int(steel.people)}k people held back in ${plural(steel.towns.length, "town")}`;
+      const works = world.steel.worksId ?? world.steel.terminalId;
+      if (b?.kind === "idle") items.push({ text: `The steel works is idle: ${who}`, button: restoreButton("steel"), at: works ? [works] : [], weight: steel.people });
+      else if (b?.kind === "ore") items.push({ text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} (Y)`), at: [b.mineId], weight: steel.people });
+      else if (b?.kind === "carry") items.push({ text: `Steel short, ${who}: it isn't reaching them from ${nameOf(b.from)}`, button: toolButton("yard", `Yard at ${nameOf(b.from)} (Y)`), at: [b.from], weight: steel.people });
+    }
+    const fuelShort = towns.filter((t) => t.fuel !== null && t.fuel < 0.6);
+    if (world.fuel && fuelShort.length > 0) {
+      // Weighed as the people living short of fuel, by how short.
+      const weight = fuelShort.reduce((sum, t) => sum + t.population * (1 - (t.fuel ?? 0)), 0) * 0.3;
+      const where = `${plural(fuelShort.length, "town")} short of fuel`;
+      if (!world.fuel.restored) items.push({ text: `${where}, and the refinery is idle`, button: restoreButton("refinery"), at: [world.fuel.refineryId], weight });
+      else {
+        // Restored but starved of crude: crude moves by road only from a source with a yard (truckers.ts).
+        const refinery = site(world.fuel.refineryId);
+        const source = world.fuel.sourceId;
+        if (refinery.capacity > 0 && refinery.made < 0.6 * refinery.capacity && refinery.limit === "input" && !world.yards.has(source)) {
+          items.push({ text: `${where}: the refinery gets no crude from ${nameOf(source)}`, button: toolButton("yard", `Yard at ${nameOf(source)} (Y)`), at: [source], weight });
+        } else items.push({ text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm (Y)"), at: [world.fuel.depotId], weight });
+      }
+    }
+    return items.sort((p, q) => q.weight - p.weight).slice(0, 5);
+  }
+  function waitingHtml(): string {
+    const items = waitingOnYou();
+    if (items.length === 0) return "";
+    return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"><span>${esc(item.text)}</span>${item.button}</div>`).join("")}</div>`;
+  }
+
   function townProblem(t: Town): Problem {
     if (t.industry) return null;
     if (t.roadFull && !t.roadFull.thin) {
@@ -159,7 +225,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const b = cementBreak(world);
       const button = b?.kind === "no-quarry" ? `<span class="muted">Next quarry ~day ${b.nextDay}</span>`
         : b?.kind === "quarry" ? toolButton("yard", `Yard at ${nameOf(b.quarryId)} (Y)`)
-        : b?.kind === "idle" ? `<span class="muted">Restore the works: under More</span>`
+        : b?.kind === "idle" ? restoreButton("works")
         : toolButton("yard", "Yard at the works (Y)");
       return { text: `Short of cement (${pct(t.cement ?? 0)} of what it needs): ${int(t.cementHeld)}k fewer people than your service would grow it to`, button };
     }
@@ -339,10 +405,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const scroll = panelEl.scrollTop;
     if (selected && !exists(selected)) selected = null;
     if (selected) {
-      panelEl.innerHTML = `<div class="pane"><button class="back" data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`;
+      panelEl.innerHTML = `${waitingHtml()}<div class="pane"><button class="back" data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`;
     } else {
       const tabs = `<div class="tabs">${(["routes", "towns", "sites"] as const).map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${t[0]!.toUpperCase()}${t.slice(1)}</button>`).join("")}</div>`;
-      panelEl.innerHTML = `${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`;
+      panelEl.innerHTML = `${waitingHtml()}${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`;
     }
     panelEl.scrollTop = scroll;
   }
@@ -660,6 +726,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     select,
     /** The named move a problem line's button offers. */
     namedMove: (i: number): NamedMove | undefined => named[i],
+    /** The towns and sites on Waiting on you: the map marks these, and only these. */
+    waitingTargets: (): Set<string> => new Set(waitingOnYou().flatMap((item) => item.at)),
     get selected() { return selected; },
     /** What the map focuses: a row hovered, else the thing picked. */
     get focus(): Selection { return hover ?? (selectedFromMap ? null : selected); },

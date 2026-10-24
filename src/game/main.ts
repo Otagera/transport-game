@@ -178,6 +178,7 @@ const screen = createScreen(world, recorder, {
     return summary ? routeCard(summary) : "";
   },
   routesMore: () => (dev ? bestMovesHtml() + resultsHtml() : "") + lorryRows(false) + corridorsHtml() + shareHtml(),
+  bond: (purpose) => bondButton(purpose),
   moneyNote: () => moneyNote(),
   treasuryMore: () => treasuryHtml(),
 });
@@ -2886,20 +2887,16 @@ overlaysEl.addEventListener("click", (event) => {
 });
 renderOverlays();
 
-// The towns your routes serve whose card names a problem, for the map's mark (the information
-// lab). Only those: on day 2 every town had one (cut off, or riders with no seat), and a
-// mark on every town says nothing; a cut-off town has its "no road" label already. Rechecked
-// twice a second, not every frame -- problemText reads a good deal of the world.
+// The places on Waiting on you, for the map's mark. Rechecked twice a second, not every
+// frame -- the list reads a good deal of the world.
 let problemTowns = new Set<string>();
 let problemsAt = -Infinity;
 function townsWithProblems(now: number): Set<string> {
   if (now - problemsAt < 500) return problemTowns;
   problemsAt = now;
-  const served = new Set<string>();
-  for (const route of [...world.routes, ...world.lorryRoutes]) {
-    for (const stop of world.simulation.vehicles.find((v) => v.id === route.vehicleIds[0])?.path ?? []) served.add(stop);
-  }
-  problemTowns = new Set([...served].filter((id) => world.towns.has(id) && !world.towns.get(id)!.industry && problemText(id) !== ""));
+  // Waiting on you's places (screen.ts), and only those: at day 482 nearly every town had a
+  // mark, and the idle cement works -- the one that mattered -- had none (brief, Revision 5).
+  problemTowns = screen.waitingTargets();
   return problemTowns;
 }
 

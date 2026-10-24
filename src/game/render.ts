@@ -137,6 +137,7 @@ export interface DrawState {
   /** A route whose card is hovered: it and its roads in focus, the rest faded. */
   focusRoute?: string | null;
   /** Towns whose card names a problem: an amber mark. */
+  /** Towns and sites on Waiting on you (screen.ts waitingTargets): each gets the amber mark. */
   problems?: ReadonlySet<string>;
   /** The overlay on the map, one at a time. */
   overlay?: Overlay;
@@ -698,20 +699,8 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   if (world.yards.has(town.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
   if (world.parks.has(town.id)) drawParkMark(ctx, p.x + r - 1, p.y - r - 6);
   if ((world.metros.get(town.id) ?? 0) > 0) drawMetroMark(ctx, p.x - r - 7, p.y + r - 3, world.metros.get(town.id)!);
-  // A problem here: an amber mark on its top-right.
-  if (state.problems?.has(town.id)) {
-    const mx = p.x + r * 0.8;
-    const my = p.y - r * 0.8;
-    ctx.fillStyle = COLORS.warn;
-    ctx.beginPath();
-    ctx.arc(mx, my, 6 * markScale, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = `700 ${Math.round(9 * markScale)}px system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("!", mx, my + 0.5);
-  }
+  // Waiting on you here: an amber mark on its top-right.
+  if (state.problems?.has(town.id)) drawWaitingMark(ctx, p.x + r * 0.8, p.y - r * 0.8);
   // Name and size for towns; a village's when zoomed in or pointed at (the region's small places
   // stay quiet), and none where it would sit on a bigger town's (labelledTowns).
   if (labelled.has(town.id)) {
@@ -737,6 +726,21 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   ctx.globalAlpha = 1;
 }
 
+/** The amber "!" on a town or site that's on Waiting on you (screen.ts): only those, so it means something. */
+function drawWaitingMark(ctx: CanvasRenderingContext2D, mx: number, my: number): void {
+  ctx.fillStyle = COLORS.warn;
+  ctx.beginPath();
+  ctx.arc(mx, my, 6 * markScale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = `700 ${Math.round(9 * markScale)}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("!", mx, my + 0.5);
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+}
+
 function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, site: GameTown, state: DrawState): void {
   const p = toScreen(view, site.x, site.y);
   const r = townRadius(site, view);
@@ -754,6 +758,7 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
     ctx.strokeRect(p.x - r - 4, p.y - r - 4, r * 2 + 8, r * 2 + 8);
   }
   if (world.yards.has(site.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
+  if (state.problems?.has(site.id)) drawWaitingMark(ctx, p.x + r, p.y - r);
   // Its name when you point at it, or zoomed in.
   if (lit || markScale * markScale >= 2) {
     ctx.textAlign = "center";
