@@ -94,7 +94,13 @@ This was never answered on the first attempt and it is why scope kept expanding.
 **Answered: a personal sandbox, and a foundation to extract an engine from.** Not
 "something others play." Concretely, this means:
 
-- No onboarding, no authored goal, no stopping point to design toward.
+- No onboarding, and no stopping point to design toward: a save you keep returning to.
+- **Goals come from the world's own problems, never from a script** (amended 2026-10-24,
+  after a designer's review of the 482-day region playtest; was "no authored goal"). A
+  pledge is made from what the simulation already names -- "Lokoja short of cement,
+  holding back 29k people" -- so it differs every game and is always about the place. No
+  scripted missions, no tutorial chain. The fantasy is the builder's: the story is the
+  place you transformed.
 - "Done" for a piece of work means *the systems work and hold up under play*, not
   *polished for a stranger*. Favor clean, modular boundaries (§4's `engine/` purity rule
   matters *more* under this answer, not less, since it's the seam an engine extraction
