@@ -17,7 +17,7 @@ yet" -- no stakes, pressure, arc or counterpart. Your answers set the direction:
 builder's story, a save you keep returning to, terms with pledges from the world's own
 problems (principles §2 amended), sacking possible, the union with you or against you.
 **[brief.md, Revision 5](brief.md) (agreed; its cuts table pending)** has the shape, the screen and the order;
-step 1 is *Waiting on you* (the cement works' restore was hidden), step 2 the pledge probe.
+step 1, *Waiting on you*, is built and merged (2026-10-24: the moves with a consequence pinned atop the panel, with their buttons -- the cement works' restore had been hidden under More -- and only their places marked on the map; screen.ts `waitingOnYou`); next, step 2, the pledge probe.
 The region's map rework and a 45% faster tick (same results) are merged into `main` (2026-10-24).
 
 ## The carry-over (2026-10-23)
