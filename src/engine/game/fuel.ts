@@ -2,7 +2,8 @@ import type { GameTown, GameWorld } from "./types";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand, type GameEvent } from "./settlement";
 import { addRoadToMap, isCutOff, roadPath, type ActionResult } from "./world";
-import { rebuildNetworks } from "./rail";
+import { railPath, rebuildNetworks } from "./rail";
+import { hasYard } from "./yards";
 import { isWater } from "../pathing/terrainAStar";
 import { canAfford } from "../economy/state";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
@@ -179,19 +180,31 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
   };
   const byRefinery = [...towns].sort((p, q) => p.dr - q.dr);
   const byDepot = [...towns].sort((p, q) => p.dd - q.dd);
+  // Only towns a source can reach: by road within the tankers' reach, or on a railway from it
+  // (fuelWithinReach). On the region, the restored refinery's whole output went to the far
+  // clusters -- the home towns already had imports -- 214-348 cells by road, past any tanker,
+  // and sat there (map 2418, day 230: 653 t a day made, none carried, a Dekina pledge stuck at 0%).
+  const within = world.tuning.fuelWithinReach;
+  const reaches = (siteId: string, roadCells: number, townId: string) => !within || roadCells <= fuelReach(world, siteId) || !!railPath(world, siteId, townId);
   // Imports first, nearest the tank farm first (a town no road reaches still
   // gets its share: it waits for one, and its card says so); then the
   // refinery fills what's still short, nearest it first -- the far side.
-  fill("depot", byDepot);
-  fill("refinery", byRefinery.filter((x) => Number.isFinite(x.dr)));
+  fill("depot", within ? byDepot.filter((x) => reaches(depot.id, x.dd, x.town.id)) : byDepot);
+  // The fuel the refinery would have sent out of reach: what's still short there, before it fills.
+  const outOfReach = within ? byRefinery.filter((x) => Number.isFinite(x.dr) && !reaches(refinery.id, x.dr, x.town.id)).reduce((sum, x) => sum + Math.max(0, unmet(x)), 0) : 0;
+  fill("refinery", byRefinery.filter((x) => Number.isFinite(x.dr) && reaches(refinery.id, x.dr, x.town.id)));
   // The second refinery last, nearest it first; by road only, as the old one.
-  if (second) fill("new", [...towns].filter((x) => Number.isFinite(x.dn)).sort((p, q) => p.dn - q.dn));
+  if (second) fill("new", [...towns].filter((x) => Number.isFinite(x.dn) && reaches(second.id, x.dn, x.town.id)).sort((p, q) => p.dn - q.dn));
   const flows: GoodsFlow[] = [];
   for (const x of towns) {
     if (x.fromRefinery > 0) flows.push({ from: fuel.refineryId, to: x.town.id, kind: "supplies", rate: x.fromRefinery });
     if (x.fromDepot > 0) flows.push({ from: fuel.depotId, to: x.town.id, kind: "supplies", rate: x.fromDepot });
     if (second && x.fromNew > 0) flows.push({ from: second.id, to: x.town.id, kind: "supplies", rate: x.fromNew });
   }
+  // What it would have sent out of reach leaves through the port instead, as the second
+  // refinery's surplus does; on a map where every town is in reach, nothing changes.
+  const exported = Math.min(refined, outOfReach);
+  if (exported > 0 && world.port && world.towns.has(world.port)) flows.push({ from: fuel.refineryId, to: world.port, kind: "supplies", rate: exported });
   if (fuel.restored) flows.push({ from: fuel.sourceId, to: fuel.refineryId, kind: "supplies", rate: world.tuning.crudeShare * fuel.baseDemand * siteScale(world, fuel.refineryId) * staffFactor(world, fuel.sourceId) });
   if (second) {
     // What no town needs leaves through the port: its fuel always has somewhere to go.
@@ -199,6 +212,11 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
     flows.push({ from: fuel.sourceId, to: second.id, kind: "supplies", rate: newRefineryCrude(world) });
   }
   return flows;
+}
+
+/** How far by road tankers take a fuel site's fuel, cells: further from a haulage yard (truckers.ts reads the same). */
+export function fuelReach(world: GameWorld, siteId: string): number {
+  return Math.max(world.tuning.tankerMaxHaulCells, world.tuning.yardsEnabled && hasYard(world, siteId) ? world.tuning.yardReachCells : 0);
 }
 
 /** What a goods flow carries, named by the kind of site it leaves. */

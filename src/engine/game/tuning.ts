@@ -142,6 +142,7 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // the 80% cut. Kept behind the switch, for the runs played with it.
   // Terms and pledges (term.ts; brief, Revision 5, step 2): the probe -- pledges from the
   // world's own problems, no grant and no penalty yet.
+  fuelWithinReach: true,
   pledgesEnabled: true,
   termDays: 120,
   // The mandate (Revision 5, step 3; agreed 2026-10-24: "120 days is fine, sacking too"): a

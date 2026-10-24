@@ -56,13 +56,13 @@ import { isDirt } from "@engine/game/congestion";
 import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/game/project";
 import { remittanceExpected } from "@engine/game/budget";
 import { carryOver, sweepDue } from "@engine/game/sweep";
-import { checkYard, yardGain } from "@engine/game/yards";
+import { checkYard, hasYard, yardGain } from "@engine/game/yards";
 import { checkPark, parkLevyGain, parkReport } from "@engine/game/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/metro";
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
 import { corridorSummaries } from "@engine/game/corridors";
 import { industryFlows, stoneServed } from "@engine/game/industries";
-import { cargoName, crudeArriving, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput, shortageAt } from "@engine/game/fuel";
+import { cargoName, crudeArriving, fuelReach, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput, shortageAt } from "@engine/game/fuel";
 import { checkExpand, expandCost, expandLevel, siteScale } from "@engine/game/expand";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/game/bonds";
 import { siteProduction, type SiteLimit } from "@engine/game/production";
@@ -1526,6 +1526,17 @@ function siteProblem(siteId: string): string {
     return `Short of ${input.name}: ${perDay(input.arriving)} of the ${perDay(input.needed)} t a day it could use, so it makes ${pct(p.made / p.capacity)} of what it could. Carry more ${from}: ${haulierMove(`lorries (<kbd>L</kbd>) on a road`, `build a haulage yard (<kbd>Y</kbd>) where it leaves from so hauliers reach this site`)}, or a freight train on track.`;
   }
   if (p.shipped < 0.5 && p.made * SECONDS_PER_GAME_DAY >= 5) {
+    // Waiting for towns past any tanker or haulier: only rail gets it there (a yard here already
+    // or not, it won't help -- the card said "build a yard" to a refinery that had one).
+    const fuelSite = site.industry === "refinery" || site.industry === "newrefinery" || site.industry === "depot";
+    const reach = fuelSite ? fuelReach(world, siteId) : Math.max(world.tuning.truckerMaxHaulCells, hasYard(world, siteId) ? world.tuning.yardReachCells : 0);
+    const far = [...(world.goods.yards.get(siteId) ?? [])].filter(([, amount]) => amount > 0).map(([key]) => key.slice(0, key.indexOf("|")))
+      .filter((to) => (roadPath(world, siteId, to)?.distance ?? Infinity) > reach && !railPath(world, siteId, to));
+    if (far.length > 0) {
+      const names = far.slice(0, 4).map(townName).join(", ") + (far.length > 4 ? ` and ${far.length - 4} more` : "");
+      return `Most of its ${p.product} is waiting for towns past the ${fuelSite ? "tankers'" : "hauliers'"} reach (${Math.round(reach)} cells by road): ${names}. Only a freight train gets it there: lay track (<kbd>K</kbd>) from ${site.name} and run freight (<kbd>G</kbd>).`;
+    }
+    if (hasYard(world, siteId)) return `Most of its ${p.product} is waiting: ${pct(p.shipped)} gets carried away, even from its yard. A freight train (<kbd>G</kbd>) on track takes more.`;
     return `Most of its ${p.product} is waiting: ${pct(p.shipped)} gets carried away. Truckers take the short hauls; ${haulierMove(`run lorries (<kbd>L</kbd>) to the towns further off.`, `build a haulage yard (<kbd>Y</kbd>) at ${site.name} so hauliers reach the towns further off.`)}`;
   }
   return "";

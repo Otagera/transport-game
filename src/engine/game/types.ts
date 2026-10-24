@@ -214,6 +214,8 @@ export interface GameTuning {
    * what size (thousands); the share expected there; added a thousand people; at most.
    */
   /** Terms and pledges (term.ts, Revision 5, 2): on; a term's length, days. Absent in runs played before them: off. */
+  /** Fuel goes only to towns its source reaches, by tanker or rail (fuel.ts; map 2418, day 230). Absent in older runs: off. */
+  fuelWithinReach?: boolean;
   pledgesEnabled?: boolean;
   termDays?: number;
   /** The mandate (term.ts, Revision 5, 3): on; the term grant's base, per pledge kept, per thousand people grown. */

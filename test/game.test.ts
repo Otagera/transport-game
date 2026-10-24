@@ -1,3 +1,4 @@
+import { fuelReach } from "@engine/game/fuel";
 import type { GameEvent } from "@engine/game/settlement";
 import { pledgeProgress } from "@engine/game/term";
 import { describe, expect, test } from "bun:test";
@@ -4028,6 +4029,16 @@ describe("terms and pledges (brief, Revision 5, step 2: the probe)", () => {
     const events: GameEvent[] = [];
     for (let i = 0; i < 2 * SECONDS_PER_GAME_DAY * 30; i += 1) events.push(...gameTick(w, SIM_DT));
     expect(events.some((e) => e.kind === "term-ended" && e.number === 1)).toBe(true);
+  }, 60_000);
+
+  test("fuel goes only to towns its source reaches: on the region, none to the far clusters past the tankers (map 2418, day 230)", () => {
+    const w = start({ startingFunds: 1e6 });
+    expect(applyAction(w, { kind: "restoreRefinery" }).ok).toBe(true);
+    const refinery = w.fuel!.refineryId;
+    for (const f of fuelFlows(w).filter((f) => f.from === refinery)) {
+      const cells = roadPath(w, refinery, f.to)?.distance ?? Infinity;
+      expect(f.to === w.port || cells <= fuelReach(w, refinery) || !!railPath(w, refinery, f.to)).toBe(true);
+    }
   }, 60_000);
 
   test("a run played before terms (no pledgesEnabled in its tuning) has none", () => {
