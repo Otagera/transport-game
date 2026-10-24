@@ -9,6 +9,17 @@ lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to 
 **581 tests passing** across 48 files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
+## Next: a game around the simulation (2026-10-24)
+
+After 482 days on the region (map 2418) you were disappointed and couldn't name why. An
+outside designer's review named it: "a very good simulation with no game wrapped around it
+yet" -- no stakes, pressure, arc or counterpart. Your answers set the direction: the
+builder's story, a save you keep returning to, terms with pledges from the world's own
+problems (principles §2 amended), sacking possible, the union with you or against you.
+**[brief.md, Revision 5](brief.md) (proposed)** has the shape, the screen and the order;
+step 1 is *Waiting on you* (the cement works' restore was hidden), step 2 the pledge probe.
+The region's map rework and a 45% faster tick (same results) are on branch `region`.
+
 ## The carry-over (2026-10-23)
 
 **The slice is the game.** On your answers: the original 3D game -- its three.js renderer,

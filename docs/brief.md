@@ -783,6 +783,120 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 | C20 | The way out matters | Connecting a second gateway moves at least a fifth of a chain's exports to it |
 | C21 | It still reads | At the start, framed on the home cluster, the screen reads like today's map (your playtest: "I knew where to start") |
 
+## Revision 5 (proposed 2026-10-24): a game around the simulation
+
+**Why.** Your region game ran to day 482 (map 2418). Afterwards you said: "I slept on the game and I must say I am disappointed... I just don't have the language to speak on what I feel is missing."
+
+An outside senior game designer reviewed it. They read this brief and the principles, read both your run files, and played the seed to day 200 themselves. The review is kept with the session's scratchpad: designer-review.md, sections 1-6. Its diagnosis: **"a very good simulation with no game wrapped around it yet."** It found no **stakes, pressure, arc or counterpart**, and listed the evidence:
+
+- **No goal.** Every playtest has ended the same way: "not much to do", "played to its end", "nothing more to build", "what else can I play for?".
+- **No pressure.** Four strikes in 482 days cost ₦4,675, against ₦3.74M in fares. ₦726k sat unspent on day 381.
+- **The bank sets the tempo.** You made a move on 120 of 482 days.
+- **No real trade-offs.** You bought nearly everything the toolbar offers. The one real trade-off was hidden: following "add a bus" took Kabba-Katsina-Ala from +₦457 a day to −₦17.
+- **Feedback that's data, not drama.** "No seat" rose from 674 to 1,881 while you succeeded, and 26 of 39 routes read "waiting".
+- **The union is weather, not a rival.**
+- **The region has no reason to cross it.**
+
+**Your answers (2026-10-24), which set the direction:**
+
+1. **The builder's story:** "the thing with simulators, when I watch people play, is the story they want to tell, and they tell it."
+2. **Sacking:** possible, "if we are leaning into the city transport manager angle."
+3. **Goals come from the world's own problems, never from a script.** Principles §2 is amended.
+4. **The union:** "They should work with you, for the welfare of the workers in your transport system... if they are not with you then they are against you."
+5. **A save you keep returning to,** as in Transport Fever or Subway Builder, not a single Mini Metro session.
+
+### The shape
+
+**A long-running save, told in terms.** Play runs in terms of about 120 game days, which make the chapters of your career. It doesn't end: each term's verdict is a line in your record, and the record is the story.
+
+**Pledges, from your map's problems.**
+- At the start of a term, the state offers three or four pledges. Each is built from what the simulation already names (problems.ts), for example:
+  - "Get cement to Lokoja and unlock its growth"
+  - "Connect Wukari and Kontagora"
+  - "Halve 'no seat' on the Kabba road"
+- You commit to two.
+- At the term's end, a verdict: what you kept, what grew, and what it set for the next term.
+
+**Capital and operations apart** (this answers Open question 9):
+- Each term's capital grant is paid up front, sized so one big project fits.
+- Fares pay for running.
+- Kept pledges and growth raise the next grant.
+- Fail repeatedly (proposed: two failed terms in a row) and you're replaced. The save ends with your career's summary, and you can fork it from an earlier day.
+
+**The union as a party, not a budget line.**
+- Each cluster's union has a named chairman, and a stance toward you: with you, wary, or against you.
+- He's shown at the motor parks, on the map.
+- He speaks for his workers' welfare. Taking a corridor, laying a lane or running BRT brings a named demand with a deadline. You choose:
+  - **concede** the run;
+  - **pay** his members;
+  - **enforce** against him;
+  - **co-opt** him: hand the route to a union cooperative.
+- He remembers. A union that's with you runs your feeders and keeps the peace in a crisis. One against you blockades your roads.
+- The pushback, strikes, settlements, enforcement and parks already built become this one face.
+
+**Later, on the same rules:**
+- **Shocks with a window to act:** fuel scarcity, floods washing out fords, a bridge failing, an okada ban. Each is seeded, announced in advance, with a deadline, and costly to ignore. The second refinery is the template.
+- **Big projects that compete for one term's grant,** some ruling each other out (one Niger rail bridge this term, at Lokoja or at Idah). The gateways (The region, step 3) supply the biggest of them.
+
+### On screen (the review's section 6)
+
+- **Waiting on you:**
+  - A pinned list of every consequential move: a restore, a pledge's next move, a union demand.
+  - Only those get marks on the map. Today the warning mark is on all 24 towns from day 1, and the cement works' restore button was hidden under More.
+- **The strip:**
+  - The term band and its pledges, with progress, replace the Day block.
+  - Population joins the strip; today two of its five numbers are money.
+- **Then and now:**
+  - On the map, the day-1 network drawn faint under today's ("Lokoja 52k → 72k").
+  - A history for each corridor.
+  - The log grouped into a record of what happened, instead of a ticker.
+- **The end-of-term report** becomes the main full screen, ahead of the revenue screen. The term reports stack into your career record.
+- **To quiet:**
+  - the TAKEN/RELEASED events;
+  - the separate levy, agbero and tout lines (one union line instead);
+  - the lane enforcement setting as a standalone toggle.
+
+**A design console** for building and tuning the above (not a map or engine editor):
+- It stays behind `?dev=1`.
+- It can:
+  - fire a shock or offer a pledge now;
+  - jump to a term's end;
+  - change a number live;
+  - set money;
+  - fork the save from day N.
+- Every console action is recorded in the run file as such.
+
+### Cuts, to make room (proposed)
+
+- The treasury remittance and the budget-year sweep (both already off), and bonds: the term grant replaces all three.
+- Freight rates: a 6-11% effect isn't a decision.
+- Routine Fix clicking becomes an upkeep policy for each corridor, with wear showing up as a shock (a road fails), not a chore.
+
+### The order: one at a time, played between steps
+
+1. **Waiting on you**, with the marks fixed. It's small, and it fixes the hidden-button problem now. Pledges and demands will land in it later.
+2. **The probe: a term band and pledge cards in the strip,** with progress bars, no penalty and no grant yet. Add a "what this did" receipt on the map a week after each build. *If your next session feels different with goals on screen, build step 3. If it doesn't, the missing piece is pressure, and step 5 or 6 comes first.*
+3. **The mandate:**
+   - the capital grant;
+   - the term's verdict;
+   - the career record;
+   - replacement after repeated failure;
+   - the design console with it.
+4. **Then and now, and the end-of-term report.**
+5. **The union as a party.**
+6. **Shocks with a window.**
+7. **Competing projects, with the gateways.**
+
+### Checks for Revision 5
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C25 | A reason to play | At any point in your playtest, you can say what you're playing for this term; "what else can I play for?" doesn't come up before day 500 |
+| C26 | Decisions, not waiting | Through day 400, the longest stretch with nothing worth deciding is under 15 days (in your playtest and in the strategist) |
+| C27 | A story to tell | After a session, your career record names at least three things you did that changed a place (and you'd tell them) |
+| C28 | Failure is possible, and fair | A strategist that ignores pledges is replaced within three terms; one that keeps them never is |
+| C29 | Nothing important hidden | Every move that unlocks a chain or answers a pledge or a demand is one click from Waiting on you |
+
 ## Pass/fail checks: when slice zero is done
 
 **Slice zero is done when every check below passes; until then nothing new gets built and nothing moves to the full game.** Measured checks run in the probe (`scripts/game-probe.ts`) and become tests where they can. Played checks come from your sessions; AI checks from the harness (see Playtest protocol).
