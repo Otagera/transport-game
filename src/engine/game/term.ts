@@ -79,6 +79,20 @@ export function pledgeValue(world: GameWorld, pledge: Pledge): number {
   }
 }
 
+/**
+ * Where a pledge stands now, as words ("now 14%"): read live, not kept in its text -- a
+ * pledge offered at 0% still said "now 0%" with you at 14% (playtest, 2026-10-24).
+ */
+export function pledgeNow(world: GameWorld, pledge: Pledge): string {
+  const value = pledgeValue(world, pledge);
+  switch (pledge.kind) {
+    case "connect": return value >= 1 ? "connected" : "";
+    case "cement": case "fuel": case "service": return `now ${Math.round(value * 100)}%`;
+    case "seats": return `now ${Math.round(value)} a day`;
+    case "grow": return `now ${Math.round(value)}k`;
+  }
+}
+
 /** How far along, 0..1. */
 export function pledgeProgress(world: GameWorld, pledge: Pledge): number {
   if (pledge.kept) return 1;
@@ -105,21 +119,21 @@ function offerPledges(world: GameWorld, number: number): Pledge[] {
     const growth = townGrowth(world, town.id);
     if (world.cement && growth && growth.cementHeld >= Math.max(5, 0.05 * town.population)) {
       const now = cementServed(world, town.id);
-      candidates.push({ pledge: { kind: "cement", townId: town.id, text: `Cement to ${name}: 80% of what it needs (now ${pct(now)})`, from: now, target: 0.8 }, weight: growth.cementHeld * 2 });
+      candidates.push({ pledge: { kind: "cement", townId: town.id, text: `Cement to ${name}: 80% of what it needs`, from: now, target: 0.8 }, weight: growth.cementHeld * 2 });
     }
     const fuel = fuelSupply(world, town.id)?.supplied;
     if (fuel !== undefined && fuel < 0.6) {
-      candidates.push({ pledge: { kind: "fuel", townId: town.id, text: `Fuel in ${name}: 80% supplied (now ${pct(fuel)})`, from: fuel, target: 0.8 }, weight: town.population * (1 - fuel) });
+      candidates.push({ pledge: { kind: "fuel", townId: town.id, text: `Fuel in ${name}: 80% supplied`, from: fuel, target: 0.8 }, weight: town.population * (1 - fuel) });
     }
     const seat = townNoSeat(world, town.id);
     if (seat && seat.perDay >= 40) {
-      candidates.push({ pledge: { kind: "seats", townId: town.id, text: `Halve those left without a seat at ${name} (${Math.round(seat.perDay)} a day)`, from: seat.perDay, target: seat.perDay / 2 }, weight: seat.perDay / 4 });
+      candidates.push({ pledge: { kind: "seats", townId: town.id, text: `Halve those left without a seat at ${name}, from ${Math.round(seat.perDay)} a day`, from: seat.perDay, target: seat.perDay / 2 }, weight: seat.perDay / 4 });
     }
     if (growth && growth.expected > 0 && growth.playerShare < growth.expected) {
-      candidates.push({ pledge: { kind: "service", townId: town.id, text: `Carry ${pct(growth.expected)} of ${name}'s trips (now ${pct(growth.playerShare)})`, from: growth.playerShare, target: growth.expected }, weight: town.population * (growth.expected - growth.playerShare) * 2 });
+      candidates.push({ pledge: { kind: "service", townId: town.id, text: `Carry ${pct(growth.expected)} of ${name}'s trips`, from: growth.playerShare, target: growth.expected }, weight: town.population * (growth.expected - growth.playerShare) * 2 });
     }
     const to = Math.ceil(town.population * 1.15);
-    candidates.push({ pledge: { kind: "grow", townId: town.id, text: `${name} to ${to}k (now ${Math.round(town.population)}k)`, from: town.population, target: to }, weight: town.population * 0.05 });
+    candidates.push({ pledge: { kind: "grow", townId: town.id, text: `${name} to ${to}k`, from: town.population, target: to }, weight: town.population * 0.05 });
   }
   candidates.sort((p, q) => q.weight - p.weight);
   const kinds = new Set<PledgeKind>();

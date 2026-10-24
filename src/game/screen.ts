@@ -1,4 +1,4 @@
-import { aWeekOnText, termVerdictText, pledgeProgress, MAX_COMMITTED } from "@engine/game/term";
+import { aWeekOnText, termVerdictText, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
 import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
 import type { GameWorld } from "@engine/game/types";
 import { diagnoseRoute, gameDay, roadPath, routeSummaries, townShare } from "@engine/game/world";
@@ -211,7 +211,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     for (const p of world.term?.pledges ?? []) {
       if (!p.committed || p.kept) continue;
       const kind = world.towns.get(p.townId)?.industry ? "site" : "town";
-      items.push({ text: `Your pledge: ${p.text} · ${pct(pledgeProgress(world, p))}`, button: `<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
+      items.push({ text: `Your pledge: ${pledgeLine(p)} · ${pct(pledgeProgress(world, p))} of the way`, button: `<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
     }
     return items.sort((p, q) => q.weight - p.weight).slice(0, 5);
   }
@@ -374,6 +374,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
    * pledges on offer with how far each has got; pledge up to two. Without terms (a run
    * played before them), the day, as before.
    */
+  /** A pledge's words with where it stands now (live). */
+  const pledgeLine = (p: Pledge) => {
+    const now = p.kept ? "" : pledgeNow(world, p);
+    return `${p.text}${now ? ` (${now})` : ""}`;
+  };
   function termHtml(day: number, mapLine: string): string {
     const term = world.term;
     if (!term) return `<div class="stat"><div class="k">Day</div><div class="v num">${day}</div><div class="d muted">${mapLine}</div></div>`;
@@ -383,8 +388,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const rows = term.pledges.map((p) => {
       const progress = pledgeProgress(world, p);
       const can = !p.committed && committed < MAX_COMMITTED;
-      return `<div class="pledge${p.committed ? " on" : ""}${p.kept ? " kept" : ""}" title="${esc(p.text)}">
-        <span class="t">${p.kept ? "✓ " : p.committed ? "★ " : ""}${esc(p.text)}</span>
+      return `<div class="pledge${p.committed ? " on" : ""}${p.kept ? " kept" : ""}" title="${esc(pledgeLine(p))}">
+        <span class="t">${p.kept ? "✓ " : p.committed ? "★ " : ""}${esc(pledgeLine(p))}</span>
         <i class="bar"><b style="width:${Math.round(progress * 100)}%"></b></i>
         ${can ? `<button data-pledge="${esc(p.id)}">Pledge</button>` : `<button data-pick="${world.towns.get(p.townId)?.industry ? "site" : "town"}|${esc(p.townId)}">Show</button>`}
       </div>`;
