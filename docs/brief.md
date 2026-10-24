@@ -979,6 +979,44 @@ Everything else folds into one of these or goes:
    - highways that grow roadside towns;
    - names, colours and waypoints for your network (can come earlier: it's cheap).
 
+### Built so far
+
+- **Step 1, Waiting on you:** merged 2026-10-24.
+- **Step 2, the pledge probe:** built 2026-10-24. Your verdict after a 348-day game: "the pledges are good, a good way to nudge the player to do something good". Fixes from that game:
+  - debt named with its drains in Waiting on you;
+  - harder service pledges;
+  - a missed pledge not offered again the very next term;
+  - one "a week on" note per pair of towns.
+- **Step 3, the mandate:** built 2026-10-24.
+  - **The grant:** ₦20k a term, plus ₦15k a pledge kept, plus ₦200 a thousand people grown. Paid at the term's start, with debt cleared from it first.
+  - **A failed term:** no pledge kept, or the towns shrank.
+  - **Replaced** after two failed terms in a row.
+  - **On screen:** the verdict and your record.
+  - **The design console** behind `?dev=1`.
+  - **Not yet in:** the cuts (they wait on your marks); a reason for each far cluster.
+
+### Ideas parked (yours, 2026-10-24), with where they'd fit
+
+- **Private traffic** ("we did not account for other humans driving on our roads"). Next after the mandate. The original 3D game's Module 12 (`661492b`) is the design to reuse:
+  - no car agents; private traffic is a load on each road that grows with the towns' prosperity;
+  - it's heaviest on the approaches to towns, and the open middle of a long road stays clear;
+  - so success chokes the corridors that caused it, and lanes, BRT and rail become how a growing city keeps moving.
+
+  It's the pressure the review found missing, and it comes from your own success, not a script.
+- **Your own bus stations and repair shops.** The formal counterpart of the danfos' motor parks: a depot you place on the map.
+  - Your routes load and turn there.
+  - Vehicles within reach of one run cheaper and break down less.
+  - It replaces most of the Fix clicking: a corridor's upkeep becomes a policy, run from a depot.
+  - It's also a mark you leave on the map (self-expression), and something the union contests.
+
+  To keep the system count down, fold it as one building, the depot, rather than two.
+- **Made-in-Nigeria vehicles** ("made in country cars mandate"). A directive from the state that fits the pledges and the vehicle generations:
+  - "buy ten locally made buses this term";
+  - local buses cost less and are less reliable at first, better with each generation;
+  - an assembly plant in a town (Innoson, Nnewi) that steel feeds and your orders grow.
+
+  It's a chain that grows a place, plus a trade-off (cheap and local, or imported and proven). Offered as a pledge kind, not a new system.
+
 ### Checks for Revision 5
 
 | # | Check | Passes when |
