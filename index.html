@@ -282,6 +282,19 @@
       .problem > span { flex: 1 1 180px; }
       .problem button { flex: none; max-width: 100%; }
       .problem.none { background: var(--surface-2); border-left-color: var(--good); }
+      .seethrough { margin: 8px 0 10px; background: var(--surface-2); border-radius: 10px; padding: 6px 6px 8px; }
+      .seethrough svg { display: block; width: 100%; height: auto; }
+      .seethrough .t { font: 10px system-ui, sans-serif; fill: var(--ink-2); }
+      .seethrough .t.muted { fill: var(--muted); }
+      .seethrough .t.warn { fill: var(--warn); font-weight: 600; }
+      .seethrough .t.bad { fill: var(--bad); font-weight: 600; }
+      .seethrough .t.small { font-size: 9px; }
+      .seethrough figcaption { font-size: 12px; padding: 4px 6px 0; }
+      .seethrough figcaption.warn { color: var(--ink); font-weight: 600; }
+      .seethrough .flow { animation: flowdash linear infinite; }
+      .seethrough .smoke { animation: smoke 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+      @keyframes flowdash { to { stroke-dashoffset: -28; } }
+      @keyframes smoke { 0% { opacity: 0.7; transform: translateY(0) scale(0.6); } 100% { opacity: 0; transform: translateY(-14px) scale(1.4); } }
       .waiting { padding-bottom: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
       .waiting .problem { margin: 6px 0; }
       .back { margin-bottom: 8px; }
