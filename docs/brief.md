@@ -821,7 +821,7 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 | C23 | Maps differ by what they make | Two maps from different regions: the strategist's first goods move is on a different chain |
 | C24 | The idle steel works is a decision | Restored by day 100 in a good game, and worth it (net and growth, against a twin that never restores it) |
 
-## Revision 5 (proposed 2026-10-24): a game around the simulation
+## Revision 5 (agreed 2026-10-24, the cuts table pending): a game around the simulation
 
 **Why.** Your region game ran to day 482 (map 2418). Afterwards you said: "I slept on the game and I must say I am disappointed... I just don't have the language to speak on what I feel is missing."
 
@@ -859,7 +859,7 @@ An outside senior game designer reviewed it. They read this brief and the princi
 - Each term's capital grant is paid up front, sized so one big project fits.
 - Fares pay for running.
 - Kept pledges and growth raise the next grant.
-- Fail repeatedly (proposed: two failed terms in a row) and you're replaced. The save ends with your career's summary, and you can fork it from an earlier day.
+- Fail two terms in a row and you're replaced (agreed 2026-10-24, with terms of 120 days: "120 days is fine, sacking too"). The save ends with your career's summary, and you can fork it from an earlier day.
 
 **The union as a party, not a budget line.**
 - Each cluster's union has a named chairman, and a stance toward you: with you, wary, or against you.
@@ -1092,6 +1092,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-24 | Revision 5 agreed: terms of 120 days; replaced after two failed terms in a row. The cuts table (fewer systems to hold) awaits your marks, item by item | Agreed 2026-10-24 |
 | 2026-10-24 | After a designer's review of the region playtest (482 days, map 2418): "a very good simulation with no game around it yet" -- no stakes, pressure, arc or counterpart. Your answers: the builder's story ("the story they want to tell"); a save you keep returning to (Transport Fever, Subway Builder), not one session; sacking possible as the city's transport manager; the union works with you for its workers' welfare, or is against you. Principles §2 amended: goals from the world's own problems, never scripted (was "no authored goal") | Agreed 2026-10-24; what to build from it not yet decided |
 | 2026-10-23 | Goods matter through growth, not money (C11 amended stands); you set what each freight line charges -- cheap, standard or dear -- and face the consequences: dear earns more a tonne and the hauliers take more of its goods by road. Eras are vehicle generations on both sides (your fleet's models and the informal sector's), not calendar ages. Sea and river freight, roads with junctions and money late in the game are for the full game (the carry-over plan, proposed) | Agreed 2026-10-23 (the carry-over plan itself proposed) |
 | 2026-10-20 | Revision 3: goods that feel real, in chains -- sites with inputs and outputs that make nothing without their input (fuel, building, food), cargo by the map's region, long legs in hundreds of tonnes a day for freight rail, a brownfield refinery; built in order (fuel chain first), each measured and played | Agreed 2026-10-20 |
