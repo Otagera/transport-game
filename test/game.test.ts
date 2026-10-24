@@ -3987,6 +3987,23 @@ describe("terms and pledges (brief, Revision 5, step 2: the probe)", () => {
     expect(week && week.kind === "a-week-on" && week.towns).toEqual([towns[0], towns[1]]);
   }, 120_000);
 
+  test("a pledge missed isn't offered again the next term; a service pledge asks a good step past where you are; one week-on note per pair", () => {
+    const w = start({ termDays: 8 });
+    for (const p of w.term!.pledges) {
+      if (p.kind === "service") expect(p.target).toBeGreaterThanOrEqual(p.from + 0.2 - 1e-9);
+    }
+    const pledged = w.term!.pledges.slice(0, 2);
+    for (const p of pledged) applyAction(w, { kind: "pledge", id: p.id });
+    const towns = [...w.basePopulation.keys()];
+    applyAction(w, { kind: "bus", a: towns[0]!, b: towns[1]! });
+    applyAction(w, { kind: "bus", a: towns[1]!, b: towns[0]! });
+    const events: GameEvent[] = [];
+    for (let i = 0; i < 9 * SECONDS_PER_GAME_DAY * 30; i += 1) events.push(...gameTick(w, SIM_DT));
+    expect(events.filter((e) => e.kind === "a-week-on")).toHaveLength(1);
+    const missed = w.term!.history[0]!.missedKeys!;
+    for (const p of w.term!.pledges) expect(missed).not.toContain(`${p.kind}:${p.townId}`);
+  }, 120_000);
+
   test("a run played before terms (no pledgesEnabled in its tuning) has none", () => {
     const w = start({ pledgesEnabled: undefined });
     expect(w.term).toBeUndefined();

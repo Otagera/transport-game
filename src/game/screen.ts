@@ -207,6 +207,22 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         } else items.push({ text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm (Y)"), at: [world.fuel.depotId], weight });
       }
     }
+    // In debt, or losing money: what's draining it, by name (a game ran to −₦71k with 17 roads'
+    // upkeep, a bond and five losing routes never pointed at). After the pledges, before the rest.
+    const net = averageNet(world);
+    if (world.economy.funds < 0 || net < 0) {
+      const last = (key: string) => dailyBudget(key).at(-1) ?? 0;
+      const losing = routes().filter((r) => r.netPerDay < 0);
+      const drains = [
+        last("upkeep") >= 1 ? `road upkeep ${naira(last("upkeep"))}` : "",
+        losing.length ? `${plural(losing.length, "route")} losing ${naira(-losing.reduce((sum, r) => sum + r.netPerDay, 0))}` : "",
+        last("bonds") >= 1 ? `bond repayments ${naira(last("bonds"))}` : "",
+      ].filter(Boolean);
+      const where = world.economy.funds < 0 ? `In debt: ${nairaK(world.economy.funds)}` : "Losing money";
+      const flow = net < 0 ? `, ${naira(-net)} a day more out than in` : "";
+      const buttons = (losing.length ? `<button data-tab="routes" title="Your routes, the worst first">Losing routes</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep (F)") : "");
+      items.push({ text: `${where}${flow}${drains.length ? `. A day: ${drains.join(" · ")}` : ""}`, button: buttons, at: [], weight: world.economy.funds < 0 ? 1e8 : 1e6 });
+    }
     // Your pledges this term, not yet kept: first, with the town (its panel has the move).
     for (const p of world.term?.pledges ?? []) {
       if (!p.committed || p.kept) continue;

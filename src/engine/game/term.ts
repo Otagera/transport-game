@@ -43,6 +43,8 @@ export interface TermRecord {
   number: number;
   kept: string[];
   missed: string[];
+  /** The missed pledges' kind and town (`kind:townId`): not offered again the very next term. */
+  missedKeys?: string[];
   /** Thousands of people in the original towns at its end, against its start. */
   peopleFrom: number;
   peopleTo: number;
@@ -104,7 +106,7 @@ export function pledgeProgress(world: GameWorld, pledge: Pledge): number {
 }
 
 /** The pledges the world's problems offer now: the most pressing of each kind, three kinds at most. */
-function offerPledges(world: GameWorld, number: number): Pledge[] {
+function offerPledges(world: GameWorld, number: number, missedLast: Set<string>): Pledge[] {
   const towns = [...world.basePopulation.keys()]
     .map((id) => world.towns.get(id)!)
     .filter((town) => town && !town.industry && (number > 1 || inHome(world, town)));
@@ -130,18 +132,21 @@ function offerPledges(world: GameWorld, number: number): Pledge[] {
       candidates.push({ pledge: { kind: "seats", townId: town.id, text: `Halve those left without a seat at ${name}, from ${Math.round(seat.perDay)} a day`, from: seat.perDay, target: seat.perDay / 2 }, weight: seat.perDay / 4 });
     }
     if (growth && growth.expected > 0 && growth.playerShare < growth.expected) {
-      candidates.push({ pledge: { kind: "service", townId: town.id, text: `Carry ${pct(growth.expected)} of ${name}'s trips`, from: growth.playerShare, target: growth.expected }, weight: town.population * (growth.expected - growth.playerShare) * 2 });
+      // What it expects, and a good step past where you are: three buses met "16% of Kabba" in three days.
+      const target = Math.min(0.9, Math.ceil(Math.max(growth.expected, growth.playerShare + 0.2) * 20) / 20);
+      candidates.push({ pledge: { kind: "service", townId: town.id, text: `Carry ${pct(target)} of ${name}'s trips`, from: growth.playerShare, target }, weight: town.population * (growth.expected - growth.playerShare) * 2 });
     }
     const to = Math.ceil(town.population * 1.15);
     candidates.push({ pledge: { kind: "grow", townId: town.id, text: `${name} to ${to}k`, from: town.population, target: to }, weight: town.population * 0.05 });
   }
   candidates.sort((p, q) => q.weight - p.weight);
+  // A pledge just missed doesn't come straight back (Katsina-Ala's seats was offered three terms running).
   const kinds = new Set<PledgeKind>();
   const placesUsed = new Set<string>();
   const offered: Pledge[] = [];
   for (const { pledge } of candidates) {
     if (offered.length >= OFFERED) break;
-    if (kinds.has(pledge.kind) || placesUsed.has(pledge.townId)) continue;
+    if (kinds.has(pledge.kind) || placesUsed.has(pledge.townId) || missedLast.has(`${pledge.kind}:${pledge.townId}`)) continue;
     kinds.add(pledge.kind);
     placesUsed.add(pledge.townId);
     offered.push({ ...pledge, id: `${number}:${pledge.kind}:${pledge.townId}`, committed: false, kept: null });
@@ -151,7 +156,7 @@ function offerPledges(world: GameWorld, number: number): Pledge[] {
 
 function openTerm(world: GameWorld, number: number, at: number, history: TermRecord[], watching: TermState["watching"]): GameEvent {
   const days = world.tuning.termDays ?? 120;
-  const pledges = offerPledges(world, number);
+  const pledges = offerPledges(world, number, new Set(history.at(-1)?.missedKeys ?? []));
   world.term = { number, startedAtSeconds: at, endsAtSeconds: at + days * D, pledges, peopleAtStart: people(world), history, watching, nextCheckAtSeconds: at + D };
   return { kind: "term-started", number, pledges: pledges.map((p) => p.text) };
 }
@@ -187,8 +192,8 @@ export function updateTerm(world: GameWorld): GameEvent[] {
     const kept = term.pledges.filter((p) => p.committed && (p.kept || pledgeProgress(world, p) >= 1));
     const missed = term.pledges.filter((p) => p.committed && !kept.includes(p));
     for (const p of term.pledges) p.kept = kept.includes(p);
-    const record: TermRecord = { number: term.number, kept: kept.map((p) => p.text), missed: missed.map((p) => p.text), peopleFrom: term.peopleAtStart, peopleTo: people(world) };
-    events.push({ kind: "term-ended", ...record });
+    const record: TermRecord = { number: term.number, kept: kept.map((p) => p.text), missed: missed.map((p) => p.text), missedKeys: missed.map((p) => `${p.kind}:${p.townId}`), peopleFrom: term.peopleAtStart, peopleTo: people(world) };
+    events.push({ kind: "term-ended", number: record.number, kept: record.kept, missed: record.missed, peopleFrom: record.peopleFrom, peopleTo: record.peopleTo });
     events.push(openTerm(world, term.number + 1, now, [...term.history, record], term.watching));
   }
   return events;
@@ -227,8 +232,10 @@ export function noteAction(world: GameWorld, spec: ActionSpec): void {
   const term = world.term;
   if (!world.tuning.pledgesEnabled || !term) return;
   const build = buildOf(world, spec);
-  // One week at a time for the same build: a third bus on a line isn't news of its own.
-  if (!build || term.watching.some((w) => w.label === build.label)) return;
+  // One note a week for the same towns, whichever way round and whatever was built: a bus each
+  // way, or a bus and its road, made two or three notes saying the same (36 in one game).
+  const towns = [...build?.towns ?? []].sort().join("|");
+  if (!build || term.watching.some((w) => [...w.towns].sort().join("|") === towns)) return;
   term.watching.push({ ...build, atSeconds: world.economy.elapsedSeconds, people: build.towns.map((id) => world.towns.get(id)?.population ?? 0), trips: tripsBetween(world, build.towns) });
 }
 
