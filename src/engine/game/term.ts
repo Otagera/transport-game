@@ -20,8 +20,14 @@ import { fuelSupply, inHome } from "./fuel";
 // Alongside, "a week on" (the review's receipts): a week after something you build, what
 // it did -- trips between its towns, their growth -- so a move's effect lands as an event.
 //
-// Plain data on the world, changed only here and by the `pledge` action, so a run file
-// replays it. Off (and absent) when the run's tuning has no `pledgesEnabled`.
+// The mandate (Revision 5, step 3, behind `mandateEnabled`): a term's verdict sets the next
+// term's capital grant -- a base, more for each pledge kept and for the people grown -- paid
+// in at the term's start, any debt cleared from it first (a running deficit eats into it).
+// A term fails when no pledge is kept or the towns shrink; two failed terms in a row and the
+// state replaces you. The save goes on (a long save, as agreed), with the record kept.
+//
+// Plain data on the world, changed only here and by the `pledge` and `console` actions, so
+// a run file replays it. Off (and absent) when the run's tuning has no `pledgesEnabled`.
 
 export type PledgeKind = "connect" | "cement" | "fuel" | "seats" | "service" | "grow";
 
@@ -48,6 +54,9 @@ export interface TermRecord {
   /** Thousands of people in the original towns at its end, against its start. */
   peopleFrom: number;
   peopleTo: number;
+  /** The mandate: no pledge kept or the towns shrank; and the grant this verdict set for the next term (debt it cleared included). */
+  failed?: boolean;
+  grant?: number;
 }
 
 export interface TermState {
@@ -60,6 +69,9 @@ export interface TermState {
   /** Builds waiting for their week (a week on). */
   watching: Array<{ label: string; towns: string[]; atSeconds: number; people: number[]; trips: number }>;
   nextCheckAtSeconds: number;
+  /** The mandate: failed terms in a row; when the state replaced you (absent: it hasn't). */
+  failedInRow?: number;
+  replacedAtSeconds?: number;
 }
 
 export const MAX_COMMITTED = 2;
@@ -193,8 +205,27 @@ export function updateTerm(world: GameWorld): GameEvent[] {
     const missed = term.pledges.filter((p) => p.committed && !kept.includes(p));
     for (const p of term.pledges) p.kept = kept.includes(p);
     const record: TermRecord = { number: term.number, kept: kept.map((p) => p.text), missed: missed.map((p) => p.text), missedKeys: missed.map((p) => `${p.kind}:${p.townId}`), peopleFrom: term.peopleAtStart, peopleTo: people(world) };
-    events.push({ kind: "term-ended", number: record.number, kept: record.kept, missed: record.missed, peopleFrom: record.peopleFrom, peopleTo: record.peopleTo });
+    let failedInRow = 0;
+    let replacedAtSeconds = term.replacedAtSeconds;
+    if (world.tuning.mandateEnabled) {
+      const t = world.tuning;
+      record.failed = kept.length === 0 || record.peopleTo < record.peopleFrom;
+      record.grant = (t.termGrantBase ?? 0) + (t.termGrantPerPledge ?? 0) * kept.length + (t.termGrantPerThousand ?? 0) * Math.max(0, record.peopleTo - record.peopleFrom);
+      failedInRow = record.failed ? (term.failedInRow ?? 0) + 1 : 0;
+    }
+    events.push({ kind: "term-ended", number: record.number, kept: record.kept, missed: record.missed, peopleFrom: record.peopleFrom, peopleTo: record.peopleTo, ...(record.failed !== undefined ? { failed: record.failed, grant: record.grant!, failedInRow } : {}) });
+    if (world.tuning.mandateEnabled && failedInRow >= 2 && replacedAtSeconds === undefined) {
+      replacedAtSeconds = now;
+      events.push({ kind: "replaced", number: record.number, terms: [...term.history, record].length });
+    }
     events.push(openTerm(world, term.number + 1, now, [...term.history, record], term.watching));
+    world.term!.failedInRow = failedInRow;
+    if (replacedAtSeconds !== undefined) world.term!.replacedAtSeconds = replacedAtSeconds;
+    // The grant, paid in as the new term starts.
+    if (record.grant) {
+      world.economy.funds += record.grant;
+      world.budget.grant = (world.budget.grant ?? 0) + record.grant;
+    }
   }
   return events;
 }
@@ -239,6 +270,22 @@ export function noteAction(world: GameWorld, spec: ActionSpec): void {
   term.watching.push({ ...build, atSeconds: world.economy.elapsedSeconds, people: build.towns.map((id) => world.towns.get(id)?.population ?? 0), trips: tripsBetween(world, build.towns) });
 }
 
+/**
+ * The design console's moves (behind ?dev=1 on the page; brief, Revision 5): end the term
+ * now, or set the money. Actions like any other, so a run file records them as such.
+ */
+export function consoleMove(world: GameWorld, op: "end-term" | "funds", amount = 0): { ok: boolean; reason?: string } {
+  if (op === "funds") {
+    world.economy.funds = amount;
+    return { ok: true };
+  }
+  const term = world.term;
+  if (!term) return { ok: false, reason: "no term running" };
+  term.endsAtSeconds = world.economy.elapsedSeconds;
+  term.nextCheckAtSeconds = world.economy.elapsedSeconds;
+  return { ok: true };
+}
+
 /** Commit to a pledge on offer this term: public, so not undone. */
 export function commitPledge(world: GameWorld, id: string): { ok: boolean; reason?: string } {
   const term = world.term;
@@ -260,9 +307,10 @@ export function aWeekOnText(world: GameWorld, e: { label: string; tripsBy: numbe
 }
 
 /** A term's verdict as a line. */
-export function termVerdictText(e: { number: number; kept: string[]; missed: string[]; peopleFrom: number; peopleTo: number }): string {
+export function termVerdictText(e: { number: number; kept: string[]; missed: string[]; peopleFrom: number; peopleTo: number; failed?: boolean; grant?: number }): string {
   const pledged = e.kept.length + e.missed.length;
   const grown = e.peopleTo - e.peopleFrom;
   const pledges = pledged === 0 ? "no pledges made" : `${e.kept.length} of ${pledged} pledge${pledged === 1 ? "" : "s"} kept`;
-  return `Term ${e.number} ended: ${pledges}; the towns ${grown >= 0 ? "grew" : "shrank"} by ${Math.abs(Math.round(grown))}k`;
+  const mandate = e.failed === undefined ? "" : `${e.failed ? " -- a failed term" : ""}; a grant of ₦${Math.round(e.grant ?? 0).toLocaleString()} for the next`;
+  return `Term ${e.number} ended: ${pledges}; the towns ${grown >= 0 ? "grew" : "shrank"} by ${Math.abs(Math.round(grown))}k${mandate}`;
 }

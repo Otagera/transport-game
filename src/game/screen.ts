@@ -45,6 +45,8 @@ export interface ScreenHooks {
   treasuryMore(): string;
   /** A bond for a restore, when you can't pay for it (main.ts bondButton); "" when none's on offer. */
   bond(purpose: "works" | "refinery" | "steel"): string;
+  /** The page is in dev mode (?dev=1): the design console's buttons show. */
+  dev: boolean;
 }
 
 // --- Formatting ------------------------------------------------------------
@@ -63,6 +65,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   const logEl = document.querySelector<HTMLElement>("#log")!;
   const panelEl = document.querySelector<HTMLElement>("#panel")!;
   const revenueEl = document.querySelector<HTMLElement>("#revenue")!;
+  const verdictEl = document.querySelector<HTMLElement>("#verdict")!;
   const tip = document.querySelector<HTMLDivElement>("#tip")!;
 
   let selected: Selection = null;
@@ -410,7 +413,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         ${can ? `<button data-pledge="${esc(p.id)}">Pledge</button>` : `<button data-pick="${world.towns.get(p.townId)?.industry ? "site" : "town"}|${esc(p.townId)}">Show</button>`}
       </div>`;
     }).join("");
-    return `<div class="stat term"><div class="k">Day ${day} · Term ${term.number}, day ${termDay} of ${length}${committed < MAX_COMMITTED ? ` · pledge ${MAX_COMMITTED - committed}` : ""}</div>${rows || `<div class="d muted">Nothing to pledge this term</div>`}<div class="d muted">${mapLine}</div></div>`;
+    const standing = term.replacedAtSeconds !== undefined ? ` · <b class="down">replaced</b>` : (term.failedInRow ?? 0) > 0 ? ` · <span class="down">a failed term behind you</span>` : "";
+    const console = hooks.dev ? `<div class="d">Console: <button data-console="end-term">End the term</button> <button data-console="funds">₦100k</button></div>` : "";
+    return `<div class="stat term"><div class="k">Day ${day} · Term ${term.number}, day ${termDay} of ${length}${committed < MAX_COMMITTED ? ` · pledge ${MAX_COMMITTED - committed}` : ""}${standing}</div>${rows || `<div class="d muted">Nothing to pledge this term</div>`}<div class="d muted">${mapLine}</div>${console}</div>`;
   }
 
   function renderStrip(mapLine: string): void {
@@ -436,7 +441,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${stat("Net a day", "Income less running costs and upkeep, a day, over the last 5 days", naira(n.netPerDay), n.netPerDay, ten?.netPerDay, recent.map((d) => d.netPerDay), naira)}
       ${stat("Money", "What you hold", nairaK(n.funds), n.funds, ten?.funds, recent.map((d) => d.funds), nairaK)}
       <div class="spacer"></div>
-      <div class="actions"><button data-revenue="open">Revenue ▸</button></div>`;
+      <div class="actions">${world.term?.history.length ? `<button data-verdict="record">Your record ▸</button> ` : ""}<button data-revenue="open">Revenue ▸</button></div>`;
   }
 
   // --- The side panel ----------------------------------------------------------------
@@ -651,6 +656,51 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${logShown.map((e, i) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}`;
   }
 
+  // --- The term's verdict and your record (brief, Revision 5, step 3) -----------------
+  // At a term's end the verdict takes the screen: what you pledged and kept, what grew, the
+  // grant it set, your standing; under it, every term so far -- the career record, the story
+  // of the save. "Your record" in the strip opens it any time.
+
+  const verdictOpen = () => verdictEl.classList.contains("open");
+  function openVerdict(mode: "term" | "record" | "replaced" | null): void {
+    verdictEl.classList.toggle("open", mode !== null);
+    if (mode) renderVerdict(mode);
+  }
+  function renderVerdict(mode: "term" | "record" | "replaced"): void {
+    const term = world.term;
+    if (!term) return;
+    const history = term.history;
+    const last = history.at(-1);
+    const grown = (r: { peopleFrom: number; peopleTo: number }) => r.peopleTo - r.peopleFrom;
+    const signed = (x: number) => `${x >= 0 ? "+" : "−"}${int(Math.abs(x))}k`;
+    const record = history.length ? `<h2>Your record</h2><table><thead><tr><th>Term</th><th>Pledges kept</th><th>The towns</th><th>Grant set</th><th></th></tr></thead><tbody>
+      ${history.map((r) => `<tr><td>${r.number}</td><td>${r.kept.length} of ${r.kept.length + r.missed.length}</td><td>${int(r.peopleFrom)}k → ${int(r.peopleTo)}k (${signed(grown(r))})</td><td>${r.grant !== undefined ? nairaK(r.grant) : "—"}</td><td class="${r.failed ? "down" : "up"}">${r.failed === undefined ? "" : r.failed ? "failed" : "good"}</td></tr>`).join("")}
+      </tbody></table>` : `<p class="muted">No term has ended yet.</p>`;
+    if (mode === "record" || !last) {
+      verdictEl.innerHTML = `<div class="top"><div class="title">Your record</div><button data-verdict="close">Back to the map ✕</button></div>${record}`;
+      return;
+    }
+    const pledges = [...last.kept.map((t) => `<li class="kept">${esc(t)}</li>`), ...last.missed.map((t) => `<li class="missed">${esc(t)}</li>`)].join("");
+    const standing = mode === "replaced" || term.replacedAtSeconds !== undefined ? "Replaced"
+      : last.failed ? "One failed term: another and you're replaced" : last.failed === false ? "In good standing" : "";
+    const lede = mode === "replaced"
+      ? `Two failed terms in a row: the state has replaced you. Your record stands below. The save goes on if you keep playing, but the region is someone else's to run now.`
+      : last.failed ? `A failed term: ${last.kept.length === 0 ? "no pledge kept" : "the towns shrank"}. Keep a pledge and grow the towns this term, or the state replaces you.`
+      : `The state's verdict on term ${last.number}.`;
+    verdictEl.innerHTML = `<div class="top"><div class="title">${mode === "replaced" ? "The state has replaced you" : `Term ${last.number}: the verdict`}</div>
+      <button class="primary" data-verdict="close">${mode === "replaced" ? "Keep playing ▸" : `Begin term ${term.number} ▸`}</button></div>
+      <p class="lede">${esc(lede)}</p>
+      <div class="heroes">
+        <div class="hero"><div class="k">Pledges kept</div><div class="v num">${last.kept.length} of ${last.kept.length + last.missed.length}</div></div>
+        <div class="hero"><div class="k">The towns</div><div class="v num">${signed(grown(last))}</div><div class="k">${int(last.peopleFrom)}k → ${int(last.peopleTo)}k</div></div>
+        <div class="hero"><div class="k">Grant for term ${term.number}</div><div class="v num">${last.grant !== undefined ? nairaK(last.grant) : "—"}</div></div>
+        <div class="hero"><div class="k">Standing</div><div class="v" style="font-size:16px">${esc(standing)}</div></div>
+      </div>
+      <h2>Your pledges</h2>${pledges ? `<ul class="pledges">${pledges}</ul>` : `<p class="muted">You made none this term.</p>`}
+      <h2>Term ${term.number}'s pledges on offer</h2><ul class="pledges">${term.pledges.map((p) => `<li>${esc(pledgeLine(p))}</li>`).join("")}</ul>
+      ${record}`;
+  }
+
   // --- The revenue screen ------------------------------------------------------------
 
   const revenueOpen = () => revenueEl.classList.contains("open");
@@ -726,7 +776,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   /** A click the screen handles itself: true when it did. Moves and old-card buttons are the page's. */
   function onClick(target: HTMLElement): boolean {
-    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue]");
+    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict]");
     if (!el || el.closest("details.more .panel-body")) return false;
     if (el.dataset.tab) { tab = el.dataset.tab as typeof tab; renderPanel(); return true; }
     if (el.dataset.back) { select(null); return true; }
@@ -752,6 +802,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
     if (el.dataset.range !== undefined) { range = Number(el.dataset.range); renderRevenue(); return true; }
     if (el.dataset.revenue) { openRevenue(el.dataset.revenue === "open"); return true; }
+    if (el.dataset.verdict) { openVerdict(el.dataset.verdict === "close" ? null : (el.dataset.verdict as "record")); return true; }
     return false;
   }
 
@@ -781,6 +832,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     renderRevenue,
     openRevenue,
     revenueOpen,
+    openVerdict,
+    verdictOpen,
     onClick,
     select,
     /** The named move a problem line's button offers. */

@@ -299,6 +299,19 @@
         position: fixed; inset: 0; background: var(--bg); z-index: 10; display: none; overflow-y: auto; padding: 18px 22px 40px; font-size: 13px;
       }
       #revenue.open { display: block; }
+      #verdict { position: fixed; inset: 0; background: var(--bg); z-index: 11; display: none; overflow-y: auto; padding: 18px 22px 40px; font-size: 13px; }
+      #verdict.open { display: block; }
+      #verdict .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+      #verdict .top .title { font-size: 20px; font-weight: 700; }
+      #verdict .lede { font-size: 14px; margin: 0 0 14px; max-width: 760px; }
+      #verdict ul.pledges { list-style: none; padding: 0; margin: 0 0 16px; }
+      #verdict ul.pledges li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+      #verdict ul.pledges li.kept::before { content: "✓ "; color: var(--good); font-weight: 700; }
+      #verdict ul.pledges li.missed::before { content: "✗ "; color: var(--bad); font-weight: 700; }
+      #verdict table { border-collapse: collapse; min-width: 560px; }
+      #verdict td, #verdict th { padding: 6px 12px 6px 0; text-align: left; border-bottom: 1px solid var(--line); }
+      #verdict button { font: inherit; padding: 4px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+      #verdict button.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
       #revenue .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
       #revenue .top .title { font-size: 20px; font-weight: 700; }
       .heroes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -364,6 +377,7 @@
     <div id="toolbar"></div>
     <div id="toast"></div>
     <section id="revenue" aria-label="Revenue"></section>
+    <section id="verdict" aria-label="Term report"></section>
     <div id="tip"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>

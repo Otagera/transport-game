@@ -39,6 +39,8 @@ export interface Takings {
 export interface BudgetTally {
   /** Passenger fares. */
   fares: number;
+  /** The state's capital grants, paid at each term's start (term.ts, the mandate). */
+  grant: number;
   /** Goods carried (lorries, freight trains): off in slice zero. */
   goods: number;
   tolls: number;
@@ -74,7 +76,7 @@ export interface BudgetTally {
 }
 
 export function createBudgetTally(): BudgetTally {
-  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, fuel: 0, upkeep: 0, enforcement: 0, settlements: 0, struck: 0, remitted: 0, borrowed: 0, bonds: 0, exports: 0, swept: 0, loading: 0, touts: 0, metro: 0 };
+  return { fares: 0, goods: 0, tolls: 0, levies: 0, agberos: 0, allocation: 0, running: 0, fuel: 0, upkeep: 0, enforcement: 0, settlements: 0, struck: 0, remitted: 0, borrowed: 0, bonds: 0, exports: 0, swept: 0, loading: 0, touts: 0, metro: 0, grant: 0 };
 }
 
 /** The current remittance period: when it ends, and its net so far (income minus running costs). */

@@ -54,7 +54,8 @@ export type GameEvent =
   // met; the verdict at a term's end; a build a week on, and what it did.
   | { kind: "term-started"; number: number; pledges: string[] }
   | { kind: "pledge-kept"; number: number; text: string; townId: string }
-  | { kind: "term-ended"; number: number; kept: string[]; missed: string[]; peopleFrom: number; peopleTo: number }
+  | { kind: "term-ended"; number: number; kept: string[]; missed: string[]; peopleFrom: number; peopleTo: number; failed?: boolean; grant?: number; failedInRow?: number }
+  | { kind: "replaced"; number: number; terms: number }
   | { kind: "a-week-on"; label: string; towns: string[]; tripsBy: number; grew: Array<{ id: string; by: number }> };
 
 export interface SettlementState {

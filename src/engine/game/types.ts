@@ -216,6 +216,11 @@ export interface GameTuning {
   /** Terms and pledges (term.ts, Revision 5, 2): on; a term's length, days. Absent in runs played before them: off. */
   pledgesEnabled?: boolean;
   termDays?: number;
+  /** The mandate (term.ts, Revision 5, 3): on; the term grant's base, per pledge kept, per thousand people grown. */
+  mandateEnabled?: boolean;
+  termGrantBase?: number;
+  termGrantPerPledge?: number;
+  termGrantPerThousand?: number;
   /** The budget-year sweep (sweep.ts, Revision 4, 3, a trial): on; the year, days; the least you may carry over. */
   sweepEnabled: boolean;
   sweepPeriodDays: number;

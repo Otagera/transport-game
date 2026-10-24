@@ -4004,6 +4004,32 @@ describe("terms and pledges (brief, Revision 5, step 2: the probe)", () => {
     for (const p of w.term!.pledges) expect(missed).not.toContain(`${p.kind}:${p.townId}`);
   }, 120_000);
 
+  test("the mandate: a term's verdict pays the next term's grant (debt cleared from it); two failed terms in a row and you're replaced", () => {
+    const w = start({ termDays: 4 });
+    applyAction(w, { kind: "console", op: "funds", amount: -10000 });
+    const events: GameEvent[] = [];
+    // No pledges made: each term fails. The towns barely move in four days.
+    for (let i = 0; i < 9 * SECONDS_PER_GAME_DAY * 30; i += 1) events.push(...gameTick(w, SIM_DT));
+    const ended = events.filter((e) => e.kind === "term-ended");
+    expect(ended.length).toBeGreaterThanOrEqual(2);
+    const first = ended[0]!;
+    expect(first.kind === "term-ended" && first.failed).toBe(true);
+    expect(first.kind === "term-ended" && first.grant).toBeGreaterThanOrEqual(w.tuning.termGrantBase!);
+    expect(w.budget.grant).toBeGreaterThanOrEqual(2 * w.tuning.termGrantBase!);
+    expect(events.some((e) => e.kind === "replaced")).toBe(true);
+    expect(w.term!.replacedAtSeconds).toBeDefined();
+    // The save goes on: a new term still opens after.
+    expect(w.term!.number).toBeGreaterThanOrEqual(3);
+  }, 120_000);
+
+  test("the console ends a term at the next day's check", () => {
+    const w = start();
+    expect(applyAction(w, { kind: "console", op: "end-term" }).ok).toBe(true);
+    const events: GameEvent[] = [];
+    for (let i = 0; i < 2 * SECONDS_PER_GAME_DAY * 30; i += 1) events.push(...gameTick(w, SIM_DT));
+    expect(events.some((e) => e.kind === "term-ended" && e.number === 1)).toBe(true);
+  }, 60_000);
+
   test("a run played before terms (no pledgesEnabled in its tuning) has none", () => {
     const w = start({ pledgesEnabled: undefined });
     expect(w.term).toBeUndefined();

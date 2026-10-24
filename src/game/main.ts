@@ -180,6 +180,7 @@ const screen = createScreen(world, recorder, {
   },
   routesMore: () => (dev ? bestMovesHtml() + resultsHtml() : "") + lorryRows(false) + corridorsHtml() + shareHtml(),
   bond: (purpose) => bondButton(purpose),
+  dev,
   moneyNote: () => moneyNote(),
   treasuryMore: () => treasuryHtml(),
 });
@@ -675,6 +676,15 @@ function announce(event: GameEvent): void {
     say(`Pledge kept: ${event.text}.`, false, 8);
   } else if (event.kind === "term-ended") {
     say(`${termVerdictText(event)}.`, event.missed.length > event.kept.length, 12);
+    // The verdict takes the screen, the game paused under it.
+    screen.openVerdict("term");
+    paused = true;
+    renderToolbar();
+  } else if (event.kind === "replaced") {
+    say(`Two failed terms in a row: the state has replaced you.`, true, 14);
+    screen.openVerdict("replaced");
+    paused = true;
+    renderToolbar();
   } else if (event.kind === "a-week-on") {
     say(`${aWeekOnText(world, event)}.`, false, 8);
   } else if (event.kind === "founded") {
@@ -974,7 +984,8 @@ window.addEventListener("keydown", (event) => {
   }
   else if (event.key === "Escape") {
     // Esc: the revenue screen shut, else a half-made build dropped, else back to the lists.
-    if (screen.revenueOpen()) screen.openRevenue(false);
+    if (screen.verdictOpen()) screen.openVerdict(null);
+    else if (screen.revenueOpen()) screen.openRevenue(false);
     else if (selectedTown) selectedTown = null;
     else {
       panelTown = null;
@@ -2614,7 +2625,7 @@ function moneyNote(): string {
 // A press held on a panel holds it still until it's released (frame(): a redraw mid-click
 // swallowed the click).
 let panelPressed = false;
-for (const panel of [panelEl, logEl, revenueEl, stripEl]) {
+for (const panel of [panelEl, logEl, revenueEl, stripEl, document.querySelector<HTMLElement>("#verdict")!]) {
   panel.addEventListener("pointerdown", () => (panelPressed = true));
   panel.addEventListener("click", (event) => {
     if (!screen.onClick(event.target as HTMLElement)) onPanelClick(event);
@@ -2663,6 +2674,13 @@ function onPanelClick(event: MouseEvent): void {
     const result = act({ label: `freight at the ${rate} rate`, towns: [], routeId }, { kind: "freightRate", routeId, rate });
     say(result.ok ? `Freight on that line now at the ${rate} rate${rate === "dear" ? ": more a tonne, and hauliers will take more of its goods by road" : rate === "cheap" ? ": less a tonne, more of its goods by your trains, fewer trucks on the roads" : ""}.` : `Can't set the rate: ${result.reason}`, !result.ok, 7);
     renderPanel();
+    return;
+  }
+  if (target.dataset.console) {
+    // The design console (dev only): recorded in the run file as console moves.
+    const op = target.dataset.console as "end-term" | "funds";
+    const result = act({ label: "a console move", towns: [] }, op === "funds" ? { kind: "console", op, amount: 100000 } : { kind: "console", op });
+    say(result.ok ? (op === "funds" ? "Console: money set to ₦100,000." : "Console: the term ends at the next day's check.") : `Console: ${result.reason}`, !result.ok, 5);
     return;
   }
   if (target.dataset.pledge) {

@@ -144,6 +144,12 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // world's own problems, no grant and no penalty yet.
   pledgesEnabled: true,
   termDays: 120,
+  // The mandate (Revision 5, step 3; agreed 2026-10-24: "120 days is fine, sacking too"): a
+  // term's verdict sets the next one's capital grant; two failed terms and you're replaced.
+  mandateEnabled: true,
+  termGrantBase: 20000,
+  termGrantPerPledge: 15000,
+  termGrantPerThousand: 200,
   sweepEnabled: false,
   sweepPeriodDays: 60,
   sweepCarryMin: 50000,
