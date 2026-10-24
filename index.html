@@ -202,6 +202,7 @@
       #toast[data-bad="true"] { background: var(--bad); }
       #key { position: fixed; left: calc(var(--left) + 12px); bottom: 16px; max-width: 470px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 11px; color: var(--muted); }
       #key b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+      #key i.fam { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin: 0 3px 0 4px; }
       #key summary { cursor: pointer; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
       #key:not([open]) { padding: 6px 12px; }
       @media (max-width: 1100px) { #key { display: none; } }
@@ -309,9 +310,32 @@
       @media (max-width: 1100px) { .card.treasury .tgrid { grid-template-columns: 1fr 1fr; } }
       @media (max-width: 1100px) { :root { --left: 0px; } #log { display: none; } }
       @media (max-width: 900px) { :root { --right: 300px; } .heroes, .cards { grid-template-columns: 1fr; } }
+      #loading { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: var(--bg); }
+      #loading .box { width: min(420px, calc(100% - 32px)); background: var(--surface); border-radius: 14px; padding: 22px 24px; box-shadow: 0 6px 24px var(--shadow); }
+      #loading .title { font-size: 22px; font-weight: 700; }
+      #loading .map { font-size: 13px; margin-bottom: 8px; }
+      #loading p { margin: 0 0 14px; font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+      #loading .bar { position: relative; height: 8px; margin: 22px 0 0; border-radius: 4px; background: #c3cbd4; }
+      #loading .bar.rail { height: 4px; background: repeating-linear-gradient(90deg, #3f4852 0 2px, transparent 2px 7px), linear-gradient(#3f4852, #3f4852) 0 50% / 100% 1.5px no-repeat; border-radius: 0; }
+      #loading .bar i { display: block; height: 100%; width: 0; background: var(--you); border-radius: 4px; transition: width 0.15s linear; }
+      #loading .bar.rail i { height: 2px; margin-top: 1px; }
+      #loading .bar .vehicle { position: absolute; left: 0; top: 50%; transform: translate(-92%, -50%); transition: left 0.15s linear; line-height: 0; filter: drop-shadow(0 1px 2px rgba(20, 30, 45, 0.25)); }
+      #loading .bar { margin-left: 10px; margin-right: 10px; display: block; overflow: visible; } /* not the panels' .bar (a clipped flex row) */
+      #loading .progress { font-size: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
     </style>
   </head>
   <body>
+    <!-- The loading screen: the region runs a week before you arrive (main.ts removes it). -->
+    <div id="loading" role="status" aria-live="polite">
+      <div class="box">
+        <div class="title">Transport Game</div>
+        <div class="map muted">&nbsp;</div>
+        <p>The region runs a week before you arrive: the danfos are on the roads, the hauliers at the yards, the towns' trips settled.</p>
+        <!-- The progress as a road (or a line) with a vehicle on it: which one, main.ts picks. -->
+        <div class="bar"><i></i><span class="vehicle"></span></div>
+        <div class="progress muted">Drawing the map</div>
+      </div>
+    </div>
     <canvas id="map"></canvas>
     <header id="strip"></header>
     <aside id="log"></aside>
@@ -320,6 +344,8 @@
       Road: width = traffic · <b style="background:#c3cbd4"></b>free <b style="background:#e8742c"></b>busy <b style="background:#c92a2a"></b>jammed · <b style="background:var(--player)"></b>your riders<br />
       Beside it: <b style="background:var(--danfo)"></b>danfos, kekes, okadas <b style="background:var(--goods)"></b>trucks (wider, more)<br />
       Your vehicles fill as full as their route runs · ring: <b style="background:var(--player)"></b>you <b style="background:var(--danfo)"></b>informal <b style="background:var(--home)"></b>stayed home<br />
+      Sites: <i class="fam" style="background:#5a48d0"></i>energy <i class="fam" style="background:#9a5212"></i>building <i class="fam" style="background:#3aa35a"></i>food and crops <i class="fam" style="background:#138fb5"></i>trade · solid working, hollow idle, amber corner held back<br />
+      Towns: a dot a village, a heavier rim a regional town, a double ring the city · ⚓ the port<br />
       ! a problem (its card says the move) · ▲▼ growing · wheel to zoom, drag to pan, 0 to fit
     </details>
     <div id="overlays"></div>

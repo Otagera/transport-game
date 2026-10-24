@@ -1,11 +1,11 @@
 import { applyAction, type ActionSpec } from "./actions";
 import { corridorSummaries } from "./corridors";
-import { generatedGameMap } from "./generate";
+import { gameMap } from "./region";
 import { lorrySummaries } from "./goods";
 import { averageHeadline, averageNet } from "./history";
 import { peopleSinceStart } from "./score";
 import type { GameEvent } from "./settlement";
-import { startGame } from "./start";
+import { startGame, startGameSteps } from "./start";
 import { gameTick } from "./tick";
 import { ALL_SYSTEMS_ON, DEFAULT_GAME_TUNING } from "./tuning";
 import type { GameMapDef, GameTuning, GameWorld } from "./types";
@@ -106,8 +106,15 @@ export function startRun(base: GameMapDef, seed: number, switches: RunSwitches, 
   return startRunWith(base, seed, runTuning(switches, overrides), devFunds);
 }
 
+/** startRun a little at a time, for a loading screen (start.ts startGameSteps): the same world. */
+export function* startRunSteps(base: GameMapDef, seed: number, switches: RunSwitches, devFunds: number | null, overrides: Partial<GameTuning> = {}): Generator<number, GameWorld, void> {
+  const world = yield* startGameSteps(gameMap(base, seed, runTuning(switches, overrides)), runTuning(switches, overrides));
+  if (devFunds !== null) world.economy.funds = devFunds;
+  return world;
+}
+
 function startRunWith(base: GameMapDef, seed: number, tuning: GameTuning, devFunds: number | null): GameWorld {
-  const world = startGame(generatedGameMap(base, seed), tuning);
+  const world = startGame(gameMap(base, seed, tuning), tuning);
   if (devFunds !== null) world.economy.funds = devFunds;
   return world;
 }
@@ -189,7 +196,8 @@ export function replayRun(
   overrides: Partial<GameTuning> = {},
 ): GameWorld {
   // The numbers it was played with when the file has them, else today's for its switches.
-  const world = startRunWith(base, file.seed, { ...(file.tuning ?? runTuning(file.switches)), ...overrides }, file.devFunds);
+  // A file without its numbers predates the region: it was played on the slice map.
+  const world = startRunWith(base, file.seed, { ...(file.tuning ?? { ...runTuning(file.switches), regionEnabled: false }), ...overrides }, file.devFunds);
   let next = 0;
   for (let tick = 0; ; tick += 1) {
     while (next < file.actions.length && file.actions[next]!.tick === tick) {

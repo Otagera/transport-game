@@ -11,6 +11,8 @@ import { roadCapacity } from "@engine/game/congestion";
 import { siteProduction } from "@engine/game/production";
 import { flowKey, goodsFlows } from "@engine/game/goods";
 import { cargoName } from "@engine/game/fuel";
+import { farmTowns } from "@engine/game/food";
+import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, tierOf, tierRadius, type Badge, type Glyph, type SiteState, type Tier } from "./icons";
 
 // The game's map, ported from the information lab (info-lab.html; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -89,9 +91,15 @@ export function toScreen(view: View, x: number, y: number): { x: number; y: numb
 /** Marks grow with the zoom, but slower than the map (its square root): room opens between them. */
 const growOf = (view: View) => (view.fit ? Math.sqrt(view.scale / view.fit) : 1);
 
-/** The lab's sizes: a town by its people, a site a small square; both grow with the zoom's square root. */
+/** The icons (icons.ts, agreed in the information lab 2026-10-23): a site's tile, this many px across at fit. */
+const SITE_SIZE = 17;
+/** The region's biggest town, the city (icons.ts tiers): set each draw. */
+let cityId: string | null = null;
+const tierOfTown = (town: GameTown): Tier => tierOf(town.population, town.id === cityId);
+
+/** The lab's sizes: a town by its tier and people, a site its tile; both grow with the zoom's square root. */
 export function townRadius(town: GameTown, view: View): number {
-  return (town.industry ? 6 : Math.max(5, Math.sqrt(town.population) * 1.1)) * growOf(view);
+  return (town.industry ? SITE_SIZE / 2 : tierRadius(tierOfTown(town), town.population)) * growOf(view);
 }
 
 /** A second line under a preview: what the action is forecast to do (forecast.ts). */
@@ -141,6 +149,8 @@ let markScale = 1;
 const FADED = 0.18;
 interface Focus { segments: Set<string>; routes: Set<string>; towns: Set<string> }
 let focus: Focus | null = null;
+/** The towns whose name fits this frame (labelled, below). */
+let labelled = new Set<string>();
 
 /** A town's roads and the routes that stop there; or a route and the roads it runs on. */
 function focusOf(world: GameWorld, state: DrawState): Focus | null {
@@ -252,6 +262,9 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
   drawVehicles(ctx, world, view, oneByOne);
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
+  cityId = [...world.towns.values()].filter((t) => !t.industry).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id ?? null;
+  farms = world.food ? new Set(farmTowns(world).map((t) => t.id)) : new Set();
+  labelled = labelledTowns(world, view, state);
   for (const town of [...world.towns.values()].sort((p, q) => p.population - q.population)) {
     if (town.industry) drawSite(ctx, world, view, town, state);
     else drawTown(ctx, world, view, town, state);
@@ -307,10 +320,11 @@ function strokeOffset(ctx: CanvasRenderingContext2D, view: View, line: Point[], 
 
 // --- Ground ------------------------------------------------------------------------------
 
-// The terrain, drawn once a world at TERRAIN_PX pixels a cell: the river's edge where the
-// interpolated water crosses a half (a crisp, smooth line, a pixel of antialiasing), the hills a
-// wash by interpolated height. One pixel a cell stretched to the screen read as a blur (playtest,
-// 2026-10-23: "why is the background blurs?"); unsmoothed, as blocks.
+// The terrain, drawn once a world at TERRAIN_PX pixels a cell. The water from the map's own
+// river and sea lines (each a width from point to point, as terrain.ts makes its cells), so its
+// edge is a smooth curve at any zoom: interpolating the cells drew their staircase on the
+// region's long rivers (playtest, 2026-10-23). The hills in relief, lit from the north-west, so a
+// range reads as ground rising and falling, not a grey wash ("the hills too are not clear").
 const TERRAIN_PX = 12;
 let terrainImage: { world: GameWorld; canvas: HTMLCanvasElement } | null = null;
 function terrainCanvas(world: GameWorld): HTMLCanvasElement {
@@ -327,7 +341,6 @@ function terrainCanvas(world: GameWorld): HTMLCanvasElement {
   const land = hex(COLORS.ground);
   const water = hex(COLORS.water);
   const hill = hex(COLORS.hill);
-  const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
   const at = (field: ArrayLike<number>, x: number, y: number) => field[Math.max(0, Math.min(H - 1, y)) * W + Math.max(0, Math.min(W - 1, x))]!;
   const bilinear = (field: ArrayLike<number>, fx: number, fy: number) => {
     const x0 = Math.floor(fx);
@@ -338,20 +351,87 @@ function terrainCanvas(world: GameWorld): HTMLCanvasElement {
     const bot0 = at(field, x0, y0 + 1) * (1 - tx) + at(field, x0 + 1, y0 + 1) * tx;
     return top0 * (1 - ty) + bot0 * ty;
   };
+  // Relief a cell at a time, then interpolated: the slope facing the light (north-west) is lit,
+  // the far side shaded; scaled so the map's steepest slope is full shade.
+  const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
+  const relief = new Float32Array(W * H);
+  const slope = new Float32Array(W * H);
+  let steepest = 0;
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const dx = (at(terrain.elevation, x + 1, y) - at(terrain.elevation, x - 1, y)) / 2;
+      const dy = (at(terrain.elevation, x, y + 1) - at(terrain.elevation, x, y - 1)) / 2;
+      relief[y * W + x] = dx + dy;
+      slope[y * W + x] = Math.hypot(dx, dy);
+      steepest = Math.max(steepest, Math.abs(dx + dy));
+    }
+  }
+  // Contours: five to the highest hill, a line a pixel wide wherever the ground crosses one.
+  const interval = top / 5;
+  const lit = [255, 255, 255];
   for (let py = 0; py < c.height; py += 1) {
     for (let px = 0; px < c.width; px += 1) {
       // Cell centres sit on integer coordinates, the canvas cell's middle.
       const fx = (px + 0.5) / TERRAIN_PX - 0.5;
       const fy = (py + 0.5) / TERRAIN_PX - 0.5;
-      const wet = bilinear(terrain.water, fx, fy);
-      const k = Math.min(0.35, (bilinear(terrain.elevation, fx, fy) / top) * 0.35);
-      const dry = [land[0]! * (1 - k) + hill[0]! * k, land[1]! * (1 - k) + hill[1]! * k, land[2]! * (1 - k) + hill[2]! * k];
-      // A sharp edge at half: a pixel's worth of blend either side of it.
-      const m = Math.max(0, Math.min(1, (wet - 0.5) * TERRAIN_PX * 0.5 + 0.5));
-      img.data.set([dry[0]! * (1 - m) + water[0]! * m, dry[1]! * (1 - m) + water[1]! * m, dry[2]! * (1 - m) + water[2]! * m, 255], (py * c.width + px) * 4);
+      const height = bilinear(terrain.elevation, fx, fy) / top;
+      const shade = steepest > 0 ? Math.max(-1, Math.min(1, bilinear(relief, fx, fy) / steepest)) : 0;
+      // Darker the higher it is; lit faces toward white, shaded ones toward the hill grey.
+      const e = height * top;
+      const level = e / interval;
+      const toLine = (Math.abs(level - Math.round(level)) * interval) / Math.max(1e-6, bilinear(slope, fx, fy) / TERRAIN_PX);
+      const contour = level > 0.5 && toLine < 1 ? 0.35 * (1 - toLine) : 0;
+      const k = Math.min(0.2, height * 0.2) + (shade < 0 ? -shade * 0.35 : 0) + contour;
+      const l = shade > 0 ? shade * 0.5 : 0;
+      img.data.set([0, 1, 2].map((i) => land[i]! * (1 - k - l) + hill[i]! * k + lit[i]! * l).concat(255), (py * c.width + px) * 4);
     }
   }
   g.putImageData(img, 0, 0);
+  const lines = world.waterLines;
+  if (lines) {
+    // Each stretch a tapered capsule, as terrain.ts's cells are made: a disc at each point, the
+    // band between two widths, all one fill.
+    g.save();
+    g.scale(TERRAIN_PX, TERRAIN_PX);
+    g.translate(0.5, 0.5);
+    g.fillStyle = COLORS.water;
+    for (const river of lines) {
+      const widthAt = (k: number) => river.widths?.[k] ?? river.width;
+      river.points.forEach(([x, y], k) => {
+        g.beginPath();
+        g.arc(x, y, widthAt(k) / 2, 0, Math.PI * 2);
+        g.fill();
+      });
+      for (let k = 1; k < river.points.length; k += 1) {
+        const [ax, ay] = river.points[k - 1]!;
+        const [bx, by] = river.points[k]!;
+        const len = Math.hypot(bx - ax, by - ay) || 1;
+        const [nx, ny] = [-(by - ay) / len, (bx - ax) / len];
+        const [ra, rb] = [widthAt(k - 1) / 2, widthAt(k) / 2];
+        g.beginPath();
+        g.moveTo(ax + nx * ra, ay + ny * ra);
+        g.lineTo(bx + nx * rb, by + ny * rb);
+        g.lineTo(bx - nx * rb, by - ny * rb);
+        g.lineTo(ax - nx * ra, ay - ny * ra);
+        g.closePath();
+        g.fill();
+      }
+    }
+    g.restore();
+  } else {
+    // A world made without its lines (the run recorder's older snapshots): the cells, as before.
+    const cells = g.getImageData(0, 0, c.width, c.height);
+    for (let py = 0; py < c.height; py += 1) {
+      for (let px = 0; px < c.width; px += 1) {
+        const wet = bilinear(terrain.water, (px + 0.5) / TERRAIN_PX - 0.5, (py + 0.5) / TERRAIN_PX - 0.5);
+        const m = Math.max(0, Math.min(1, (wet - 0.5) * TERRAIN_PX * 0.5 + 0.5));
+        if (m <= 0) continue;
+        const o = (py * c.width + px) * 4;
+        for (let i = 0; i < 3; i += 1) cells.data[o + i] = cells.data[o + i]! * (1 - m) + water[i]! * m;
+      }
+    }
+    g.putImageData(cells, 0, 0);
+  }
   terrainImage = { world, canvas: c };
   return c;
 }
@@ -569,28 +649,44 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
 
 // --- Towns and sites (the lab's) ------------------------------------------------------------
 
+let farms = new Set<string>();
+
+/**
+ * Which towns get their name and size this frame: a village only zoomed in, the rest biggest
+ * first, each only where its label clears the ones already placed -- zoomed out over the
+ * region, names sat on each other (Auchi on Bonny). The town you point at or picked always.
+ */
+function labelledTowns(world: GameWorld, view: View, state: DrawState): Set<string> {
+  const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
+  const out = new Set<string>();
+  const towns = [...world.towns.values()].filter((t) => !t.industry);
+  const lit = (t: GameTown) => state.selectedTown === t.id || state.hoverTown === t.id;
+  for (const town of towns.sort((p, q) => Number(lit(q)) - Number(lit(p)) || q.population - p.population)) {
+    if (tierOfTown(town) === "village" && !lit(town) && markScale * markScale < 2) continue;
+    const p = toScreen(view, town.x, town.y);
+    const r = townRadius(town, view);
+    const half = Math.max(24, town.name.length * 3.6);
+    const box = { x0: p.x - half, y0: p.y - r - 2, x1: p.x + half, y1: p.y + r + 34 };
+    if (!lit(town) && placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+    placed.push(box);
+    out.add(town.id);
+  }
+  return out;
+}
+
 function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, town: GameTown, state: DrawState): void {
   const p = toScreen(view, town.x, town.y);
   const r = townRadius(town, view);
   const lit = state.selectedTown === town.id || state.hoverTown === town.id;
+  const tier = tierOfTown(town);
+  const close = lit || markScale * markScale >= 2;
   ctx.globalAlpha = focus && !focus.towns.has(town.id) ? 0.3 : 1;
-  ctx.fillStyle = COLORS.surface;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-  ctx.fill();
-  // The ring: you, informal, stayed home -- clockwise from the top.
+  // The town by its tier (icons.ts): body, the ring of who carries its trips, its rim.
   const share = townShare(world, town.id);
-  let start = -Math.PI / 2;
-  for (const [value, color] of [[share.player, COLORS.player], [share.informal, COLORS.danfo], [share.lost, COLORS.home]] as const) {
-    if (value <= 0) continue;
-    const end = start + value * Math.PI * 2;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r + 2.5 * markScale, start, end);
-    ctx.lineWidth = 4 * markScale;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-    start = end;
-  }
+  drawTownIcon(ctx, p.x, p.y, r, tier, { you: share.player, informal: share.informal, lost: share.lost }, { surface: COLORS.surface, ink: COLORS.ink, you: COLORS.player, informal: COLORS.danfo, home: COLORS.home });
+  // Badges: the port always; a farm town zoomed in or pointed at.
+  const badges: Badge[] = [...(town.id === world.port ? ["port" as const] : []), ...(close && farms.has(town.id) ? ["farm" as const] : [])];
+  badges.forEach((b, k) => drawBadge(ctx, p.x - r * 0.85 - k * 15, p.y + r * 0.85, 15, b, COLORS.surface));
   if (lit) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, r + 7 * markScale, 0, Math.PI * 2);
@@ -616,16 +712,16 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
     ctx.textBaseline = "middle";
     ctx.fillText("!", mx, my + 0.5);
   }
-  // Name and size for the towns the map was made with; a roadside town's name when you point at it.
-  const roadside = !world.basePopulation.has(town.id);
-  if (!roadside || lit) {
+  // Name and size for towns; a village's when zoomed in or pointed at (the region's small places
+  // stay quiet), and none where it would sit on a bigger town's (labelledTowns).
+  if (labelled.has(town.id)) {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     // A white halo under each label, so a road under it doesn't make it hard to read.
     ctx.lineJoin = "round";
     ctx.strokeStyle = COLORS.surface;
     ctx.lineWidth = 3.5;
-    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.font = tier === "city" || tier === "regional" ? "700 13px system-ui, sans-serif" : "600 12px system-ui, sans-serif";
     ctx.strokeText(town.name, p.x, p.y + r + 7);
     ctx.fillStyle = COLORS.ink;
     ctx.fillText(town.name, p.x, p.y + r + 7);
@@ -646,15 +742,20 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   const r = townRadius(site, view);
   const lit = state.selectedTown === site.id || state.hoverTown === site.id;
   ctx.globalAlpha = focus && !focus.towns.has(site.id) ? 0.3 : 1;
+  // Its tile and glyph (icons.ts): solid working, hollow idle, an amber corner held back.
   const made = siteProduction(world, site.id);
-  ctx.fillStyle = COLORS.surface;
-  ctx.strokeStyle = made && made.capacity > 0 && made.made < 0.6 * made.capacity ? COLORS.warn : COLORS.goods;
-  ctx.lineWidth = lit ? 3 : 2;
-  ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
-  ctx.strokeRect(p.x - r, p.y - r, r * 2, r * 2);
-  if (world.yards.has(site.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
-  // Its name when you point at it (the lab's tooltip, as a label).
+  const perDay = (x: number) => x * SECONDS_PER_GAME_DAY;
+  const siteState: SiteState = !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
+  const glyph = (site.industry && site.industry in GLYPHS ? site.industry : "quarry") as Glyph;
+  drawSiteIcon(ctx, p.x, p.y, r * 2, glyph, siteState, COLORS.surface);
   if (lit) {
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(p.x - r - 4, p.y - r - 4, r * 2 + 8, r * 2 + 8);
+  }
+  if (world.yards.has(site.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
+  // Its name when you point at it, or zoomed in.
+  if (lit || markScale * markScale >= 2) {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.font = "600 11px system-ui, sans-serif";

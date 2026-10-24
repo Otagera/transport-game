@@ -3,7 +3,7 @@ import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
 import { addRoadToMap, isCutOff, roadPath, type ActionResult } from "./world";
 import { rebuildNetworks } from "./rail";
-import { addSite, dry, nearestDistance, ringSpot } from "./fuel";
+import { addSite, dry, homeBox, inHome, nearestDistance, ringSpot } from "./fuel";
 import { canAfford, SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { planRoad } from "./roads";
@@ -175,11 +175,12 @@ export function placeCementWorks(world: GameWorld): void {
   const { terrain } = world.simulation.map;
   const highest = terrain.elevation.reduce((top, e) => Math.max(top, e), 0);
   // Its old road goes to a town on the network: one cut off would strand it.
-  const linked = [...world.towns.values()].filter((town) => !town.industry && !isCutOff(world, town.id));
+  const linked = [...world.towns.values()].filter((town) => !town.industry && !isCutOff(world, town.id) && inHome(world, town));
   const nearLinked = (x: number, y: number) => Math.min(...linked.map((town) => Math.hypot(town.x - x, town.y - y)));
+  const box = homeBox(world);
   let best: { x: number; y: number; s: number } | null = null;
-  for (let y = 4; y < world.height - 4; y += 1) {
-    for (let x = 4; x < world.width - 4; x += 1) {
+  for (let y = box.y + 4; y < box.y + box.height - 4; y += 1) {
+    for (let x = box.x + 4; x < box.x + box.width - 4; x += 1) {
       if (!dry(world, x, y, 2) || nearestDistance(world, x, y) < 8) continue;
       const near = nearLinked(x, y);
       if (near > 16) continue;

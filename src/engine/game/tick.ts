@@ -3,7 +3,7 @@ import type { DeliveryEvent, PathResult, Vehicle } from "../simulation/types";
 import { createOneShotVehicle, freeSeats, hasCompletedTrip, nodesAhead, tickVehicle, type Loader } from "../simulation/vehicle";
 import { applyOperatingCosts, updateIncomeRateEMA } from "../economy/state";
 import type { InformalMode, GameRoute, GameTuning, GameWorld } from "./types";
-import { indexOutcomes, pairKey, roadPath, takeShortestRoad } from "./world";
+import { indexOutcomes, pairKey, roadPath, roadPathByKey, takeShortestRoad } from "./world";
 import { foundGateTown, updateSettlements, type GameEvent } from "./settlement";
 import { updateSites } from "./workers";
 import { repayBonds } from "./bonds";
@@ -66,19 +66,44 @@ export function queueKey(destination: string, origin: string): string {
   return `${destination}|${origin}`;
 }
 
+// Parsed keys, kept: a game has a few hundred of each, read every tick (profiled on the region:
+// splitting them again each tick was a tenth of a tick). The parsed objects are shared: read only.
+const parsedQueueKeys = new Map<string, { destination: string; origin: string }>();
 export function parseQueueKey(key: string): { destination: string; origin: string } {
-  const bar = key.indexOf("|");
-  return { destination: key.slice(0, bar), origin: key.slice(bar + 1) };
+  let parsed = parsedQueueKeys.get(key);
+  if (!parsed) {
+    const bar = key.indexOf("|");
+    parsedQueueKeys.set(key, (parsed = { destination: key.slice(0, bar), origin: key.slice(bar + 1) }));
+  }
+  return parsed;
 }
+
+const arrivalKeys = new WeakMap<object, string>();
 
 /** Motor-park pool key: `at>origin>destination` -- where they are, and the trip they're on. */
 function poolKey(at: string, origin: string, destination: string): string {
   return `${at}>${origin}>${destination}`;
 }
 
-export function parsePoolKey(key: string): { at: string; origin: string; destination: string } {
-  const [at, origin, destination] = key.split(">") as [string, string, string];
-  return { at, origin, destination };
+const parsedPoolKeys = new Map<string, { at: string; origin: string; destination: string; trip: string; path: string }>();
+/** A pool key's parts, and the keys made from them: the trip (pairKey) and its road (roadPath's). */
+export function parsePoolKey(key: string): { at: string; origin: string; destination: string; trip: string; path: string } {
+  let parsed = parsedPoolKeys.get(key);
+  if (!parsed) {
+    const [at, origin, destination] = key.split(">") as [string, string, string];
+    parsedPoolKeys.set(key, (parsed = { at, origin, destination, trip: pairKey(origin, destination), path: pairKey(at, destination) }));
+  }
+  return parsed;
+}
+
+/** The pool key a queue's riders go to when they give up at `at`, kept as the parsed keys are. */
+const poolKeys = new Map<string, Map<string, string>>();
+function poolKeyFor(at: string, queueKey: string, origin: string, destination: string): string {
+  let byQueue = poolKeys.get(at);
+  if (!byQueue) poolKeys.set(at, (byQueue = new Map()));
+  let key = byQueue.get(queueKey);
+  if (!key) byQueue.set(queueKey, (key = poolKey(at, origin, destination)));
+  return key;
 }
 
 // One slice tick. The order matters and is the whole model:
@@ -115,7 +140,11 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   // 1. Arrivals.
   for (const pair of simulation.demand) {
     const queue = simulation.queues.get(pair.from);
-    if (queue) bump(queue, queueKey(pair.to, pair.from), pair.rate * dt);
+    if (!queue) continue;
+    // Its queue key kept on the pair (demand is rebuilt only when towns or rail change).
+    let key = arrivalKeys.get(pair);
+    if (key === undefined) arrivalKeys.set(pair, (key = queueKey(pair.to, pair.from)));
+    bump(queue, key, pair.rate * dt);
   }
 
   // 2. Giving up.
@@ -129,7 +158,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
       const leaving = amount * leaveFractionHere;
       queue.set(key, amount - leaving);
       const { destination, origin } = parseQueueKey(key);
-      bump(informal.pool, poolKey(at, origin, destination), leaving);
+      bump(informal.pool, poolKeyFor(at, key, origin, destination), leaving);
     }
   }
 
@@ -407,6 +436,9 @@ interface PooledRider {
 
 type Group = { at: string; riders: PooledRider[] };
 
+/** A road's group key (where it starts, its first town), kept per path: paths are cached, so once a road. */
+const groupKeys = new WeakMap<PathResult, string>();
+
 /**
  * Sorts one motor-park pool into groups by where riders are and the first
  * town they'd pass through. Riders with no road go home at once; the rest
@@ -423,9 +455,8 @@ function groupPool(
   const groups = new Map<string, Group>();
   for (const [key, pooled] of pool) {
     if (pooled <= 0) continue;
-    const { at, origin, destination } = parsePoolKey(key);
-    const trip = pairKey(origin, destination);
-    const path = roadPath(world, at, destination);
+    const { at, origin, destination, trip, path: pathKey } = parsePoolKey(key);
+    const path = roadPathByKey(world, pathKey, at, destination);
 
     // No road: nobody can take them. They stay home.
     if (!path || path.nodeIds.length < 2) {
@@ -438,7 +469,8 @@ function groupPool(
     pool.set(key, pooled - drifting);
     onDrift(key, trip, drifting);
 
-    const groupKey = `${at}>${path.nodeIds[1]}`;
+    let groupKey = groupKeys.get(path);
+    if (groupKey === undefined) groupKeys.set(path, (groupKey = `${at}>${path.nodeIds[1]}`));
     let group = groups.get(groupKey);
     if (!group) {
       group = { at, riders: [] };
@@ -449,16 +481,53 @@ function groupPool(
   return [...groups.values()];
 }
 
-/** The destination in a group whose path collects the most waiting riders, and who'd be aboard. */
+/** A path's stops as a set, made once a path (paths are cached, so this is once a road). */
+const stopsOf = new WeakMap<PathResult, Set<string>>();
+function stopsOn(path: PathResult): Set<string> {
+  let stops = stopsOf.get(path);
+  if (!stops) stopsOf.set(path, (stops = new Set(path.nodeIds)));
+  return stops;
+}
+
+/**
+ * The destination in a group whose path collects the most waiting riders, and who'd be aboard.
+ * Each destination is tried once (riders bound the same way share its path, so its load: a
+ * later one never beat the first), and the riders are summed in the same order as ever, so the
+ * loads are the same to the last bit -- run files replay as played. Profiled on the region, the
+ * set made per rider and the filter were a quarter of a tick.
+ */
 function bestRun(group: Group, pool: Map<string, number>): { run: PooledRider; aboard: PooledRider[]; load: number } | null {
-  let best: { run: PooledRider; aboard: PooledRider[]; load: number } | null = null;
-  for (const candidate of group.riders) {
-    const stops = new Set(candidate.path.nodeIds);
-    const aboard = group.riders.filter((rider) => stops.has(rider.destination));
-    const load = aboard.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0), 0);
-    if (!best || load > best.load) best = { run: candidate, aboard, load };
+  // The riders' destinations as numbers and their counts read once, so the inner loop is
+  // array reads, not a string lookup per rider per candidate.
+  const { riders } = group;
+  const index = new Map<string, number>();
+  const bound = new Int32Array(riders.length);
+  const waiting = new Float64Array(riders.length);
+  riders.forEach((rider, i) => {
+    let k = index.get(rider.destination);
+    if (k === undefined) index.set(rider.destination, (k = index.size));
+    bound[i] = k;
+    waiting[i] = pool.get(rider.key) ?? 0;
+  });
+  const passes = new Uint8Array(index.size);
+  let best: { run: PooledRider; stops: Set<string>; load: number } | null = null;
+  const tried = new Set<string>();
+  for (const candidate of riders) {
+    if (tried.has(candidate.destination)) continue;
+    tried.add(candidate.destination);
+    const stops = stopsOn(candidate.path);
+    passes.fill(0);
+    for (const node of candidate.path.nodeIds) {
+      const k = index.get(node);
+      if (k !== undefined) passes[k] = 1;
+    }
+    let load = 0;
+    for (let i = 0; i < riders.length; i += 1) if (passes[bound[i]!]) load += waiting[i]!;
+    if (!best || load > best.load) best = { run: candidate, stops, load };
   }
-  return best;
+  if (!best) return null;
+  const { stops } = best;
+  return { run: best.run, aboard: group.riders.filter((rider) => stops.has(rider.destination)), load: best.load };
 }
 
 /**
@@ -607,17 +676,40 @@ function dispatchInformal(world: GameWorld, dt: number, lost: Map<string, number
     if (!laned.has(segmentId)) bump(yours, segmentId, vehicle.congestionWeight);
   }
 
+  // A group whose riders all together can't fill one can't fill one on any road: the search is
+  // skipped (exactly: a sum of some of them, in order, is never more than all of them, in order).
+  // Most groups are waiting to fill, most ticks -- profiled, the search was a quarter of a tick.
+  const waitingIn = (group: Group, pool: Map<string, number>) => group.riders.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0), 0);
   const danfoGroups = groupPool(world, informal.pool, drift, lost, (key, _trip, amount) => bump(informal.smallPool, key, amount));
+  // Every run from a group starts on the same road (a group is riders at one park whose roads
+  // share a first leg): if sendInformal would turn that leg down, it turns down every run, so
+  // the search is skipped -- exactly, as its checks change nothing before they pass. Most ticks
+  // the roads out are full: 0.4 vehicles leave a tick, the search ran for every group.
+  const struck = world.lanes.length > 0 ? struckSegments(world) : null;
+  const refuses = (id: string, mode: InformalMode) =>
+    (mode === "danfo" && struck?.has(id)) ||
+    (informal.segmentSpace.get(id) ?? 0) + (yours.get(id) ?? 0) + informalSpec(tuning, mode).weight > informalBudget(world, id) ||
+    (world.segmentSpeed.get(id) ?? 1) < tuning.informalMinSpeed;
+  // (Every rider's first leg, not just the first rider's: two roads could join the same towns.)
+  const firstLegRefuses = (group: Group, mode: InformalMode) => {
+    let last = "";
+    for (const rider of group.riders) {
+      const id = rider.path.segmentIds[0]!;
+      if (id !== last && !refuses(id, mode)) return false;
+      last = id;
+    }
+    return true;
+  };
   for (const group of danfoGroups) {
+    if (waitingIn(group, informal.pool) < tuning.danfoCapacity || firstLegRefuses(group, "danfo")) continue;
     const best = bestRun(group, informal.pool);
     if (best && best.load >= tuning.danfoCapacity) sendInformal(world, "danfo", group, best.run, best.aboard, best.load, informal.pool, gaveUp, yours, lost, takings);
   }
 
   const smallGroups = groupPool(world, informal.smallPool, drift, lost, (_key, trip, amount) => bump(lost, trip, amount));
   for (const group of smallGroups) {
-    const best = bestRun(group, informal.smallPool);
-    if (!best) continue;
-    if (best.load >= tuning.kekeCapacity) {
+    const best = waitingIn(group, informal.smallPool) < tuning.kekeCapacity || firstLegRefuses(group, "keke") ? null : bestRun(group, informal.smallPool);
+    if (best && best.load >= tuning.kekeCapacity) {
       if (sendInformal(world, "keke", group, best.run, best.aboard, best.load, informal.smallPool, gaveUp, yours, lost, takings)) continue;
     }
     // An okada takes one rider, from whoever has waited in the biggest crowd.

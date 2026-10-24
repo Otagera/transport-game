@@ -12,6 +12,7 @@ import type { MilestoneState } from "./score";
 import type { CorridorState } from "./corridors";
 import type { FuelState } from "./fuel";
 import type { CementState } from "./cement";
+import type { SteelState } from "./steel";
 import type { SitesState } from "./workers";
 import type { Bond } from "./bonds";
 import type { FoodState } from "./food";
@@ -41,11 +42,13 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport";
 
 export interface GameRoadDef {
   a: string;
   b: string;
+  /** The road's line between its towns, map cells (region.ts: the old highways, laid over the land); absent, straight. */
+  via?: Array<[number, number]>;
 }
 
 export interface GameRiverDef {
@@ -80,6 +83,8 @@ export interface GameMapDef {
   port?: string;
   /** Step 4: inherited railway, straight and out of service until restored (rail.ts). */
   rails?: GameRoadDef[];
+  /** The region (region.ts): the home cluster's box, where you start and the camera frames. Absent: the whole map is home. */
+  home?: { x: number; y: number; width: number; height: number };
 }
 
 /** A player route: an A<->B shuttle, running however many buses. */
@@ -412,6 +417,29 @@ export interface GameTuning {
    * one); the rate every line starts at (for measuring). Run files without them replay as played.
    */
   freightRatesEnabled: boolean;
+  /**
+   * The region (region.ts; brief, The region): the seed's map as the home cluster of a region
+   * 2.5 times as wide and tall, with three more clusters, a coast and its port. Run files
+   * without it drew the slice map, and replay on it.
+   */
+  regionEnabled: boolean;
+  /**
+   * The steel chain (steel.ts; brief, More industries, more chains): on; steel a town wants,
+   * tonnes per thousand people a day; the works' capacity and the port's imports as shares of
+   * day 1's want; tonnes of ore a tonne of steel takes; what the mine digs a day; restoring the
+   * idle works; how far past its start a town grows before it needs steel; jobs at the works,
+   * the mine and the terminal, thousands. Run files without it replay without steel.
+   */
+  steelEnabled: boolean;
+  steelPerThousandPerDay: number;
+  steelWorksShare: number;
+  steelImportShare: number;
+  orePerSteel: number;
+  mineOutputPerDay: number;
+  steelRestoreCost: number;
+  steelFreeShare: number;
+  jobsSteelworks: number;
+  jobsMine: number;
   freightRateCheap: number;
   freightRateDear: number;
   freightHaulierPull: number;
@@ -605,6 +633,10 @@ export interface GameTuning {
 }
 
 export interface GameWorld {
+  /** The home cluster's box on a region map (region.ts): where the camera starts. Absent: all of it. */
+  home?: { x: number; y: number; width: number; height: number };
+  /** The map's rivers and sea as drawn lines, for the screen to draw smooth (the terrain's water is their cells). */
+  waterLines?: GameRiverDef[];
   /** Money over the last game day: what the strip and route rows read (ledger.ts). */
   ledger: DayLedger;
   /** Sim time when the player's day 1 began: after the warm-up (start.ts), 0 for a cold world. */
@@ -630,6 +662,8 @@ export interface GameWorld {
   fuel: FuelState | null;
   /** The building chain's works and state (cement.ts); null until placed, or with it off. */
   cement: CementState | null;
+  /** The steel chain (steel.ts); null until placed, with it off, or in a run file from before it. */
+  steel: SteelState | null;
   /** Each site's staffed days and the camp at its gate (workers.ts). */
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */

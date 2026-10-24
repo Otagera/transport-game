@@ -3,7 +3,7 @@ import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
 import { isCutOff, roadPath } from "./world";
 import { rebuildNetworks } from "./rail";
-import { addSite, dry, nearestDistance, ringSpot } from "./fuel";
+import { addSite, dry, homeBox, inHome, nearestDistance, ringSpot } from "./fuel";
 import { inheritedRoad } from "./cement";
 import { staffFactor } from "./workers";
 import { siteScale } from "./expand";
@@ -233,17 +233,18 @@ export function payExports(world: GameWorld, dt: number): number {
  */
 export function placeMill(world: GameWorld, region: string | undefined): void {
   if (!world.tuning.foodEnabled || !world.tuning.goodsEnabled || world.food) return;
-  const farms = farmTowns(world);
+  const farms = farmTowns(world).filter((town) => inHome(world, town));
   if (farms.length === 0) return;
   const weight = farms.reduce((sum, town) => sum + town.population, 0);
   const cx = farms.reduce((sum, town) => sum + town.x * town.population, 0) / weight;
   const cy = farms.reduce((sum, town) => sum + town.y * town.population, 0) / weight;
-  const linked = [...world.towns.values()].filter((town) => !town.industry && !isCutOff(world, town.id));
+  const linked = [...world.towns.values()].filter((town) => !town.industry && !isCutOff(world, town.id) && inHome(world, town));
   if (linked.length === 0) return;
   const nearLinked = (x: number, y: number) => Math.min(...linked.map((town) => Math.hypot(town.x - x, town.y - y)));
+  const box = homeBox(world);
   let best: { x: number; y: number; s: number } | null = null;
-  for (let y = 4; y < world.height - 4; y += 1) {
-    for (let x = 4; x < world.width - 4; x += 1) {
+  for (let y = box.y + 4; y < box.y + box.height - 4; y += 1) {
+    for (let x = box.x + 4; x < box.x + box.width - 4; x += 1) {
       if (!dry(world, x, y, 2) || nearestDistance(world, x, y) < 8 || nearLinked(x, y) > 16) continue;
       const s = -Math.hypot(x - cx, y - cy);
       if (!best || s > best.s) best = { x, y, s };

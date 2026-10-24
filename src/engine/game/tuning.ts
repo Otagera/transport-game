@@ -442,6 +442,24 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // dear one 1.6; against a dear line hauliers load and reach 1.5 times as
   // far, against a cheap one two-thirds. First guesses, to measure.
   freightRatesEnabled: true,
+  // The region (2026-10-23): new games are drawn on it.
+  regionEnabled: true,
+  // The steel chain (2026-10-23; steel.ts). Nigeria uses some 30 kg of steel a
+  // person a year: 0.08 t a thousand a day. The works makes 1.2 times day 1's
+  // want from 1.6 t of ore a tonne -- one mine of 180 t a day runs it on a
+  // region map; the port lands 0.3 of it. Restoring Ajaokuta is the dearest
+  // single move in the game (cement's works 45,000). Past +80% of its start a
+  // town needs steel (cement gates +40%). First guesses, to measure (C22, C24).
+  steelEnabled: true,
+  steelPerThousandPerDay: 0.08,
+  steelWorksShare: 1.2,
+  steelImportShare: 0.3,
+  orePerSteel: 1.6,
+  mineOutputPerDay: 180,
+  steelRestoreCost: 80000,
+  steelFreeShare: 0.8,
+  jobsSteelworks: 3,
+  jobsMine: 0.5,
   freightRateCheap: 0.6,
   freightRateDear: 1.6,
   freightHaulierPull: 0.5,

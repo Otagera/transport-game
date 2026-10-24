@@ -11,7 +11,7 @@ import { createBudgetTally, createRemittancePeriod } from "./budget";
 import { faresAlong, legFare } from "./fares";
 import { createDayLedger, forgetRoute, lastDay, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
-import type { OutcomeRates, GameMapDef, GameRoute, GameTown, GameTuning, GameWorld } from "./types";
+import type { OutcomeRates, GameMapDef, GameRoadDef, GameRoute, GameTown, GameTuning, GameWorld } from "./types";
 import { DEFAULT_GAME_TUNING, SWITCHED_OFF } from "./tuning";
 import { createSettlementState } from "./settlement";
 import { createGoodsState, lorryResale, lorrySummaries } from "./goods";
@@ -61,6 +61,14 @@ function roadSegment(id: string, a: string, b: string, provenance: Segment["prov
   return { id, corridorId: `corridor-${id}`, fromNodeId: a, toNodeId: b, type: "road", level: "ground", condition: 1, provenance, surface: "dirt" };
 }
 
+/** An inherited road's line through its `via` points, and its length along them. */
+function laidOver(def: GameMapDef, road: GameRoadDef): { polyline: Point[]; length: number } {
+  const at = (id: string) => def.towns.find((town) => town.id === id)!;
+  const polyline = [at(road.a), ...road.via!.map(([x, y]) => ({ x, y })), at(road.b)].map(({ x, y }) => ({ x, y }));
+  const length = polyline.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - polyline[i]!.x, p.y - polyline[i]!.y), 0);
+  return { polyline, length };
+}
+
 function buildMap(def: GameMapDef): GeneratedMap {
   const map: GeneratedMap = {
     seed: 0,
@@ -69,7 +77,7 @@ function buildMap(def: GameMapDef): GeneratedMap {
     corridors: [],
     segments: [],
   };
-  def.roads.forEach((road, i) => addRoadToMap(map, `inherited-${i}`, road.a, road.b, "inherited"));
+  def.roads.forEach((road, i) => addRoadToMap(map, `inherited-${i}`, road.a, road.b, "inherited", road.via ? laidOver(def, road) : undefined));
   // The def's towns are copied, not shared: emergent towns grow and the
   // def is the map's starting state, not live state.
   return map;
@@ -101,6 +109,8 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
   const world: GameWorld = {
     width: def.width,
     height: def.height,
+    ...(def.home ? { home: { ...def.home } } : {}),
+    ...(def.terrain?.rivers ? { waterLines: structuredClone(def.terrain.rivers) } : {}),
     towns: new Map(def.towns.map((town) => [town.id, { ...town }])),
     tuning,
     simulation,
@@ -128,6 +138,7 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
     industrySchedule: createIndustrySchedule(tuning, def.towns.reduce((sum, town) => sum * 31 + Math.round(town.x * 7 + town.y * 13 + town.population), 17)),
     fuel: null,
     cement: null,
+    steel: null,
     sites: createSitesState(),
     bonds: [],
     expansions: new Map(),
@@ -188,9 +199,14 @@ export function emptyOutcome(): OutcomeRates {
 }
 
 export function roadPath(world: GameWorld, from: string, to: string): PathResult | null {
-  const key = pairKey(from, to);
-  if (!world.pathCache.has(key)) world.pathCache.set(key, findPath(world.simulation.routing, from, to));
-  return world.pathCache.get(key)!;
+  return roadPathByKey(world, pairKey(from, to), from, to);
+}
+
+/** roadPath with its key already made (`pairKey(from, to)`): the tick's hot loops keep theirs. */
+export function roadPathByKey(world: GameWorld, key: string, from: string, to: string): PathResult | null {
+  let path = world.pathCache.get(key);
+  if (path === undefined) world.pathCache.set(key, (path = findPath(world.simulation.routing, from, to)));
+  return path;
 }
 
 // --- Player actions -------------------------------------------------------
@@ -956,6 +972,9 @@ export interface OutcomeIndex {
   to: Map<string, { made: number; total: number }>;
 }
 
+/** A pair key's two towns, split once (indexOutcomes reads every pair every tick). */
+const pairEnds = new Map<string, [string, string]>();
+
 export function indexOutcomes(world: GameWorld): void {
   const from = new Map<string, OutcomeRates>();
   const fromToTowns = new Map<string, OutcomeRates>();
@@ -969,9 +988,12 @@ export function indexOutcomes(world: GameWorld): void {
     sum.lost += rates.lost;
   };
   for (const [key, rates] of world.pairOutcomes) {
-    const separator = key.indexOf(":");
-    const a = key.slice(0, separator);
-    const b = key.slice(separator + 1);
+    let ends = pairEnds.get(key);
+    if (!ends) {
+      const separator = key.indexOf(":");
+      pairEnds.set(key, (ends = [key.slice(0, separator), key.slice(separator + 1)]));
+    }
+    const [a, b] = ends;
     add(from, a, rates);
     if (!world.towns.get(b)?.industry) add(fromToTowns, a, rates);
     let arrive = to.get(b);

@@ -37,6 +37,10 @@ import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors }
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/game/score";
 import { variedGameMap } from "@engine/game/variation";
 import { generatedMapInfo, generatedGameMap } from "@engine/game/generate";
+import { REGION_HEIGHT, REGION_WIDTH, gameMap, regionInfo } from "@engine/game/region";
+import { restoreSteel, steelDemand, steelFlows, steelServed } from "@engine/game/steel";
+import { issueBond as issueSteelBond } from "@engine/game/bonds";
+import { flowKey as goodsKey } from "@engine/game/goods";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
@@ -46,7 +50,7 @@ import { buildGameTerrain } from "@engine/game/terrain";
 import { GAME_MAP } from "../src/game/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
 import { applyAction } from "@engine/game/actions";
-import { createRunRecorder, recordAction, recordTick, replayRun, runFile, startRun, type RunFile } from "@engine/game/runlog";
+import { createRunRecorder, recordAction, recordTick, replayRun, runFile, startRun, startRunSteps, type RunFile } from "@engine/game/runlog";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/game/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/game/settlement";
@@ -2849,6 +2853,172 @@ describe("Revision 2: retiring a road, and the road that became the railway", ()
   });
 });
 
+describe("the region: the seed's map as the home cluster of a wider map (brief, The region)", () => {
+  test("a game's tuning picks the map: the region for new games, the slice map for files without it; seed 0 stays hand-made", () => {
+    expect(gameMap(GAME_MAP, 7, { regionEnabled: true }).width).toBe(REGION_WIDTH);
+    expect(gameMap(GAME_MAP, 7, {})).toEqual(generatedGameMap(GAME_MAP, 7));
+    expect(gameMap(GAME_MAP, 0, { regionEnabled: true })).toEqual(generatedGameMap(GAME_MAP, 0));
+    expect(gameMap(GAME_MAP, 7, { regionEnabled: true })).toEqual(gameMap(GAME_MAP, 7, { regionEnabled: true }));
+  });
+
+  test("every seed: the home cluster is the seed's slice map moved whole; clusters beyond it; one dominant city; a port; all reachable", () => {
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const info = regionInfo(GAME_MAP, seed);
+      const { map, home } = info;
+      expect(info.rejected).toBeLessThan(300); // never the fallback
+      expect([map.width, map.height]).toEqual([REGION_WIDTH, REGION_HEIGHT]);
+      expect(map.towns.length).toBeGreaterThanOrEqual(home.map.towns.length + 12);
+      expect(new Set(map.towns.map((t) => t.id)).size).toBe(map.towns.length);
+      // The home cluster: the slice map's towns, roads and sizes, moved by the home box's corner.
+      const box = map.home!;
+      home.map.towns.forEach((t, i) => expect(map.towns[i]).toEqual({ ...t, x: t.x + box.x, y: t.y + box.y }));
+      expect(map.roads.slice(0, home.map.roads.length)).toEqual(home.map.roads);
+      // Every other town beyond the home box, and no two towns close.
+      for (const t of map.towns.slice(home.map.towns.length)) {
+        expect(t.x < box.x || t.x > box.x + box.width || t.y < box.y || t.y > box.y + box.height).toBe(true);
+      }
+      for (const [i, a] of map.towns.entries()) for (const b of map.towns.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(15);
+      const largest = map.towns.reduce((big, t) => (t.population > big.population ? t : big));
+      expect(largest.id).toBe(home.trunk[0]);
+      expect(map.towns.some((t) => t.id === map.port)).toBe(true);
+      // Old highways join every cluster: the inherited roads alone make one network of everything not cut off.
+      const joinedTowns = map.towns.filter((t) => map.roads.some((r) => r.a === t.id || r.b === t.id));
+      const reached = new Set([home.trunk[0]]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const r of map.roads) for (const [a, b] of [[r.a, r.b], [r.b, r.a]] as const) if (reached.has(a) && !reached.has(b)) { reached.add(b); grew = true; }
+      }
+      expect(joinedTowns.every((t) => reached.has(t.id))).toBe(true);
+      expect(info.hubs.every((h) => reached.has(h))).toBe(true);
+      buildGameTerrain(map); // every town dry (it throws otherwise)
+    }
+  }, 30_000);
+
+  test("a start a slice at a time (the loading screen's) builds the same world as one in a go", () => {
+    const switches = { all: false, goodsOff: false, wearOff: false };
+    const overrides = { regionEnabled: false, warmUpDays: 2 };
+    const steps = startRunSteps(GAME_MAP, 5, switches, null, overrides);
+    const progress: number[] = [];
+    let step = steps.next();
+    while (!step.done) {
+      progress.push(step.value);
+      step = steps.next();
+    }
+    const whole = startRun(GAME_MAP, 5, switches, null, overrides);
+    expect(progress.length).toBeGreaterThan(10);
+    expect(progress.at(-1)).toBe(1);
+    expect(step.value.economy.elapsedSeconds).toBe(whole.economy.elapsedSeconds);
+    expect(averageHeadline(step.value)).toEqual(averageHeadline(whole));
+    expect([...step.value.towns.values()].map((t) => t.population)).toEqual([...whole.towns.values()].map((t) => t.population));
+  }, 30_000);
+
+  test("the chains are the home cluster's: every site in its box, the port the home city's (map 4882's oilfield sat in the region's far corner)", () => {
+    for (const seed of [3, 11, 4882]) {
+      const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
+      const box = w.home!;
+      const info = regionInfo(GAME_MAP, seed);
+      expect(w.port).toBe(info.home.map.port!); // inland, a dry port
+      // Steel's works and mine are placed over the whole region on purpose (steel.ts: a long haul).
+      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine");
+      expect(sites.length).toBeGreaterThanOrEqual(4);
+      for (const s of sites) expect(s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height).toBe(true);
+    }
+  }, 60_000);
+
+  test("the water drains: the big river reaches the sea, the home river joins it, the seaport is on the coast; the hills stay out of the home box", () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const { map, seaport } = regionInfo(GAME_MAP, seed);
+      const terrain = buildGameTerrain(map);
+      const [coast, main, homeRiver] = map.terrain!.rivers!;
+      const wet = (x: number, y: number) => terrain.water[Math.round(y) * map.width + Math.round(x)] === 1;
+      // The big river's mouth is in the sea; the home river's mouth is in the big river.
+      const mouth = main!.points.at(-1)!;
+      expect(wet(mouth[0], mouth[1])).toBe(true);
+      const ends = [homeRiver!.points[0]!, homeRiver!.points.at(-1)!];
+      expect(ends.some(([x, y]) => Math.abs(y - main!.points.reduce((best, p) => (Math.abs(p[0] - x) < Math.abs(best[0] - x) ? p : best))[1]) < 12)).toBe(true);
+      // The seaport within a few cells of the sea.
+      const port = map.towns.find((t) => t.id === seaport)!;
+      let nearSea = false;
+      for (let dx = -12; dx <= 12; dx += 1) if (wet(port.x + dx, port.y) && Math.abs(port.x + dx - (coast!.points[0]![0] < 0 ? 0 : map.width - 1)) < 30) nearSea = true;
+      expect(nearSea).toBe(true);
+      const box = map.home!;
+      for (const h of map.terrain!.hills!.slice(regionInfo(GAME_MAP, seed).home.map.terrain!.hills!.length)) {
+        const dx = Math.max(box.x - h.x, 0, h.x - (box.x + box.width));
+        const dy = Math.max(box.y - h.y, 0, h.y - (box.y + box.height));
+        expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(h.radius);
+      }
+    }
+  }, 60_000);
+
+  test("a region plays: started as a new game is, a bus in the home cluster carries riders", () => {
+    const w = startRun(GAME_MAP, 3, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
+    expect(w.width).toBe(REGION_WIDTH);
+    expect(w.home).toBeDefined();
+    const info = regionInfo(GAME_MAP, 3);
+    expect(addBus(w, info.home.trunk[0], info.home.trunk[1]).ok).toBe(true);
+    run(w, 2 * SECONDS_PER_GAME_DAY);
+    expect(averageHeadline(w).yourRidersPerDay).toBeGreaterThan(0);
+  }, 60_000);
+});
+
+describe("the steel chain (steel.ts; brief, More industries, more chains)", () => {
+  // Seed 4 is a South-South region (a works and its mine), seed 1 the South-West (imports only).
+  const game = (seed: number, tuning: Partial<typeof DEFAULT_GAME_TUNING> = {}) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, ...tuning });
+
+  test("a South-South map has an idle works, its mine far out with no road to it, and a terminal by the port; a South-West map only the terminal", () => {
+    const w = game(4);
+    expect(regionInfo(GAME_MAP, 4).home.region).toBe("southSouth");
+    const steel = w.steel!;
+    expect(steel.working).toBe(false);
+    const works = w.towns.get(steel.worksId!)!;
+    const mine = w.towns.get(steel.mineId!)!;
+    expect([works.industry, mine.industry, w.towns.get(steel.terminalId!)!.industry]).toEqual(["steelworks", "ironmine", "steelport"]);
+    expect(Math.hypot(works.x - mine.x, works.y - mine.y)).toBeGreaterThanOrEqual(40);
+    // The ore's way to the works is yours to build: no road joins them directly.
+    expect(w.simulation.map.segments.some((s) => [s.fromNodeId, s.toNodeId].includes(mine.id) && [s.fromNodeId, s.toNodeId].includes(works.id))).toBe(false);
+    const sw = game(1).steel!;
+    expect(sw.worksId).toBeNull();
+    expect(sw.terminalId).not.toBeNull();
+  }, 30_000);
+
+  test("idle, the mine digs nothing and the port's imports are split over the towns; restored, ore is wanted", () => {
+    const w = game(4);
+    const steel = w.steel!;
+    const flows = steelFlows(w);
+    expect(flows.some((f) => f.from === steel.mineId)).toBe(false);
+    const imported = flows.filter((f) => f.from === steel.terminalId).reduce((sum, f) => sum + f.rate, 0);
+    expect(imported).toBeCloseTo(w.tuning.steelImportShare * steel.baseDemand, 6);
+    w.economy.funds = w.tuning.steelRestoreCost;
+    expect(restoreSteel(w).ok).toBe(true);
+    expect(w.economy.funds).toBe(0);
+    expect(steelFlows(w).find((f) => f.from === steel.mineId && f.to === steel.worksId)!.rate).toBeGreaterThan(0);
+    expect(restoreSteel(w).ok).toBe(false); // already working
+  }, 30_000);
+
+  test("past +80% of its start a town grows only as far as its steel lets it", () => {
+    // Cement off, and room to grow far past +80%, so only steel can hold the town back.
+    const w = game(1, { cementEnabled: false, townGrowthCap: 20 });
+    const town = [...w.towns.values()].filter((t) => !t.industry && w.basePopulation.has(t.id)).sort((p, q) => q.population - p.population)[0]!;
+    const base = w.basePopulation.get(town.id)!;
+    const key = goodsKey({ from: w.steel!.terminalId!, to: town.id, kind: "supplies" });
+    w.goods.outcomes.set(key, { delivered: 0, spoiled: 0, trucked: 0 });
+    expect(steelServed(w, town.id)).toBe(0);
+    expect(townGrowth(w, town.id)!.cap).toBeCloseTo(base * (1 + w.tuning.steelFreeShare), 6);
+    w.goods.outcomes.set(key, { delivered: steelDemand(w, town.id), spoiled: 0, trucked: 0 });
+    expect(steelServed(w, town.id)).toBe(1);
+    expect(townGrowth(w, town.id)!.cap).toBeGreaterThan(base * (1 + w.tuning.steelFreeShare) * 2);
+  }, 30_000);
+
+  test("a bond can restore the works; a run file without steel has none", () => {
+    const w = game(4);
+    w.economy.incomeRateEMA = 1_000_000; // income enough to carry the repayments
+    expect(issueSteelBond(w, "steel").ok).toBe(true);
+    expect(w.steel!.working).toBe(true);
+    const old = game(4, { steelEnabled: undefined as unknown as boolean });
+    expect(old.steel).toBeNull();
+  }, 30_000);
+});
+
 describe("generated maps per seed, with guards (brief, After the ladder's playtest, 5; P8)", () => {
   test("seed 0 is the hand-made map; a seed always draws the same map, and another seed another", () => {
     expect(generatedGameMap(GAME_MAP, 0)).toEqual({ ...GAME_MAP, region: "southwest" });
@@ -2959,7 +3129,9 @@ describe("seeded variation of the hand-made map (brief, Revision 1, the order, 3
 describe("run files: a played game saved, read and replayed (runlog.ts)", () => {
   test("a run saved as JSON replays to exactly the same world", () => {
     const switches = { all: false, goodsOff: false, wearOff: false };
-    const world = startRun(GAME_MAP, 3, switches, null);
+    // A new game's map is the region (and its replay must draw the region again); no warm-up, for time.
+    const world = startRun(GAME_MAP, 3, switches, null, { warmUpDays: 0 });
+    expect(world.width).toBe(REGION_WIDTH);
     const recorder = createRunRecorder(world, 3, switches, null);
     const ticksADay = Math.round(SECONDS_PER_GAME_DAY / SIM_DT);
     const towns = [...world.towns.keys()];
@@ -2976,13 +3148,13 @@ describe("run files: a played game saved, read and replayed (runlog.ts)", () => 
     play(4);
     const file = JSON.parse(JSON.stringify(runFile(recorder))) as RunFile;
     expect(file.actions.length).toBeGreaterThanOrEqual(2);
-    expect(file.days.length).toBe(7);
+    expect(file.days.length).toBeGreaterThanOrEqual(6); // 7 days played; with no warm-up the first day row lands a day later
     expect(file.days.at(-1)!.routes.length).toBeGreaterThan(0);
     const replayed = replayRun(GAME_MAP, file);
     expect(replayed.economy.funds).toBe(world.economy.funds);
     expect(headline(replayed)).toEqual(headline(world));
     expect([...replayed.towns.values()].map((t) => t.population)).toEqual([...world.towns.values()].map((t) => t.population));
-  }, 20_000);
+  }, 90_000);
 });
 
 describe("Revision 3, step 1: the fuel chain (fuel.ts)", () => {

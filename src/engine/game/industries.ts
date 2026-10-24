@@ -7,6 +7,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { cementActive } from "./cement";
 import { staffFactor } from "./workers";
 import { expandLevel } from "./expand";
+import { homeBox } from "./fuel";
 
 // Industries that open and close (docs/brief.md, Revision 2: the second
 // economy). A site, not a town: a few workers of its own, and goods it wants
@@ -165,9 +166,10 @@ export function openQuarry(world: GameWorld): GameEvent | null {
   const highest = terrain.elevation.reduce((top, e) => Math.max(top, e), 0);
   const sites = [...world.towns.values(), ...world.ruins.values()];
   let best: { x: number; y: number; score: number } | null = null;
+  const box = homeBox(world);
   for (let attempt = 0; attempt < 300; attempt += 1) {
-    const x = Math.round(4 + draw(world) * (terrain.width - 9));
-    const y = Math.round(4 + draw(world) * (terrain.height - 9));
+    const x = Math.round(box.x + 4 + draw(world) * (box.width - 9));
+    const y = Math.round(box.y + 4 + draw(world) * (box.height - 9));
     let wet = false;
     for (let dy = -2; dy <= 2 && !wet; dy += 1) for (let dx = -2; dx <= 2 && !wet; dx += 1) wet = isWater(terrain, x + dx, y + dy);
     if (wet) continue;

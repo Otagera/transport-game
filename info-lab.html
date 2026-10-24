@@ -181,6 +181,17 @@
         position: fixed; inset: 0; background: var(--bg); z-index: 10; display: none; overflow-y: auto; padding: 18px 22px 40px;
       }
       #revenue.open { display: block; }
+      #sheet { position: fixed; inset: 0; background: var(--bg); z-index: 11; display: none; overflow-y: auto; padding: 18px 22px 40px; }
+      #sheet.open { display: block; }
+      #sheet .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+      #sheet .top .title { font-size: 20px; font-weight: 700; }
+      #sheet h3 { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 10px 0 4px; }
+      #sheet h3 i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+      .icons { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+      .icon { width: 140px; }
+      .icon canvas { display: block; background: var(--land); border-radius: 8px; }
+      .icon .name { font-size: 12px; margin-top: 3px; }
+      .icon .note { font-size: 11px; }
       #revenue .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
       #revenue .top .title { font-size: 20px; font-weight: 700; }
       .heroes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -217,6 +228,7 @@
       </div>
     </div>
     <section id="revenue" aria-label="Revenue"></section>
+    <section id="sheet" aria-label="Icon sheet"></section>
     <div id="tip"></div>
     <script type="module" src="/src/info-lab/main.ts"></script>
   </body>

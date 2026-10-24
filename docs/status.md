@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**581 tests passing** across 48 files (`bun test`). Typecheck / test / build /
+**487 tests passing** across the files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Next: a game around the simulation (2026-10-24)
@@ -18,7 +18,7 @@ builder's story, a save you keep returning to, terms with pledges from the world
 problems (principles §2 amended), sacking possible, the union with you or against you.
 **[brief.md, Revision 5](brief.md) (proposed)** has the shape, the screen and the order;
 step 1 is *Waiting on you* (the cement works' restore was hidden), step 2 the pledge probe.
-The region's map rework and a 45% faster tick (same results) are on branch `region`.
+The region's map rework and a 45% faster tick (same results) are merged into `main` (2026-10-24).
 
 ## The carry-over (2026-10-23)
 
@@ -42,6 +42,26 @@ user: "go fully into the new lab design; if I play and miss something I will cal
    the log on the left, the side panel on the right (lists that sort; one layout for a town,
    route, site or road with its problem line and a real move), the revenue screen. The old
    wings and Treasury drawer are gone; their cards live whole under each panel's "More".
+
+**The region** (brief, The region): step 2, the generator, built 2026-10-23 on branch
+`region`, **not yet played** (engine.md, The region): new games are drawn on a 250 × 160
+region -- the seed's slice map as the home cluster, three more clusters, a coast with the
+port, more rivers, a range, old highways and railway between clusters -- and the camera
+starts on the home cluster. **Reworked 2026-10-23 on branch `region-map`** (the user: "look
+at the state of this"; engine.md, The region): the chains placed in the home cluster (an
+oilfield had sat in the far corner), an inland home city a dry port, water that drains (a
+wandering coast, a big river to the sea, the home river joining it, tributaries), a hill range,
+highways laid over the land, clusters spread apart; on the screen, smooth water, hills in
+relief with contours, labels that don't overlap. Next: the gateways (step 3: the port and border crossings,
+imports and exports through them), then the strategist on regions (step 4). Speed: a tick
+costs ~5.4x the slice map's and the warm-up holds the page ~9 s -- with the optimisation
+work.
+
+**More chains** (brief, More industries, more chains): **steel** built 2026-10-23 on branch
+`region`, not yet played or measured (engine.md, The steel chain) -- an idle works and its far
+mine on Middle Belt and South-South maps, a steel terminal by every port, steel gating towns
+past +80%. Next: measure C22/C24 with the strategist, then palm oil and cocoa. The icons
+(render-and-ui.md §7, Icons) are in the game.
 
 Then the open items for the full game (brief, the carry-over plan): roads with junctions,
 money late in the game, eras as vehicle generations, sea and river freight.

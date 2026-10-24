@@ -45,9 +45,10 @@ import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, goodsFlows, isLorr
 import type { RouteDiagnosis } from "@engine/game/world";
 import type { GameEvent } from "@engine/game/settlement";
 import { GAME_MAP } from "./map";
+import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 import type { ForecastLine } from "./render";
 import { applyAction, type ActionOutcome, type ActionSpec } from "@engine/game/actions";
-import { createRunRecorder, recordAction, recordTick, runFile, startRun, type RunSwitches } from "@engine/game/runlog";
+import { createRunRecorder, recordAction, recordTick, runFile, startRunSteps, type RunSwitches } from "@engine/game/runlog";
 import { vehicleMoves } from "@engine/game/moves";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/game/upkeep";
 import { isDirt } from "@engine/game/congestion";
@@ -67,6 +68,7 @@ import { siteProduction, type SiteLimit } from "@engine/game/production";
 import { exportsArriving, farmland, farmTowns, flourCapacity, flourOutput, flourServed, flourWant, foodActive, foodServed, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/game/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/game/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput, cementBreak } from "@engine/game/cement";
+import { isSteelSite, mineOutput, oreArriving, steelBreak, steelCapacity, steelImports, steelOutput, steelServed } from "@engine/game/steel";
 import { isYourRoad } from "@engine/game/upkeep";
 import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
@@ -123,7 +125,42 @@ const fundsParam = Number(params.get("funds"));
 const devFunds = dev && params.has("funds") && Number.isFinite(fundsParam) ? fundsParam : null;
 // Started as a replay would start it (runlog.ts), and recorded as it goes:
 // "Save run" writes the file a script can read or replay.
-const world = startRun(GAME_MAP, seed, switches, devFunds);
+// The world runs its week before you arrive (start.ts) -- on a region, seconds of work: a
+// loading screen says so and shows how far it's got, the warm-up run a slice at a time
+// between frames (startRunSteps: the same world, tick for tick).
+const world = await (async () => {
+  const loading = document.querySelector<HTMLElement>("#loading")!;
+  loading.querySelector<HTMLElement>(".map")!.textContent = `Map ${seed}`;
+  const bar = loading.querySelector<HTMLElement>(".bar i")!;
+  // A vehicle rides the bar, in the map's look (its pills): your bus, a danfo, or your train on track.
+  const ride = (["bus", "danfo", "train"] as const)[Math.floor(Math.random() * 3)]!;
+  const pill = (x: number, w: number, fill: string) => `<rect x="${x}" y="2" width="${w}" height="12" rx="5" style="fill:${fill}" stroke="#fff" stroke-width="1.5"/>${Array.from({ length: Math.floor((w - 8) / 6) }, (_, k) => `<rect x="${x + 4 + k * 6}" y="5" width="4" height="3.5" rx="1" fill="#fff" opacity="0.85"/>`).join("")}`;
+  const vehicle = ride === "train"
+    ? `<svg width="111" height="24" viewBox="0 0 74 16">${pill(1, 34, "var(--you)")}${pill(38, 34, "var(--you)")}</svg>`
+    : `<svg width="54" height="24" viewBox="0 0 36 16">${pill(1, ride === "bus" ? 34 : 26, ride === "bus" ? "var(--you)" : "var(--danfo)")}</svg>`;
+  const rider = loading.querySelector<HTMLElement>(".bar .vehicle")!;
+  rider.innerHTML = vehicle;
+  loading.querySelector<HTMLElement>(".bar")!.classList.toggle("rail", ride === "train");
+  if (ride === "danfo") bar.style.background = "var(--danfo)";
+  const label = loading.querySelector<HTMLElement>(".progress")!;
+  const days = DEFAULT_GAME_TUNING.warmUpDays;
+  const steps = startRunSteps(GAME_MAP, seed, switches, devFunds);
+  let since = performance.now();
+  for (;;) {
+    const step = steps.next();
+    if (step.done) {
+      loading.remove();
+      return step.value;
+    }
+    if (performance.now() - since > 40) {
+      bar.style.width = `${Math.round(step.value * 100)}%`;
+      rider.style.left = `${step.value * 100}%`;
+      label.textContent = `Day ${Math.min(days, 1 + Math.floor(step.value * days))} of ${days} before you arrive`;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      since = performance.now();
+    }
+  }
+})();
 const recorder = createRunRecorder(world, seed, switches, devFunds, String(import.meta.env.VITE_GAME_BUILD ?? "unknown"));
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
@@ -1345,6 +1382,7 @@ function haulierMove(lorries: string, yard: string): string {
 function renderIndustry(townId: string): void {
   if (isFuelSite(world.towns.get(townId))) return renderFuelSite(townId);
   if (isCementSite(world.towns.get(townId))) return renderCementSite(townId);
+  if (isSteelSite(world.towns.get(townId))) return renderSteelSite(townId);
   if (world.towns.get(townId)?.industry === "mill") return renderMillSite(townId);
   if (world.towns.get(townId)?.industry === "flourmill") return renderFlourMillSite(townId);
   const limestone = cementActive(world);
@@ -1659,6 +1697,72 @@ function renderCementSite(townId: string): void {
     </div>`;
 }
 
+// The steel chain's cards (steel.ts): the works, its mine, the port's terminal -- what each
+// makes, from what, and the one thing holding it back, as the cement works' card does.
+function renderSteelSite(townId: string): void {
+  const steel = world.steel!;
+  const site = world.towns.get(townId)!;
+  const t = world.tuning;
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const flows = goodsFlows(world).filter((flow) => flow.from === townId).sort((p, q) => q.rate - p.rate);
+  const rows = flows
+    .map((flow) => {
+      const outcome = world.goods.outcomes.get(flowKey(flow));
+      const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
+      const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
+      const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
+      return `<div class="trip"><span class="name">${townName(flow.to)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+    })
+    .join("");
+  let kicker = "";
+  let lines: string[] = [];
+  let problem = "";
+  let action = "";
+  if (site.industry === "steelport") {
+    kicker = "Steel terminal · imports";
+    lines = [
+      `Imports ${perDay(steelImports(world))} t of steel a day through the port, a share of what the towns want, split between them.`,
+      `Towns grow past ${pct(t.steelFreeShare)} of their start only as far as their steel lets them (cement takes them to ${pct(t.cementFreeShare)}).`,
+      "Truckers take it on short hauls; further than that, it's yours to carry or it waits.",
+    ];
+  } else if (site.industry === "ironmine") {
+    kicker = steel.working ? `Iron ore mine · ${perDay(mineOutput(world))} t a day` : "Iron ore mine · waiting on the works";
+    lines = [
+      `Digs ${t.mineOutputPerDay} t of ore a day for ${steel.worksId ? townName(steel.worksId) : "the steel works"} once it runs: ${t.orePerSteel} t makes a tonne of steel.`,
+      "A long haul from the works, and no road between them: the ore's way there is yours to build -- a road and a haulage yard, or track and freight trains.",
+    ];
+    if (!steel.working) problem = `Nobody wants its ore while ${steel.worksId ? townName(steel.worksId) : "the works"} is idle. Restore the works first.`;
+    else if (steel.worksId && !roadPath(world, townId, steel.worksId) && !railPath(world, townId, steel.worksId)) problem = `No way from here to ${townName(steel.worksId)}: build a road (<kbd>R</kbd>) or lay track (<kbd>K</kbd>), and the ore can go.`;
+  } else {
+    const capacity = perDay(steelCapacity(world));
+    const out = perDay(steelOutput(world));
+    kicker = steel.working ? `Steel works · ${out} of ${capacity} t a day` : "Steel works · idle";
+    lines = [
+      `Makes up to ${capacity} t of steel a day, from ${t.orePerSteel} t of iron ore a tonne: ${perDay(oreArriving(world))} t of ore a day is reaching it.`,
+      `Towns grow past ${pct(t.steelFreeShare)} of their start only as far as their steel lets them: the big towns' last growth.`,
+      `Built, never run (Ajaokuta). Its steel is split between the towns its roads reach; the far towns' share waits for ${haulierMove("your lorries or freight trains", "a haulage yard here (<kbd>Y</kbd>) or freight trains")}.`,
+    ];
+    if (!steel.working) {
+      problem = `Idle. Restore it, and its mine${steel.mineId ? ` at ${townName(steel.mineId)}` : ""} starts digging; until then the towns get only the port's imports.`;
+      action = `<span class="actions"><button data-restore-steel="1">Restore it: ${naira(t.steelRestoreCost)}</button>${world.economy.funds < t.steelRestoreCost ? bondButton("steel") : ""}</span>`;
+    } else if (steel.mineId && !roadPath(world, steel.mineId, townId) && !railPath(world, steel.mineId, townId)) {
+      problem = `No way to it from ${townName(steel.mineId)}: build a road (<kbd>R</kbd>) or lay track (<kbd>K</kbd>) between them, and the ore can come.`;
+    } else if (out < capacity * 0.6) {
+      problem = `Short of ore: ${perDay(oreArriving(world))} of ${Math.round(capacity * t.orePerSteel)} t a day. Carry it from the mine: a haulage yard there (<kbd>Y</kbd>), or a freight train on track.`;
+    }
+  }
+  if (!problem) problem = siteProblem(townId);
+  townEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">${kicker}</div>
+      <div class="title">${site.name}</div>
+      ${productionHtml(townId)}
+      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}${workersItem(townId)}</ul>
+      ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
+      ${rows}
+    </div>`;
+}
+
 // Jobs at sites a town's people reach (workers.ts, step 2c): room to grow.
 function jobsText(townId: string): string {
   const room = jobsGrowth(world, townId);
@@ -1913,6 +2017,15 @@ function problemText(townId: string): string {
       : broken?.kind === "quarry" ? `${works} is short of limestone: ${townName(broken.quarryId)} is working but little reaches it. Give the quarry a road (<kbd>R</kbd>) and a haulage yard (<kbd>Y</kbd>), or track for a freight train.`
       : `Carry cement from ${works}: ${haulierMove("a lorry (<kbd>L</kbd>), or a freight train on track.", `build a haulage yard (<kbd>Y</kbd>) at ${works} so hauliers reach it, or a freight train on track.`)}`;
     return `<p class="callout hook"><span class="k">The problem here</span>${townName(townId)} can't grow: no cement. It gets ${pct(cementServed(world, townId))} of what it wants; all of it would grow it ${Math.round(growth.cementHeld)}k more. ${move}</p>`;
+  }
+  // Grown as far as its steel lets it (steel.ts): past +80%, the big towns' last growth.
+  if (growth && town && world.steel && growth.steelHeld > growth.base * 0.05 && town.population >= growth.target * 0.97) {
+    const broken = steelBreak(world);
+    const move = broken?.kind === "idle" ? `Restore ${townName(world.steel.worksId!)} (its card), and bring it ore.`
+      : broken?.kind === "ore" ? `${townName(world.steel.worksId!)} is short of ore: connect ${townName(broken.mineId)} -- a haulage yard (<kbd>Y</kbd>), or track and a freight train.`
+      : broken?.kind === "carry" ? `Carry steel from ${townName(broken.from)}: ${haulierMove("a freight train on track, or a lorry", `a haulage yard (<kbd>Y</kbd>) at ${townName(broken.from)} so hauliers reach further, or a freight train on track`)}.`
+      : "";
+    return `<p class="callout hook"><span class="k">The problem here</span>${townName(townId)} can't grow: no steel. It gets ${pct(steelServed(world, townId))} of what it wants; all of it would grow it ${Math.round(growth.steelHeld)}k more. ${move}</p>`;
   }
   // A worn road your vehicles pay for (brief, Revision 2: wear per corridor).
   const worn = wornRoadAt(world, townId);
@@ -2582,6 +2695,12 @@ function onPanelClick(event: MouseEvent): void {
     renderPanel();
     return;
   }
+  if (target.dataset.restoreSteel) {
+    const result = act({ label: "restoring the steel works", towns: world.steel?.worksId ? [world.steel.worksId] : [] }, { kind: "restoreSteel" });
+    say(result.ok ? `Steel works restored for ${naira(result.amount ?? 0)}. Its mine starts digging: get the ore to it.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
   if (target.dataset.dropProject) {
     act({ label: "dropping the named project", towns: [] }, { kind: "dropProject" });
     say("Project dropped: the treasury takes its usual share again.");
@@ -2830,6 +2949,14 @@ function frame(now: number): void {
 renderToolbar();
 renderStrip();
 resize(); // again, now the toolbar and the strip exist to be measured
+// On a region (region.ts), the camera starts framed on the home cluster: the rest of the
+// region is there, a zoom out (0, or Fit), running without you (brief, The region).
+if (world.home) {
+  // A little short of the box, so towns at its edge sit clear of the panels and the toolbar.
+  zoom = 0.9 * Math.min(MAX_ZOOM, world.width / world.home.width, world.height / world.home.height);
+  lookAt = { x: world.home.x + world.home.width / 2, y: world.home.y + world.home.height / 2 };
+  applyZoom();
+}
 renderPanel();
 screen.renderLog(true);
 // The hints take the start from here (hint 1); the developer view keeps the old line.

@@ -48,6 +48,13 @@ export function siteJobs(world: GameWorld, town: GameTown): number {
       return t.jobsDepot;
     case "silo":
       return t.jobsSilo;
+    // The steel chain (steel.ts): an idle works and its mine keep a caretaker's few.
+    case "steelworks":
+      return world.steel?.working ? t.jobsSteelworks * siteScale(world, town.id) : idle;
+    case "ironmine":
+      return world.steel?.working ? t.jobsMine : idle;
+    case "steelport":
+      return t.jobsSilo;
     case "mill":
       return t.jobsMill * siteScale(world, town.id);
     case "flourmill":
@@ -55,6 +62,18 @@ export function siteJobs(world: GameWorld, town: GameTown): number {
     default:
       return 0;
   }
+}
+
+/** One town's share of a site's workers, as workforceShares has it (0 if out of reach), without the whole map of them. */
+export function workforceShare(world: GameWorld, site: GameTown, townId: string): number {
+  const from = commuterTowns(world, site);
+  let sum = 0;
+  let mine: { town: GameTown; distance: number } | null = null;
+  for (const entry of from) {
+    sum += entry.town.population / entry.distance;
+    if (entry.town.id === townId) mine = entry;
+  }
+  return mine ? mine.town.population / mine.distance / sum : 0;
 }
 
 /** Where a site's workers live: each town's share of them, 0..1 -- the towns within reach, by size over distance. */
@@ -76,7 +95,10 @@ export function workforceShares(world: GameWorld, site: GameTown): Map<string, n
 const commuters = new WeakMap<GameWorld, { key: string; bySite: Map<string, Array<{ town: GameTown; distance: number }>> }>();
 
 function commuterTowns(world: GameWorld, site: GameTown): Array<{ town: GameTown; distance: number }> {
-  const key = `${world.towns.size}:${world.ruins.size}:${world.nextId}:${world.tuning.commuteReachCells}`;
+  // Keyed on the towns, not world.nextId: that moves with every danfo that sets off, so the
+  // cache was rebuilt nearly every tick (profiled on the region). A town founded, a site added
+  // or one retired changes a count.
+  const key = `${world.towns.size}:${world.ruins.size}:${world.tuning.commuteReachCells}`;
   let cache = commuters.get(world);
   if (!cache || cache.key !== key) commuters.set(world, (cache = { key, bySite: new Map() }));
   let list = cache.bySite.get(site.id);
@@ -151,7 +173,8 @@ export function jobsGrowth(world: GameWorld, townId: string): number {
   let jobs = 0;
   for (const site of world.towns.values()) {
     if (!site.industry) continue;
-    const share = workforceShares(world, site).get(townId);
+    // Every town, every site, every tick: one town's share, not each site's whole map (profiled).
+    const share = workforceShare(world, site, townId);
     if (share) jobs += siteJobs(world, site) * share * staffing(world, site.id);
   }
   return Math.min(base * t.jobsCapShare, jobs * t.peoplePerJob);
