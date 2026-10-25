@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sprite Lab</title>
+    <!-- Dev-only (vite.config.ts builds index.html alone): hand-inked vehicles and towns, to try. -->
+    <style>
+      :root { --bg: #e9edf1; --surface: #ffffff; --ink: #1b2129; --ink-2: #4a5563; --muted: #7b8694; --line: #d6dce3; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 14px system-ui, sans-serif; }
+      main { max-width: 1240px; margin: 0 auto; padding: 18px 16px 48px; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      h2 { font-size: 15px; margin: 22px 0 8px; }
+      p { color: var(--ink-2); max-width: 760px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+      .card { background: var(--surface); border-radius: 12px; padding: 10px 12px; }
+      .card h3 { margin: 0 0 4px; font-size: 13px; }
+      .card canvas { display: block; width: 100%; height: auto; }
+      .scene { background: var(--surface); border-radius: 12px; padding: 10px; }
+      .scene canvas { display: block; width: 100%; height: auto; border-radius: 8px; }
+      .toggle { display: flex; gap: 6px; margin: 6px 0 10px; }
+      .toggle button { font: inherit; padding: 4px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+      .toggle button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Sprite lab: hand-inked towns and vehicles</h1>
+      <p>Drawn in code: flat colour, an ink line with a little wobble, isometric. Each kind and facing is drawn once and stamped onto the map. On the map they'd show when you zoom in; further out the clean marks stay. Try the scene's two looks below.</p>
+      <h2>The scene, live</h2>
+      <div class="scene"><div class="toggle"><button data-look="inked" class="on">Inked</button><button data-look="current">Current map</button></div><canvas id="scene" width="1200" height="560"></canvas></div>
+      <h2>Your vehicles and theirs, four facings each</h2>
+      <div class="grid" id="vehicles"></div>
+      <h2>Towns, by size: they move up a size as they grow</h2>
+      <div class="grid" id="towns"></div>
+    </main>
+    <script type="module" src="/src/sprite-lab/main.ts"></script>
+  </body>
+</html>
