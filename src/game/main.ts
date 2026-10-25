@@ -239,8 +239,8 @@ async function toggle3d(): Promise<void> {
   if (in3d && !view3d) view3d = (await import("./view3d")).createView3D();
   if (in3d) view3d?.show(world);
   else view3d?.hide();
-  // The overlays are the 2D map's; the 3D view shows traffic on its roads.
-  document.querySelector<HTMLElement>("#overlays")!.style.display = in3d ? "none" : "";
+  // The overlays, key and hints are the 2D map's (index.html hides them under body.in3d).
+  document.body.classList.toggle("in3d", in3d);
   renderZoomControl();
 }
 let view: View = { scale: 1, offsetX: 0, offsetY: 0 };
