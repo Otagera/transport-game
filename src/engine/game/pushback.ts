@@ -1,3 +1,4 @@
+import { laneMood } from "./union";
 import type { GameWorld } from "./types";
 import type { GameEvent } from "./settlement";
 import { roadChain } from "./world";
@@ -162,9 +163,11 @@ export function updateLanes(world: GameWorld, dt: number): { cost: number; lost:
     // The lane's gone (or the road): nothing to hold or strike over.
     if (!chain || !chain.some((piece) => piece.busLane)) continue;
     const strict = lane.enforcement === "strict";
+    // The chairman's stance (union.ts): against you, his danfos take a lane back sooner and his grievance builds faster.
+    const mood = laneMood(world, lane);
     lane.encroachment = strict
       ? Math.max(0, lane.encroachment - tuning.encroachmentClearPerDay * days)
-      : Math.min(1, lane.encroachment + tuning.encroachmentPerDay * days);
+      : Math.min(1, lane.encroachment + tuning.encroachmentPerDay * days * mood.encroachment);
     if (strict) cost += enforcementPerDay(world, lane) * days;
     const striking = lane.strikeUntil > now;
     // The corridor's income, a day at a time: a strike's cost is measured
@@ -208,7 +211,7 @@ export function updateLanes(world: GameWorld, dt: number): { cost: number; lost:
       }
       continue;
     }
-    lane.grievance += days / (strict ? tuning.strikeEveryStrictDays : tuning.strikeEveryLaxDays);
+    lane.grievance += (days / (strict ? tuning.strikeEveryStrictDays : tuning.strikeEveryLaxDays)) * mood.grievance;
     if (lane.grievance < 1) continue;
     // Announced under lax enforcement there's nothing left to relax: that strike goes ahead.
     lane.grievance = 0;

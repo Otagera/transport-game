@@ -1,3 +1,4 @@
+import { answerDemand, unionAfterAction } from "./union";
 import { commitPledge, consoleMove, noteAction } from "./term";
 import type { GameWorld } from "./types";
 import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
@@ -47,7 +48,8 @@ export type ActionSpec =
   | { kind: "bond"; purpose: BondPurpose }
   | { kind: "sell"; routeId: string }
   | { kind: "pledge"; id: string }
-  | { kind: "console"; op: "end-term" | "funds"; amount?: number };
+  | { kind: "console"; op: "end-term" | "funds"; amount?: number }
+  | { kind: "union"; unionId: string; answer: "pay" | "concede" | "coop" | "refuse" };
 
 /** `amount`: money charged (a repair) or returned (a sale), where the caller wants to say it. */
 export interface ActionOutcome {
@@ -59,7 +61,10 @@ export interface ActionOutcome {
 export function applyAction(world: GameWorld, spec: ActionSpec): ActionOutcome {
   const outcome = apply(world, spec);
   // A build starts its week, to say what it did (term.ts).
-  if (outcome.ok) noteAction(world, spec);
+  if (outcome.ok) {
+    noteAction(world, spec);
+    unionAfterAction(world, spec); // lanes and BRT anger the union; parks please it (union.ts)
+  }
   return outcome;
 }
 
@@ -69,6 +74,8 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       return commitPledge(world, spec.id);
     case "console":
       return consoleMove(world, spec.op, spec.amount);
+    case "union":
+      return answerDemand(world, spec.unionId, spec.answer);
     case "bus":
       return addBus(world, spec.a, spec.b);
     case "minibus":

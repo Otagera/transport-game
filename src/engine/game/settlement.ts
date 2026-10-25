@@ -56,6 +56,10 @@ export type GameEvent =
   | { kind: "pledge-kept"; number: number; text: string; townId: string }
   | { kind: "term-ended"; number: number; kept: string[]; missed: string[]; peopleFrom: number; peopleTo: number; failed?: boolean; grant?: number; failedInRow?: number }
   | { kind: "replaced"; number: number; terms: number }
+  // The union (union.ts): a demand on the table, your answer (or ignoring it), his stance crossing a line.
+  | { kind: "union-demand"; union: string; chairman: string; text: string; deadlineAt: number }
+  | { kind: "union-answered"; union: string; chairman: string; answer: "pay" | "concede" | "coop" | "refuse" | "ignored" }
+  | { kind: "union-stance"; union: string; chairman: string; stance: "with you" | "wary" | "against you" }
   | { kind: "a-week-on"; label: string; towns: string[]; tripsBy: number; grew: Array<{ id: string; by: number }> };
 
 export interface SettlementState {

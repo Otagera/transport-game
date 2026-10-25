@@ -1,3 +1,4 @@
+import { updateUnions } from "./union";
 import { updatePrivateTraffic } from "./private";
 import { updateTerm } from "./term";
 import { chargeFuelPremium, shortageAt, updateFuelShortage, updateNewRefinery } from "./fuel";
@@ -335,6 +336,8 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
     }
   }
   const lanes = updateLanes(world, dt);
+  // The unions (union.ts): what this tick's lanes and corridors did to them, their demands' deadlines.
+  lanes.events.push(...updateUnions(world, dt, lanes.events));
   const upkeep = roadUpkeep + lanes.cost;
   // ...and your road vehicles pay more to run on worn roads (wear.ts).
   const rough = tuning.wearEnabled ? chargeRoughRoads(world, dt, routeOf) : { total: 0, byRoute: new Map<string, number>() };
