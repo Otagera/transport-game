@@ -157,6 +157,7 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   termGrantBase: 20000,
   termGrantPerPledge: 15000,
   termGrantPerThousand: 200,
+  termOpeningGrant: 20000,
   sweepEnabled: false,
   sweepPeriodDays: 60,
   sweepCarryMin: 50000,

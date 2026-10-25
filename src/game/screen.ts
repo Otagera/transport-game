@@ -265,6 +265,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const buttons = (losing.length ? `<button data-tab="routes" title="Your routes, the worst first">Losing routes</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep (F)") : "");
       items.push({ text: `${where}${flow}${drains.length ? `. A day: ${drains.join(" · ")}` : ""}`, button: buttons, at: [], weight: world.economy.funds < 0 ? 1e8 : 1e6 });
     }
+    // Pledges left to make this term: the strip alone was missed (a game ran 115 days with none).
+    const term = world.term;
+    const left = term ? MAX_COMMITTED - term.pledges.filter((p) => p.committed).length : 0;
+    if (term && left > 0 && term.pledges.some((p) => !p.committed)) {
+      items.push({ text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
+    }
     // Your pledges this term, not yet kept: first, with the town (its panel has the move).
     for (const p of world.term?.pledges ?? []) {
       if (!p.committed || p.kept) continue;
@@ -704,13 +710,33 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   // of the save. "Your record" in the strip opens it any time.
 
   const verdictOpen = () => verdictEl.classList.contains("open");
-  function openVerdict(mode: "term" | "record" | "replaced" | null): void {
+  let verdictMode: "term" | "record" | "replaced" | "pledges" = "term";
+  function openVerdict(mode: "term" | "record" | "replaced" | "pledges" | null): void {
     verdictEl.classList.toggle("open", mode !== null);
-    if (mode) renderVerdict(mode);
+    if (mode) renderVerdict((verdictMode = mode));
   }
-  function renderVerdict(mode: "term" | "record" | "replaced"): void {
+  /** The term's pledges on offer, each with its Pledge button while you've pledges left. */
+  function pledgeChoices(): string {
+    const term = world.term;
+    if (!term) return "";
+    const committed = term.pledges.filter((p) => p.committed).length;
+    return `<ul class="pledges choose">${term.pledges.map((p) => `<li>${p.committed ? "★ " : ""}${esc(pledgeLine(p))} ${!p.committed && committed < MAX_COMMITTED ? `<button data-pledge="${esc(p.id)}">Pledge</button>` : ""}</li>`).join("")}</ul>`;
+  }
+
+  function renderVerdict(mode: "term" | "record" | "replaced" | "pledges"): void {
     const term = world.term;
     if (!term) return;
+    if (mode === "pledges") {
+      // A term's start (the first included): what the state asks this term, chosen here.
+      const length = world.tuning.termDays ?? 120;
+      const committed = term.pledges.filter((p) => p.committed).length;
+      const grant = term.number === 1 && world.tuning.termOpeningGrant ? ` It opens with a grant of ${nairaK(world.tuning.termOpeningGrant)} to build with.` : "";
+      verdictEl.innerHTML = `<div class="top"><div class="title">Term ${term.number}: your pledges</div><button class="primary" data-verdict="close">${committed > 0 ? "Begin ▸" : "Later"}</button></div>
+        <p class="lede">You run the state's transport for ${length} days a term.${grant} The state offers these, from what your towns need now. Pledge up to ${MAX_COMMITTED}: keep them and the next term's grant grows; keep none, or let the towns shrink, and it's a failed term. Two failed terms in a row and you're replaced.</p>
+        ${pledgeChoices()}
+        <p class="muted">Pledged: ${committed} of ${MAX_COMMITTED}. They stay in the strip, with how far each has got.</p>`;
+      return;
+    }
     const history = term.history;
     const last = history.at(-1);
     const grown = (r: { peopleFrom: number; peopleTo: number }) => r.peopleTo - r.peopleFrom;
@@ -739,7 +765,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="hero"><div class="k">Standing</div><div class="v" style="font-size:16px">${esc(standing)}</div></div>
       </div>
       <h2>Your pledges</h2>${pledges ? `<ul class="pledges">${pledges}</ul>` : `<p class="muted">You made none this term.</p>`}
-      <h2>Term ${term.number}'s pledges on offer</h2><ul class="pledges">${term.pledges.map((p) => `<li>${esc(pledgeLine(p))}</li>`).join("")}</ul>
+      <h2>Term ${term.number}'s pledges on offer: pledge up to ${MAX_COMMITTED}</h2>${pledgeChoices()}
       ${record}`;
   }
 
@@ -844,7 +870,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
     if (el.dataset.range !== undefined) { range = Number(el.dataset.range); renderRevenue(); return true; }
     if (el.dataset.revenue) { openRevenue(el.dataset.revenue === "open"); return true; }
-    if (el.dataset.verdict) { openVerdict(el.dataset.verdict === "close" ? null : (el.dataset.verdict as "record")); return true; }
+    if (el.dataset.verdict) { openVerdict(el.dataset.verdict === "close" ? null : (el.dataset.verdict as "record" | "pledges")); return true; }
     return false;
   }
 
@@ -876,6 +902,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     revenueOpen,
     openVerdict,
     verdictOpen,
+    /** Redraws the open verdict or pledge card (a pledge made from it). */
+    refreshVerdict: () => { if (verdictOpen()) renderVerdict(verdictMode); },
     onClick,
     select,
     /** The named move a problem line's button offers. */

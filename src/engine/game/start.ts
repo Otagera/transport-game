@@ -63,8 +63,6 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
     if ((i + 1) % WARM_UP_STEP === 0) yield (i + 1) / ticks;
   }
   world.startSeconds = world.economy.elapsedSeconds;
-  // The first term opens as you arrive (term.ts).
-  startTerms(world);
   // The strip's "informal sector earned" counts from when you arrived, and
   // so does your budget; the allocation pays on growth from day 1.
   world.informal.earnings = 0;
@@ -76,6 +74,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   world.remittance = createRemittancePeriod(world.economy.elapsedSeconds, tuning);
   // The budget year starts with you (sweep.ts).
   world.sweep = createSweepState(world.economy.elapsedSeconds, tuning.sweepPeriodDays ?? 60);
+  // The first term opens as you arrive (term.ts), its opening grant on top of the starting money.
+  startTerms(world);
   // Towns only: a site's workers aren't the region's people (score.ts counts the same way).
   world.startPopulation = new Map([...world.towns.values()].filter((town) => !town.industry).map((town) => [town.id, town.population]));
   world.milestones = new Map(); // growth during the warm-up isn't yours

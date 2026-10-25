@@ -342,7 +342,7 @@ describe("slice zero: the world is already running on day 1", () => {
   test("the informal sector's earnings count from day 1, and your funds are untouched", () => {
     const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0 });
     expect(w.informal.earnings).toBe(0);
-    expect(w.economy.funds).toBe(DEFAULT_GAME_TUNING.startingFunds);
+    expect(w.economy.funds).toBe(DEFAULT_GAME_TUNING.startingFunds + (DEFAULT_GAME_TUNING.termOpeningGrant ?? 0)); // the term's opening grant is yours (term.ts)
     expect(lastDay(w.ledger).net).toBe(0);
   });
 });
@@ -855,7 +855,7 @@ describe("slice: tolls, levies and the allocation (step 6)", () => {
 
   test("on day 1 your funds are the starting funds: warm-up levies and allocation aren't yours", () => {
     const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0 });
-    expect(w.economy.funds).toBe(DEFAULT_GAME_TUNING.startingFunds);
+    expect(w.economy.funds).toBe(DEFAULT_GAME_TUNING.startingFunds + (DEFAULT_GAME_TUNING.termOpeningGrant ?? 0)); // the term's opening grant is yours (term.ts)
     expect(w.budget.levies).toBe(0);
     expect(w.budget.allocation).toBe(0);
   });

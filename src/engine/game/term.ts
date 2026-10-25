@@ -177,6 +177,13 @@ function openTerm(world: GameWorld, number: number, at: number, history: TermRec
 export function startTerms(world: GameWorld): void {
   if (!world.tuning.pledgesEnabled || world.term) return;
   openTerm(world, 1, world.economy.elapsedSeconds, [], []);
+  // The mandate's opening grant: term 1 begins with money to build with, as each later term
+  // does (three games running, the first hundred days were a slide from ₦2.7k into debt).
+  const opening = world.tuning.mandateEnabled ? world.tuning.termOpeningGrant ?? 0 : 0;
+  if (opening > 0) {
+    world.economy.funds += opening;
+    world.budget.grant = (world.budget.grant ?? 0) + opening;
+  }
 }
 
 /** Once a game day: pledges met, builds a week on, and a term's end. */

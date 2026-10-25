@@ -228,6 +228,8 @@ export interface GameTuning {
   termGrantBase?: number;
   termGrantPerPledge?: number;
   termGrantPerThousand?: number;
+  /** The grant term 1 opens with (absent in runs played before it: none). */
+  termOpeningGrant?: number;
   /** The budget-year sweep (sweep.ts, Revision 4, 3, a trial): on; the year, days; the least you may carry over. */
   sweepEnabled: boolean;
   sweepPeriodDays: number;

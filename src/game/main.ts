@@ -1022,9 +1022,17 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
   // What the wear is costing you now: your vehicles' extra running cost on it.
   const roughPerDay = pieces.reduce((sum, piece) => sum + roughCostPerDay(world, piece), 0);
   const costing = roughPerDay >= 1 ? ` · costs your vehicles ${naira(roughPerDay)}/day extra` : "";
+  // Each road's upkeep is small; the total isn't (eighteen roads came to ₦300 a day, and debt).
+  const all = [...world.maintained].reduce((sum, mid) => {
+    const segment = world.simulation.map.segments.find((s) => s.id === mid);
+    return sum + (segment ? upkeepPerDay(world, segment) : 0);
+  }, 0);
+  const adding = pieces.reduce((sum, piece) => sum + upkeepPerDay(world, piece), 0);
+  const net = averageNet(world);
+  const total = world.maintained.has(id) ? "" : ` · all your roads' upkeep then ${naira(all + adding)}/day${net - adding < 0 ? `: more than you clear (${naira(net)}/day)` : ""}`;
   const label = world.maintained.has(id)
-    ? `${roadName(id)} · maintained, ${upkeep}/day · click to stop`
-    : `${roadName(id)} · ${state}${costing} · maintain for ~${upkeep}/day`;
+    ? `${roadName(id)} · maintained, ${upkeep}/day of ${naira(all)}/day on all your roads · click to stop`
+    : `${roadName(id)} · ${state}${costing} · maintain for ~${upkeep}/day${total}`;
   const ends = chainOf(world, id);
   const towns = ends ? [ends.a, ends.b] : [worst.fromNodeId, worst.toNodeId];
   const forecast = dev ? forecastLine({ kind: "fix", segmentId: id, on: !world.maintained.has(id) }, { label: "maintaining", towns }) : undefined;
@@ -2702,6 +2710,7 @@ function onPanelClick(event: MouseEvent): void {
   if (target.dataset.pledge) {
     const result = act({ label: "a pledge", towns: [] }, { kind: "pledge", id: target.dataset.pledge });
     const pledge = world.term?.pledges.find((p) => p.id === target.dataset.pledge);
+    screen.refreshVerdict();
     say(result.ok ? `Pledged: ${pledge?.text ?? ""}. It's on Waiting on you until it's kept; the term runs to day ${world.term ? gameDay(world, world.term.endsAtSeconds) - 1 : "?"}.` : `Can't pledge: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
@@ -2919,6 +2928,8 @@ hintEl.addEventListener("click", (event) => {
 
 const accumulator = new Accumulator(SIM_DT);
 let last = performance.now();
+// The first term's pledges: asked for as play begins (the strip alone was missed).
+let askedFirstPledges = false;
 let panelTimer = 0;
 
 // The map's overlays, one at a time (the information lab): the traffic map, or demand between
@@ -2952,6 +2963,14 @@ function townsWithProblems(now: number): Set<string> {
 
 let revenueTimer = 0;
 function frame(now: number): void {
+  if (!askedFirstPledges && world.term) {
+    askedFirstPledges = true;
+    if (world.term.number === 1 && world.term.pledges.length > 0 && !world.term.pledges.some((p) => p.committed)) {
+      screen.openVerdict("pledges");
+      paused = true;
+      renderToolbar();
+    }
+  }
   const elapsed = (now - last) / 1000;
   last = now;
   if (!paused) {
