@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3D Lab</title>
+    <!-- Dev-only (vite.config.ts builds index.html alone): a dummy of the game in live 3D, to try. -->
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe3ef; font: 13px system-ui, sans-serif; }
+      #view { position: fixed; inset: 0; }
+      #hud { position: fixed; left: 12px; top: 12px; background: rgb(255 255 255 / 0.88); border-radius: 10px; padding: 10px 12px; max-width: 360px; color: #1b2129; line-height: 1.45; }
+      #hud b { font-size: 14px; }
+      #hud .muted { color: #6b7684; }
+      .label { font: 600 12px system-ui, sans-serif; color: #1b2129; background: rgb(255 255 255 / 0.85); padding: 1px 6px; border-radius: 6px; white-space: nowrap; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="view"></div>
+    <div id="hud"><b>Live 3D dummy</b> · map 2418, the home cluster<br />
+      Drag to rotate · right-drag to pan · wheel to zoom.<br />
+      <span class="muted">The map's own hills, rivers, roads and towns; Quaternius models (CC0); vehicles driving the roads. Not the game: no simulation.</span><br />
+      <span id="fps" class="muted"></span></div>
+    <script type="module" src="/src/lab3d/main.ts"></script>
+  </body>
+</html>
