@@ -1,3 +1,4 @@
+import { laneMood } from "@engine/game/union";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
@@ -4123,5 +4124,71 @@ describe("the far clusters' offers (clusters.ts; brief, Revision 5: a reason for
     for (let i = 0; i < 4 * SECONDS_PER_GAME_DAY * 30; i += 1) gameTick(w, SIM_DT);
     expect(w.term!.number).toBe(2);
     expect(w.term!.pledges.some((p) => p.kind === "reach")).toBe(true);
+  }, 60_000);
+});
+
+describe("the union as a party (union.ts; brief, Revision 5: the union, agreed 2026-10-25)", () => {
+  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 2418, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...overrides });
+  /** A home road between two towns, paved and laned. */
+  const laned = (w: GameWorld) => {
+    const homeIds = new Set(w.unions!.find((u) => u.id === "home")!.towns);
+    const road = w.simulation.map.segments.find((s) => s.type === "road" && homeIds.has(s.fromNodeId) && homeIds.has(s.toNodeId))!;
+    const [a, b] = [road.fromNodeId, road.toNodeId];
+    expect(applyAction(w, { kind: "pave", a, b }).ok).toBe(true);
+    expect(applyAction(w, { kind: "lane", a, b }).ok).toBe(true);
+    return [a, b] as const;
+  };
+  const tick = (w: GameWorld, days: number) => { const events: GameEvent[] = []; for (let i = 0; i < days * SECONDS_PER_GAME_DAY * 30; i += 1) events.push(...gameTick(w, SIM_DT)); return events; };
+
+  test("a chairman for the home cluster and each far one, wary to begin", () => {
+    const w = start();
+    expect(w.unions!.length).toBe(1 + (w.clusters?.length ?? 0));
+    for (const u of w.unions!) { expect(u.stance).toBe(0); expect(u.chairman.length).toBeGreaterThan(3); expect(u.towns.length).toBeGreaterThan(0); }
+  }, 60_000);
+
+  test("a bus lane angers him and brings a demand with a deadline; paying meets it and pleases him", () => {
+    const w = start();
+    laned(w);
+    const home = w.unions!.find((u) => u.id === "home")!;
+    expect(home.stance).toBeLessThan(0);
+    expect(home.demand?.kind).toBe("lane");
+    const before = home.stance;
+    const funds = w.economy.funds;
+    const price = home.demand!.price;
+    expect(applyAction(w, { kind: "union", unionId: "home", answer: "pay" }).ok).toBe(true);
+    expect(w.economy.funds).toBeCloseTo(funds - price, 6);
+    expect(home.stance).toBeGreaterThan(before);
+    expect(home.demand).toBeNull();
+  }, 60_000);
+
+  test("conceding eases the lane; refusing, or letting the deadline pass, brings a strike", () => {
+    const w = start();
+    const [a, b] = laned(w);
+    expect(applyAction(w, { kind: "union", unionId: "home", answer: "concede" }).ok).toBe(true);
+    const lane = laneOn(w, a, b)!;
+    expect(lane.enforcement).toBe("lax");
+    expect(lane.encroachment).toBeGreaterThanOrEqual(0.5);
+    // A second lane's demand, ignored past its deadline: he strikes.
+    const w2 = start();
+    laned(w2);
+    const events = tick(w2, (w2.tuning.unionDemandDays ?? 7) + 1);
+    expect(events.some((e) => e.kind === "union-answered" && e.answer === "ignored")).toBe(true);
+    expect(events.some((e) => e.kind === "strike-announced")).toBe(true);
+  }, 120_000);
+
+  test("against you, a lane's grievance builds faster; with you, slower", () => {
+    const w = start();
+    const [a, b] = laned(w);
+    const lane = laneOn(w, a, b)!;
+    const home = w.unions!.find((u) => u.id === "home")!;
+    home.stance = -0.8;
+    expect(laneMood(w, lane).grievance).toBeGreaterThan(2);
+    home.stance = 0.8;
+    expect(laneMood(w, lane).grievance).toBeLessThan(0.6);
+  }, 60_000);
+
+  test("a run played before it (no unionEnabled) has none", () => {
+    const w = start({ unionEnabled: undefined });
+    expect(w.unions).toBeUndefined();
   }, 60_000);
 });

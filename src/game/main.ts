@@ -675,6 +675,12 @@ function announce(event: GameEvent): void {
   } else if (event.kind === "swept") {
     // The budget year's end (sweep.ts): only said when it took something.
     if (event.amount >= 1) say(`The budget year ended: ${naira(event.amount)} above what you may carry over went back to the treasury. Name a project to keep money for it.`, true, 9);
+  } else if (event.kind === "union-demand") {
+    say(`${event.chairman} demands: "${event.text}" Answer by day ${gameDay(world, event.deadlineAt) - 1}: it's in Waiting on you.`, true, 12);
+  } else if (event.kind === "union-answered") {
+    if (event.answer === "ignored") say(`${event.chairman}: you ignored him. His drivers strike.`, true, 9);
+  } else if (event.kind === "union-stance") {
+    say(`${event.chairman}'s union is ${event.stance} now.`, event.stance === "against you", 8);
   } else if (event.kind === "term-started") {
     say(`Term ${event.number} begins: the state offers ${event.pledges.length} pledges, from what your towns need now. Pledge up to two, in the strip.`, false, 10);
   } else if (event.kind === "pledge-kept") {
@@ -2697,6 +2703,14 @@ function onPanelClick(event: MouseEvent): void {
     const [routeId, rate] = target.dataset.freightRate.split("|") as [string, FreightRate];
     const result = act({ label: `freight at the ${rate} rate`, towns: [], routeId }, { kind: "freightRate", routeId, rate });
     say(result.ok ? `Freight on that line now at the ${rate} rate${rate === "dear" ? ": more a tonne, and hauliers will take more of its goods by road" : rate === "cheap" ? ": less a tonne, more of its goods by your trains, fewer trucks on the roads" : ""}.` : `Can't set the rate: ${result.reason}`, !result.ok, 7);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.union) {
+    const [unionId, answer] = target.dataset.union.split("|") as [string, "pay" | "concede" | "coop" | "refuse"];
+    const result = act({ label: "an answer to the union", towns: [] }, { kind: "union", unionId, answer });
+    const chairman = world.unions?.find((u) => u.id === unionId)?.chairman ?? "The chairman";
+    say(result.ok ? `${chairman}: ${{ pay: `you paid his members ${naira(result.amount ?? 0)}. He'll remember it.`, concede: "you eased the lane. His danfos are back in it, and he'll remember it.", coop: "you handed him the route: his cooperative runs it now, the fares are his. He won't forget it.", refuse: "you refused him. Expect a strike." }[answer]}` : `Can't: ${result.reason}`, !result.ok || answer === "refuse", 9);
     renderPanel();
     return;
   }

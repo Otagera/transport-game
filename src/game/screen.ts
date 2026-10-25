@@ -1,3 +1,4 @@
+import { routeAlong, stanceWord, unionOf } from "@engine/game/union";
 import { clusterOf, clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad } from "@engine/game/private";
 import { aWeekOnText, termVerdictText, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
@@ -146,6 +147,15 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   }
   type Site = ReturnType<typeof site>;
 
+  /** A town's union: its chairman, how he stands with you, and what he last remembers (union.ts). */
+  function unionHtml(townId: string): string {
+    const union = unionOf(world, townId);
+    if (!union) return "";
+    const last = union.memory.at(-1);
+    const mood = stanceWord(union.stance);
+    return `<p class="muted">Union: <b>${esc(union.chairman)}</b>, ${mood}${last ? `. He remembers ${esc(last.text)} (day ${last.day})` : ""}.</p>`;
+  }
+
   /** A far cluster's regional town: what the cluster offers your chains, and how much reaches you (clusters.ts). */
   function offerHtml(townId: string): string {
     const cluster = clusterOf(world, townId);
@@ -286,6 +296,19 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const left = term ? MAX_COMMITTED - term.pledges.filter((p) => p.committed).length : 0;
     if (term && left > 0 && term.pledges.some((p) => !p.committed)) {
       items.push({ text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
+    }
+    // The unions' demands (union.ts): who's asking, how he stands, his words, the deadline, and your answers.
+    for (const union of world.unions ?? []) {
+      const d = union.demand;
+      if (!d) continue;
+      const where = union.id === "home" ? "your home cluster's" : `${nameOf(union.id)}'s`;
+      const buttons = [
+        `<button data-union="${union.id}|pay">Pay his members · ${nairaK(d.price)}</button>`,
+        d.kind === "lane" && world.lanes.some((l) => (l.a === d.a && l.b === d.b) || (l.a === d.b && l.b === d.a)) ? `<button data-union="${union.id}|concede">Ease the lane</button>` : "",
+        routeAlong(world, d.a, d.b) ? `<button data-union="${union.id}|coop">Hand him the route</button>` : "",
+        `<button data-union="${union.id}|refuse">Refuse</button>`,
+      ].join("");
+      items.push({ text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
     }
     // Your pledges this term, not yet kept: first, with the town (its panel has the move).
     for (const p of world.term?.pledges ?? []) {
@@ -583,6 +606,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       return `<div class="kicker">Town · ${t.trend}${t.roadside ? " · grew on the road" : ""}</div>
         <div class="head"><div class="title">${esc(t.name)}</div><div class="num">${int(t.population)}k</div></div>
         ${offerHtml(t.id)}
+        ${unionHtml(t.id)}
         ${problemHtml(townProblem(t))}
         <div class="tiles">
           ${tile("People", `${int(t.population)}k`, t.base ? `${since >= 0 ? "+" : ""}${pct(since)} since day 1` : "")}
@@ -692,6 +716,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "project-lapse-warning": return { text: `${ab(e)}: the project money lapses soon`, tone: "bad", group: "money", select: { kind: "town", id: e.a } };
       case "project-lapsed": return { text: `${ab(e)}: the project lapsed, the treasury took ${nairaK(e.taken)}`, tone: "bad", group: "money", select: null };
       case "project-done": return { text: `${ab(e)}: the ${e.rung === "lane" ? "bus lane" : "rail"} is built`, tone: "good", group: "money", select: { kind: "town", id: e.a } };
+      case "union-demand": return { text: `${e.chairman}: "${e.text}"`, tone: "bad", group: "trouble", select: null };
+      case "union-answered": return { text: `${e.chairman}: ${{ pay: "you paid his members", concede: "you eased the lane", coop: "you handed him the route", refuse: "you refused him", ignored: "you ignored him: he strikes" }[e.answer]}`, tone: e.answer === "refuse" || e.answer === "ignored" ? "bad" : "good", group: "trouble", select: null };
+      case "union-stance": return { text: `${e.chairman}'s union is ${e.stance} now`, tone: e.stance === "with you" ? "good" : e.stance === "against you" ? "bad" : "", group: "trouble", select: null };
       case "term-started": return { text: `Term ${e.number} began: ${e.pledges.length} pledges on offer`, tone: "", group: "growth", select: null };
       case "pledge-kept": return { text: `Pledge kept: ${e.text}`, tone: "good", group: "growth", select: { kind: "town", id: e.townId } };
       case "term-ended": return { text: termVerdictText(e), tone: e.missed.length > e.kept.length ? "bad" : "good", group: "growth", select: null };

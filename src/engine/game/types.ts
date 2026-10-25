@@ -1,4 +1,6 @@
 import type { TermState } from "./term";
+import type { UnionState } from "./union";
+import type { GameEvent } from "./settlement";
 import type { LaneState } from "./pushback";
 import type { NamedProject } from "./project";
 import type { PathResult, RoutingContext, SimulationState } from "../simulation/types";
@@ -222,6 +224,13 @@ export interface GameTuning {
    * what size (thousands); the share expected there; added a thousand people; at most.
    */
   /** Terms and pledges (term.ts, Revision 5, 2): on; a term's length, days. Absent in runs played before them: off. */
+  /** The union as a party (union.ts): on; days between an against-you chairman's demands; a demand's deadline, days; its price, a base and per thousand of his towns' people; how long he remembers, days. Absent in older runs: off. */
+  unionEnabled?: boolean;
+  unionDemandEveryDays?: number;
+  unionDemandDays?: number;
+  unionPriceBase?: number;
+  unionPricePerThousand?: number;
+  unionMemoryDays?: number;
   /** The far clusters' offers (clusters.ts): on; a limestone field's output against a quarry's; a farm belt's staple against a farm town's. Absent in older runs: off. */
   clusterOffersEnabled?: boolean;
   fieldOutputScale?: number;
@@ -664,6 +673,10 @@ export interface GameTuning {
 
 export interface GameWorld {
   /** The home cluster's box on a region map (region.ts): where the camera starts. Absent: all of it. */
+  /** Each cluster's union and its chairman (union.ts); absent when the union is off. */
+  unions?: UnionState[];
+  /** What the union did between ticks (an answer, an action's effect), reported with the next tick's events. */
+  union?: { events: GameEvent[] };
   /** The region's far clusters and their offers (clusters.ts); absent on the slice map. */
   clusters?: ClusterDef[];
   home?: { x: number; y: number; width: number; height: number };

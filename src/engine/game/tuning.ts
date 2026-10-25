@@ -147,6 +147,13 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // near it. A city that grows by 100k fills its approaches by itself; one that doesn't adds little.
   // The far clusters' offers (clusters.ts; brief, Revision 5): a limestone field for your
   // cement works, or a farm belt for your mill -- far, so reaching it is a project.
+  // The union as a party (union.ts; agreed 2026-10-25): a chairman a cluster, with a stance and demands.
+  unionEnabled: true,
+  unionDemandEveryDays: 20,
+  unionDemandDays: 7,
+  unionPriceBase: 400,
+  unionPricePerThousand: 4,
+  unionMemoryDays: 120,
   clusterOffersEnabled: true,
   fieldOutputScale: 2,
   farmBeltScale: 2,
