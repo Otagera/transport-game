@@ -79,6 +79,7 @@ import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type Overl
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { createScreen } from "./screen";
 import { shortVerdict } from "./verdicts";
+import type { View3D } from "./view3d";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
 // list, one strip:
@@ -230,6 +231,18 @@ let hoverTown: string | null = null;
 let mouse: { x: number; y: number } | null = null;
 let speed = 1;
 let paused = false;
+// The watch-only 3D view (view3d.ts): three.js loads the first time you switch to it.
+let view3d: View3D | null = null;
+let in3d = false;
+async function toggle3d(): Promise<void> {
+  in3d = !in3d;
+  if (in3d && !view3d) view3d = (await import("./view3d")).createView3D();
+  if (in3d) view3d?.show(world);
+  else view3d?.hide();
+  // The overlays are the 2D map's; the 3D view shows traffic on its roads.
+  document.querySelector<HTMLElement>("#overlays")!.style.display = in3d ? "none" : "";
+  renderZoomControl();
+}
 let view: View = { scale: 1, offsetX: 0, offsetY: 0 };
 
 const naira = (n: number) => `${n < 0 ? "−" : ""}₦${Math.abs(Math.round(n)).toLocaleString()}`;
@@ -315,11 +328,13 @@ function renderZoomControl(): void {
     document.body.appendChild(el);
     el.addEventListener("click", (event) => {
       const z = (event.target as HTMLElement).dataset.zoom;
-      if (z === "fit") { zoom = 1; applyZoom(); }
+      if (z === "3d") void toggle3d();
+      else if (z === "fit") { zoom = 1; applyZoom(); }
       else if (z) zoomAt(window.innerWidth / 2, window.innerHeight / 2, z === "in" ? 1.5 : 1 / 1.5);
     });
   }
-  el.innerHTML = `<button data-zoom="in" title="Zoom in (or the wheel)">+</button><button data-zoom="out" title="Zoom out">−</button>${zoom > 1.0001 ? `<button data-zoom="fit" title="The whole map (0)">Fit · ${zoom.toFixed(1)}×</button>` : ""}`;
+  const toggle = `<button data-zoom="3d" title="${in3d ? "Back to the map, to build" : "Watch your game in 3D (drag to turn, wheel to zoom)"}">${in3d ? "Map" : "3D"}</button>`;
+  el.innerHTML = in3d ? toggle : `<button data-zoom="in" title="Zoom in (or the wheel)">+</button><button data-zoom="out" title="Zoom out">−</button>${zoom > 1.0001 ? `<button data-zoom="fit" title="The whole map (0)">Fit · ${zoom.toFixed(1)}×</button>` : ""}${toggle}`;
 }
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
@@ -3000,7 +3015,8 @@ function frame(now: number): void {
     }
   }
   const picked = screen.focus;
-  draw(ctx, world, view, {
+  if (in3d && view3d) view3d.frame(world);
+  else draw(ctx, world, view, {
     selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay,
     focusTown: focusTown() ?? (picked && picked.kind !== "route" && picked.kind !== "segment" ? picked.id : null),
     focusRoute: focusRoute ?? (picked?.kind === "route" ? picked.id : null),
