@@ -40,6 +40,8 @@ export interface IndustryState {
   closesAtSeconds: number;
   /** Rolling tonnes a second of its output delivered (any vehicle): what keeps it open past its grace. */
   deliveredEMA: number;
+  /** A far cluster's limestone field (clusters.ts): never works out or closes, makes more, and doesn't count against the quarries that open. */
+  field?: boolean;
 }
 
 /** Stone: building supplies, carried as the supplies cargo kind, told apart by where it comes from. */
@@ -82,7 +84,8 @@ export function industryFlows(world: GameWorld): GoodsFlow[] {
     const cement = world.cement!;
     if (!cement.working) return flows;
     for (const industry of world.industries.values()) {
-      if (world.towns.has(industry.id)) flows.push({ from: industry.id, to: cement.worksId, kind: "supplies", rate: (tuning.quarryOutputPerDay * staffFactor(world, industry.id)) / SECONDS_PER_GAME_DAY });
+      const scale = industry.field ? tuning.fieldOutputScale ?? 1 : 1;
+      if (world.towns.has(industry.id)) flows.push({ from: industry.id, to: cement.worksId, kind: "supplies", rate: (scale * tuning.quarryOutputPerDay * staffFactor(world, industry.id)) / SECONDS_PER_GAME_DAY });
     }
     return flows;
   }
@@ -137,6 +140,7 @@ export function updateIndustries(world: GameWorld, dt: number): GameEvent[] {
     const age = now - industry.openedAtSeconds;
     const unserved = age >= tuning.industryGraceDays * SECONDS_PER_GAME_DAY && industry.deliveredEMA * SECONDS_PER_GAME_DAY < tuning.industryMinDeliveredPerDay;
     const workedOut = now >= industry.closesAtSeconds;
+    if (industry.field) continue; // a far cluster's field waits for you (clusters.ts)
     if (unserved || workedOut) events.push(closeIndustry(world, industry, workedOut ? "worked out" : "nothing moved"));
   }
   if (now >= world.industrySchedule.nextAtSeconds) {
@@ -145,7 +149,8 @@ export function updateIndustries(world: GameWorld, dt: number): GameEvent[] {
     // An idle works wants no limestone: no quarry opens for it until it runs (cement.ts).
     // An expanded works lets one more quarry open for it at a time (expand.ts).
     const maxOpen = tuning.industryMaxOpen + (cementActive(world) ? expandLevel(world, world.cement!.worksId) : 0);
-    if (world.industries.size < maxOpen && (!cementActive(world) || world.cement!.working)) {
+    const quarries = [...world.industries.values()].filter((industry) => !industry.field).length;
+    if (quarries < maxOpen && (!cementActive(world) || world.cement!.working)) {
       const opened = openQuarry(world);
       if (opened) events.push(opened);
     }

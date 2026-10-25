@@ -1,3 +1,5 @@
+import { farmland } from "@engine/game/food";
+import { clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
 import { fuelReach } from "@engine/game/fuel";
 import type { GameEvent } from "@engine/game/settlement";
@@ -2924,8 +2926,9 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       const box = w.home!;
       const info = regionInfo(GAME_MAP, seed);
       expect(w.port).toBe(info.home.map.port!); // inland, a dry port
-      // Steel's works and mine are placed over the whole region on purpose (steel.ts: a long haul).
-      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine");
+      // Steel's works and mine are placed over the whole region on purpose (steel.ts: a long haul),
+      // and so are the far clusters' limestone fields (clusters.ts).
+      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-"));
       expect(sites.length).toBeGreaterThanOrEqual(4);
       for (const s of sites) expect(s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height).toBe(true);
     }
@@ -4079,5 +4082,46 @@ describe("private traffic (private.ts; brief, Revision 5, Ideas parked)", () => 
     const w = start({ privateTrafficEnabled: undefined });
     for (let i = 0; i < 60; i += 1) gameTick(w, SIM_DT);
     expect(w.privateFlow).toBeUndefined();
+  }, 60_000);
+});
+
+describe("the far clusters' offers (clusters.ts; brief, Revision 5: a reason for each far cluster)", () => {
+  const start = (seed: number, overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, ...overrides });
+
+  test("every region's far clusters offer something: limestone in the hills, a farm belt elsewhere, one of each", () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const { map } = regionInfo(GAME_MAP, seed);
+      const offers = map.clusters!.map((c) => c.offer);
+      expect(offers.length).toBeGreaterThanOrEqual(2);
+      expect(offers).toContain("limestone");
+      expect(offers).toContain("farm");
+      for (const c of map.clusters!) expect(c.towns[0]).toBe(c.hub);
+    }
+  }, 60_000);
+
+  test("a limestone field: placed by its hub, permanent, twice a quarry, and not counted against the quarries that open", () => {
+    const w = start(2418, { cementEnabled: true });
+    const cluster = w.clusters!.find((c) => c.offer === "limestone")!;
+    const field = w.industries.get(`field-${cluster.hub}`);
+    if (!w.cement) return; // a map without the building chain has no field
+    expect(field?.field).toBe(true);
+    expect(field!.closesAtSeconds).toBe(Infinity);
+    const site = w.towns.get(field!.id)!;
+    const hub = w.towns.get(cluster.hub)!;
+    expect(Math.hypot(site.x - hub.x, site.y - hub.y)).toBeLessThanOrEqual(15);
+    expect(clusterOfferShare(w, cluster)).not.toBeNull();
+  }, 60_000);
+
+  test("a farm belt's towns grow twice the staple; term 2 asks you to bring an offer home", () => {
+    const w = start(2418, { termDays: 3 });
+    const belt = w.clusters!.find((c) => c.offer === "farm")!;
+    const town = w.towns.get(belt.towns[1] ?? belt.towns[0]!)!;
+    const land = farmland(w, town);
+    w.tuning.farmBeltScale = 1;
+    expect(land).toBeCloseTo(farmland(w, town) * 2, 6);
+    w.tuning.farmBeltScale = 2;
+    for (let i = 0; i < 4 * SECONDS_PER_GAME_DAY * 30; i += 1) gameTick(w, SIM_DT);
+    expect(w.term!.number).toBe(2);
+    expect(w.term!.pledges.some((p) => p.kind === "reach")).toBe(true);
   }, 60_000);
 });

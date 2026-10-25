@@ -1,3 +1,4 @@
+import { placeClusterOffers } from "./clusters";
 import { startTerms } from "./term";
 import type { GameMapDef, GameTuning, GameWorld } from "./types";
 import { placeFuelSites } from "./fuel";
@@ -57,6 +58,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeMill(world, map.region);
   // And the steel chain (steel.ts): after the rest, so every other site sits where it did.
   placeSteel(world, map.region);
+  // And each far cluster's offer (clusters.ts): a limestone field in its hills.
+  placeClusterOffers(world);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) {
     gameTick(world, SIM_DT);

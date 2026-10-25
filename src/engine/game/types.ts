@@ -86,6 +86,14 @@ export interface GameMapDef {
   rails?: GameRoadDef[];
   /** The region (region.ts): the home cluster's box, where you start and the camera frames. Absent: the whole map is home. */
   home?: { x: number; y: number; width: number; height: number };
+  /** The region's far clusters: each its regional town, its towns, and what it offers your chains (clusters.ts). */
+  clusters?: ClusterDef[];
+}
+
+export interface ClusterDef {
+  hub: string;
+  towns: string[];
+  offer: "limestone" | "farm";
 }
 
 /** A player route: an A<->B shuttle, running however many buses. */
@@ -214,6 +222,10 @@ export interface GameTuning {
    * what size (thousands); the share expected there; added a thousand people; at most.
    */
   /** Terms and pledges (term.ts, Revision 5, 2): on; a term's length, days. Absent in runs played before them: off. */
+  /** The far clusters' offers (clusters.ts): on; a limestone field's output against a quarry's; a farm belt's staple against a farm town's. Absent in older runs: off. */
+  clusterOffersEnabled?: boolean;
+  fieldOutputScale?: number;
+  farmBeltScale?: number;
   /** Private traffic (private.ts): on; the load a thousand people's cars make (danfo-equivalents a second), the share of a town's size that drives (its growth since day 1 drives whole), how far from a town it fades, cells. Absent in older runs: off. */
   privateTrafficEnabled?: boolean;
   privatePerThousand?: number;
@@ -652,6 +664,8 @@ export interface GameTuning {
 
 export interface GameWorld {
   /** The home cluster's box on a region map (region.ts): where the camera starts. Absent: all of it. */
+  /** The region's far clusters and their offers (clusters.ts); absent on the slice map. */
+  clusters?: ClusterDef[];
   home?: { x: number; y: number; width: number; height: number };
   /** The map's rivers and sea as drawn lines, for the screen to draw smooth (the terrain's water is their cells). */
   waterLines?: GameRiverDef[];

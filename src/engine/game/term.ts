@@ -1,3 +1,4 @@
+import { clusterOf, clusterOfferShare } from "./clusters";
 import type { GameWorld } from "./types";
 import type { GameEvent } from "./settlement";
 import type { ActionSpec } from "./actions";
@@ -29,7 +30,7 @@ import { fuelSupply, inHome } from "./fuel";
 // Plain data on the world, changed only here and by the `pledge` and `console` actions, so
 // a run file replays it. Off (and absent) when the run's tuning has no `pledgesEnabled`.
 
-export type PledgeKind = "connect" | "cement" | "fuel" | "seats" | "service" | "grow";
+export type PledgeKind = "connect" | "cement" | "fuel" | "seats" | "service" | "grow" | "reach";
 
 export interface Pledge {
   id: string;
@@ -90,6 +91,10 @@ export function pledgeValue(world: GameWorld, pledge: Pledge): number {
     case "seats": return townNoSeat(world, pledge.townId)?.perDay ?? 0;
     case "service": return townGrowth(world, pledge.townId)?.playerShare ?? 0;
     case "grow": return world.towns.get(pledge.townId)?.population ?? 0;
+    case "reach": {
+      const cluster = clusterOf(world, pledge.townId);
+      return cluster ? clusterOfferShare(world, cluster)?.share ?? 0 : 0;
+    }
   }
 }
 
@@ -104,6 +109,7 @@ export function pledgeNow(world: GameWorld, pledge: Pledge): string {
     case "cement": case "fuel": case "service": return `now ${Math.round(value * 100)}%`;
     case "seats": return `now ${Math.round(value)} a day`;
     case "grow": return `now ${Math.round(value)}k`;
+    case "reach": return `now ${Math.round(value * 100)}% arriving`;
   }
 }
 
@@ -150,6 +156,19 @@ function offerPledges(world: GameWorld, number: number, missedLast: Set<string>)
     }
     const to = Math.ceil(town.population * 1.15);
     candidates.push({ pledge: { kind: "grow", townId: town.id, text: `${name} to ${to}k`, from: town.population, target: to }, weight: town.population * 0.05 });
+  }
+  // From term 2, a far cluster's offer (clusters.ts): bring half of it home. Weighted to lead:
+  // it's the reason to go out to the region.
+  if (number > 1) {
+    for (const cluster of world.clusters ?? []) {
+      const offer = clusterOfferShare(world, cluster);
+      const hub = world.towns.get(cluster.hub);
+      if (!offer || !hub || offer.share >= 0.5) continue;
+      const text = cluster.offer === "limestone"
+        ? `Bring ${hub.name}'s limestone to your cement works: half of its ${Math.round(offer.perDay)} t a day`
+        : `Bring ${hub.name}'s farm belt to your mill: half of its ${Math.round(offer.perDay)} t a day`;
+      candidates.push({ pledge: { kind: "reach", townId: hub.id, text, from: offer.share, target: 0.5 }, weight: 1e6 + hub.population });
+    }
   }
   candidates.sort((p, q) => q.weight - p.weight);
   // A pledge just missed doesn't come straight back (Katsina-Ala's seats was offered three terms running).

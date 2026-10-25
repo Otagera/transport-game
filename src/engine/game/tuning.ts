@@ -145,6 +145,11 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   fuelWithinReach: true,
   // Private traffic (private.ts; your idea, 2026-10-24): a growing town's cars fill the roads
   // near it. A city that grows by 100k fills its approaches by itself; one that doesn't adds little.
+  // The far clusters' offers (clusters.ts; brief, Revision 5): a limestone field for your
+  // cement works, or a farm belt for your mill -- far, so reaching it is a project.
+  clusterOffersEnabled: true,
+  fieldOutputScale: 2,
+  farmBeltScale: 2,
   privateTrafficEnabled: true,
   privatePerThousand: 0.1,
   privateBaseShare: 0.05,

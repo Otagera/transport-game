@@ -434,6 +434,7 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
 
   // A range of hills between two clusters, clear of every town.
   const pairs = shuffle(rng, [[homeBox.x + HOME_WIDTH / 2, homeBox.y + HOME_HEIGHT / 2], ...centres.map((c) => [c.x, c.y])].flatMap((a, i, all) => all.slice(i + 1).map((b) => [a, b] as const)));
+  let ridge: { a: readonly number[]; b: readonly number[] } | null = null;
   for (const [a, b] of pairs) {
     // A range, not a row of knolls: hills overlapping along a bowed spine across the
     // line between the two, highest in the middle, tapering at the ends.
@@ -461,6 +462,7 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
     }
     if (range.every((h) => towns.every((t) => distance(t, h) >= h.radius + 2) && inBounds(h) && toBox(h, homeBox) >= h.radius)) {
       hills.push(...range);
+      ridge = { a, b };
       break;
     }
   }
@@ -497,6 +499,14 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
     }
   }
   if (reach.componentCount() !== 1) return null;
+
+  // What each far cluster offers your chains (clusters.ts): a cluster the range runs to has
+  // limestone in its hills; the rest are farm belts. At least one of each where there are two.
+  const nearRidge = (c: Point) => (ridge ? Math.min(Math.hypot(c.x - ridge.a[0]!, c.y - ridge.a[1]!), Math.hypot(c.x - ridge.b[0]!, c.y - ridge.b[1]!)) : Infinity);
+  const offers: Array<"limestone" | "farm"> = centres.map((c) => (nearRidge(c) < 1 ? "limestone" : "farm"));
+  if (!offers.includes("limestone") && offers.length > 0) offers[centres.map(nearRidge).indexOf(Math.min(...centres.map(nearRidge)))] = "limestone";
+  if (!offers.includes("farm") && offers.length > 1) offers[offers.length - 1] = "farm";
+  map.clusters = clusters.map((cluster, k) => ({ hub: cluster[0]!.id, towns: cluster.map((t) => t.id), offer: offers[k]! }));
 
   return { map, hubs: [city.id, ...hubs.map((h) => h.id)], seaport };
 }

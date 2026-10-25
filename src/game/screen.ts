@@ -1,3 +1,4 @@
+import { clusterOf, clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad } from "@engine/game/private";
 import { aWeekOnText, termVerdictText, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
 import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
@@ -144,6 +145,21 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return { id, product: p?.product ?? null, made: p ? p.made * D : 0, capacity: p ? p.capacity * D : 0, limit: p?.limit ?? null, staffing: p?.staffing ?? null, shipped: p?.shipped ?? null };
   }
   type Site = ReturnType<typeof site>;
+
+  /** A far cluster's regional town: what the cluster offers your chains, and how much reaches you (clusters.ts). */
+  function offerHtml(townId: string): string {
+    const cluster = clusterOf(world, townId);
+    if (!cluster || cluster.hub !== townId) return "";
+    const offer = clusterOfferShare(world, cluster);
+    if (!offer) return "";
+    if (cluster.offer === "limestone" && world.cement && !world.cement.working) {
+      return `<div class="problem"><span>This cluster offers limestone for your cement works, from ${esc(nameOf(`field-${cluster.hub}`))}: twice a quarry's, and it never works out. Your works is idle: restore it, and the field's limestone wants carrying here.</span></div>`;
+    }
+    const what = cluster.offer === "limestone"
+      ? `limestone for your cement works: ${int(offer.perDay)} t a day from ${esc(nameOf(`field-${cluster.hub}`))}`
+      : `its farm belt's staple for your mill: ${int(offer.perDay)} t a day from ${cluster.towns.length} towns`;
+    return `<div class="problem ${offer.share >= 0.5 ? "none" : ""}"><span>This cluster offers ${what}. ${pct(offer.share)} reaches you${offer.share < 0.5 ? ": it's past the hauliers' reach. A yard here, a long road or rail brings it" : ""}.</span></div>`;
+  }
 
   /**
    * The site see-through (seethrough.ts): its inputs, the plant and its shift, a lane to each
@@ -566,6 +582,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const here = routes().filter((r) => r.stops.includes(t.id));
       return `<div class="kicker">Town · ${t.trend}${t.roadside ? " · grew on the road" : ""}</div>
         <div class="head"><div class="title">${esc(t.name)}</div><div class="num">${int(t.population)}k</div></div>
+        ${offerHtml(t.id)}
         ${problemHtml(townProblem(t))}
         <div class="tiles">
           ${tile("People", `${int(t.population)}k`, t.base ? `${since >= 0 ? "+" : ""}${pct(since)} since day 1` : "")}

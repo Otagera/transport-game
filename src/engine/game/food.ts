@@ -1,3 +1,4 @@
+import { inFarmBelt } from "./clusters";
 import type { GameTown, GameWorld } from "./types";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
@@ -84,7 +85,9 @@ export function farmTowns(world: GameWorld): GameTown[] {
 
 /** Thousands of people a farm town's land feeds: its start (its farmland doesn't grow with it), or its size before `farmsByStart`. */
 export function farmland(world: GameWorld, town: GameTown): number {
-  return world.tuning.farmsByStart ? (world.basePopulation.get(town.id) ?? town.population) : town.population;
+  const land = world.tuning.farmsByStart ? (world.basePopulation.get(town.id) ?? town.population) : town.population;
+  // A far cluster's farm belt grows more (clusters.ts).
+  return land * (inFarmBelt(world, town.id) ? world.tuning.farmBeltScale ?? 1 : 1);
 }
 
 /** Original towns at market size: they eat what the mill makes, and draw market trade. */
