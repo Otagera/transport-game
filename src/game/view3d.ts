@@ -12,11 +12,14 @@ import { MapControls } from "three/examples/jsm/controls/MapControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { GameTown, GameWorld } from "@engine/game/types";
 import type { Vehicle } from "@engine/simulation/types";
+import type { Segment } from "@engine/map/types";
 import { privateLoad } from "@engine/game/private";
 import { roadCapacity } from "@engine/game/congestion";
 import { routingFor } from "@engine/game/rail";
 import { polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/game/roads";
-import { inHome } from "@engine/game/fuel";
+import { inHome, shortageAt } from "@engine/game/fuel";
+import { growthTrend } from "@engine/game/growth";
+import { MIN_CONDITION } from "@engine/map/decay";
 import { isFlooded } from "@engine/game/floods";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { tierOf, type Tier } from "./icons";
@@ -24,7 +27,7 @@ import type { Focus } from "./render";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
-import { CONCRETE, ROOFS, WALLS, fillingStation, haulageYard, kiosk, metroEntrance, motorPark, railStation } from "./shapes3d";
+import { CONCRETE, ROOFS, WALLS, fillingStation, fuelSeller, haulageYard, kiosk, metroEntrance, motorPark, railStation } from "./shapes3d";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
 
@@ -589,7 +592,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   /** A house of a town's fabric, in its town's frame: drawn as instances, walls and roof apart. */
   interface House { x: number; y: number; z: number; w: number; d: number; h: number; rh: number; ry: number; wall: string; roof: string }
   let fabric: House[] = [];
-  function townKit(town: GameTown, tier: Tier): Kit {
+  function townKit(town: GameTown, tier: Tier, boom = false): Kit {
     fabric = [];
     const rand = seeded(town.id);
     const kit = new Kit();
@@ -674,6 +677,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       else if (centre) put(7, 0.55, (k, rr, ry) => shophouse(k, rr, 0, 0, ry));
       else put(9, 1, (k, rr, ry) => (rand() < 0.75 ? bungalow(k, rr, 0, 0, ry) : shophouse(k, rr, 0, 0, ry)));
     }
+    // A town growing past its size (growth.ts growthTrend): trade spills out -- more market
+    // umbrellas and stalls through its streets. Placed last, so the rest of it stays put.
+    if (boom && tier !== "village") {
+      const extra = tier === "city" ? 10 : tier === "regional" ? 7 : 4;
+      for (let i = 0; i < extra; i += 1) put(7, 0.75, (k, rr) => market(k, rr, 0, 0, 2 + Math.floor(rr() * 3)));
+    }
     return kit;
   }
   function siteKit(town: GameTown): { kit: Kit; x: number; z: number } {
@@ -736,7 +745,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     for (const town of [...sites, ...people]) {
       const tier = town.industry ? "village" : tierOf(town.population, town.id === cityId);
       // A step every fifth of its size (or a tier change): a growing town rebuilds now and then.
-      const key = town.industry ? `site:${town.industry}` : `${tier}:${Math.round(Math.log(Math.max(1, town.population)) * 5)}`;
+      const boom = !town.industry && growthTrend(w, town.id) === "growing";
+      const key = town.industry ? `site:${town.industry}` : `${tier}:${Math.round(Math.log(Math.max(1, town.population)) * 5)}${boom ? ":boom" : ""}`;
       const known = towns.get(town.id);
       if (known && known.key !== key) {
         scene.remove(known.mesh, known.label);
@@ -744,7 +754,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         towns.delete(town.id);
       }
       if (!towns.has(town.id)) {
-        const { kit, x, z } = town.industry ? siteKit(town) : { kit: townKit(town, tier), x: 0, z: 0 };
+        const { kit, x, z } = town.industry ? siteKit(town) : { kit: townKit(town, tier, boom), x: 0, z: 0 };
         const mesh = new THREE.Mesh(kit.merged(), material);
         mesh.position.copy(ground(town.x, town.y)).add(new THREE.Vector3(x, 0, z));
         if (!town.industry && fabric.length) mesh.add(...houses(fabric));
@@ -814,7 +824,16 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const tintColour = new THREE.Color();
   const KIND_TINT: Partial<Record<VehicleKind3D, string>> = { bus: "#2a78d6", minibus: "#4f97e8", brt: "#c0392b", train: "#2a78d6" };
   const tinted = new Set<VehicleKind3D>(["bus", "minibus", "brt", "train"]);
+  // Laterite dust behind whatever drives a worn road: rough enough to cost your buses
+  // (wear.ts roughCostFactor), it shows. One instanced mesh of puffs, three a vehicle.
+  const DUST_MAX = 3000;
+  const dust = new THREE.InstancedMesh(own(new THREE.IcosahedronGeometry(1, 1)), own(new THREE.MeshBasicMaterial({ color: 0xd8b48c, transparent: true, opacity: 0.22, depthWrite: false })), DUST_MAX);
+  dust.frustumCulled = false;
+  dust.count = 0;
+  scene.add(dust);
+  const puffAt = new THREE.Vector3(), puffScale = new THREE.Vector3(), still = new THREE.Quaternion();
   function placeVehicles(w: GameWorld): void {
+    let puffs = 0;
     const routeOf = new Map<string, string>();
     for (const route of w.routes) for (const id of route.vehicleIds) routeOf.set(id, route.id);
     const now = performance.now();
@@ -837,9 +856,22 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const heading = was === undefined ? pose.angle : was + Math.atan2(Math.sin(pose.angle - was), Math.cos(pose.angle - was)) * turn;
       headings.set(v.id, heading);
       seen.add(v.id);
+      const road = kind === "train" || kind === "freight" ? null : segmentUnder(w, v);
+      const rough = road && road.type === "road" ? (1 - road.condition) / (1 - MIN_CONDITION) : 0;
+      if (rough > 0.45 && puffs + 3 <= DUST_MAX) {
+        for (let i = 0; i < 3; i += 1) {
+          const back = (2.5 + i * 2.2) * VEHICLE_SCALE;
+          const swell = 0.8 + i * 0.7 + 0.25 * Math.sin(now / 180 + i * 2 + at.x);
+          puffAt.set(at.x - Math.cos(heading) * back, at.y + 0.6 + i * 0.6, at.z - Math.sin(heading) * back);
+          const size = swell * Math.min(1, rough * 1.4);
+          dust.setMatrixAt(puffs++, matrix.compose(puffAt, still, puffScale.set(size * 1.3, size * 0.8, size * 1.3)));
+        }
+      }
       const route = routeOf.get(v.id);
       (byKind.get(kind) ?? byKind.set(kind, []).get(kind)!).push({ at, heading, tint: tinted.has(kind) ? (route && labelOf(w, routeLabelKey(route))?.colour) || KIND_TINT[kind] : undefined });
     }
+    dust.count = puffs;
+    dust.instanceMatrix.needsUpdate = true;
     for (const id of headings.keys()) if (!seen.has(id)) headings.delete(id);
     for (const [kind, mesh] of fleets) if (!byKind.has(kind)) mesh.count = 0;
     for (const [kind, list] of byKind) {
@@ -997,6 +1029,47 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       scene.add(mesh);
       groves.set(kind, mesh);
     }
+  }
+  // Fuel sellers (fuel.ts): where a town is a third or more short, jerrycans line the roads into
+  // it, as the town card says ("Roadside sellers sell fuel at a premium"). Rebuilt when which
+  // towns are short changes.
+  let sellers: THREE.Mesh | null = null;
+  let sellersKey = "";
+  function syncSellers(w: GameWorld): void {
+    const short = [...w.towns.values()].filter((t) => !t.industry && shortageAt(w, t.id) >= 0.35);
+    const key = short.map((t) => t.id).sort().join("|") + `#${roadLines.length}`;
+    if (key === sellersKey) return;
+    sellersKey = key;
+    if (sellers) { scene.remove(sellers); sellers.geometry.dispose(); sellers = null; }
+    if (!short.length) return;
+    const kit = new Kit();
+    for (const town of short) {
+      const rand = seeded(`sellers-${town.id}`);
+      const r = reachCells.get(town.id) ?? 3;
+      for (const line of roadLines) {
+        if (!line.some((p) => Math.hypot(p.x - town.x, p.y - town.y) < r + 4)) continue;
+        const length = polylineLength(line);
+        for (let along = 0.3; along < length; along += 0.45) {
+          const [, rest] = splitPolyline(line, along);
+          const p = rest[0]!, q = rest.find((o) => Math.hypot(o.x - p.x, o.y - p.y) > 1e-6) ?? line[line.length - 1]!;
+          const d = Math.hypot(p.x - town.x, p.y - town.y);
+          if (d < r * 0.6 || d > r + 3.5 || rand() > 0.7) continue;
+          const dir = Math.atan2(q.y - p.y, q.x - p.x);
+          const side = rand() < 0.5 ? 1 : -1;
+          const nx = -Math.sin(dir) * side, ny = Math.cos(dir) * side;
+          const cx = p.x + nx * 0.9, cy = p.y + ny * 0.9;
+          const cell = Math.round(cy) * W + Math.round(cx);
+          if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2 || terrain.water[cell] === 1 || occupied[cell] === WET) continue;
+          const one = new Kit();
+          fuelSeller(one, rand, 0, 0, Math.atan2(-nx, -ny));
+          kit.place(one.merged(), cx * M, elevationAt(cx, cy) * HEIGHT - 0.05, cy * M);
+        }
+      }
+    }
+    if (kit.empty) return;
+    sellers = new THREE.Mesh(kit.merged(), material);
+    sellers.castShadow = true;
+    scene.add(sellers);
   }
   // Roadside life: kiosks strung along the roads just outside each town, and a filling station
   // on each road out of a town of some size. One mesh, rebuilt when the network changes.
@@ -1190,6 +1263,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         slowAt = now;
         colourRoads(w);
         syncTowns(w);
+        if (planted) syncSellers(w);
         if (planted) syncBuilds(w);
         if (!planted) {
           plant(w);
@@ -1224,6 +1298,13 @@ function poseOf(world: GameWorld, vehicle: Vehicle): { x: number; y: number; ang
   const prev = line[0]!;
   const angle = next === here ? Math.atan2(here.y - prev.y, here.x - prev.x) : Math.atan2(next.y - here.y, next.x - here.x);
   return { x: here.x, y: here.y, angle };
+}
+/** The road piece a vehicle is on now; null between pieces or off the map's segments. */
+function segmentUnder(world: GameWorld, vehicle: Vehicle): Segment | null {
+  const length = vehicle.path.length;
+  if (length < 2 || vehicle.pathIndex >= length) return null;
+  const edge = routingFor(world, vehicle).graph.get(vehicle.path[(vehicle.pathIndex - 1 + length) % length]!)?.find((c) => c.to === vehicle.path[vehicle.pathIndex]);
+  return (edge && world.simulation.map.segments.find((c) => c.id === edge.segmentId)) || null;
 }
 function edgeLine(world: GameWorld, from: string, to: string, vehicle: Vehicle): Point[] {
   const routing = routingFor(world, vehicle);

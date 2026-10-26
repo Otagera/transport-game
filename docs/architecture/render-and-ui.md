@@ -508,6 +508,17 @@ lattice) gathers the savanna's and hills' trees into clumps with open ground bet
 in a grove's heart, with one in thirty standing half again above the rest. The gallery forest
 by the banks and the towns' trees aren't clumped.
 
+**The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
+legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
+- **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the
+  town card's "Roadside sellers sell fuel at a premium"), jerrycan stalls line the roads into it
+  (`fuelSeller`, shapes3d.ts): one merged mesh, rebuilt when which towns are short changes.
+- **Dust.** Behind each road vehicle on a piece worn past 45% of the way to the floor (its
+  `condition`, as `roughCostFactor` reads it), three pale puffs: one instanced mesh, up to 3,000.
+- **A booming town.** A town `growthTrend` calls growing gets extra market umbrellas through its
+  streets (more in a city). They're placed after everything else in `townKit`, so a town switching in
+  or out of growth doesn't reshuffle its houses.
+
 **Kept from the old map, in the lab's style** (the lab had no need to show them): the build
 preview and its price label, the fix tool's road, strike and TAKEN/LOST tags, wardens, the
 yard/park/metro marks, emptied towns, rail track. **Gone from the map** (the cards, the overlays

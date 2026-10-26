@@ -320,6 +320,19 @@ export function kiosk(kit: Kit, rand: Rand, x: number, z: number, ry: number): v
   if (rand() < 0.5) k.box(1.2, 0.8, 0.8, "#8a6a45", 1.8, 2);
   kit.place(k.merged(), x, 0, z, ry);
 }
+/** A roadside fuel seller (a town short of fuel): a bench, jerrycans lined up beside it, a funnel, a shade. */
+export function fuelSeller(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
+  const k = new Kit();
+  k.box(1.8, 0.7, 0.8, "#8a6a45");
+  const cans = 3 + Math.floor(rand() * 4);
+  for (let i = 0; i < cans; i += 1) k.box(0.45, 0.65, 0.3, pick(rand, ["#e0a400", "#e0a400", "#2b8a3e", "#c0392b"]), -1.4 + i * 0.55, 1, 0);
+  k.cone(0.2, 0.3, "#5a5f66", 0.4, 0, 0.75, 6, 0);
+  if (rand() < 0.6) {
+    k.cylinder(0.05, 2.2, "#5a5f66", -0.4, 0, 0, 4);
+    k.cone(1.4, 0.5, pick(rand, ["#c0392b", "#2a78d6", "#e67e22", "#ffffff"]), -0.4, 0, 2.1, 8, 0);
+  }
+  kit.place(k.merged(), x, 0, z, ry);
+}
 /** A filling station: a canopy on posts over two pumps, its shop behind, its sign by the road. */
 export function fillingStation(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
   const k = new Kit();
