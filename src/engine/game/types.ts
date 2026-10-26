@@ -83,7 +83,8 @@ export interface GameMapDef {
    * for another age's needs and never fixed (principles §1, brownfield premise). */
   roads: GameRoadDef[];
   /** Step 3: authored terrain. Absent means flat dry land. */
-  terrain?: { rivers?: GameRiverDef[]; hills?: GameHillDef[] };
+  /** `valleys`: the rivers cut through the hills (terrain.ts); absent in maps drawn before it. */
+  terrain?: { rivers?: GameRiverDef[]; hills?: GameHillDef[]; valleys?: boolean };
   /** Step 4: the port city, where supplies come from (goods.ts). Absent means no supplies. */
   port?: string;
   /** Step 4: inherited railway, straight and out of service until restored (rail.ts). */
@@ -243,6 +244,8 @@ export interface GameTuning {
   floodsEnabled?: boolean;
   /** A new road over water: a causeway that floods, or a high bridge (floods.ts). Absent in older runs: off. */
   causewaysEnabled?: boolean;
+  /** Rivers cut valleys through the hills (terrain.ts). Absent in older runs: off, their maps as drawn. */
+  riverValleys?: boolean;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;

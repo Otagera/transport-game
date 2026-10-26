@@ -88,8 +88,10 @@ export interface RegionInfo {
 }
 
 /** The map a game is played on: the region when its tuning says so, else the seed's slice map. */
-export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?: boolean }): GameMapDef {
-  return tuning.regionEnabled ? regionMap(base, seed) : generatedMapInfo(base, seed).map;
+export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?: boolean; riverValleys?: boolean }): GameMapDef {
+  const map = tuning.regionEnabled ? regionMap(base, seed) : generatedMapInfo(base, seed).map;
+  // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
+  return tuning.riverValleys ? { ...map, terrain: { ...map.terrain, valleys: true } } : map;
 }
 
 export function regionMap(base: GameMapDef, seed: number): GameMapDef {

@@ -8,7 +8,7 @@
 // Draw calls kept low: the land one mesh, the water one, each road one (its colour changes),
 // each town one merged mesh, and each kind of vehicle one InstancedMesh.
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { MapControls } from "three/examples/jsm/controls/MapControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { GameTown, GameWorld } from "@engine/game/types";
 import type { Vehicle } from "@engine/simulation/types";
@@ -23,7 +23,10 @@ import { tierOf, type Tier } from "./icons";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
 
 const M = 8; // metres a map cell
-const HEIGHT = 7; // metres an elevation unit
+// Metres an elevation unit. The map's cells stand for far more than the 8 m they're drawn at,
+// so the hills are drawn low: at 7 m a unit, a 2D map's gentle hill stood up as a spike (your
+// playtest, 2026-10-26: "see another mountain in 3D").
+const HEIGHT = 2.2;
 const VEHICLE_SCALE = 1.6; // a little larger than life, to be seen from above
 const ROAD_COLOURS = { free: 0x6e6f70, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
 
@@ -51,12 +54,19 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
   labels.domElement.style.cssText = "position:absolute;inset:0;pointer-events:none;";
   host.append(labels.domElement);
   const camera = new THREE.PerspectiveCamera(40, 1, 1, 8000);
-  const controls = new OrbitControls(camera, renderer.domElement);
+  // A map's controls, not an orbit's (your playtest: "the zoom and panning in 3D is bad"): drag
+  // moves the land under your hand, right-drag (or ctrl-drag) turns and tilts, the wheel zooms
+  // toward the pointer. Panning stays level over the ground, whatever the tilt.
+  const controls = new MapControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.maxPolarAngle = Math.PI * 0.47;
+  controls.dampingFactor = 0.12;
+  controls.screenSpacePanning = false;
+  controls.maxPolarAngle = Math.PI * 0.44;
+  controls.minPolarAngle = 0.05;
   controls.zoomToCursor = true;
-  controls.minDistance = 30;
-  controls.maxDistance = 2600;
+  controls.zoomSpeed = 1.4;
+  controls.minDistance = 25;
+  controls.maxDistance = 2400;
   const resize = () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
@@ -101,6 +111,12 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
       if (built?.world !== world) this.show(world);
       built!.update(world);
       controls.update();
+      // The point you turn round stays on the ground, over hill or valley.
+      const floor = built!.groundAt(controls.target.x, controls.target.z);
+      const lift = floor - controls.target.y;
+      controls.target.y += lift;
+      camera.position.y += lift;
+      built!.cullLabels(camera);
       built!.sun.target.position.copy(controls.target);
       built!.sun.position.copy(controls.target).add(new THREE.Vector3(-400, 700, -300));
       renderer.render(built!.scene, camera);
@@ -115,11 +131,15 @@ interface Built {
   sun: THREE.DirectionalLight;
   /** The towns' and sites' meshes, for a click. */
   pickable: THREE.Object3D[];
+  /** The ground's height under a point of the 3D world. */
+  groundAt(x: number, z: number): number;
+  /** Labels shown only as near as they're readable: a village up close, the city from afar. */
+  cullLabels(camera: THREE.Camera): void;
   update(world: GameWorld): void;
   dispose(): void;
 }
 
-function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: OrbitControls, onPick: (townId: string) => void): Built {
+function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapControls, onPick: (townId: string) => void): Built {
   const { terrain } = world.simulation.map;
   const W = terrain.width;
   const H = terrain.height;
@@ -331,7 +351,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
   }
 
   // --- Towns: each one merged mesh, rebuilt when its tier or size step changes ------------
-  const towns = new Map<string, { mesh: THREE.Mesh; key: string; label: CSS2DObject; text: HTMLElement }>();
+  const towns = new Map<string, { mesh: THREE.Mesh; key: string; label: CSS2DObject; text: HTMLElement; reach: number }>();
+  // How far off (metres) each kind of label still shows.
+  const REACH: Record<string, number> = { city: 3000, regional: 1500, town: 900, village: 420, site: 600 };
   const material = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
   /** Whether a point (cells) is in a river as drawn, `pad` cells wide of it: for places near `at`. */
   function wetAround(at: { x: number; y: number }, reach: number): (x: number, y: number, pad: number) => boolean {
@@ -464,7 +486,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
         const label = new CSS2DObject(text);
         label.position.copy(ground(town.x + x / M, town.y + z / M, town.industry ? 30 : 45));
         scene.add(label);
-        towns.set(town.id, { mesh, key, label, text });
+        towns.set(town.id, { mesh, key, label, text, reach: REACH[town.industry ? "site" : tier] ?? 900 });
       }
       const entry = towns.get(town.id)!;
       const words = town.industry ? town.name : `${town.name} · ${Math.round(town.population)}k`;
@@ -568,6 +590,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
     sun,
     get pickable() {
       return [...towns.values()].map((t) => t.mesh);
+    },
+    groundAt: (x, z) => elevationAt(x / M, z / M) * HEIGHT,
+    cullLabels(cam) {
+      for (const t of towns.values()) t.label.visible = cam.position.distanceTo(t.label.position) < t.reach;
     },
     update(w) {
       // The network's shape changes rarely; check it cheaply, rebuild only then.
