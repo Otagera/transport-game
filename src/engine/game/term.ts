@@ -108,7 +108,9 @@ export function pledgeNow(world: GameWorld, pledge: Pledge): string {
   switch (pledge.kind) {
     case "connect": return value >= 1 ? "connected" : "";
     case "cement": case "fuel": case "service": return `now ${Math.round(value * 100)}%`;
-    case "seats": return `now ${Math.round(value)} a day`;
+    // Not while it's where it started: "from 220 a day (now 220 a day)" read as nothing done
+    // (outside review, 2026-10-26).
+    case "seats": return Math.round(value) === Math.round(pledge.from) ? "" : `now ${Math.round(value)} a day`;
     case "grow": return `now ${Math.round(value)}k`;
     case "reach": return `now ${Math.round(value * 100)}% arriving`;
   }
@@ -148,7 +150,7 @@ function offerPledges(world: GameWorld, number: number, missedLast: Set<string>)
     }
     const seat = townNoSeat(world, town.id);
     if (seat && seat.perDay >= 40) {
-      candidates.push({ pledge: { kind: "seats", townId: town.id, text: `Halve those left without a seat at ${name}, from ${Math.round(seat.perDay)} a day`, from: seat.perDay, target: seat.perDay / 2 }, weight: seat.perDay / 4 });
+      candidates.push({ pledge: { kind: "seats", townId: town.id, text: `Halve those left without a seat at ${name}: ${Math.round(seat.perDay)} a day to ${Math.round(seat.perDay / 2)}`, from: seat.perDay, target: seat.perDay / 2 }, weight: seat.perDay / 4 });
     }
     if (growth && growth.expected > 0 && growth.playerShare < growth.expected) {
       // What it expects, and a good step past where you are: three buses met "16% of Kabba" in three days.

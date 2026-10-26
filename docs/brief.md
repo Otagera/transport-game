@@ -1044,7 +1044,6 @@ Everything else folds into one of these or goes:
 | C30 | Geography is a decision | In your playtest you can name a crossing or a route round the hills you chose, and why |
 | C31 | The far clusters pull | By the end of term 2, you've connected at least one far cluster because it had something you wanted (not because the map was there) |
 
-||||||| 8f62abb
 ## Pass/fail checks: when slice zero is done
 
 **Slice zero is done when every check below passes; until then nothing new gets built and nothing moves to the full game.** Measured checks run in the probe (`scripts/game-probe.ts`) and become tests where they can. Played checks come from your sessions; AI checks from the harness (see Playtest protocol).
