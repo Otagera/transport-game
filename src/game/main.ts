@@ -79,6 +79,7 @@ import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type Overl
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { createScreen } from "./screen";
 import { shortVerdict } from "./verdicts";
+import { waysFor } from "@engine/game/crossings";
 import type { View3D } from "./view3d";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -469,7 +470,7 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
   switch (current) {
     case "road": {
       const chain = roadChain(world, a, b);
-      if (!chain) return { kind: "road", a, b, alignment };
+      if (!chain) return { kind: "road", a, b, alignment: wayBetween("road", a, b).way };
       if (chain.some(isDirt)) return { kind: "pave", a, b };
       // A lane already: the Road tool switches its enforcement, strict <-> lax.
       const lane = chain.every((piece) => piece.busLane) ? laneOn(world, a, b) : undefined;
@@ -477,7 +478,7 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
       return { kind: "lane", a, b };
     }
     case "track":
-      return { kind: "track", a, b, alignment };
+      return { kind: "track", a, b, alignment: trackAction(world, a, b) === "build" ? wayBetween("track", a, b).way : "cheapest" };
     case "bus":
     case "minibus":
     case "brt":
@@ -931,16 +932,18 @@ canvas.addEventListener("click", (event) => {
     if (result.ok) say(`Paved ${townName(from)} – ${townName(town)} for ${naira(cost)}: it now carries ${paveGain()}× the traffic.${later}`);
     else say(`Can't pave: ${result.reason}`, true);
   } else if (tool === "road") {
-    const cost = roadCost(world, from, town, alignment);
-    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment });
-    if (result.ok) say(`Built road ${townName(from)} – ${townName(town)} for ${naira(cost)}.${later}`);
+    const { way } = wayBetween("road", from, town);
+    const cost = roadCost(world, from, town, way);
+    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment: way });
+    if (result.ok) say(`Built road ${townName(from)} – ${townName(town)}${way === "direct" ? ", the straight way" : ""}, for ${naira(cost)}.${later}`);
     else say(`Can't build: ${result.reason}`, true);
   } else if (tool === "track") {
     const action = trackAction(world, from, town);
     const restoring = action === "restore";
-    const cost = trackCost(world, from, town, alignment);
+    const way = action === "build" ? wayBetween("track", from, town).way : "cheapest";
+    const cost = trackCost(world, from, town, way);
     const label = restoring ? `restoring the old line ${townName(from)} – ${townName(town)}` : `track ${townName(from)} – ${townName(town)}`;
-    const result = act({ label, towns }, { kind: "track", a: from, b: town, alignment });
+    const result = act({ label, towns }, { kind: "track", a: from, b: town, alignment: way });
     if (result.ok) say(restoring ? `Restored the old line ${townName(from)} – ${townName(town)} for ${naira(cost)}: trains can run on it` : action === "onroad" ? `The road ${townName(from)} – ${townName(town)} became the railway, for ${naira(cost)}.` : `Laid track ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't lay track: ${result.reason}`, true);
   } else if (tool === "freight") {
@@ -998,7 +1001,7 @@ window.addEventListener("keydown", (event) => {
   else if (event.key === "k" || event.key === "K") setTool("track");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
-  else if ((event.key === "a" || event.key === "A") && world.tuning.straightAlignmentEnabled) {
+  else if ((event.key === "a" || event.key === "A") && (world.tuning.straightAlignmentEnabled || world.tuning.crossingsEnabled)) {
     alignment = alignment === "cheapest" ? "direct" : "cheapest";
     renderToolbar();
   }
@@ -1075,15 +1078,30 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
   return { segmentId: id, at: mouse, label, forecast };
 }
 
-// The other alignment, when it's a different road: the choice made legible
+/**
+ * The way a road or track between two towns goes: the one you've picked (A) where it's a choice
+ * there -- where a river or a ridge makes straight a different road (crossings.ts) -- or else
+ * the cheapest. And the other way, if there is one.
+ */
+function wayBetween(kind: "road" | "track", a: string, b: string): { way: Alignment; other: Alignment | null } {
+  const plan = (way: Alignment) => (kind === "road" ? planRoad(world, a, b, way) : planRail(world, a, b, way));
+  const ways = waysFor(world, plan);
+  const way = ways.includes(alignment) ? alignment : "cheapest";
+  return { way, other: ways.find((w) => w !== way) ?? null };
+}
+
+/** Over a ridge or across the water: what the straight way takes on. */
+const straightWord = (plan: RoadPlan) => (plan.hillsCost >= 20 && plan.hillsCost >= plan.bridgeCost ? "over the hills" : "across the water");
+
+// The other way, when it's a choice: the choice made legible
 // (principles §1: round, or over -- say what each costs).
-function otherWay(plan: RoadPlan, other: RoadPlan | null): string {
+function otherWay(plan: RoadPlan, other: RoadPlan | null, way: Alignment): string {
   if (!other || Math.abs(other.cost - plan.cost) < 1) return "";
-  if (alignment === "direct") {
+  if (way === "direct") {
     const longer = other.length / plan.length - 1;
     return ` · round it ${naira(other.cost)}${longer >= 0.05 ? `, ${pct(longer)} longer` : ""} (A)`;
   }
-  return ` · straight ${naira(other.cost)}, ${pct(1 - other.length / plan.length)} shorter (A)`;
+  return ` · straight ${straightWord(other)} ${naira(other.cost)}, ${pct(1 - other.length / plan.length)} shorter (A)`;
 }
 
 // What a road's price is made of (principles §1: a quote must say *why*,
@@ -1165,21 +1183,22 @@ function ghost(): Ghost | null {
     return withForecast(ghost, { kind: "pave", a: selectedTown, b: to }, { label: "paving", towns: [selectedTown, to] });
   }
   if (tool === "road") {
-    const check = checkRoad(world, selectedTown, to, alignment);
-    const plan = planRoad(world, selectedTown, to, alignment);
+    const { way, other: otherWayKind } = wayBetween("road", selectedTown, to);
+    const check = checkRoad(world, selectedTown, to, way);
+    const plan = planRoad(world, selectedTown, to, way);
     if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
-    const other = planRoad(world, selectedTown, to, alignment === "direct" ? "cheapest" : "direct");
+    const other = otherWayKind ? planRoad(world, selectedTown, to, otherWayKind) : null;
     // Said up front: a road takes no fares, and costs its upkeep every day
     // (step 5). It pays in who it lets travel -- and only in money once you
     // run something on it (playtest, day 31: two roads drained the funds
     // and earned nothing).
     const keep = naira(upkeepFor(world.tuning, plan.length, plan.bridgeCells, false));
-    const label = `${alignment === "direct" ? "Direct road" : "Road"} ${naira(plan.cost)} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders} · earns no fares itself: run a bus on it`;
+    const label = `${way === "direct" ? `Road straight ${straightWord(plan)}` : "Road"} ${naira(plan.cost)} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${otherWay(plan, other, way)} · ${riders} · earns no fares itself: run a bus on it`;
     const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
-    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment }, { label: "the road", towns: [selectedTown, to] });
+    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment: way }, { label: "the road", towns: [selectedTown, to] });
   }
   if (tool === "track") {
-    const check = checkTrack(world, selectedTown, to, alignment);
+    const check = checkTrack(world, selectedTown, to, "cheapest");
     if (trackAction(world, selectedTown, to) === "onroad") {
       const label = `Track on the retired road ${naira(onRoadCost(world, selectedTown, to))} · its earthworks are done; the road goes · ${riders}`;
       const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? label : `${naira(onRoadCost(world, selectedTown, to))} · ${check.reason}` };
@@ -1190,12 +1209,14 @@ function ghost(): Ghost | null {
       const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? label : check.reason };
       return withForecast(ghost, { kind: "track", a: selectedTown, b: to, alignment }, { label: "restoring", towns: [selectedTown, to] });
     }
-    const plan = planRail(world, selectedTown, to, alignment);
-    if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
-    const other = planRail(world, selectedTown, to, alignment === "direct" ? "cheapest" : "direct");
-    const label = `${alignment === "direct" ? "Direct track" : "Track"} ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)}${otherWay(plan, other)} · ${riders}`;
-    const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
-    return withForecast(ghost, { kind: "track", a: selectedTown, b: to, alignment }, { label: "track", towns: [selectedTown, to] });
+    const { way, other: otherWayKind } = wayBetween("track", selectedTown, to);
+    const wayCheck = checkTrack(world, selectedTown, to, way);
+    const plan = planRail(world, selectedTown, to, way);
+    if (!plan) return { from: selectedTown, to: end, ok: false, label: wayCheck.ok ? "" : wayCheck.reason };
+    const other = otherWayKind ? planRail(world, selectedTown, to, otherWayKind) : null;
+    const label = `${way === "direct" ? `Track straight ${straightWord(plan)}` : "Track"} ${naira(plan.cost)}${roadWhy(plan, selectedTown, to)}${otherWay(plan, other, way)} · ${riders}`;
+    const ghost = { from: selectedTown, to: end, ok: wayCheck.ok, line: plan.polyline, label: wayCheck.ok ? label : `${naira(plan.cost)} · ${wayCheck.reason}` };
+    return withForecast(ghost, { kind: "track", a: selectedTown, b: to, alignment: way }, { label: "track", towns: [selectedTown, to] });
   }
   if (tool === "train") {
     const check = checkTrain(world, selectedTown, to);

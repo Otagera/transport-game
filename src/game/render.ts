@@ -831,6 +831,28 @@ function drawTakenLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: 
  * in the water's blue; the rest named only zoomed in, where you'd look for a crossing.
  */
 function drawFords(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
+  // The rivers' named crossings (crossings.ts): a narrows, a crossing beside a town -- named
+  // zoomed in, with a tick on each bank, where you'd look for a place to cross.
+  if (world.crossings && markScale * markScale >= 2) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "italic 10px system-ui, sans-serif";
+    ctx.strokeStyle = COLORS.labelMuted;
+    ctx.lineWidth = 1.5;
+    for (const c of world.crossings) {
+      for (const b of c.banks) {
+        const p = toScreen(view, b.x, b.y);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const p = toScreen(view, c.x, c.y);
+      ctx.fillStyle = COLORS.labelMuted;
+      ctx.fillText(c.name, p.x, p.y - 10 * markScale);
+    }
+    ctx.restore();
+  }
   const floods = world.floods;
   if (!floods) return;
   ctx.save();

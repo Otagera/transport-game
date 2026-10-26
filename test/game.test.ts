@@ -1,4 +1,8 @@
 import { laneMood } from "@engine/game/union";
+import { waysFor } from "@engine/game/crossings";
+import { isWater } from "@engine/pathing/terrainAStar";
+import { SWITCHED_OFF } from "@engine/game/tuning";
+import { homeBox } from "@engine/game/fuel";
 import { fordBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
@@ -2930,7 +2934,7 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       expect(w.port).toBe(info.home.map.port!); // inland, a dry port
       // Steel's works and mine are placed over the whole region on purpose (steel.ts: a long haul),
       // and so are the far clusters' limestone fields (clusters.ts).
-      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-"));
+      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field"); // the far fields are out there by design (clusters.ts, crossings.ts)
       expect(sites.length).toBeGreaterThanOrEqual(4);
       for (const s of sites) expect(s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height).toBe(true);
     }
@@ -4275,5 +4279,68 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
   test("a run played before it (no floodsEnabled) has no fords", () => {
     const w = start({ floodsEnabled: undefined });
     expect(w.floods).toBeUndefined();
+  }, 60_000);
+});
+
+describe("named crossings, straight or round, the ridge's limestone (crossings.ts; brief, Revision 5, step 6)", () => {
+  const start = (seed: number, overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...overrides });
+  const named = (w: GameWorld, name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
+
+  test("each river's crossings are named, bank to bank within a bridge's span, clear of the fords", () => {
+    const w = start(4202);
+    expect(w.crossings!.length).toBeGreaterThan(0);
+    for (const c of w.crossings!) {
+      expect(c.name).toMatch(/(narrows|crossing)( \(\d+\))?$/);
+      for (const b of c.banks) expect(isWater(w.simulation.map.terrain, b.x, b.y)).toBe(false);
+      expect(c.span).toBeLessThan(14);
+      for (const f of w.floods!.fords) expect(Math.hypot(f.x - c.x, f.y - c.y)).toBeGreaterThanOrEqual(8);
+    }
+  }, 60_000);
+
+  test("straight across is offered where a ridge makes it a different road -- shorter, dearer -- and built as asked", () => {
+    const w = start(8510);
+    const [a, b] = [named(w, "Gashua"), named(w, "Potiskum")];
+    const ways = waysFor(w, (way) => planRoad(w, a, b, way));
+    expect(ways).toEqual(["cheapest", "direct"]);
+    const round = planRoad(w, a, b, "cheapest")!, over = planRoad(w, a, b, "direct")!;
+    expect(over.length).toBeLessThan(round.length * 0.8);
+    expect(over.cost).toBeGreaterThan(round.cost);
+    expect(applyAction(w, { kind: "road", a, b, alignment: "direct" }).ok).toBe(true);
+    expect(roadChain(w, a, b)).toBeTruthy();
+  }, 60_000);
+
+  test("on open land there's one way: straight isn't offered, and asking for it is refused", () => {
+    const w = start(8510);
+    const towns = [...w.towns.values()].filter((t) => !t.industry);
+    let checked = 0;
+    for (const p of towns) for (const q of towns) {
+      if (p.id >= q.id || roadChain(w, p.id, q.id) || checked >= 3) continue;
+      const cheapest = planRoad(w, p.id, q.id, "cheapest");
+      const direct = planRoad(w, p.id, q.id, "direct");
+      if (!cheapest || !direct || cheapest.bridgeCells > 0 || cheapest.hillsCost > 0 || direct.bridgeCells > 0 || direct.hillsCost > 0) continue;
+      checked += 1;
+      expect(waysFor(w, (way) => planRoad(w, p.id, q.id, way))).toEqual(["cheapest"]);
+      expect(applyAction(w, { kind: "road", a: p.id, b: q.id, alignment: "direct" }).ok).toBe(false);
+    }
+    expect(checked).toBeGreaterThan(0);
+  }, 60_000);
+
+  test("a limestone field on the range's heights, outside the home cluster: a quarry that never works out, out of the hauliers' reach", () => {
+    const w = start(8510);
+    const field = w.towns.get("ridge-field")!;
+    expect(field.industry).toBe("quarry");
+    expect(w.industries.get("ridge-field")!.closesAtSeconds).toBe(Infinity);
+    const box = homeBox(w);
+    expect(field.x < box.x || field.x >= box.x + box.width || field.y < box.y || field.y >= box.y + box.height).toBe(true);
+    const works = w.towns.get(w.cement!.worksId)!;
+    expect(Math.hypot(field.x - works.x, field.y - works.y)).toBeGreaterThan(40);
+  }, 60_000);
+
+  test("a run played before it (no crossingsEnabled) has none, no ridge field, and straight stays switched off", () => {
+    const w = start(8510, { crossingsEnabled: undefined, ridgeFieldEnabled: undefined });
+    expect(w.crossings).toBeUndefined();
+    expect(w.towns.has("ridge-field")).toBe(false);
+    const [a, b] = [named(w, "Gashua"), named(w, "Potiskum")];
+    expect(applyAction(w, { kind: "road", a, b, alignment: "direct" })).toEqual({ ok: false, reason: SWITCHED_OFF });
   }, 60_000);
 });

@@ -150,6 +150,10 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // The union as a party (union.ts; agreed 2026-10-25): a chairman a cluster, with a stance and demands.
   // The rains (floods.ts; brief, Revision 5, step 6): the old roads' fords flood twice a year,
   // named two weeks ahead, unless you raise a bridge at them.
+  // Named crossings and the way a road goes, and a limestone field on the range (crossings.ts;
+  // brief, Revision 5, step 6): where you cross a river, and whether over a ridge or round it.
+  crossingsEnabled: true,
+  ridgeFieldEnabled: true,
   floodsEnabled: true,
   floodFirstDayMin: 45,
   floodFirstDayMax: 75,

@@ -1000,6 +1000,13 @@ Everything else folds into one of these or goes:
   - **Ignored:** for 20 days everything on that road waits at the bank (it runs at 8% speed). Measured on seed 2418 with three buses over the Lokoja ford: fares down 80% for the flood, ₦3,300 lost; its bridge is ₦4,800, so it pays back within the year. A ford your vehicles don't cross can be left: that's the choice.
   - **The design console** gets "Rains now".
   - **Not yet in:** the other named crossings (the narrows and the dear bridge beside a town), straight-or-round at rivers, minerals in the hills beyond the limestone field.
+- **Step 6, the rest -- crossings, straight or round, the ridge's limestone:** built 2026-10-26 (crossings.ts).
+  - **Named crossings:** each river's narrows (at most two) and its crossings beside towns of 15k+ (at most two), named on the map zoomed in, clear of the fords.
+  - **Straight or round, at rivers and ridges only:** drawing a road or track, the quote says the other way where a river or a ridge makes straight a different road ("straight over the hills ₦553, 32% shorter (A)"); A takes it. On open land there's one way. A way the other beats on both price and length isn't offered. Measured: 4-17 town pairs a map get the choice.
+  - **Routing by a named crossing: tried and dropped.** Over 136 unjoined pairs on three maps, one such way was worth offering (₦50 dearer for the same length): the planner already takes the best crossing, and a bridge (₦40 a cell of water) barely costs more than the land. A crossing becomes a decision only if crossings differ in more than price -- see the proposal below.
+  - **The ridge's limestone:** a limestone field on the hill range's heights between two clusters (a quarry that never works out), 57-144 cells from your works, past the hauliers' reach: 75 t a day, a quarter of what the works wants, once you bring it -- over the ridge or round it.
+  - **Not in:** iron and coal on the range (a second iron source needs the steel chain changed; coal is a chain of its own).
+  - **Proposed, for your word: the crossing as a choice of kind.** A new road across a river chooses a *causeway* (cheap, floods with the rains like a ford) or a *high bridge* (today's price and dearer, all-weather). That makes where and how you cross a real decision, tied to the rains.
 
 ### Ideas parked (yours, 2026-10-24), with where they'd fit
 

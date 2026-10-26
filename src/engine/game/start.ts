@@ -1,5 +1,6 @@
 import { startUnions } from "./union";
 import { startFloods } from "./floods";
+import { placeCrossings, placeRidgeField } from "./crossings";
 import { placeClusterOffers } from "./clusters";
 import { startTerms } from "./term";
 import type { GameMapDef, GameTuning, GameWorld } from "./types";
@@ -62,6 +63,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeSteel(world, map.region);
   // And each far cluster's offer (clusters.ts): a limestone field in its hills.
   placeClusterOffers(world);
+  // And a limestone field on the hill range between two clusters (crossings.ts).
+  placeRidgeField(world);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) {
     gameTick(world, SIM_DT);
@@ -85,6 +88,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   startUnions(world);
   // And the old roads' fords, and when the first rains come (floods.ts).
   startFloods(world);
+  // And each river's named crossings, clear of the fords (crossings.ts).
+  placeCrossings(world);
   // Towns only: a site's workers aren't the region's people (score.ts counts the same way).
   world.startPopulation = new Map([...world.towns.values()].filter((town) => !town.industry).map((town) => [town.id, town.population]));
   world.milestones = new Map(); // growth during the warm-up isn't yours
