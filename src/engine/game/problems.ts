@@ -214,6 +214,11 @@ export function shrinkCause(world: GameWorld, townId: string): ShrinkCause | nul
   return { why: `its service is ${pct(now.service)} (yours ${pct(now.playerShare)}): not enough to hold its size`, move: serviceMove };
 }
 
+/** The move that would carry more of a town's people: its worst no seat's, else its biggest trip's. */
+export function serviceMove(world: GameWorld, townId: string): NamedMove | null {
+  return townNoSeat(world, townId)?.move ?? biggestPairMove(world, townId);
+}
+
 /** The move for a town's biggest trip with a road: what would carry more of its people. */
 function biggestPairMove(world: GameWorld, townId: string): NamedMove | null {
   let best: { other: string; demand: number } | null = null;

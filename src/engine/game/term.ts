@@ -6,9 +6,11 @@ import type { ActionSpec } from "./actions";
 import { SECONDS_PER_GAME_DAY as D } from "../economy/state";
 import { isCutOff, pairKey } from "./world";
 import { townGrowth } from "./growth";
-import { townNoSeat } from "./problems";
-import { cementServed } from "./cement";
-import { fuelSupply, inHome } from "./fuel";
+import { serviceMove, townNoSeat, type NamedMove } from "./problems";
+import { cementBreak, cementServed } from "./cement";
+import { fuelPlanned, fuelReachable, fuelSupply, inHome } from "./fuel";
+import { roadMoves } from "./moves";
+import { fieldId } from "./clusters";
 
 // Terms and pledges (docs/brief.md, Revision 5, step 2: the probe). Play runs in terms
 // of `termDays`; at each term's start the state offers three pledges, each made from a
@@ -116,6 +118,61 @@ export function pledgeNow(world: GameWorld, pledge: Pledge): string {
   }
 }
 
+/**
+ * The move that would most likely answer a pledge, with its price (outside review,
+ * 2026-10-26: a pledge read as a task with no way in -- "Connect Ota by road" said nothing
+ * of what a road there costs, the refinery's ₦60k sat apart from the fuel pledge it
+ * answers). The same moves Waiting on you and the town panel name; null when nothing one
+ * move does is the answer (a town to grow by service it already has).
+ */
+export function pledgeMove(world: GameWorld, pledge: Pledge): NamedMove | null {
+  const t = world.tuning;
+  const yard = (townId: string): NamedMove | null =>
+    world.yards.has(townId) ? null : { action: { kind: "yard", townId }, price: t.yardCost, label: `A yard at ${nameOf(world, townId)} (Y)` };
+  // The cheapest road that joins a cut-off place to a town on the network (not to a site:
+  // "a road Epe–Ilugun Garri Mill" joined it to a mill, not to anyone's trips).
+  const road = (townId: string): NamedMove | null => {
+    const best = roadMoves(world).filter((m) => m.action.a === townId && !world.towns.get(m.action.b)?.industry).sort((p, q) => p.price - q.price)[0];
+    return best ? { action: best.action, price: best.price, label: `A road ${nameOf(world, townId)}–${nameOf(world, best.action.b)} (R)` } : null;
+  };
+  const finite = (move: NamedMove | null | undefined) => (move && Number.isFinite(move.price) ? move : null);
+  switch (pledge.kind) {
+    case "connect": return road(pledge.townId);
+    case "cement": {
+      const b = cementBreak(world);
+      if (!b || !world.cement) return null;
+      if (b.kind === "idle") return { action: { kind: "restoreWorks" }, price: t.worksRestoreCost, label: "Restore the cement works" };
+      if (b.kind === "quarry") return yard(b.quarryId);
+      return b.kind === "carry" ? yard(world.cement.worksId) : null;
+    }
+    case "fuel": {
+      const fuel = world.fuel;
+      if (!fuel) return null;
+      // A yard at the tank farm sends its tankers further: the answer where imports are there
+      // but can't reach the town. Tried on the plan (fuelPlanned), not guessed; else the refinery.
+      if (t.yardsEnabled && !world.yards.has(fuel.depotId)) {
+        const before = fuelPlanned(world, pledge.townId) ?? 0;
+        world.yards.add(fuel.depotId);
+        const after = fuelPlanned(world, pledge.townId) ?? 0;
+        world.yards.delete(fuel.depotId);
+        if (after > before + 0.05) return yard(fuel.depotId);
+      }
+      if (!fuelReachable(world, pledge.townId, fuel.refineryId)) return null;
+      if (!fuel.restored) return { action: { kind: "restoreRefinery" }, price: t.refineryRestoreCost, label: "Restore the refinery" };
+      return yard(fuel.sourceId) ?? yard(fuel.refineryId);
+    }
+    case "seats": return finite(townNoSeat(world, pledge.townId)?.move);
+    case "service": case "grow": return finite(serviceMove(world, pledge.townId));
+    case "reach": {
+      const cluster = clusterOf(world, pledge.townId);
+      if (!cluster) return null;
+      // Limestone comes from the field on the ridge, a farm belt's staple from its towns.
+      const from = cluster.offer === "limestone" ? fieldId(cluster) : cluster.hub;
+      return isCutOff(world, from) ? road(from) : yard(from);
+    }
+  }
+}
+
 /** How far along, 0..1. */
 export function pledgeProgress(world: GameWorld, pledge: Pledge): number {
   if (pledge.kept) return 1;
@@ -144,8 +201,10 @@ function offerPledges(world: GameWorld, number: number, missedLast: Set<string>)
       const now = cementServed(world, town.id);
       candidates.push({ pledge: { kind: "cement", townId: town.id, text: `Cement to ${name}: 80% of what it needs`, from: now, target: 0.8 }, weight: growth.cementHeld * 2 });
     }
+    // Short by the network, not by this week's tankers (fuelPlanned).
     const fuel = fuelSupply(world, town.id)?.supplied;
-    if (fuel !== undefined && fuel < 0.6) {
+    const planned = fuelPlanned(world, town.id);
+    if (fuel !== undefined && fuel < 0.6 && planned !== null && planned < 0.6 && fuelReachable(world, town.id)) {
       candidates.push({ pledge: { kind: "fuel", townId: town.id, text: `Fuel in ${name}: 80% supplied`, from: fuel, target: 0.8 }, weight: town.population * (1 - fuel) });
     }
     const seat = townNoSeat(world, town.id);

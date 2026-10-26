@@ -10,7 +10,8 @@ import { clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
 import { fuelReach } from "@engine/game/fuel";
 import type { GameEvent } from "@engine/game/settlement";
-import { pledgeProgress } from "@engine/game/term";
+import { pledgeMove, pledgeNow, pledgeProgress } from "@engine/game/term";
+import { fuelPlanned, fuelReachable } from "@engine/game/fuel";
 import { describe, expect, test } from "bun:test";
 import { addBus, buildRoad, createGameWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/game/world";
 import { informalBudget, gameTick } from "@engine/game/tick";
@@ -3974,6 +3975,32 @@ describe("terms and pledges (brief, Revision 5, step 2: the probe)", () => {
       expect(pledgeProgress(w, p)).toBeGreaterThanOrEqual(0);
     }
   }, 60_000);
+
+  test("each pledge names a real move with its price: bought, it goes through (outside review, 2026-10-26)", () => {
+    for (const seed of [2418, 7585]) {
+      const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1 });
+      for (const p of w.term!.pledges) {
+        const move = pledgeMove(w, p);
+        if (["connect", "fuel", "cement"].includes(p.kind)) expect(move).not.toBeNull();
+        if (!move) continue;
+        expect(Number.isFinite(move.price) && move.price > 0).toBe(true);
+        const copy = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1 });
+        copy.economy.funds = 1e6;
+        expect(applyAction(copy, move.action)).toMatchObject({ ok: true });
+      }
+      // Fuel is pledged only where the network leaves a town short and a source could reach it
+      // (a 57% read just after the warm-up, planned full, reached 100% by day 40 untouched).
+      for (const p of w.term!.pledges.filter((q) => q.kind === "fuel")) {
+        expect(fuelPlanned(w, p.townId)!).toBeLessThan(0.6);
+        expect(fuelReachable(w, p.townId)).toBe(true);
+      }
+      // A seat pledge says where it's going, and no "now" until it moves.
+      for (const p of w.term!.pledges.filter((q) => q.kind === "seats")) {
+        expect(p.text).toMatch(/: \d+ a day to \d+$/);
+        expect(pledgeNow(w, p)).toBe("");
+      }
+    }
+  }, 120_000);
 
   test("you pledge two at most, once each; it's an action, so a run file replays it", () => {
     const w = start();

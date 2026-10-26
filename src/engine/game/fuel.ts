@@ -252,6 +252,35 @@ export function fuelSupply(world: GameWorld, townId: string): { supplied: number
   return { supplied: Math.min(1, imported + refined), imported, refined, second };
 }
 
+/**
+ * How much of a town's fuel the sources plan to send it, 0..1 (fuelFlows' rates against its
+ * want): short by the network, not by this week's tankers. What arrives (fuelSupply) comes in
+ * tanker loads over a rolling window, so just after the warm-up it read 57% at a town planned
+ * full, which reached 100% by day 40 with nothing done -- and was offered as a pledge, the
+ * idle refinery named as its answer (seed 7585, outside review, 2026-10-26).
+ */
+export function fuelPlanned(world: GameWorld, townId: string): number | null {
+  const demand = fuelDemand(world, townId);
+  if (!world.fuel || demand <= 0) return null;
+  const planned = fuelFlows(world).filter((f) => f.to === townId).reduce((sum, f) => sum + f.rate, 0);
+  return Math.min(1, planned / demand);
+}
+
+/**
+ * Whether a fuel source could reach the town at all: by road within a tanker's reach from a
+ * yard there (the furthest a move makes it), or by rail. A town no source reaches is short
+ * whatever you restore or build at the sites -- measured on seed 7585, eight towns stayed at
+ * 0% with the refinery restored and yards at the oilfield and the refinery -- so it's no
+ * pledge to offer, and the refinery's no answer for it.
+ */
+export function fuelReachable(world: GameWorld, townId: string, from?: string): boolean {
+  const fuel = world.fuel;
+  if (!fuel) return false;
+  const reach = Math.max(world.tuning.tankerMaxHaulCells, world.tuning.yardsEnabled ? world.tuning.yardReachCells : 0);
+  const sources = from ? [from] : [fuel.depotId, fuel.refineryId, ...(fuel.newRefineryId ? [fuel.newRefineryId] : [])];
+  return sources.some((id) => !world.tuning.fuelWithinReach || (roadPath(world, id, townId)?.distance ?? Infinity) <= reach || !!railPath(world, id, townId));
+}
+
 /** Recomputes every town's shortage, once a tick (tick.ts), from the rolling fuel supplied. No road, no traffic: none counted. */
 export function updateFuelShortage(world: GameWorld): void {
   const fuel = world.fuel;

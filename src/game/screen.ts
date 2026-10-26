@@ -3,7 +3,7 @@ import { fordBridgeCost, fordById } from "@engine/game/floods";
 import { LINE_COLOURS, labelOf, roadLabelKeyOf, routeLabelKey } from "@engine/game/labels";
 import { clusterOf, clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad } from "@engine/game/private";
-import { aWeekOnText, termVerdictText, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
+import { aWeekOnText, termVerdictText, pledgeMove, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
 import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
 import type { GameWorld } from "@engine/game/types";
 import { diagnoseRoute, gameDay, roadPath, routeSummaries, townShare } from "@engine/game/world";
@@ -12,7 +12,7 @@ import { averageHeadline, averageNet } from "@engine/game/history";
 import { goodsFlows, flowKey, lorrySummaries } from "@engine/game/goods";
 import { siteProduction } from "@engine/game/production";
 import { corridorSummaries } from "@engine/game/corridors";
-import { cargoName, fuelReach, fuelSupply } from "@engine/game/fuel";
+import { cargoName, fuelPlanned, fuelReach, fuelReachable, fuelSupply } from "@engine/game/fuel";
 import { hasYard } from "@engine/game/yards";
 import { siteFigure, type FigureData } from "./seethrough";
 import { cementBreak, cementServed } from "@engine/game/cement";
@@ -275,7 +275,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       else if (b?.kind === "ore") items.push({ text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} (Y)`), at: [b.mineId], weight: steel.people });
       else if (b?.kind === "carry") items.push({ text: `Steel short, ${who}: it isn't reaching them from ${nameOf(b.from)}`, button: toolButton("yard", `Yard at ${nameOf(b.from)} (Y)`), at: [b.from], weight: steel.people });
     }
-    const fuelShort = towns.filter((t) => t.fuel !== null && t.fuel < 0.6);
+    // Short by the network, not by this week's tankers (fuel.ts fuelPlanned): just after the
+    // warm-up, towns planned full read short, and the idle refinery was named for them.
+    const fuelShort = towns.filter((t) => t.fuel !== null && t.fuel < 0.6 && (fuelPlanned(world, t.id) ?? 1) < 0.6 && fuelReachable(world, t.id));
     if (world.fuel && fuelShort.length > 0) {
       // Weighed as the people living short of fuel, by how short.
       const weight = fuelShort.reduce((sum, t) => sum + t.population * (1 - (t.fuel ?? 0)), 0) * 0.3;
@@ -341,7 +343,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     for (const p of world.term?.pledges ?? []) {
       if (!p.committed || p.kept) continue;
       const kind = world.towns.get(p.townId)?.industry ? "site" : "town";
-      items.push({ text: `Your pledge: ${pledgeLine(p)} · ${pct(pledgeProgress(world, p))} of the way`, button: `<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
+      // The move that answers it, bought from here (C29), with a bond beside a restore you can't pay for.
+      const move = pledgeMove(world, p);
+      const restore = move?.action.kind === "restoreRefinery" ? "refinery" : move?.action.kind === "restoreWorks" ? "works" : null;
+      const bond = restore && move && world.economy.funds < move.price ? hooks.bond(restore) : "";
+      items.push({ text: `Your pledge: ${pledgeLine(p)} · ${pct(pledgeProgress(world, p))} of the way`, button: `${moveButton(move ?? undefined, "")}${bond}<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
     }
     return items.sort((p, q) => q.weight - p.weight).slice(0, 5);
   }
@@ -799,7 +805,29 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const term = world.term;
     if (!term) return "";
     const committed = term.pledges.filter((p) => p.committed).length;
-    return `<ul class="pledges choose">${term.pledges.map((p) => `<li>${p.committed ? "★ " : ""}${esc(pledgeLine(p))} ${!p.committed && committed < MAX_COMMITTED ? `<button data-pledge="${esc(p.id)}">Pledge</button>` : ""}</li>`).join("")}</ul>`;
+    return `<ul class="pledges choose">${term.pledges.map((p) => `<li><div class="line">${p.committed ? "★ " : ""}${esc(pledgeLine(p))} ${!p.committed && committed < MAX_COMMITTED ? `<button data-pledge="${esc(p.id)}">Pledge</button>` : ""}</div>${p.kept ? "" : pledgeMoveLine(p)}</li>`).join("")}</ul>`;
+  }
+  /**
+   * A pledge's likely first move and its price against what you have (outside review,
+   * 2026-10-26: "which problem can I realistically solve with the money and time I have?").
+   */
+  function pledgeMoveLine(p: Pledge): string {
+    const move = pledgeMove(world, p);
+    if (!move) return "";
+    const short = move.price - world.economy.funds;
+    const afford = short > 0 ? `<span class="bad">${nairaK(short)} more than you have</span>` : `<span class="good">within your ${nairaK(world.economy.funds)}</span>`;
+    // A restore beyond your money: the bond that pays for it now, beside it (the refinery's ₦60k
+    // against ₦23k read as a wall, with the way round it two clicks away under More).
+    const restore = move.action.kind === "restoreRefinery" ? "refinery" : move.action.kind === "restoreWorks" ? "works" : null;
+    const bond = restore && short > 0 ? hooks.bond(restore) : "";
+    return `<div class="move muted">The likely move: ${esc(move.label.replace(/\s*\([^)]*\)$/, ""))} · ${nairaK(move.price)}, ${afford}${bond ? ` ${bond}` : ""}</div>`;
+  }
+  /** What keeping pledges is worth: the next term's grant by how many you keep (the mandate). */
+  function grantLine(): string {
+    const t = world.tuning;
+    if (!t.mandateEnabled) return "";
+    const by = (kept: number) => nairaK((t.termGrantBase ?? 0) + (t.termGrantPerPledge ?? 0) * kept);
+    return `<p class="muted">You have ${nairaK(world.economy.funds)}. The next term's grant: ${by(0)} if you keep none (a failed term), ${by(1)} with one kept, ${by(MAX_COMMITTED)} with both, and ${naira(t.termGrantPerThousand ?? 0)} more for every thousand people the towns grow. A move beyond your money waits for it, or a bond pays for a restore now.</p>`;
   }
 
   function renderVerdict(mode: "term" | "record" | "replaced" | "pledges"): void {
@@ -813,6 +841,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       verdictEl.innerHTML = `<div class="top"><div class="title">Term ${term.number}: your pledges</div><button class="primary" data-verdict="close">${committed > 0 ? "Begin ▸" : "Later"}</button></div>
         <p class="lede">You run the state's transport for ${length} days a term.${grant} The state offers these, from what your towns need now. Pledge up to ${MAX_COMMITTED}: keep them and the next term's grant grows; keep none, or let the towns shrink, and it's a failed term. Two failed terms in a row and you're replaced.</p>
         ${pledgeChoices()}
+        ${grantLine()}
         <p class="muted">Pledged: ${committed} of ${MAX_COMMITTED}. They stay in the strip, with how far each has got.</p>`;
       return;
     }
@@ -844,7 +873,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="hero"><div class="k">Standing</div><div class="v" style="font-size:16px">${esc(standing)}</div></div>
       </div>
       <h2>Your pledges</h2>${pledges ? `<ul class="pledges">${pledges}</ul>` : `<p class="muted">You made none this term.</p>`}
-      <h2>Term ${term.number}'s pledges on offer: pledge up to ${MAX_COMMITTED}</h2>${pledgeChoices()}
+      <h2>Term ${term.number}'s pledges on offer: pledge up to ${MAX_COMMITTED}</h2>${pledgeChoices()}${grantLine()}
       ${record}`;
   }
 
