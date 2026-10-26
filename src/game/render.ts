@@ -7,7 +7,7 @@ import { gameDay, roadChain, townShare } from "@engine/game/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/game/growth";
 import { corridorChanges, corridorSummaries } from "@engine/game/corridors";
-import { noSeatPairs } from "@engine/game/problems";
+import { noSeatPairs, seatMove } from "@engine/game/problems";
 import { polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/game/roads";
 import { roadCapacity } from "@engine/game/congestion";
 import { siteProduction } from "@engine/game/production";
@@ -263,7 +263,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
-  drawVehicles(ctx, world, view, oneByOne);
+  drawVehicles(ctx, world, view, oneByOne, overlay !== "none");
   for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   cityId = [...world.towns.values()].filter((t) => !t.industry).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id ?? null;
   farms = world.food ? new Set(farmTowns(world).map((t) => t.id)) : new Set();
@@ -461,7 +461,9 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
   ctx.lineJoin = "round";
   const yours = yourRidersOnRoads(world);
   const maxYours = Math.max(1, ...yours.values());
-  const alphaFor = (id: string) => (focus && !focus.segments.has(id) ? FADED : dim ? 0.45 : 1);
+  // Under an overlay the network steps back, so the overlay is what you see (outside review,
+  // 2026-10-26: switching modes barely changed a map whose roads stayed at full strength).
+  const alphaFor = (id: string) => (focus && !focus.segments.has(id) ? FADED : dim ? OVERLAY_BACKDROP : 1);
   for (const segment of world.simulation.map.segments) {
     const line = segmentPolyline(world.simulation.map, segment);
     ctx.globalAlpha = alphaFor(segment.id);
@@ -554,7 +556,7 @@ function overlayMarks(world: GameWorld, overlay: Overlay) {
     }
     const top = [...pairs.values()].filter((p) => p.v >= 10 && town(p.a) && town(p.b)).sort((p, q) => q.v - p.v).slice(0, 60);
     const max = Math.max(1, ...top.map((p) => p.v));
-    for (const p of top) marks.push({ a: town(p.a)!, b: town(p.b)!, width: 1 + (p.v / max) * 12, color: COLORS.ink2, alpha: 0.35 });
+    for (const p of top) marks.push({ a: town(p.a)!, b: town(p.b)!, width: 1 + (p.v / max) * 12, color: COLORS.ink2, alpha: 0.55 });
   } else if (overlay === "noseat") {
     const pairs = noSeatPairs(world).filter((p) => p.perDay >= 10 && town(p.a) && town(p.b));
     const max = Math.max(1, ...pairs.map((p) => p.perDay));
@@ -577,6 +579,55 @@ function overlayMarks(world: GameWorld, overlay: Overlay) {
   }
   overlayCache = { at: now, world, overlay, marks };
   return marks;
+}
+
+/** How much of the roads and vehicles shows under an overlay. */
+const OVERLAY_BACKDROP = 0.2;
+
+/**
+ * An overlay's headline in a line, for the caption under the mode buttons: the total it
+ * shows and its biggest mark, by name -- and on No seat, the move for the worst (the
+ * review: "No seat should expose underserved towns and overloaded corridors").
+ */
+export function overlayCaption(world: GameWorld, overlay: Overlay): string {
+  const name = (id: string) => world.towns.get(id)?.name ?? id;
+  const int = (x: number) => Math.round(x).toLocaleString();
+  if (overlay === "demand") {
+    let total = 0;
+    const pairs = new Map<string, { a: string; b: string; v: number }>();
+    for (const [key, r] of world.pairOutcomes) {
+      const i = key.indexOf(":");
+      const [x, y] = [key.slice(0, i), key.slice(i + 1)];
+      const [a, b] = x < y ? [x, y] : [y, x];
+      const v = (r.player + r.poached + r.gaveUp + r.lost) * SECONDS_PER_GAME_DAY;
+      total += v;
+      const p = pairs.get(`${a}~${b}`) ?? { a, b, v: 0 };
+      p.v += v;
+      pairs.set(`${a}~${b}`, p);
+    }
+    const top = [...pairs.values()].sort((p, q) => q.v - p.v)[0];
+    return top ? `${int(total)} trips wanted a day, the thicker the more. The most: ${name(top.a)} ↔ ${name(top.b)}, ${int(top.v)} a day.` : "No trips wanted yet.";
+  }
+  if (overlay === "noseat") {
+    const pairs = noSeatPairs(world);
+    const total = pairs.reduce((sum, p) => sum + p.perDay, 0);
+    const worst = pairs[0];
+    if (!worst || total < 1) return "Everyone with a road finds a seat.";
+    const move = seatMove(world, worst.a, worst.b);
+    const answer = Number.isFinite(move.price) ? ` The move: ${move.label.replace(/\s*\([^)]*\)$/, "")}, ₦${int(move.price)}.` : "";
+    return `${int(total)} a day have a road but find no seat. The worst: ${name(worst.a)} ↔ ${name(worst.b)}, ${int(worst.perDay)} a day.${answer}`;
+  }
+  if (overlay === "informal") {
+    const corridors = corridorSummaries(world).filter((c) => world.towns.has(c.a) && world.towns.has(c.b));
+    const top = [...corridors].sort((p, q) => q.informal * (q.perDay.poached + q.perDay.gaveUp + q.perDay.player + q.perDay.lost) - p.informal * (p.perDay.poached + p.perDay.gaveUp + p.perDay.player + p.perDay.lost))[0];
+    return top ? `The danfos' share of each corridor's trips: the bolder, the more theirs. Their biggest: ${name(top.a)}–${name(top.b)}, ${Math.round(top.informal * 100)}% theirs, ${Math.round(top.you * 100)}% yours.` : "No corridors yet.";
+  }
+  if (overlay === "goods") {
+    const flows = goodsFlows(world).map((f) => ({ f, perDay: f.rate * SECONDS_PER_GAME_DAY })).sort((x, y) => y.perDay - x.perDay);
+    const top = flows[0];
+    return top ? `The biggest goods flows: fuel and crude red, cement and stone purple, food green. The most: ${cargoName(world, top.f.from, top.f.kind, top.f.to)} ${name(top.f.from)} → ${name(top.f.to)}, ${int(top.perDay)} t a day.` : "No goods moving yet.";
+  }
+  return "";
 }
 
 function drawOverlay(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, overlay: Overlay): void {
@@ -623,7 +674,7 @@ function pill(ctx: CanvasRenderingContext2D, pose: { x: number; y: number; angle
   ctx.restore();
 }
 
-function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, oneByOne: boolean): void {
+function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, oneByOne: boolean, dim = false): void {
   const colourOf = (route: string | undefined) => (route && labelOf(world, routeLabelKey(route))?.colour) || COLORS.player;
   const routeOf = new Map<string, string>();
   for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
@@ -633,7 +684,7 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
     const pose = vehiclePose(world, view, vehicle);
     if (!pose) continue;
     const route = routeOf.get(vehicle.id);
-    ctx.globalAlpha = !focus ? 1 : route ? (focus.routes.has(route) ? 1 : FADED) : focus.segments.has(segmentOfVehicle(world, vehicle) ?? "") ? 1 : FADED;
+    ctx.globalAlpha = (!focus ? 1 : route ? (focus.routes.has(route) ? 1 : FADED) : focus.segments.has(segmentOfVehicle(world, vehicle) ?? "") ? 1 : FADED) * (dim ? OVERLAY_BACKDROP : 1);
     const full = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / Math.max(1, vehicle.capacity);
     if (informal) {
       const mode = world.informal.active.get(vehicle.id)?.mode ?? (vehicle.id.startsWith("truck-") ? "truck" : "danfo");

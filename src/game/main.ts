@@ -75,7 +75,7 @@ import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
 import { averageBudget, averageNet } from "@engine/game/history";
-import { draw, fitView, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
+import { draw, fitView, overlayCaption, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { createScreen } from "./screen";
 import { shortVerdict } from "./verdicts";
@@ -3049,9 +3049,22 @@ let panelTimer = 0;
 // towns, trips with no seat, each corridor's informal share, or the biggest goods flows.
 let overlay: Overlay = "none";
 const overlaysEl = document.querySelector<HTMLDivElement>("#overlays")!;
+const captionEl = document.querySelector<HTMLDivElement>("#overlay-caption")!;
 function renderOverlays(): void {
   const opts: Array<[Overlay, string]> = [["none", "Traffic"], ["demand", "Demand"], ["noseat", "No seat"], ["informal", "Informal share"], ["goods", "Goods"]];
   overlaysEl.innerHTML = opts.map(([id, label]) => `<button data-overlay="${id}" class="${overlay === id ? "on" : ""}">${label}</button>`).join("");
+  renderCaption();
+}
+// What the overlay says, in a line under its buttons: read twice a second, not every frame.
+let captionAt = -Infinity;
+let captionFor: Overlay | null = null;
+function renderCaption(now = performance.now()): void {
+  if (now - captionAt < 500 && captionFor === overlay) return;
+  captionAt = now;
+  captionFor = overlay;
+  const text = overlay === "none" ? "" : overlayCaption(world, overlay);
+  captionEl.hidden = !text;
+  if (captionEl.textContent !== text) captionEl.textContent = text;
 }
 overlaysEl.addEventListener("click", (event) => {
   const id = (event.target as HTMLElement).dataset.overlay as Overlay | undefined;
@@ -3099,6 +3112,7 @@ function frame(now: number): void {
     }
   }
   const picked = screen.focus;
+  if (!in3d) renderCaption(now);
   if (in3d && view3d) view3d.frame(world);
   else draw(ctx, world, view, {
     selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay,

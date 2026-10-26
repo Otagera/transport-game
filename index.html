@@ -51,7 +51,10 @@
       #zoom-control button { font: 600 13px system-ui, sans-serif; min-width: 30px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
       #zoom-control button:hover { border-color: var(--muted); }
       /* The 3D view's labels (view3d.ts): towns by tier, sites quieter; villages only up close. */
-      body.in3d #overlays, body.in3d #hint, body.in3d #key { display: none !important; }
+      body.in3d #overlays, body.in3d #overlay-caption, body.in3d #hint, body.in3d #key { display: none !important; }
+      /* What the overlay shows, in a line under its buttons (outside review, 2026-10-26). */
+      #overlay-caption { position: fixed; left: calc(var(--left) + 12px); top: calc(var(--top) + 54px); max-width: 520px; z-index: 4; background: var(--panel); padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 10px rgba(20, 30, 45, 0.14); font-size: 12px; line-height: 1.4; color: var(--ink); }
+      #overlay-caption[hidden] { display: none; }
       .label3d { pointer-events: auto; cursor: pointer; font: 600 12px system-ui, sans-serif; color: #1f2328; background: rgba(255,255,255,0.82); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
       .label3d.city { font-size: 14px; }
       .label3d.village { font-weight: 500; font-size: 11px; opacity: 0.85; }
@@ -196,8 +199,10 @@
       #controls { position: fixed; right: 20px; top: 9px; max-width: 230px; text-align: right; font-size: 11px; line-height: 1.45; color: var(--muted); z-index: 3; }
       body:not([data-dev="true"]) #toolbar { right: auto; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); transform: translateX(-50%); }
       /* A hint: beside the town it's about, else over the control line. */
-      #hint { position: fixed; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); bottom: 190px; transform: translateX(-50%); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--player); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(20, 30, 45, 0.18); font-size: 13px; line-height: 1.35; }
-      #hint.anchored { bottom: auto; transform: none; }
+      /* Top-left, under the mode bar: at the map's middle it sat over the network it explained (outside review, 2026-10-26). */
+      #hint { position: fixed; left: calc(var(--left) + 12px); top: calc(var(--top) + 60px); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--player); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(20, 30, 45, 0.18); font-size: 13px; line-height: 1.35; }
+      #hint.anchored { bottom: auto; top: auto; transform: none; }
+      #overlay-caption:not([hidden]) ~ #hint:not(.anchored) { top: calc(var(--top) + 118px); }
       #hint[hidden] { display: none; }
       #hint button { flex: none; border: 1px solid var(--line); background: none; border-radius: 6px; padding: 1px 6px; cursor: pointer; font: 11px var(--label-font); color: var(--muted); }
       #hint button:hover { color: var(--ink); border-color: var(--ink); }
@@ -330,13 +335,17 @@
       #verdict .lede { font-size: 14px; margin: 0 0 14px; max-width: 760px; }
       #verdict ul.pledges { list-style: none; padding: 0; margin: 0 0 16px; }
       #verdict ul.pledges li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+      #verdict ul.pledges li .move { font-size: 12px; margin-top: 2px; }
+      #verdict ul.pledges li .move .bad { color: var(--bad); }
+      #verdict ul.pledges li .move .good { color: var(--good); }
       #verdict ul.pledges li.kept::before { content: "✓ "; color: var(--good); font-weight: 700; }
       #verdict ul.pledges li.missed::before { content: "✗ "; color: var(--bad); font-weight: 700; }
       #verdict table { border-collapse: collapse; min-width: 560px; }
       #verdict td, #verdict th { padding: 6px 12px 6px 0; text-align: left; border-bottom: 1px solid var(--line); }
       #verdict button { font: inherit; padding: 4px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
       #verdict button.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-      #verdict ul.pledges.choose li { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; }
+      #verdict ul.pledges.choose li { font-size: 14px; }
+      #verdict ul.pledges.choose li .line { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
       #revenue .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
       #revenue .top .title { font-size: 20px; font-weight: 700; }
       .heroes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -398,6 +407,7 @@
       ! a problem (its card says the move) · ▲▼ growing · wheel to zoom, drag to pan, 0 to fit
     </details>
     <div id="overlays"></div>
+    <div id="overlay-caption" hidden></div>
     <div id="hint" hidden></div>
     <div id="toolbar"></div>
     <div id="toast"></div>
