@@ -1010,6 +1010,23 @@ Everything else folds into one of these or goes:
 
 - **Step 7, part 1 -- names and colours** (labels.ts): built 2026-10-26. A route of yours takes a name and one of eight line colours (its vehicles drawn in it, so your network reads as lines); a road takes a name, written along it on the map. In the route's and the road's panels ("Name it", Enter to keep). Recorded in the run file; nothing in the simulation reads them. Waypoints, the rest of "Your mark on it" 2, aren't in.
 
+- **From an outside review of seed 7585 (2026-10-26)**, built the same day:
+  - **Each pledge names its likely move and price** (`term.ts pledgeMove`): on the pledge card,
+    against your money (a bond beside a restore you can't pay for), and as the button on the
+    pledge's Waiting-on-you line (C29). The pledge screen says what the next term's grant is by
+    pledges kept.
+  - **A fuel pledge only where the town is really short** (engine.md, the fuel chain): the
+    reviewer's "Fuel in Ikire: 80% (now 57%)" was a reading just after the warm-up, and the
+    pledge kept itself; the ₦60k refinery named for it did nothing there.
+  - **The map's modes**: the network steps back under an overlay and a caption names what it
+    shows; the hint off the map's middle. **3D**: a selection lights its connections, rings the
+    town and glides the camera to it.
+  - **Open, yours to decide: the grant against the big restores.** "Each term's capital grant
+    is paid up front, sized so one big project fits" doesn't hold: term 1 opens with ₦22.5k,
+    the restores cost ₦45-80k, and on day 1 a bond is refused (repayments would pass 30% of
+    income). Keeping both pledges sets term 2 at ₦50k plus growth: about one restore. Either
+    the term-1 grant or the restore prices change, or "one big project" means from term 2.
+
 ### Ideas parked (yours, 2026-10-24), with where they'd fit
 
 - **Private traffic** ("we did not account for other humans driving on our roads"). Next after the mandate. The original 3D game's Module 12 (`661492b`) is the design to reuse:

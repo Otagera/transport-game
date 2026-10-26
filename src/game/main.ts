@@ -75,7 +75,7 @@ import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
 import { averageBudget, averageNet } from "@engine/game/history";
-import { draw, fitView, overlayCaption, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
+import { draw, fitView, focusFor, overlayCaption, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { createScreen } from "./screen";
 import { shortVerdict } from "./verdicts";
@@ -3113,11 +3113,13 @@ function frame(now: number): void {
   }
   const picked = screen.focus;
   if (!in3d) renderCaption(now);
-  if (in3d && view3d) view3d.frame(world);
+  const focusOn = { town: focusTown() ?? (picked && picked.kind !== "route" && picked.kind !== "segment" ? picked.id : null), route: focusRoute ?? (picked?.kind === "route" ? picked.id : null) };
+  // In 3D the same focus: a selected town's or route's connections lit, the town ringed.
+  if (in3d && view3d) view3d.frame(world, focusFor(world, focusOn.town, focusOn.route), focusOn.route ? null : focusOn.town);
   else draw(ctx, world, view, {
     selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay,
-    focusTown: focusTown() ?? (picked && picked.kind !== "route" && picked.kind !== "segment" ? picked.id : null),
-    focusRoute: focusRoute ?? (picked?.kind === "route" ? picked.id : null),
+    focusTown: focusOn.town,
+    focusRoute: focusOn.route,
   });
 
   panelTimer += elapsed;

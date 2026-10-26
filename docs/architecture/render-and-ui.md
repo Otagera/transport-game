@@ -483,8 +483,20 @@ hills -- since 2026-10-23 the water drawn from the map's own river and sea lines
 contours to the highest: the cells' staircase and a grey wash didn't read on the region). Names
 go to the biggest towns first where they clear the ones placed (`labelledTowns`), so zoomed out
 over the region they don't sit on each other. One overlay at a time (`Overlay`: demand, no seat, the informal share, the 25 biggest goods
-flows), cached a sim second. Focus (`focusOf`) fades what isn't part of the hovered town or route;
+flows), cached a sim second. Under an overlay the roads and vehicles drop to 20%
+(`OVERLAY_BACKDROP`), so the overlay is what you see, and `#overlay-caption` under the mode buttons
+gives its headline in a line (`overlayCaption`: the total and the biggest mark by name; on No
+seat, the move for the worst pair), read twice a second. The hint box sits top-left under the
+mode bar, not in the map's middle over the network it explains (outside review, 2026-10-26). Focus (`focusOf`, and `focusFor` for the 3D view) fades what isn't part of the hovered town or route;
 zoom and pan in `main.ts`, with marks growing by the square root of the zoom (`growOf`).
+
+**The 3D view's focus** (`view3d.ts`, 2026-10-26). The 2D map's focus (`focusFor`) is passed to
+`View3D.frame` as well. A selected town's or route's roads and track are tinted in your colour and
+lit, the rest fade toward the ground's pale; a thin pulsing ring marks the selected town's
+built-up heart; the names of the towns it connects to stay up whatever the zoom; and the camera
+glides over to a newly selected place, keeping its angle (a drag of yours stops the glide).
+Recoloured when the focus changes and on the roads' half-second recolour. From the outside
+review: selecting a place should show what it's connected to, or 3D is scenery.
 
 **Kept from the old map, in the lab's style** (the lab had no need to show them): the build
 preview and its price label, the fix tool's road, strike and TAKEN/LOST tags, wardens, the

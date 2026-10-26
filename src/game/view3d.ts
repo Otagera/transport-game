@@ -20,6 +20,7 @@ import { inHome } from "@engine/game/fuel";
 import { isFlooded } from "@engine/game/floods";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { tierOf, type Tier } from "./icons";
+import type { Focus } from "./render";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
@@ -34,13 +35,21 @@ const M = 8; // metres a map cell
 const HEIGHT = 2.2;
 const VEHICLE_SCALE = 1.6; // a little larger than life, to be seen from above
 const ROAD_COLOURS = { paved: 0x56585b, dirt: 0xa47a55, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
+/** A selection: your colour (the 2D map's --player), lit on what it's connected to; the rest toward the ground's pale. */
+const FOCUS_COLOUR = 0x2a78d6;
+const FOCUS_GLOW = 0x0c2a52;
+const FOCUS = new THREE.Color(FOCUS_COLOUR);
+const FADED_TO = new THREE.Color(0xd9d3c4);
 
 export interface View3D {
   /** Show it, built for this world (rebuilt if the world is a new one). */
   show(world: GameWorld): void;
   hide(): void;
-  /** Draw a frame: the vehicles where they are now; roads and towns as they've changed. */
-  frame(world: GameWorld): void;
+  /**
+   * Draw a frame: the vehicles where they are now; roads and towns as they've changed. With a
+   * focus (render.ts focusFor: a selected town or route), what it's connected to stands out.
+   */
+  frame(world: GameWorld, focus?: Focus | null, selected?: string | null): void;
   readonly shown: boolean;
 }
 
@@ -97,6 +106,10 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
 
   let built: Built | null = null;
   let shown = false;
+  let lastSelected: string | null = null;
+  let glideTo: THREE.Vector3 | null = null;
+  // A drag of your own stops a glide.
+  controls.addEventListener("start", () => (glideTo = null));
   return {
     get shown() {
       return shown;
@@ -113,10 +126,22 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
       host.style.display = "none";
       shown = false;
     },
-    frame(world) {
+    frame(world, focus = null, selected = null) {
       if (!shown) return;
       if (built?.world !== world) this.show(world);
+      built!.focus(focus, selected);
       built!.update(world);
+      // A newly selected place: the camera glides over to it, keeping its angle and distance.
+      if (selected !== lastSelected) {
+        lastSelected = selected;
+        glideTo = selected ? built!.centreOf(selected) : null;
+      }
+      if (glideTo) {
+        const step = glideTo.clone().sub(controls.target).multiplyScalar(0.12);
+        controls.target.add(step);
+        camera.position.add(step);
+        if (step.lengthSq() < 0.01) glideTo = null;
+      }
       controls.update();
       // The point you turn round stays on the ground, over hill or valley.
       const floor = built!.groundAt(controls.target.x, controls.target.z);
@@ -147,6 +172,10 @@ interface Built {
   groundAt(x: number, z: number): number;
   /** Labels shown only as near as they're readable: a village up close, the city from afar. */
   cullLabels(camera: THREE.Camera): void;
+  /** What's selected and what it's connected to: those roads lit, the rest faded, a ring at the town. */
+  focus(focus: Focus | null, selected: string | null): void;
+  /** Where a town or site stands, on the ground; null when it isn't drawn. */
+  centreOf(id: string): THREE.Vector3 | null;
   update(world: GameWorld): void;
   dispose(): void;
 }
@@ -471,22 +500,45 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     roadLines = segments.filter((s) => s.retiredAt === undefined).map((s) => segmentPolyline(w.simulation.map, s));
   }
+  let focused: Focus | null = null;
+  let focusKey = "";
+  // A ring on the ground round the selected town, pulsing a little.
+  const ringMaterial = own(new THREE.MeshBasicMaterial({ color: FOCUS_COLOUR, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+  const ring = new THREE.Mesh(own(new THREE.RingGeometry(0.96, 1, 96)), ringMaterial);
+  ring.rotation.x = -Math.PI / 2;
+  ring.visible = false;
+  ring.renderOrder = 2;
+  scene.add(ring);
   function colourRoads(w: GameWorld): void {
     for (const [id, road] of roads) {
       if (road.retired) continue;
-      if (road.rail) {
-        // Disused track fades, as on the 2D map.
-        road.material.color.setHex(w.railOutOfService.has(id) ? 0xc9c2b4 : 0x9a9184);
-        continue;
+      colourRoad(w, id, road);
+      // A selected town's or route's roads in your colour, lit; the rest pale (outside review,
+      // 2026-10-26: selecting a place should show what it's connected to, or 3D is scenery).
+      if (!focused) road.material.emissive.setHex(0x000000);
+      else if (focused.segments.has(id)) {
+        road.material.color.lerp(FOCUS, 0.7);
+        road.material.emissive.setHex(FOCUS_GLOW);
       }
-      const speed = w.segmentSpeed.get(id) ?? 1;
-      const load = ((w.roadFlowEMA.get(id) ?? 0) + privateLoad(w, id)) / Math.max(1e-6, roadCapacity(w, id));
-      // Grey when free, amber as it fills, red when jammed: the 2D map's road, in its weight too.
-      // Under the flood (floods.ts): the water's colour.
-      // Its own surface when free; tinted amber as it fills, red when jammed.
-      if (isFlooded(w, id)) road.material.color.setHex(ROAD_COLOURS.flooded);
-      else road.material.color.setHex(road.base).lerp(new THREE.Color(speed < 0.7 ? ROAD_COLOURS.jammed : speed < 0.9 || load > 0.8 ? ROAD_COLOURS.busy : road.base), 0.75);
+      else {
+        road.material.emissive.setHex(0x000000);
+        road.material.color.lerp(FADED_TO, 0.7);
+      }
     }
+  }
+  function colourRoad(w: GameWorld, id: string, road: { material: THREE.MeshLambertMaterial; rail: boolean; base: number }): void {
+    if (road.rail) {
+      // Disused track fades, as on the 2D map.
+      road.material.color.setHex(w.railOutOfService.has(id) ? 0xc9c2b4 : 0x9a9184);
+      return;
+    }
+    const speed = w.segmentSpeed.get(id) ?? 1;
+    const load = ((w.roadFlowEMA.get(id) ?? 0) + privateLoad(w, id)) / Math.max(1e-6, roadCapacity(w, id));
+    // Grey when free, amber as it fills, red when jammed: the 2D map's road, in its weight too.
+    // Under the flood (floods.ts): the water's colour.
+    // Its own surface when free; tinted amber as it fills, red when jammed.
+    if (isFlooded(w, id)) road.material.color.setHex(ROAD_COLOURS.flooded);
+    else road.material.color.setHex(road.base).lerp(new THREE.Color(speed < 0.7 ? ROAD_COLOURS.jammed : speed < 0.9 || load > 0.8 ? ROAD_COLOURS.busy : road.base), 0.75);
   }
 
   // --- Towns: each one merged mesh, rebuilt when its tier or size step changes ------------
@@ -1056,7 +1108,33 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     },
     groundAt: (x, z) => elevationAt(x / M, z / M) * HEIGHT,
     cullLabels(cam) {
-      for (const t of towns.values()) t.label.visible = cam.position.distanceTo(t.label.position) < t.reach;
+      // A selected place's connections keep their names whatever the distance.
+      for (const [id, t] of towns) t.label.visible = cam.position.distanceTo(t.label.position) < t.reach || !!focused?.towns.has(id);
+      if (ring.visible) ringMaterial.opacity = 0.45 + 0.2 * Math.sin(performance.now() / 300);
+    },
+    centreOf(id) {
+      const entry = towns.get(id);
+      return entry ? entry.label.position.clone().setY(entry.mesh.position.y) : null;
+    },
+    focus(focus, selected) {
+      const key = focus ? `${selected}|${focus.segments.size}|${focus.towns.size}|${focus.routes.size}` : "";
+      if (key === focusKey) return;
+      focusKey = key;
+      focused = focus;
+      colourRoads(world);
+      const entry = selected ? towns.get(selected) : undefined;
+      ring.visible = !!entry;
+      if (entry) {
+        const geometry = entry.mesh.geometry;
+        if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+        const sphere = geometry.boundingSphere!;
+        // The town's built-up heart, not its whole spread of fields and houses.
+        const radius = Math.max(20, Math.min(160, sphere.radius * 0.55));
+        const x = entry.mesh.position.x + sphere.center.x;
+        const z = entry.mesh.position.z + sphere.center.z;
+        ring.position.set(x, elevationAt(x / M, z / M) * HEIGHT + 1.5, z);
+        ring.scale.setScalar(radius);
+      }
     },
     update(w) {
       // The network's shape changes rarely; check it cheaply, rebuild only then.

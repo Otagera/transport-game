@@ -381,7 +381,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         : "";
       return { text: `Short of steel (${pct(t.steel ?? 0)} of what it needs): ${int(t.steelHeld)}k fewer people than your service would grow it to`, button };
     }
-    if (t.fuel !== null && t.fuel < 0.6) return { text: `Fuel short: ${pct(t.fuel)} supplied`, button: toolButton("yard", "Yard at the tank farm (Y)") };
+    // Short by the network and within a source's reach: else a yard at the tank farm does nothing
+    // for it (Ota, with no road at all, was sent there).
+    if (t.fuel !== null && t.fuel < 0.6 && (fuelPlanned(world, t.id) ?? 1) < 0.6 && fuelReachable(world, t.id)) return { text: `Fuel short: ${pct(t.fuel)} supplied`, button: toolButton("yard", "Yard at the tank farm (Y)") };
     const shrink = shrinkCause(world, t.id);
     if (shrink) return { text: `Shrinking: ${shrink.why}`, button: moveButton(shrink.move ?? undefined, "") };
     const worn = wornRoadAt(world, t.id);

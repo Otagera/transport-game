@@ -969,6 +969,16 @@ transfers, diagnosis, debt advice, receipts and forecasts treat it as any passen
 - **`fuelSupply(world, town)`** — fuel delivered (yours and tankers') over need, and the
   share from each source: the town card's Fuel line. `restoreRefinery` (`ActionSpec`
   `restoreRefinery`) costs `refineryRestoreCost`.
+- **Short by the network, not by this week's tankers** (2026-10-26). `fuelSupply` counts tanker
+  loads over a rolling window, so it arrives in bursts, and just after the warm-up a town planned
+  full can read 57% (Ikire, seed 7585: 57% → 98% → 62% in five days, 100% by day 40 untouched). A
+  pledge, a Waiting-on-you item or a town card that names a fuel problem reads two more things:
+  **`fuelPlanned(world, town)`**, what the sources plan to send it (`fuelFlows`' rates over its
+  need), and **`fuelReachable(world, town, from?)`**, whether any source could reach it at all
+  (by road within a tanker's reach from a yard, or by rail). Measured on 7585: eight far towns
+  stayed at 0% with the refinery restored and yards at the oilfield and refinery. Naming the
+  refinery for them named a move that does nothing (principles §3, Display: a visual must not
+  say something the model doesn't mean).
 - **What a shortage does** (step 1b). A town's shortage is `1 − fuel supplied`, rolling,
   recomputed each tick (`updateFuelShortage`, after goods outcomes); a cut-off town counts
   none. At a total shortage: its danfo fares rise `fuelFarePremium` (50%), which feeds the

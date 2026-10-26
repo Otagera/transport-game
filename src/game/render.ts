@@ -150,13 +150,19 @@ export interface DrawState {
 /** How much bigger marks draw than at the whole-map view (the square root of the zoom). */
 let markScale = 1;
 const FADED = 0.18;
-interface Focus { segments: Set<string>; routes: Set<string>; towns: Set<string> }
+export interface Focus { segments: Set<string>; routes: Set<string>; towns: Set<string> }
 let focus: Focus | null = null;
 /** The towns whose name fits this frame (labelled, below). */
 let labelled = new Set<string>();
 
 /** A town's roads and the routes that stop there; or a route and the roads it runs on. */
 function focusOf(world: GameWorld, state: DrawState): Focus | null {
+  return focusFor(world, state.focusTown, state.focusRoute ?? null);
+}
+
+/** The same focus, for the 3D view too: what a selected town or route is connected to. */
+export function focusFor(world: GameWorld, focusTown: string | null, focusRoute: string | null): Focus | null {
+  const state = { focusTown, focusRoute };
   if (!state.focusTown && !state.focusRoute) return null;
   const segments = new Set<string>();
   const routes = new Set<string>();
