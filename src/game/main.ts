@@ -690,6 +690,18 @@ function announce(event: GameEvent): void {
   } else if (event.kind === "swept") {
     // The budget year's end (sweep.ts): only said when it took something.
     if (event.amount >= 1) say(`The budget year ended: ${naira(event.amount)} above what you may carry over went back to the treasury. Name a project to keep money for it.`, true, 9);
+  } else if (event.kind === "flood-warning") {
+    // A shock with a window (floods.ts): named ahead, paused at any speed, like the refinery.
+    const names = event.fords.map((f) => f.name).join(" and ");
+    say(`The rains are coming: in ${event.inDays} days ${names} ${event.fords.length === 1 ? "floods" : "flood"} for ${event.days} days, and everything on ${event.fords.length === 1 ? "that road" : "those roads"} waits at the bank. Raise a bridge before then: it's in Waiting on you.`, true, 14);
+    if (!paused) {
+      paused = true;
+      renderToolbar();
+    }
+  } else if (event.kind === "flood-rose") {
+    say(`The water's over ${event.fords.map((f) => f.name).join(" and ")}: for ${event.days} days, the road waits at the bank. A bridge still opens it.`, true, 10);
+  } else if (event.kind === "flood-fell") {
+    say(`The water's down at ${event.fords.map((f) => f.name).join(" and ")}: the road's open. The rains come again in half a year.`, false, 8);
   } else if (event.kind === "union-demand") {
     say(`${event.chairman} demands: "${event.text}" Answer by day ${gameDay(world, event.deadlineAt) - 1}: it's in Waiting on you.`, true, 12);
   } else if (event.kind === "union-answered") {
@@ -2721,6 +2733,13 @@ function onPanelClick(event: MouseEvent): void {
     renderPanel();
     return;
   }
+  if (target.dataset.ford) {
+    const ford = world.floods?.fords.find((f) => f.id === target.dataset.ford);
+    const result = act({ label: "a bridge at a ford", towns: ford ? [ford.a, ford.b] : [] }, { kind: "bridgeFord", fordId: target.dataset.ford });
+    say(result.ok ? `A bridge at ${ford?.name ?? "the ford"}, for ${naira(result.amount ?? 0)}: that road stays open through the rains, now and every year.` : `Can't: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
   if (target.dataset.union) {
     const [unionId, answer] = target.dataset.union.split("|") as [string, "pay" | "concede" | "coop" | "refuse"];
     const result = act({ label: "an answer to the union", towns: [] }, { kind: "union", unionId, answer });
@@ -2731,9 +2750,9 @@ function onPanelClick(event: MouseEvent): void {
   }
   if (target.dataset.console) {
     // The design console (dev only): recorded in the run file as console moves.
-    const op = target.dataset.console as "end-term" | "funds";
+    const op = target.dataset.console as "end-term" | "funds" | "rains";
     const result = act({ label: "a console move", towns: [] }, op === "funds" ? { kind: "console", op, amount: 100000 } : { kind: "console", op });
-    say(result.ok ? (op === "funds" ? "Console: money set to ₦100,000." : "Console: the term ends at the next day's check.") : `Console: ${result.reason}`, !result.ok, 5);
+    say(result.ok ? (op === "funds" ? "Console: money set to ₦100,000." : op === "rains" ? "Console: the rains are named now." : "Console: the term ends at the next day's check.") : `Console: ${result.reason}`, !result.ok, 5);
     return;
   }
   if (target.dataset.pledge) {

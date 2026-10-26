@@ -1,4 +1,5 @@
 import { startUnions } from "./union";
+import { startFloods } from "./floods";
 import { placeClusterOffers } from "./clusters";
 import { startTerms } from "./term";
 import type { GameMapDef, GameTuning, GameWorld } from "./types";
@@ -82,6 +83,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   startTerms(world);
   // And a chairman for each cluster's union (union.ts).
   startUnions(world);
+  // And the old roads' fords, and when the first rains come (floods.ts).
+  startFloods(world);
   // Towns only: a site's workers aren't the region's people (score.ts counts the same way).
   world.startPopulation = new Map([...world.towns.values()].filter((town) => !town.industry).map((town) => [town.id, town.population]));
   world.milestones = new Map(); // growth during the warm-up isn't yours

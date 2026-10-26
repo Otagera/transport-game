@@ -1,3 +1,4 @@
+import { isFlooded } from "./floods";
 import { privateLoad } from "./private";
 import { computeSegmentLoads } from "../simulation/congestion";
 import type { Segment } from "../map/types";
@@ -166,7 +167,9 @@ export function updateRoadSpeeds(world: GameWorld, dt: number): void {
     const previousHeavy = world.heavyFlowEMA.get(segment.id) ?? 0;
     world.heavyFlowEMA.set(segment.id, previousHeavy + ((heavy.get(segment.id) ?? 0) / dt - previousHeavy) * alpha);
     // Private cars share the road (private.ts): they slow it, and everything on it, as any traffic does.
-    world.segmentSpeed.set(segment.id, tuning.congestion ? speedFactor(flow + privateLoad(world, segment.id), roadCapacity(world, segment.id, encroached.get(segment.id)), tuning.minSpeedFactor) : 1);
+    const speed = tuning.congestion ? speedFactor(flow + privateLoad(world, segment.id), roadCapacity(world, segment.id, encroached.get(segment.id)), tuning.minSpeedFactor) : 1;
+    // A ford under the flood (floods.ts): everything waits at the bank, whatever the traffic.
+    world.segmentSpeed.set(segment.id, isFlooded(world, segment.id) ? Math.min(speed, tuning.floodSpeed ?? 0.08) : speed);
   }
   // Your buses' speed in each lane: the lane's own capacity against their
   // flow -- and, as danfos encroach, worn toward general traffic's speed:

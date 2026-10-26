@@ -18,6 +18,7 @@ import { buildPark } from "./parks";
 import { buildMetro } from "./metro";
 import { setFreightRate } from "./freightrates";
 import { issueBond, type BondPurpose } from "./bonds";
+import { bridgeFord } from "./floods";
 
 // Every player action as plain data. Data, not a closure, so it can be
 // sent to a worker and replayed there: the forecast (forecast.ts) runs an
@@ -48,8 +49,9 @@ export type ActionSpec =
   | { kind: "bond"; purpose: BondPurpose }
   | { kind: "sell"; routeId: string }
   | { kind: "pledge"; id: string }
-  | { kind: "console"; op: "end-term" | "funds"; amount?: number }
-  | { kind: "union"; unionId: string; answer: "pay" | "concede" | "coop" | "refuse" };
+  | { kind: "console"; op: "end-term" | "funds" | "rains"; amount?: number }
+  | { kind: "union"; unionId: string; answer: "pay" | "concede" | "coop" | "refuse" }
+  | { kind: "bridgeFord"; fordId: string };
 
 /** `amount`: money charged (a repair) or returned (a sale), where the caller wants to say it. */
 export interface ActionOutcome {
@@ -76,6 +78,10 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       return consoleMove(world, spec.op, spec.amount);
     case "union":
       return answerDemand(world, spec.unionId, spec.answer);
+    case "bridgeFord": {
+      const result = bridgeFord(world, spec.fordId);
+      return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };
+    }
     case "bus":
       return addBus(world, spec.a, spec.b);
     case "minibus":

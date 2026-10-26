@@ -994,6 +994,12 @@ Everything else folds into one of these or goes:
   - **On screen:** the verdict and your record.
   - **The design console** behind `?dev=1`.
   - **Not yet in:** the cuts (they wait on your marks); a reason for each far cluster.
+- **Step 6, the first shock -- the rains:** built 2026-10-26 (floods.ts).
+  - **Fords:** every old road's river crossing is a named ford (3-7 a map; the home trunk's always among them). A road you build has its bridge priced in, so only old roads have fords.
+  - **The season:** the first rains between days 45 and 75, then every 180 days. Two weeks ahead the season's two fords are named -- the one most of your vehicles cross first, then one drawn -- the game pauses, and Waiting on you offers **Raise a bridge** at each (₦1,200 a cell of water: ₦2-6k).
+  - **Ignored:** for 20 days everything on that road waits at the bank (it runs at 8% speed). Measured on seed 2418 with three buses over the Lokoja ford: fares down 80% for the flood, ₦3,300 lost; its bridge is ₦4,800, so it pays back within the year. A ford your vehicles don't cross can be left: that's the choice.
+  - **The design console** gets "Rains now".
+  - **Not yet in:** the other named crossings (the narrows and the dear bridge beside a town), straight-or-round at rivers, minerals in the hills beyond the limestone field.
 
 ### Ideas parked (yours, 2026-10-24), with where they'd fit
 

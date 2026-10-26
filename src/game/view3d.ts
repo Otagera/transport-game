@@ -17,6 +17,7 @@ import { roadCapacity } from "@engine/game/congestion";
 import { routingFor } from "@engine/game/rail";
 import { polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/game/roads";
 import { inHome } from "@engine/game/fuel";
+import { isFlooded } from "@engine/game/floods";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { tierOf, type Tier } from "./icons";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
@@ -24,7 +25,7 @@ import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, s
 const M = 8; // metres a map cell
 const HEIGHT = 7; // metres an elevation unit
 const VEHICLE_SCALE = 1.6; // a little larger than life, to be seen from above
-const ROAD_COLOURS = { free: 0x6e6f70, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4 };
+const ROAD_COLOURS = { free: 0x6e6f70, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
 
 export interface View3D {
   /** Show it, built for this world (rebuilt if the world is a new one). */
@@ -298,7 +299,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
       const speed = w.segmentSpeed.get(id) ?? 1;
       const load = ((w.roadFlowEMA.get(id) ?? 0) + privateLoad(w, id)) / Math.max(1e-6, roadCapacity(w, id));
       // Grey when free, amber as it fills, red when jammed: the 2D map's road, in its weight too.
-      road.material.color.setHex(speed < 0.7 ? ROAD_COLOURS.jammed : speed < 0.9 || load > 0.8 ? ROAD_COLOURS.busy : ROAD_COLOURS.free);
+      // Under the flood (floods.ts): the water's colour.
+      if (isFlooded(w, id)) road.material.color.setHex(ROAD_COLOURS.flooded);
+      else road.material.color.setHex(speed < 0.7 ? ROAD_COLOURS.jammed : speed < 0.9 || load > 0.8 ? ROAD_COLOURS.busy : ROAD_COLOURS.free);
     }
   }
 

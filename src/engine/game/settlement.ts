@@ -59,6 +59,9 @@ export type GameEvent =
   // The union (union.ts): a demand on the table, your answer (or ignoring it), his stance crossing a line.
   | { kind: "union-demand"; union: string; chairman: string; text: string; deadlineAt: number }
   | { kind: "union-answered"; union: string; chairman: string; answer: "pay" | "concede" | "coop" | "refuse" | "ignored" }
+  | { kind: "flood-warning"; fords: Array<{ id: string; name: string }>; inDays: number; days: number }
+  | { kind: "flood-rose"; fords: Array<{ id: string; name: string }>; days: number }
+  | { kind: "flood-fell"; fords: Array<{ id: string; name: string }> }
   | { kind: "union-stance"; union: string; chairman: string; stance: "with you" | "wary" | "against you" }
   | { kind: "a-week-on"; label: string; towns: string[]; tripsBy: number; grew: Array<{ id: string; by: number }> };
 

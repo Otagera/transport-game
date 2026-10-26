@@ -273,6 +273,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   }
   drawWardens(ctx, world, view);
   drawStrikeLabels(ctx, world, view);
+  drawFords(ctx, world, view);
   drawTakenLabels(ctx, world, view);
   // Last, so nothing on the map draws through the price.
   if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok, state.ghost.forecast);
@@ -822,6 +823,52 @@ function drawTakenLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: 
     ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.fillText(text, mid.x - 14 - width / 2, mid.y);
+  }
+  ctx.restore();
+}
+/**
+ * The fords (floods.ts): a season's named ones tagged with the day the water rises, flooded ones
+ * in the water's blue; the rest named only zoomed in, where you'd look for a crossing.
+ */
+function drawFords(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
+  const floods = world.floods;
+  if (!floods) return;
+  ctx.save();
+  ctx.font = "700 11px ui-monospace, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const ford of floods.fords) {
+    const coming = floods.phase === "warned" && floods.coming.includes(ford.id);
+    const under = floods.phase === "flood" && floods.under.includes(ford.id);
+    const p = toScreen(view, ford.x, ford.y);
+    const tag = under ? { text: `${ford.name} · FLOODED`, fill: "#2a6f97", ink: "#fff" }
+      : coming ? { text: `${ford.name} · floods day ${gameDay(world, floods.riseAt) - 1}`, fill: COLORS.slow, ink: "#fff" }
+      : null;
+    if (!tag) {
+      // Quiet otherwise: a town's crossing named zoomed in, a site's short road's not at all.
+      const site = world.towns.get(ford.a)?.industry || world.towns.get(ford.b)?.industry;
+      if (site || markScale * markScale < 4) continue;
+      ctx.font = "italic 10px system-ui, sans-serif";
+      ctx.fillStyle = COLORS.labelMuted;
+      ctx.fillText(ford.bridged ? ford.name.replace(/ford$/, "bridge") : ford.name, p.x, p.y + 12 * markScale);
+      ctx.font = "700 11px ui-monospace, monospace";
+      continue;
+    }
+    if (under || coming) {
+      // The crossing itself, ringed.
+      ctx.strokeStyle = tag.fill;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 7 * markScale, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const width = ctx.measureText(tag.text).width + 10;
+    ctx.fillStyle = tag.fill;
+    ctx.beginPath();
+    ctx.roundRect(p.x - width / 2, p.y + 10 * markScale, width, 18, 4);
+    ctx.fill();
+    ctx.fillStyle = tag.ink;
+    ctx.fillText(tag.text, p.x, p.y + 10 * markScale + 9);
   }
   ctx.restore();
 }

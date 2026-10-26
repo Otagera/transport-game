@@ -1,5 +1,6 @@
 import type { TermState } from "./term";
 import type { UnionState } from "./union";
+import type { FloodState } from "./floods";
 import type { GameEvent } from "./settlement";
 import type { LaneState } from "./pushback";
 import type { NamedProject } from "./project";
@@ -233,6 +234,16 @@ export interface GameTuning {
   unionMemoryDays?: number;
   /** The far clusters' offers (clusters.ts): on; a limestone field's output against a quarry's; a farm belt's staple against a farm town's. Absent in older runs: off. */
   clusterOffersEnabled?: boolean;
+  /** The rains (floods.ts, Revision 5, step 6): on; the first rains between these days; then every so many days; named this many days ahead; lasting; fords a season; how fast a flooded road runs; an all-weather bridge's price a cell of water. Absent in older runs: off. */
+  floodsEnabled?: boolean;
+  floodFirstDayMin?: number;
+  floodFirstDayMax?: number;
+  floodEveryDays?: number;
+  floodWarnDays?: number;
+  floodDays?: number;
+  floodFordsPerSeason?: number;
+  floodSpeed?: number;
+  fordBridgePerCell?: number;
   fieldOutputScale?: number;
   farmBeltScale?: number;
   /** Private traffic (private.ts): on; the load a thousand people's cars make (danfo-equivalents a second), the share of a town's size that drives (its growth since day 1 drives whole), how far from a town it fades, cells. Absent in older runs: off. */
@@ -678,6 +689,8 @@ export interface GameWorld {
   /** What the union did between ticks (an answer, an action's effect), reported with the next tick's events. */
   union?: { events: GameEvent[] };
   /** The region's far clusters and their offers (clusters.ts); absent on the slice map. */
+  /** The fords and the rains (floods.ts); absent when the floods are off. */
+  floods?: FloodState;
   clusters?: ClusterDef[];
   home?: { x: number; y: number; width: number; height: number };
   /** The map's rivers and sea as drawn lines, for the screen to draw smooth (the terrain's water is their cells). */
