@@ -52,7 +52,7 @@
       #zoom-control button:hover { border-color: var(--muted); }
       /* The 3D view's labels (view3d.ts): towns by tier, sites quieter; villages only up close. */
       body.in3d #overlays, body.in3d #hint, body.in3d #key { display: none !important; }
-      .label3d { font: 600 12px system-ui, sans-serif; color: #1f2328; background: rgba(255,255,255,0.82); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+      .label3d { pointer-events: auto; cursor: pointer; font: 600 12px system-ui, sans-serif; color: #1f2328; background: rgba(255,255,255,0.82); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
       .label3d.city { font-size: 14px; }
       .label3d.village { font-weight: 500; font-size: 11px; opacity: 0.85; }
       .label3d.site { font-weight: 500; font-size: 11px; color: #6b4520; }
