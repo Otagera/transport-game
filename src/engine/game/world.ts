@@ -1,3 +1,4 @@
+import { addCauseways, highBridgeCost } from "./floods";
 import { waysFor } from "./crossings";
 import type { GeneratedMap, Segment } from "../map/types";
 import type { DemandPair, PathResult, Vehicle } from "../simulation/types";
@@ -219,8 +220,10 @@ export type ActionResult = { ok: true } | { ok: false; reason: string };
 // A new road's price is its plan's (roads.ts: engine/pathing's cost
 // function IS the build price, architecture hard rule 3). The preview and
 // the charge both call this; nothing else prices a road.
-export function roadCost(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest"): number {
-  return planRoad(world, a, b, alignment)?.cost ?? Infinity;
+/** What a road costs; `high`, with its crossings raised to a high bridge (floods.ts: a causeway otherwise). */
+export function roadCost(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest", high = false): number {
+  const plan = planRoad(world, a, b, alignment);
+  return plan ? plan.cost + (high ? highBridgeCost(world, plan.polyline) : 0) : Infinity;
 }
 
 // Paving buys the surface, not the earthworks: the alignment is already
@@ -381,23 +384,26 @@ export function addBusLane(world: GameWorld, a: string, b: string): ActionResult
   return { ok: true };
 }
 
-export function checkRoad(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
+export function checkRoad(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest", high = false): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (alignment !== "cheapest" && !waysFor(world, (way) => planRoad(world, a, b, way)).includes(alignment)) {
     return { ok: false, reason: world.tuning.crossingsEnabled || world.tuning.straightAlignmentEnabled ? "that way isn't open for this road" : SWITCHED_OFF };
   }
   if (roadChain(world, a, b)) return { ok: false, reason: "already connected directly" };
   if (!planRoad(world, a, b, alignment)) return { ok: false, reason: "the water is too wide to bridge here" };
-  if (!canAfford(world.economy, roadCost(world, a, b, alignment))) return { ok: false, reason: "can't afford it" };
+  if (!canAfford(world.economy, roadCost(world, a, b, alignment, high))) return { ok: false, reason: "can't afford it" };
   return { ok: true };
 }
 
-export function buildRoad(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
-  const check = checkRoad(world, a, b, alignment);
+export function buildRoad(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest", high = false): ActionResult {
+  const check = checkRoad(world, a, b, alignment, high);
   if (!check.ok) return check;
   const plan = planRoad(world, a, b, alignment)!;
-  world.economy.funds -= plan.cost;
-  addRoadToMap(world.simulation.map, `road-${world.nextId++}`, a, b, "built", plan);
+  world.economy.funds -= roadCost(world, a, b, alignment, high);
+  const id = `road-${world.nextId++}`;
+  addRoadToMap(world.simulation.map, id, a, b, "built", plan);
+  // Over water, not high: a causeway the rains can take (floods.ts).
+  if (!high) addCauseways(world, world.simulation.map.segments.find((s) => s.id === id)!);
   rebuildNetworks(world);
   return { ok: true };
 }

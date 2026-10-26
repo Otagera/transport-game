@@ -27,7 +27,7 @@ import { bridgeFord } from "./floods";
 
 export type ActionSpec =
   | { kind: "bus" | "minibus" | "brt" | "lorry" | "train" | "freight"; a: string; b: string }
-  | { kind: "road"; a: string; b: string; alignment: Alignment }
+  | { kind: "road"; a: string; b: string; alignment: Alignment; high?: boolean }
   | { kind: "pave"; a: string; b: string }
   | { kind: "lane"; a: string; b: string }
   | { kind: "enforce"; a: string; b: string; enforcement: Enforcement }
@@ -95,7 +95,7 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
     case "freight":
       return addFreightTrain(world, spec.a, spec.b);
     case "road":
-      return buildRoad(world, spec.a, spec.b, spec.alignment);
+      return buildRoad(world, spec.a, spec.b, spec.alignment, spec.high ?? false);
     case "pave":
       return paveRoad(world, spec.a, spec.b);
     case "lane":

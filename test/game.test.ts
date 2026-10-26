@@ -3,7 +3,7 @@ import { waysFor } from "@engine/game/crossings";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { SWITCHED_OFF } from "@engine/game/tuning";
 import { homeBox } from "@engine/game/fuel";
-import { fordBridgeCost, isFlooded } from "@engine/game/floods";
+import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
@@ -4342,5 +4342,69 @@ describe("named crossings, straight or round, the ridge's limestone (crossings.t
     expect(w.towns.has("ridge-field")).toBe(false);
     const [a, b] = [named(w, "Gashua"), named(w, "Potiskum")];
     expect(applyAction(w, { kind: "road", a, b, alignment: "direct" })).toEqual({ ok: false, reason: SWITCHED_OFF });
+  }, 60_000);
+});
+
+describe("a new road over water: a causeway that floods, or a high bridge (floods.ts; brief, Revision 5, step 6)", () => {
+  const quick = { floodFirstDayMin: 4, floodFirstDayMax: 5, floodWarnDays: 2, floodDays: 3, floodEveryDays: 10 };
+  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 8510, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, ...overrides });
+  const named = (w: GameWorld, name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
+  const until = (w: GameWorld, kind: GameEvent["kind"], days = 20) => {
+    for (let i = 0; i < days * SECONDS_PER_GAME_DAY * 30; i += 1) {
+      const hit = gameTick(w, SIM_DT).find((e) => e.kind === kind);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  test("built plain, its crossing is a causeway: at the quoted price, a ford of yours the rains can take", () => {
+    const w = start();
+    const [a, b] = [named(w, "Ganye"), named(w, "Gashua")];
+    const plan = planRoad(w, a, b, "cheapest")!;
+    expect(plan.bridgeCells).toBeGreaterThan(0);
+    const fords = w.floods!.fords.length;
+    const funds = w.economy.funds;
+    expect(applyAction(w, { kind: "road", a, b, alignment: "cheapest" }).ok).toBe(true);
+    expect(funds - w.economy.funds).toBeCloseTo(plan.cost, 0);
+    const added = w.floods!.fords.slice(fords);
+    expect(added.length).toBeGreaterThan(0);
+    for (const ford of added) { expect(ford.built).toBe(true); expect(ford.name).toMatch(/causeway/); }
+  }, 60_000);
+
+  test("built high, it costs the raise on top -- a ford's price a cell -- and never floods", () => {
+    const w = start();
+    const [a, b] = [named(w, "Ganye"), named(w, "Gashua")];
+    const plan = planRoad(w, a, b, "cheapest")!;
+    const raise = highBridgeCost(w, plan.polyline);
+    expect(raise).toBeGreaterThanOrEqual(w.tuning.fordBridgePerCell!);
+    const fords = w.floods!.fords.length;
+    const funds = w.economy.funds;
+    expect(applyAction(w, { kind: "road", a, b, alignment: "cheapest", high: true }).ok).toBe(true);
+    expect(funds - w.economy.funds).toBeCloseTo(plan.cost + raise, 0);
+    expect(w.floods!.fords.length).toBe(fords);
+  }, 60_000);
+
+  test("your buses over a causeway: the rains name it first, and it floods", () => {
+    const w = start();
+    const [a, b] = [named(w, "Ganye"), named(w, "Gashua")];
+    expect(applyAction(w, { kind: "road", a, b, alignment: "cheapest" }).ok).toBe(true);
+    const causeway = w.floods!.fords.find((f) => f.built)!;
+    expect(applyAction(w, { kind: "bus", a, b }).ok).toBe(true);
+    expect(applyAction(w, { kind: "bus", a, b }).ok).toBe(true);
+    const warning = until(w, "flood-warning");
+    if (warning?.kind !== "flood-warning") throw new Error("no warning");
+    expect(warning.fords[0]!.id).toBe(causeway.id);
+    until(w, "flood-rose");
+    for (let i = 0; i < 300; i += 1) gameTick(w, SIM_DT);
+    const piece = roadChain(w, a, b)!.find((s) => isFlooded(w, s.id));
+    expect(piece).toBeTruthy();
+  }, 120_000);
+
+  test("a run played before it (no causewaysEnabled): a new road's bridge never floods", () => {
+    const w = start({ causewaysEnabled: undefined });
+    const [a, b] = [named(w, "Ganye"), named(w, "Gashua")];
+    const fords = w.floods!.fords.length;
+    expect(applyAction(w, { kind: "road", a, b, alignment: "cheapest" }).ok).toBe(true);
+    expect(w.floods!.fords.length).toBe(fords);
   }, 60_000);
 });

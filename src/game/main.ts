@@ -80,6 +80,7 @@ import { createHintState, dismissHint, updateHints } from "./hints";
 import { createScreen } from "./screen";
 import { shortVerdict } from "./verdicts";
 import { waysFor } from "@engine/game/crossings";
+import { highBridgeCost } from "@engine/game/floods";
 import type { View3D } from "./view3d";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
@@ -227,6 +228,8 @@ document.addEventListener("click", (event) => {
 let tool: Tool = "bus";
 // Road and Track tools: bend round the terrain where it's cheaper, or hold the straight line and pay (A).
 let alignment: Alignment = "cheapest";
+// A new road over water: a causeway (floods with the rains) or a high bridge (C; floods.ts).
+let highBridge = false;
 let selectedTown: string | null = null;
 let hoverTown: string | null = null;
 let mouse: { x: number; y: number } | null = null;
@@ -470,7 +473,11 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
   switch (current) {
     case "road": {
       const chain = roadChain(world, a, b);
-      if (!chain) return { kind: "road", a, b, alignment: wayBetween("road", a, b).way };
+      if (!chain) {
+        const way = wayBetween("road", a, b).way;
+        const plan = planRoad(world, a, b, way);
+        return { kind: "road", a, b, alignment: way, high: highBridge && !!plan && highBridgeCost(world, plan.polyline) > 0 };
+      }
       if (chain.some(isDirt)) return { kind: "pave", a, b };
       // A lane already: the Road tool switches its enforcement, strict <-> lax.
       const lane = chain.every((piece) => piece.busLane) ? laneOn(world, a, b) : undefined;
@@ -933,9 +940,12 @@ canvas.addEventListener("click", (event) => {
     else say(`Can't pave: ${result.reason}`, true);
   } else if (tool === "road") {
     const { way } = wayBetween("road", from, town);
-    const cost = roadCost(world, from, town, way);
-    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment: way });
-    if (result.ok) say(`Built road ${townName(from)} – ${townName(town)}${way === "direct" ? ", the straight way" : ""}, for ${naira(cost)}.${later}`);
+    const plan = planRoad(world, from, town, way);
+    const high = highBridge && !!plan && highBridgeCost(world, plan.polyline) > 0;
+    const wet = !!plan && highBridgeCost(world, plan.polyline) > 0;
+    const cost = roadCost(world, from, town, way, high);
+    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment: way, high });
+    if (result.ok) say(`Built road ${townName(from)} – ${townName(town)}${way === "direct" ? ", the straight way" : ""}${!wet ? "" : high ? ", on a high bridge" : ", over a causeway that floods in the rains (C for a high bridge)"}, for ${naira(cost)}.${later}`);
     else say(`Can't build: ${result.reason}`, true);
   } else if (tool === "track") {
     const action = trackAction(world, from, town);
@@ -1001,6 +1011,10 @@ window.addEventListener("keydown", (event) => {
   else if (event.key === "k" || event.key === "K") setTool("track");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
+  else if ((event.key === "c" || event.key === "C") && world.tuning.causewaysEnabled && world.floods) {
+    highBridge = !highBridge;
+    say(highBridge ? "Roads over water: a high bridge, open in the rains." : "Roads over water: a causeway, cheap -- it floods in the rains.", false, 4);
+  }
   else if ((event.key === "a" || event.key === "A") && (world.tuning.straightAlignmentEnabled || world.tuning.crossingsEnabled)) {
     alignment = alignment === "cheapest" ? "direct" : "cheapest";
     renderToolbar();
@@ -1184,18 +1198,24 @@ function ghost(): Ghost | null {
   }
   if (tool === "road") {
     const { way, other: otherWayKind } = wayBetween("road", selectedTown, to);
-    const check = checkRoad(world, selectedTown, to, way);
     const plan = planRoad(world, selectedTown, to, way);
+    const raise = plan ? highBridgeCost(world, plan.polyline) : 0;
+    const high = highBridge && raise > 0;
+    const check = checkRoad(world, selectedTown, to, way, high);
     if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
-    const other = otherWayKind ? planRoad(world, selectedTown, to, otherWayKind) : null;
+    const otherPlan = otherWayKind ? planRoad(world, selectedTown, to, otherWayKind) : null;
+    // The other way priced as this one's built: high, its crossings high too.
+    const other = otherPlan && highBridge ? { ...otherPlan, cost: otherPlan.cost + highBridgeCost(world, otherPlan.polyline) } : otherPlan;
     // Said up front: a road takes no fares, and costs its upkeep every day
     // (step 5). It pays in who it lets travel -- and only in money once you
     // run something on it (playtest, day 31: two roads drained the funds
     // and earned nothing).
     const keep = naira(upkeepFor(world.tuning, plan.length, plan.bridgeCells, false));
-    const label = `${way === "direct" ? `Road straight ${straightWord(plan)}` : "Road"} ${naira(plan.cost)} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${otherWay(plan, other, way)} · ${riders} · earns no fares itself: run a bus on it`;
-    const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost)} · ${check.reason}` };
-    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment: way }, { label: "the road", towns: [selectedTown, to] });
+    // Over water: which kind of crossing, and the other's price (C).
+    const crossing = raise <= 0 ? "" : high ? ` · a high bridge, open in the rains (a causeway ${naira(raise)} less, C)` : ` · a causeway: floods in the rains (a high bridge +${naira(raise)}, C)`;
+    const label = `${way === "direct" ? `Road straight ${straightWord(plan)}` : "Road"} ${naira(plan.cost + (high ? raise : 0))} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${crossing}${otherWay(plan, other, way)} · ${riders} · earns no fares itself: run a bus on it`;
+    const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost + (high ? raise : 0))} · ${check.reason}` };
+    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment: way, high }, { label: "the road", towns: [selectedTown, to] });
   }
   if (tool === "track") {
     const check = checkTrack(world, selectedTown, to, "cheapest");

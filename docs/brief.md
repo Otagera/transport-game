@@ -1006,7 +1006,7 @@ Everything else folds into one of these or goes:
   - **Routing by a named crossing: tried and dropped.** Over 136 unjoined pairs on three maps, one such way was worth offering (₦50 dearer for the same length): the planner already takes the best crossing, and a bridge (₦40 a cell of water) barely costs more than the land. A crossing becomes a decision only if crossings differ in more than price -- see the proposal below.
   - **The ridge's limestone:** a limestone field on the hill range's heights between two clusters (a quarry that never works out), 57-144 cells from your works, past the hauliers' reach: 75 t a day, a quarter of what the works wants, once you bring it -- over the ridge or round it.
   - **Not in:** iron and coal on the range (a second iron source needs the steel chain changed; coal is a chain of its own).
-  - **Proposed, for your word: the crossing as a choice of kind.** A new road across a river chooses a *causeway* (cheap, floods with the rains like a ford) or a *high bridge* (today's price and dearer, all-weather). That makes where and how you cross a real decision, tied to the rains.
+  - **The crossing as a choice of kind** (agreed 2026-10-26, built the same day): a new road over water crosses on a *causeway* at the planner's price (₦40 a cell of water) -- and floods with the rains like a ford -- or on a *high bridge*, ₦1,200 a cell more (C): the same as raising a ford, so building high now or raising later cost the same. A causeway your buses cross is the first the rains name. Track's bridges stay all-weather. The road quote now wraps to a readable width (it had grown past the map's).
 
 ### Ideas parked (yours, 2026-10-24), with where they'd fit
 
