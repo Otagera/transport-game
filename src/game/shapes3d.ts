@@ -202,7 +202,8 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
   switch (kind) {
     case "bus":
     case "brt": {
-      const body = kind === "bus" ? "#2a78d6" : "#c0392b";
+      // White: each is tinted by its route's colour, or its kind's (view3d.ts placeVehicles).
+      const body = "#ffffff";
       const len = kind === "bus" ? 12 : 9;
       const halves = kind === "bus" ? [0] : [-4.8, 4.8];
       for (const off of halves) {
@@ -211,14 +212,14 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
         k2.box(len * 0.9, 0.9, 2.56, GLASS, 0, 0, 1.6);
         k2.box(0.2, 1.2, 2.2, GLASS, len / 2, 0, 1.3);
         wheels(k2, len, 2.5);
-        kit.add(k2.merged(), "#ffffff", { x: off });
+        kit.place(k2.merged(), off, 0, 0); // its own colours kept: windows, tyres
       }
       if (kind === "brt") kit.box(0.8, 2.3, 2.2, "#4a4f55", 0, 0, 0.6);
       break;
     }
     case "minibus":
     case "danfo": {
-      const body = kind === "minibus" ? "#4f97e8" : "#e8b400";
+      const body = kind === "minibus" ? "#ffffff" : "#e8b400";
       kit.box(5.5, 2, 2.2, body, 0, 0, 0.45);
       glassBand(5.5, 2.2, 1.45, 0.7);
       if (kind === "danfo") {
@@ -258,7 +259,7 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
     }
     case "train":
     case "freight": {
-      const body = kind === "train" ? "#2a78d6" : "#8a5a2b";
+      const body = kind === "train" ? "#ffffff" : "#8a5a2b";
       kit.box(18, 3.2, 3, body, 0, 0, 0.8);
       if (kind === "train") kit.box(16.5, 1, 3.06, GLASS, 0, 0, 2.1);
       else for (let i = 0; i < 4; i += 1) kit.box(0.2, 3.3, 3.05, "#5a3a1d", -6.75 + i * 4.5, 0, 0.75);
@@ -333,4 +334,55 @@ export function fillingStation(kit: Kit, rand: Rand, x: number, z: number, ry: n
   k.box(0.3, 6, 0.3, "#5a5f66", 7.5, 5);
   k.box(1.8, 1.4, 0.3, brand, 7.5, 5, 6);
   kit.place(k.merged(), x, 0, z, ry);
+}
+
+// --- What you build at a town: each centred on (0, 0), its front toward +z, placed by view3d.ts ---
+
+/** A motor park: a paved lot, danfos in rows, the union's shelter and its sign. */
+export function motorPark(kit: Kit, rand: Rand, ry: number): void {
+  const k = new Kit();
+  k.box(30, 0.3, 20, "#8e9093");
+  for (let row = 0; row < 2; row += 1) for (let i = 0; i < 6; i += 1) {
+    k.box(2.2, 2, 4.8, rand() < 0.85 ? "#e8b400" : "#f2efe6", -11 + i * 4.4, -4 + row * 9, 0.3);
+    k.box(2.24, 0.25, 4.84, "#1e1e1e", -11 + i * 4.4, -4 + row * 9, 1.1);
+  }
+  k.box(12, 0.3, 4, "#2b8a3e", 0, 8.5, 3.6);
+  for (const px of [-5.5, 5.5]) k.box(0.3, 3.6, 0.3, "#5a5f66", px, 8.5);
+  k.box(0.3, 5, 0.3, "#5a5f66", 14, 9);
+  k.box(3, 1.4, 0.2, "#2b8a3e", 14, 9, 5);
+  kit.place(k.merged(), 0, 0, 0, ry);
+}
+/** A haulage yard: a fenced gravel lot, lorries, stacked goods, a gantry. */
+export function haulageYard(kit: Kit, rand: Rand, ry: number): void {
+  const k = new Kit();
+  k.box(34, 0.25, 24, "#b3a58c");
+  for (const [w, d, x, z] of [[34, 0.3, 0, -12], [34, 0.3, 0, 12], [0.3, 24, -17, 0], [0.3, 24, 17, 0]] as const) k.box(w, 1.8, d, "#7a7f85", x, z);
+  for (let i = 0; i < 4; i += 1) {
+    k.box(2.6, 2.6, 7, "#8a5a2b", -12 + i * 5, -5, 0.25);
+    k.box(2.4, 2.4, 2.2, "#e8e1d4", -12 + i * 5, -0.3, 0.25);
+  }
+  for (let i = 0; i < 6; i += 1) k.box(3, 1.2 + rand() * 1.6, 3, pick(rand, ["#c9a36b", "#8a6a45", "#6f8fa8", "#b4b9bc"]), 6 + (i % 3) * 3.6, 5 + Math.floor(i / 3) * 3.6, 0.25);
+  for (const px of [3, 15]) k.box(0.6, 8, 0.6, "#e0a400", px, 0);
+  k.box(13, 0.8, 0.8, "#e0a400", 9, 0, 8);
+  kit.place(k.merged(), 0, 0, 0, ry);
+}
+/** A rail station: a platform along the track (+x), its house with a red roof. */
+export function railStation(kit: Kit, rand: Rand, ry: number): void {
+  const k = new Kit();
+  k.box(40, 1, 4, "#cfc8bb");
+  k.box(12, 4, 6, pick(rand, ["#efe3c8", "#e2c79a", "#f2efe6"]), 0, 5.5);
+  k.gable(12.6, 6.6, 2.4, "#a0392b", 0, 5.5, 4);
+  k.box(16, 0.25, 3, "#a0392b", -14, 0, 3.6);
+  for (const px of [-21, -7]) k.box(0.25, 2.6, 0.25, "#5a5f66", px, 1, 1);
+  kit.place(k.merged(), 0, 0, 0, ry);
+}
+/** A metro entrance: a glazed pavilion over the stairs, its blue M. */
+export function metroEntrance(kit: Kit, ry: number): void {
+  const k = new Kit();
+  k.box(8, 0.3, 6, "#cfc8bb");
+  k.box(7, 3, 4.5, "#9fd0e6", 0, 0, 0.3);
+  k.box(7.6, 0.4, 5, "#1c5aa6", 0, 0, 3.3);
+  k.box(0.3, 5, 0.3, "#5a5f66", 4.5, 2.5);
+  k.box(1.8, 1.8, 0.3, "#1c5aa6", 4.5, 2.5, 5);
+  kit.place(k.merged(), 0, 0, 0, ry);
 }

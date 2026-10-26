@@ -23,7 +23,8 @@ import { tierOf, type Tier } from "./icons";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
-import { CONCRETE, ROOFS, WALLS, fillingStation, kiosk } from "./shapes3d";
+import { CONCRETE, ROOFS, WALLS, fillingStation, haulageYard, kiosk, metroEntrance, motorPark, railStation } from "./shapes3d";
+import { labelOf, routeLabelKey } from "@engine/game/labels";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
 
 const M = 8; // metres a map cell
@@ -32,7 +33,7 @@ const M = 8; // metres a map cell
 // playtest, 2026-10-26: "see another mountain in 3D").
 const HEIGHT = 2.2;
 const VEHICLE_SCALE = 1.6; // a little larger than life, to be seen from above
-const ROAD_COLOURS = { free: 0x6e6f70, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
+const ROAD_COLOURS = { paved: 0x56585b, dirt: 0xa47a55, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
 
 export interface View3D {
   /** Show it, built for this world (rebuilt if the world is a new one). */
@@ -359,6 +360,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const dx = q.x - o.x, dy = q.y - o.y, len = Math.hypot(dx, dy) || 1;
       const nx = (-dy / len) * (p.w / M / 2), ny = (dx / len) * (p.w / M / 2);
       const l = ground(p.x + nx, p.y + ny, lift), r = ground(p.x - nx, p.y - ny, lift);
+      // A strip laid on a road (its lane, its centre line, a track's rails) rides the road's deck.
+      if (!piers && !clampToMap) {
+        const under = decks.get(cellKey(p.x, p.y));
+        if (under !== undefined) { l.y = Math.max(l.y, under + 0.12); r.y = Math.max(r.y, under + 0.12); }
+      }
       const level = deck[i];
       if (level !== null) {
         l.y = Math.max(l.y, level + lift);
@@ -399,7 +405,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   }
 
   // --- Roads: one mesh each, rebuilt when the network changes, recoloured as traffic does ----
-  const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean; rail: boolean }>();
+  const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean; rail: boolean; base: number; look: string }>();
   const railMaterial = own(new THREE.MeshLambertMaterial({ color: 0x3b3a38, side: THREE.DoubleSide }));
   // Every line a road runs (for keeping buildings off them).
   let roadLines: Point[][] = [];
@@ -409,6 +415,18 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     mesh.geometry.dispose();
     for (const child of mesh.children) (child as THREE.Mesh).geometry?.dispose();
   };
+  /** A polyline moved `off` cells to its left (negative: right), for a lane down a road's side. */
+  function offsetLine(points: Point[], off: number): Point[] {
+    return points.map((p, k) => {
+      const a = points[Math.max(0, k - 1)]!, b = points[Math.min(points.length - 1, k + 1)]!;
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      return { x: p.x - ((b.y - a.y) / len) * off, y: p.y + ((b.x - a.x) / len) * off };
+    });
+  }
+  const laneMaterial = own(new THREE.MeshLambertMaterial({ color: 0xb8433a, side: THREE.DoubleSide }));
+  const lineMaterial = own(new THREE.MeshBasicMaterial({ color: 0xf2efe6, side: THREE.DoubleSide }));
+  /** What a road is drawn as: rebuilt when it changes -- paved, laned, retired (what you've done to it shows). */
+  const roadLook = (segment: { retiredAt?: number; surface?: string; busLane?: boolean; type: string }) => `${segment.type}:${segment.retiredAt !== undefined}:${segment.surface ?? ""}:${!!segment.busLane}`;
   function syncRoads(w: GameWorld): void {
     const segments = w.simulation.map.segments;
     const seen = new Set<string>();
@@ -416,7 +434,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       seen.add(segment.id);
       const retired = segment.retiredAt !== undefined;
       const known = roads.get(segment.id);
-      if (known && known.retired === retired) continue;
+      if (known && known.look === roadLook(segment)) continue;
       if (known) {
         drop(known.mesh);
         known.material.dispose();
@@ -424,20 +442,26 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const line = segmentPolyline(w.simulation.map, segment);
       const rail = segment.type === "rail";
       // Track: a ballast bed with the rails' dark band on it; a road: tarmac or dirt, coloured by its traffic.
-      const material = new THREE.MeshLambertMaterial({ color: rail ? 0x9a9184 : retired ? ROAD_COLOURS.retired : ROAD_COLOURS.free, side: THREE.DoubleSide });
+      // A dirt road is laterite and narrower; a paved one is asphalt with a centre line; a bus lane
+      // a red band down its side. What you've paved and laned reads from the air.
+      const paved = segment.surface === "paved";
+      const base = rail ? 0x9a9184 : retired ? ROAD_COLOURS.retired : paved ? ROAD_COLOURS.paved : ROAD_COLOURS.dirt;
+      const material = new THREE.MeshLambertMaterial({ color: base, side: THREE.DoubleSide });
       // Each a hair above the last: two roads on one line don't flicker through each other.
       const piers = new Kit();
       const lift = 0.35 + (roads.size % 6) * 0.04;
-      const mesh = new THREE.Mesh(ribbonGeometry(line, rail ? 6 : retired ? 5 : 9, lift, piers), material);
+      const mesh = new THREE.Mesh(ribbonGeometry(line, rail ? 6 : retired ? 5 : paved ? 10 : 7.5, lift, piers), material);
       mesh.receiveShadow = true;
       if (rail) mesh.add(new THREE.Mesh(ribbonGeometry(line, 2.6, lift + 0.25), railMaterial));
+      if (!rail && !retired && paved) mesh.add(new THREE.Mesh(ribbonGeometry(line, 0.35, lift + 0.08), lineMaterial));
+      if (!rail && !retired && segment.busLane) for (const side of [1, -1]) mesh.add(new THREE.Mesh(ribbonGeometry(offsetLine(line, (side * 3.4) / M), 2.4, lift + 0.06), laneMaterial));
       if (!piers.empty) {
         const legs = new THREE.Mesh(piers.merged(), pierMaterial);
         legs.castShadow = true;
         mesh.add(legs);
       }
       scene.add(mesh);
-      roads.set(segment.id, { mesh, material, retired, rail });
+      roads.set(segment.id, { mesh, material, retired, rail, base, look: roadLook(segment) });
     }
     for (const [id, road] of roads) {
       if (seen.has(id)) continue;
@@ -459,8 +483,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const load = ((w.roadFlowEMA.get(id) ?? 0) + privateLoad(w, id)) / Math.max(1e-6, roadCapacity(w, id));
       // Grey when free, amber as it fills, red when jammed: the 2D map's road, in its weight too.
       // Under the flood (floods.ts): the water's colour.
+      // Its own surface when free; tinted amber as it fills, red when jammed.
       if (isFlooded(w, id)) road.material.color.setHex(ROAD_COLOURS.flooded);
-      else road.material.color.setHex(speed < 0.7 ? ROAD_COLOURS.jammed : speed < 0.9 || load > 0.8 ? ROAD_COLOURS.busy : ROAD_COLOURS.free);
+      else road.material.color.setHex(road.base).lerp(new THREE.Color(speed < 0.7 ? ROAD_COLOURS.jammed : speed < 0.9 || load > 0.8 ? ROAD_COLOURS.busy : road.base), 0.75);
     }
   }
 
@@ -703,12 +728,18 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), scale = new THREE.Vector3().setScalar(VEHICLE_SCALE), up = new THREE.Vector3(0, 1, 0);
   const headings = new Map<string, number>();
   let placedAt = performance.now();
+  // Your vehicles in their route's colour where you've given it one (labels.ts), else their kind's.
+  const tintColour = new THREE.Color();
+  const KIND_TINT: Partial<Record<VehicleKind3D, string>> = { bus: "#2a78d6", minibus: "#4f97e8", brt: "#c0392b", train: "#2a78d6" };
+  const tinted = new Set<VehicleKind3D>(["bus", "minibus", "brt", "train"]);
   function placeVehicles(w: GameWorld): void {
+    const routeOf = new Map<string, string>();
+    for (const route of w.routes) for (const id of route.vehicleIds) routeOf.set(id, route.id);
     const now = performance.now();
     const turn = Math.min(1, ((now - placedAt) / 1000) * 10);
     placedAt = now;
     const seen = new Set<string>();
-    const byKind = new Map<VehicleKind3D, Array<{ at: THREE.Vector3; heading: number }>>();
+    const byKind = new Map<VehicleKind3D, Array<{ at: THREE.Vector3; heading: number; tint?: string }>>();
     for (const v of w.simulation.vehicles) {
       const pose = poseOf(w, v);
       if (!pose) continue;
@@ -724,18 +755,21 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const heading = was === undefined ? pose.angle : was + Math.atan2(Math.sin(pose.angle - was), Math.cos(pose.angle - was)) * turn;
       headings.set(v.id, heading);
       seen.add(v.id);
-      (byKind.get(kind) ?? byKind.set(kind, []).get(kind)!).push({ at, heading });
+      const route = routeOf.get(v.id);
+      (byKind.get(kind) ?? byKind.set(kind, []).get(kind)!).push({ at, heading, tint: tinted.has(kind) ? (route && labelOf(w, routeLabelKey(route))?.colour) || KIND_TINT[kind] : undefined });
     }
     for (const id of headings.keys()) if (!seen.has(id)) headings.delete(id);
     for (const [kind, mesh] of fleets) if (!byKind.has(kind)) mesh.count = 0;
     for (const [kind, list] of byKind) {
       const mesh = fleet(kind, list.length);
-      list.forEach(({ at, heading }, i) => {
+      list.forEach(({ at, heading, tint }, i) => {
         quat.setFromAxisAngle(up, -heading);
         mesh.setMatrixAt(i, matrix.compose(at, quat, scale));
+        if (tint) mesh.setColorAt(i, tintColour.set(tint));
       });
       mesh.count = list.length;
       mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
   }
 
@@ -931,6 +965,63 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const cleared = new Set(taken);
     clearTrees((cell) => cleared.has(cell));
   }
+  // What you've built at towns (your word: make 3D show your own work): a motor park, a haulage
+  // yard, a rail station where the track stops, metro entrances. Each stands just outside its
+  // town's houses, on its own side; one mesh, rebuilt when any of them changes.
+  let builds: THREE.Mesh | null = null;
+  let buildsKey = "";
+  function syncBuilds(w: GameWorld): void {
+    const stations = new Set(w.simulation.map.segments.filter((s) => s.type === "rail" && s.retiredAt === undefined).flatMap((s) => [s.fromNodeId, s.toNodeId]));
+    const key = `${[...w.parks].sort()}|${[...w.yards].sort()}|${[...stations].sort()}|${[...w.metros].map(([t, n]) => `${t}:${n}`).sort()}`;
+    if (key === buildsKey) return;
+    buildsKey = key;
+    if (builds) { scene.remove(builds); builds.geometry.dispose(); builds = null; }
+    const kit = new Kit();
+    const cleared: number[] = [];
+    const standAt = (town: GameTown, angle: number, make: (k: Kit, ry: number) => void) => {
+      const r = (town.industry ? 2.5 : reachCells.get(town.id) ?? 3) + 1.6;
+      // Round the town from its own side until a dry, roadless spot.
+      for (let k = 0; k < 16; k += 1) {
+        const a = angle + k * 0.4 * (k % 2 ? 1 : -1);
+        const cx = town.x + Math.cos(a) * r, cy = town.y + Math.sin(a) * r;
+        const cell = Math.round(cy) * W + Math.round(cx);
+        if (cx < 2 || cy < 2 || cx > W - 3 || cy > H - 3 || terrain.water[cell] === 1 || occupied[cell] === ROAD || occupied[cell] === WET) continue;
+        const one = new Kit();
+        make(one, a + Math.PI / 2);
+        kit.place(one.merged(), cx * M, elevationAt(cx, cy) * HEIGHT - 0.15, cy * M);
+        for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) cleared.push(cell + dy * W + dx);
+        return;
+      }
+    };
+    for (const id of w.parks) { const t = w.towns.get(id); if (t) standAt(t, 0.3, (k, ry) => motorPark(k, seeded(`park-${id}`), ry)); }
+    for (const id of w.yards) { const t = w.towns.get(id); if (t) standAt(t, 2.4, (k, ry) => haulageYard(k, seeded(`yard-${id}`), ry)); }
+    for (const id of stations) {
+      const t = w.towns.get(id);
+      if (!t || t.industry) continue;
+      // Beside the track, where it comes into the town.
+      const seg = w.simulation.map.segments.find((s) => s.type === "rail" && (s.fromNodeId === id || s.toNodeId === id))!;
+      const line = segmentPolyline(w.simulation.map, seg);
+      const out = seg.fromNodeId === id ? line : [...line].reverse();
+      const [, rest] = splitPolyline(out, Math.min(polylineLength(out) * 0.5, (reachCells.get(id) ?? 3) * 0.6));
+      const p = rest[0]!, q = rest[1] ?? out[out.length - 1]!;
+      const dir = Math.atan2(q.y - p.y, q.x - p.x);
+      const sx = p.x - Math.sin(dir) * 1.1, sy = p.y + Math.cos(dir) * 1.1;
+      const one = new Kit();
+      railStation(one, seeded(`station-${id}`), -dir);
+      kit.place(one.merged(), sx * M, elevationAt(sx, sy) * HEIGHT - 0.1, sy * M);
+    }
+    for (const [id, lines] of w.metros) {
+      const t = w.towns.get(id);
+      for (let n = 0; t && n < lines; n += 1) standAt(t, 4.2 + n * 1.3, (k, ry) => metroEntrance(k, ry));
+    }
+    if (kit.empty) return;
+    builds = new THREE.Mesh(kit.merged(), material);
+    builds.castShadow = true;
+    builds.receiveShadow = true;
+    scene.add(builds);
+    const gone = new Set(cleared);
+    clearTrees((cell) => gone.has(cell));
+  }
   /** A road built since, or a town grown: the trees in its way go. */
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   function clearTrees(gone: (cell: number) => boolean): void {
@@ -985,6 +1076,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         slowAt = now;
         colourRoads(w);
         syncTowns(w);
+        if (planted) syncBuilds(w);
         if (!planted) {
           plant(w);
           buildRoadside(w);
