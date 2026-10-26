@@ -1184,3 +1184,22 @@ room above `cementFreeShare` (+40%) is scaled by cement served, then the room ab
 - **Run files replay as played:** each change sits behind a tuning key a run file played
   before it lacks (`newRefineryEnabled`, `exportsPaidOnce`, `growthIgnoresCommutes`,
   `parksEnabled`), so undefined means the old behaviour.
+
+### Round a flooded ford (2026-10-26, `floodDetour`)
+
+A route's vehicles re-plan their path at **either end** of the route (`takeShortestRoad`,
+called from tick.ts's loaders before anyone boards). Under the rains they choose by time, not
+length: `findPath`'s optional `slowdown` counts a flooded piece as 1 / `floodSpeed` (12.5×) its
+length, so a bus goes round by a dry road where that's quicker than waiting at the bank, and
+back the short way once the water falls. A re-plan is skipped while anyone aboard is bound for
+a stop the new way skips (riders ride through either end). Your choice, from an outside review
+("shocks should test the redundancy of the network you built"):
+- **On day 1 no ford has a dry way round** (26 fords over six maps): the old network crosses
+  each river once. A detour exists only where you've built a second crossing: a high bridge,
+  or a causeway (which floods too, when the rains name it).
+- **Measured** with a high-bridged second crossing and three buses over the ford, a 10-day
+  flood: the route's net over the flood ₦1,687 / ₦2,765 / ₦3,528 on seeds 2418 / 7585 / 4242,
+  against −₦203 / ₦1,398 / ₦1,303 before. Re-planning at the start only, half the buses crawled
+  back over the ford before they could turn (₦1,193 / ₦2,338 / ₦2,788).
+- Riders' own paths (`roadPath`, cached) and the danfos are unchanged: the danfos already
+  refuse a run over a road below `informalMinSpeed`.

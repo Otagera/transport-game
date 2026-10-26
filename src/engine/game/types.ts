@@ -244,6 +244,8 @@ export interface GameTuning {
   floodsEnabled?: boolean;
   /** A new road over water: a causeway that floods, or a high bridge (floods.ts). Absent in older runs: off. */
   causewaysEnabled?: boolean;
+  /** Your road vehicles re-plan at either end of their route, round a flooded road where a dry one is quicker (world.ts takeShortestRoad). Absent in older runs: off, at the start only, by length. */
+  floodDetour?: boolean;
   /** Rivers cut valleys through the hills (terrain.ts). Absent in older runs: off, their maps as drawn. */
   riverValleys?: boolean;
   floodFirstDayMin?: number;

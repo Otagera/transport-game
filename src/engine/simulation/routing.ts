@@ -32,7 +32,12 @@ function heuristic(a: { x: number; y: number }, b: { x: number; y: number }): nu
 // whatever's already built. Edge weight is the segment's travel length
 // (straight-line unless the segment says otherwise, never shorter), so
 // straight-line distance stays an admissible heuristic.
-export function findPath(context: RoutingContext, fromId: string, toId: string): PathResult | null {
+//
+// `slowdown`, if given, multiplies an edge's weight (at least 1, so the heuristic stays
+// admissible): how much slower than free a piece is to cross, for a vehicle choosing its way by
+// time -- a flooded ford (game/world.ts takeShortestRoad). The distance returned is then that
+// weighted length, not the road's.
+export function findPath(context: RoutingContext, fromId: string, toId: string, slowdown?: (segmentId: string) => number): PathResult | null {
   if (fromId === toId) {
     return { nodeIds: [fromId], segmentIds: [], distance: 0 };
   }
@@ -81,7 +86,7 @@ export function findPath(context: RoutingContext, fromId: string, toId: string):
     const currentG = gScore.get(current) ?? Infinity;
 
     for (const edge of context.graph.get(current) ?? []) {
-      const tentativeG = currentG + edge.weight;
+      const tentativeG = currentG + (slowdown ? edge.weight * Math.max(1, slowdown(edge.segmentId)) : edge.weight);
       if (tentativeG < (gScore.get(edge.to) ?? Infinity)) {
         cameFrom.set(edge.to, { node: current, segmentId: edge.segmentId });
         gScore.set(edge.to, tentativeG);

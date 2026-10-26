@@ -22,7 +22,9 @@ The region's map rework and a 45% faster tick (same results) are merged into `ma
 **From an outside review of seed 7585** (2026-10-26, brief Revision 5, Built so far): pledges name
 their move and price; a fuel pledge only where a town is really short and a source can reach it
 (the reviewer's fuel pledge kept itself); the map's modes clearer; selection in 3D lights its
-connections. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
+connections; 3D's look (a filmic grade, haze, trees in groves) and its state (fuel sellers, dust,
+a growing town's market); your buses go round a flooded ford by a dry road you built
+(`floodDetour`). **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

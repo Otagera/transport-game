@@ -1021,6 +1021,11 @@ Everything else folds into one of these or goes:
   - **The map's modes**: the network steps back under an overlay and a caption names what it
     shows; the hint off the map's middle. **3D**: a selection lights its connections, rings the
     town and glides the camera to it.
+  - **Round a flooded ford** (your choice over a "divert" button): your buses re-plan at either
+    end of their route and go round by a dry road where that's quicker than the flood; back
+    once it falls (engine.md, Round a flooded ford). No ford has a dry way round on day 1: it's
+    the second crossing you build that rides out the rains. **3D shows the world's state**:
+    fuel sellers where a town is short, dust on worn roads, market umbrellas in a growing town.
   - **Open, yours to decide: the grant against the big restores.** "Each term's capital grant
     is paid up front, sized so one big project fits" doesn't hold: term 1 opens with ₦22.5k,
     the restores cost ₦45-80k, and on day 1 a bond is refused (repayments would pass 30% of

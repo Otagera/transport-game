@@ -183,13 +183,14 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   const routeRevenue = new Map<string, number>();
   const plans = tripPlans(world);
 
-  // Arriving at the start of its route, a road vehicle takes a shorter road
-  // built since it was bought -- before it loads, so riders board for the
-  // stops it will make.
+  // Arriving at either end of its route, a road vehicle takes a shorter road
+  // built since it was bought, or a dry one round a flooded ford -- before it
+  // loads, so riders board for the stops it will make. (At one end only, half a
+  // route's buses crawled back over a flooded ford before they could turn.)
   const atStart = (vehicle: Vehicle, at: string, index: number) => {
-    if (index !== 0 || world.railVehicles.has(vehicle.id)) return;
+    if (world.railVehicles.has(vehicle.id)) return;
     const route = routeById.get(routeOf.get(vehicle.id) ?? "");
-    if (route && at === route.a) takeShortestRoad(world, vehicle, route);
+    if (route && ((at === route.a && index === 0) || (world.tuning.floodDetour && at === route.b))) takeShortestRoad(world, vehicle, route, at);
   };
 
   const busLoader: Loader = (vehicle, at, index) => {

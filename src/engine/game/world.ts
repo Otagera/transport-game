@@ -552,20 +552,36 @@ export function placeAtCycleFraction(world: GameWorld, vehicle: Vehicle, fractio
 }
 
 /**
- * A road vehicle arriving at the start of its route (`route.a`) takes the
- * shortest road round now, if a road built since it was bought gives a
- * shorter one. Called there, after everyone aboard has got off and before
- * anyone boards (tick.ts), so nobody rides to a stop the new way skips (the
- * playtest, day 273: buses kept the long way round after the two towns
- * were joined directly). It stays at index 0, the stop it's at.
+ * A road vehicle arriving at either end of its route takes the shortest road
+ * round now, if a road built since it was bought gives a shorter one. Called
+ * there, after those for that stop have got off and before anyone boards
+ * (tick.ts) -- and only if nobody still aboard is bound for a stop the new
+ * way skips (else at the next end) -- so nobody rides to a stop it no longer
+ * makes (the playtest, day 273: buses kept the long way round after the two
+ * towns were joined directly). It stays at the stop it's at: index 0 at
+ * `route.a`, the outward leg's end at `route.b`.
  */
-export function takeShortestRoad(world: GameWorld, vehicle: Vehicle, route: GameRoute): void {
-  const there = findPath(world.simulation.routing, route.a, route.b);
-  const back = findPath(world.simulation.routing, route.b, route.a);
+export function takeShortestRoad(world: GameWorld, vehicle: Vehicle, route: GameRoute, at: string = route.a): void {
+  // Under the rains, the quickest way, not the shortest: a flooded road counts as long as it is
+  // slow (1 / floodSpeed), so a route goes round by a dry road where that's quicker than waiting
+  // at the bank, and back once the water falls (your choice, 2026-10-26: a network with another
+  // way across rides out the rains; outside review: shocks should test its redundancy).
+  const detour = !!world.tuning.floodDetour;
+  const flooded = world.floods?.flooded;
+  const slowdown = detour && world.tuning.floodsEnabled && flooded && flooded.size > 0
+    ? (id: string) => (flooded.has(id) ? 1 / Math.max(0.01, world.tuning.floodSpeed ?? 0.08) : 1)
+    : undefined;
+  const there = findPath(world.simulation.routing, route.a, route.b, slowdown);
+  const back = findPath(world.simulation.routing, route.b, route.a, slowdown);
   if (!there || !back) return;
   const path = [...there.nodeIds, ...back.nodeIds.slice(1, -1)];
   if (path.length === vehicle.path.length && path.every((id, i) => id === vehicle.path[i])) return;
+  if (detour) {
+    const stops = new Set(path);
+    if (vehicle.cargo.some((entry) => !stops.has(entry.to))) return;
+  }
   vehicle.path = path;
+  vehicle.pathIndex = detour && at === route.b ? there.nodeIds.length - 1 : 0;
   world.plans = null; // the stops it makes have changed, and riders' plans with them
 }
 

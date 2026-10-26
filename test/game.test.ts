@@ -4304,6 +4304,35 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
     expect(w.floods!.flooded.size).toBeLessThan(before);
   }, 120_000);
 
+  test("your buses go round a flooded ford by a dry road you built, and back when the water falls", () => {
+    // Seed 7585: the Ikire ford on the Ikire-Itori road; a high-bridged road Ikire-Ipetu is the other way across.
+    const w = startRun(GAME_MAP, 7585, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, floodFordsPerSeason: 1, floodDays: 8 });
+    const id = (name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
+    const [ikire, itori, ipetu] = [id("Ikire"), id("Itori"), id("Ipetu")];
+    expect(applyAction(w, { kind: "road", a: ikire, b: ipetu, alignment: "cheapest", high: true }).ok).toBe(true);
+    for (let i = 0; i < 3; i += 1) applyAction(w, { kind: "bus", a: ikire, b: itori });
+    const buses = w.routes.flatMap((r) => r.vehicleIds).map((v) => w.simulation.vehicles.find((x) => x.id === v)!);
+    const over = (v: (typeof buses)[number]) => v.path.some((node, k) => {
+      const from = v.path[(k - 1 + v.path.length) % v.path.length]!;
+      const seg = w.simulation.routing.graph.get(from)?.find((e) => e.to === node)?.segmentId;
+      return !!seg && w.floods!.flooded.has(seg);
+    });
+    expect(until(w, "flood-rose")?.kind).toBe("flood-rose");
+    expect(w.floods!.flooded.size).toBeGreaterThan(0);
+    const flooded = new Set(w.floods!.flooded);
+    tick(w, 5);
+    // Most have turned at an end and gone round (one may still be crawling out of the water).
+    expect(buses.filter((v) => !over(v)).length).toBeGreaterThanOrEqual(2);
+    expect(until(w, "flood-fell")?.kind).toBe("flood-fell");
+    tick(w, 4);
+    // Back the short way, over the old road, once it's dry.
+    const back = buses.filter((v) => v.path.some((node, k) => {
+      const from = v.path[(k - 1 + v.path.length) % v.path.length]!;
+      return flooded.has(w.simulation.routing.graph.get(from)?.find((e) => e.to === node)?.segmentId ?? "");
+    }));
+    expect(back.length).toBeGreaterThanOrEqual(2);
+  }, 180_000);
+
   test("a run played before it (no floodsEnabled) has no fords", () => {
     const w = start({ floodsEnabled: undefined });
     expect(w.floods).toBeUndefined();
