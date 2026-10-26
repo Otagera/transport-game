@@ -236,7 +236,10 @@ let view3d: View3D | null = null;
 let in3d = false;
 async function toggle3d(): Promise<void> {
   in3d = !in3d;
-  if (in3d && !view3d) view3d = (await import("./view3d")).createView3D();
+  if (in3d && !view3d) view3d = (await import("./view3d")).createView3D((id) => {
+    // A town or site clicked in 3D: its panel, as a click on the map would.
+    screen.select({ kind: world.towns.get(id)?.industry ? "site" : "town", id });
+  });
   if (in3d) view3d?.show(world);
   else view3d?.hide();
   // The overlays, key and hints are the 2D map's (index.html hides them under body.in3d).

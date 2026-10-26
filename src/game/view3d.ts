@@ -36,7 +36,8 @@ export interface View3D {
   readonly shown: boolean;
 }
 
-export function createView3D(): View3D {
+/** `onPick`: a town or site clicked (its mesh or its label) -- main.ts opens its panel. */
+export function createView3D(onPick: (townId: string) => void = () => {}): View3D {
   const host = document.createElement("div");
   host.id = "view3d";
   host.style.cssText = "position:fixed;inset:0;display:none;";
@@ -64,6 +65,18 @@ export function createView3D(): View3D {
   };
   addEventListener("resize", resize);
   resize();
+  // A click (not a drag that turned the camera) on a town's buildings picks it.
+  const ray = new THREE.Raycaster();
+  let down: { x: number; y: number } | null = null;
+  renderer.domElement.addEventListener("pointerdown", (event) => { down = { x: event.clientX, y: event.clientY }; });
+  renderer.domElement.addEventListener("pointerup", (event) => {
+    if (!down || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5 || !built) return;
+    down = null;
+    ray.setFromCamera(new THREE.Vector2((event.clientX / innerWidth) * 2 - 1, -(event.clientY / innerHeight) * 2 + 1), camera);
+    const hit = ray.intersectObjects(built.pickable, false)[0];
+    const id = hit?.object.userData.townId as string | undefined;
+    if (id) onPick(id);
+  });
 
   let built: Built | null = null;
   let shown = false;
@@ -74,7 +87,7 @@ export function createView3D(): View3D {
     show(world) {
       if (built?.world !== world) {
         built?.dispose();
-        built = build(world, camera, controls);
+        built = build(world, camera, controls, onPick);
       }
       host.style.display = "block";
       shown = true;
@@ -100,11 +113,13 @@ interface Built {
   world: GameWorld;
   scene: THREE.Scene;
   sun: THREE.DirectionalLight;
+  /** The towns' and sites' meshes, for a click. */
+  pickable: THREE.Object3D[];
   update(world: GameWorld): void;
   dispose(): void;
 }
 
-function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: OrbitControls): Built {
+function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: OrbitControls, onPick: (townId: string) => void): Built {
   const { terrain } = world.simulation.map;
   const W = terrain.width;
   const H = terrain.height;
@@ -250,7 +265,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
   }
 
   // --- Roads: one mesh each, rebuilt when the network changes, recoloured as traffic does ----
-  const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean }>();
+  const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean; rail: boolean }>();
+  const railMaterial = own(new THREE.MeshLambertMaterial({ color: 0x3b3a38, side: THREE.DoubleSide }));
   // Every line a road runs (for keeping buildings off them).
   let roadLines: Point[][] = [];
   const pierMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -272,18 +288,22 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
         known.material.dispose();
       }
       const line = segmentPolyline(w.simulation.map, segment);
-      const material = new THREE.MeshLambertMaterial({ color: retired ? ROAD_COLOURS.retired : ROAD_COLOURS.free, side: THREE.DoubleSide });
+      const rail = segment.type === "rail";
+      // Track: a ballast bed with the rails' dark band on it; a road: tarmac or dirt, coloured by its traffic.
+      const material = new THREE.MeshLambertMaterial({ color: rail ? 0x9a9184 : retired ? ROAD_COLOURS.retired : ROAD_COLOURS.free, side: THREE.DoubleSide });
       // Each a hair above the last: two roads on one line don't flicker through each other.
       const piers = new Kit();
-      const mesh = new THREE.Mesh(ribbonGeometry(line, retired ? 5 : 9, 0.35 + (roads.size % 6) * 0.04, piers), material);
+      const lift = 0.35 + (roads.size % 6) * 0.04;
+      const mesh = new THREE.Mesh(ribbonGeometry(line, rail ? 6 : retired ? 5 : 9, lift, piers), material);
       mesh.receiveShadow = true;
+      if (rail) mesh.add(new THREE.Mesh(ribbonGeometry(line, 2.6, lift + 0.25), railMaterial));
       if (!piers.empty) {
         const legs = new THREE.Mesh(piers.merged(), pierMaterial);
         legs.castShadow = true;
         mesh.add(legs);
       }
       scene.add(mesh);
-      roads.set(segment.id, { mesh, material, retired });
+      roads.set(segment.id, { mesh, material, retired, rail });
     }
     for (const [id, road] of roads) {
       if (seen.has(id)) continue;
@@ -296,6 +316,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
   function colourRoads(w: GameWorld): void {
     for (const [id, road] of roads) {
       if (road.retired) continue;
+      if (road.rail) {
+        // Disused track fades, as on the 2D map.
+        road.material.color.setHex(w.railOutOfService.has(id) ? 0xc9c2b4 : 0x9a9184);
+        continue;
+      }
       const speed = w.segmentSpeed.get(id) ?? 1;
       const load = ((w.roadFlowEMA.get(id) ?? 0) + privateLoad(w, id)) / Math.max(1e-6, roadCapacity(w, id));
       // Grey when free, amber as it fills, red when jammed: the 2D map's road, in its weight too.
@@ -431,9 +456,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
         mesh.position.copy(ground(town.x, town.y)).add(new THREE.Vector3(x, 0, z));
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.userData.townId = town.id;
         scene.add(mesh);
         const text = document.createElement("div");
         text.className = town.industry ? "label3d site" : `label3d ${tier}`;
+        text.addEventListener("click", () => onPick(town.id));
         const label = new CSS2DObject(text);
         label.position.copy(ground(town.x + x / M, town.y + z / M, town.industry ? 30 : 45));
         scene.add(label);
@@ -539,6 +566,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: Orbi
     world,
     scene,
     sun,
+    get pickable() {
+      return [...towns.values()].map((t) => t.mesh);
+    },
     update(w) {
       // The network's shape changes rarely; check it cheaply, rebuild only then.
       const segments = w.simulation.map.segments;
