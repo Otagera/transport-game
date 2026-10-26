@@ -25,9 +25,15 @@ export function buildGameTerrain(def: GameMapDef): TerrainField {
   const rivers = def.terrain?.rivers ?? [];
   const hills = def.terrain?.hills ?? [];
 
+  // Rivers cut their valleys (your playtest, 2026-10-26: "the river through the mountain" --
+  // a river ran over the range, in 2D and 3D): the ground falls to the water's level at its
+  // banks, back to the hill's own height VALLEY cells out. A range a river crosses has a gorge.
+  const valleys = !!def.terrain?.valleys;
+  const VALLEY = 5;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const i = y * width + x;
+      let bank = Infinity;
       for (const river of rivers) {
         for (let k = 1; k < river.points.length; k += 1) {
           const [ax, ay] = river.points[k - 1]!;
@@ -36,6 +42,7 @@ export function buildGameTerrain(def: GameMapDef): TerrainField {
           // A river narrows and widens between its points: a narrow stretch is a cheap crossing.
           const width = river.widths ? river.widths[k - 1]! + (river.widths[k]! - river.widths[k - 1]!) * t : river.width;
           if (distance <= width / 2) water[i] = 1;
+          bank = Math.min(bank, distance - width / 2);
         }
       }
       // A hill is a smooth bump: full height at its centre, zero at its
@@ -44,6 +51,10 @@ export function buildGameTerrain(def: GameMapDef): TerrainField {
       for (const hill of hills) {
         const d = Math.hypot(x - hill.x, y - hill.y) / hill.radius;
         if (d < 1) elevation[i] += hill.height * (1 - d * d) ** 2;
+      }
+      if (valleys && elevation[i]! > 0) {
+        const v = Math.max(0, Math.min(1, bank / VALLEY));
+        elevation[i] = elevation[i]! * v * v * (3 - 2 * v);
       }
     }
   }

@@ -1,4 +1,5 @@
 import { laneMood } from "@engine/game/union";
+import { LINE_COLOURS, labelOf, roadLabelKey, routeLabelKey } from "@engine/game/labels";
 import { waysFor } from "@engine/game/crossings";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { SWITCHED_OFF } from "@engine/game/tuning";
@@ -4407,4 +4408,37 @@ describe("a new road over water: a causeway that floods, or a high bridge (flood
     expect(applyAction(w, { kind: "road", a, b, alignment: "cheapest" }).ok).toBe(true);
     expect(w.floods!.fords.length).toBe(fords);
   }, 60_000);
+});
+
+describe("your names and colours (labels.ts; brief, The map, \"Your mark on it\", 1)", () => {
+  const switches = { all: false, goodsOff: false, wearOff: false };
+
+  test("a route gets a name and a colour, a road a name; a blank clears; nonsense is refused", () => {
+    const w = startRun(GAME_MAP, 3, switches, null, { warmUpDays: 0, startingFunds: 1e6 });
+    const road = w.simulation.map.segments.find((s) => s.type === "road")!;
+    const [a, b] = [road.fromNodeId, road.toNodeId];
+    expect(applyAction(w, { kind: "bus", a, b }).ok).toBe(true);
+    const route = w.routes[0]!;
+    expect(applyAction(w, { kind: "label", key: routeLabelKey(route.id), name: "  The   Shuttle ", colour: LINE_COLOURS[3] }).ok).toBe(true);
+    expect(labelOf(w, routeLabelKey(route.id))).toEqual({ name: "The Shuttle", colour: LINE_COLOURS[3] });
+    expect(applyAction(w, { kind: "label", key: roadLabelKey(b, a), name: "Old Trunk Road" }).ok).toBe(true);
+    expect(labelOf(w, roadLabelKey(a, b))?.name).toBe("Old Trunk Road");
+    expect(applyAction(w, { kind: "label", key: roadLabelKey(a, b), colour: LINE_COLOURS[0] }).ok).toBe(false);
+    expect(applyAction(w, { kind: "label", key: routeLabelKey(route.id), colour: "#123456" }).ok).toBe(false);
+    expect(applyAction(w, { kind: "label", key: "route:nowhere", name: "x" }).ok).toBe(false);
+    expect(applyAction(w, { kind: "label", key: routeLabelKey(route.id), name: "", colour: "" }).ok).toBe(true);
+    expect(labelOf(w, routeLabelKey(route.id))).toEqual({});
+  }, 60_000);
+
+  test("a run file keeps them: the replay has the same names", () => {
+    const world = startRun(GAME_MAP, 3, switches, null, { warmUpDays: 0, startingFunds: 1e6 });
+    const recorder = createRunRecorder(world, 3, switches, null);
+    const act = (action: Parameters<typeof applyAction>[1]) => { if (applyAction(world, action).ok) recordAction(recorder, world, action); };
+    const road = world.simulation.map.segments.find((s) => s.type === "road")!;
+    act({ kind: "bus", a: road.fromNodeId, b: road.toNodeId });
+    act({ kind: "label", key: routeLabelKey(world.routes[0]!.id), name: "Line 1", colour: LINE_COLOURS[1] });
+    for (let i = 0; i < 30; i += 1) recordTick(recorder, world, gameTick(world, SIM_DT));
+    const replayed = replayRun(GAME_MAP, JSON.parse(JSON.stringify(runFile(recorder))) as RunFile);
+    expect(replayed.labels).toEqual(world.labels);
+  }, 90_000);
 });

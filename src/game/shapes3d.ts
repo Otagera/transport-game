@@ -40,8 +40,8 @@ export class Kit {
     this.parts.push(g);
   }
   /** A piece already coloured (another kit's merged()), moved into place. */
-  place(geo: THREE.BufferGeometry, x: number, y: number, z: number): void {
-    this.parts.push(geo.clone().translate(x, y, z));
+  place(geo: THREE.BufferGeometry, x: number, y: number, z: number, ry = 0): void {
+    this.parts.push(geo.clone().rotateY(ry).translate(x, y, z));
   }
   /** A box standing on y = 0 at its centre (x, z), w along x, d along z. */
   box(w: number, h: number, d: number, colour: string | number, x = 0, z = 0, y = 0, ry = 0): void {
@@ -76,9 +76,9 @@ export class Kit {
 
 // --- Buildings -----------------------------------------------------------------------------
 
-const WALLS = ["#efe3c8", "#e2c79a", "#d9a066", "#9cc5d6", "#b9d3a5", "#f2efe6", "#e8b8a0", "#c98d6a"];
-const ROOFS = ["#a7aeb3", "#9aa3a9", "#8c5a3c", "#a0603e", "#6f8fa8", "#b4b9bc"];
-const CONCRETE = ["#cfc8bb", "#d9d3c7", "#bfb8aa", "#e0d8c8"];
+export const WALLS = ["#efe3c8", "#e2c79a", "#d9a066", "#9cc5d6", "#b9d3a5", "#f2efe6", "#e8b8a0", "#c98d6a"];
+export const ROOFS = ["#a7aeb3", "#9aa3a9", "#8c5a3c", "#a0603e", "#6f8fa8", "#b4b9bc"];
+export const CONCRETE = ["#cfc8bb", "#d9d3c7", "#bfb8aa", "#e0d8c8"];
 
 /** A bungalow in its compound: plastered walls, a zinc hip roof, a wall round the yard. */
 export function bungalow(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
@@ -202,7 +202,8 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
   switch (kind) {
     case "bus":
     case "brt": {
-      const body = kind === "bus" ? "#2a78d6" : "#c0392b";
+      // White: each is tinted by its route's colour, or its kind's (view3d.ts placeVehicles).
+      const body = "#ffffff";
       const len = kind === "bus" ? 12 : 9;
       const halves = kind === "bus" ? [0] : [-4.8, 4.8];
       for (const off of halves) {
@@ -211,14 +212,14 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
         k2.box(len * 0.9, 0.9, 2.56, GLASS, 0, 0, 1.6);
         k2.box(0.2, 1.2, 2.2, GLASS, len / 2, 0, 1.3);
         wheels(k2, len, 2.5);
-        kit.add(k2.merged(), "#ffffff", { x: off });
+        kit.place(k2.merged(), off, 0, 0); // its own colours kept: windows, tyres
       }
       if (kind === "brt") kit.box(0.8, 2.3, 2.2, "#4a4f55", 0, 0, 0.6);
       break;
     }
     case "minibus":
     case "danfo": {
-      const body = kind === "minibus" ? "#4f97e8" : "#e8b400";
+      const body = kind === "minibus" ? "#ffffff" : "#e8b400";
       kit.box(5.5, 2, 2.2, body, 0, 0, 0.45);
       glassBand(5.5, 2.2, 1.45, 0.7);
       if (kind === "danfo") {
@@ -258,7 +259,7 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
     }
     case "train":
     case "freight": {
-      const body = kind === "train" ? "#2a78d6" : "#8a5a2b";
+      const body = kind === "train" ? "#ffffff" : "#8a5a2b";
       kit.box(18, 3.2, 3, body, 0, 0, 0.8);
       if (kind === "train") kit.box(16.5, 1, 3.06, GLASS, 0, 0, 2.1);
       else for (let i = 0; i < 4; i += 1) kit.box(0.2, 3.3, 3.05, "#5a3a1d", -6.75 + i * 4.5, 0, 0.75);
@@ -267,4 +268,121 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
     }
   }
   return kit.merged();
+}
+
+// --- Trees: the savanna's, standing on y = 0, about life size ------------------------------
+
+export type TreeKind = "acacia" | "shade" | "palm" | "bush";
+/** A tree's shape; each kind one InstancedMesh, scaled and turned per tree. */
+export function treeGeometry(kind: TreeKind): THREE.BufferGeometry {
+  const kit = new Kit();
+  const bark = "#6b4f36";
+  switch (kind) {
+    case "acacia": {
+      // The savanna's flat-topped tree: a forked trunk, a wide thin crown.
+      kit.add(new THREE.CylinderGeometry(0.25, 0.35, 4.5, 5), bark, { y: 2.25, rz: 0.12 });
+      kit.add(new THREE.CylinderGeometry(3.2, 2.6, 1.1, 7), "#6f8a3c", { y: 4.9 });
+      kit.add(new THREE.CylinderGeometry(2.2, 2.6, 0.7, 7), "#7f9a46", { x: 0.6, y: 5.6, z: -0.3 });
+      break;
+    }
+    case "shade": {
+      // A mango or shea: a short trunk under a round, dark crown.
+      kit.add(new THREE.CylinderGeometry(0.35, 0.45, 3, 5), bark, { y: 1.5 });
+      kit.add(new THREE.IcosahedronGeometry(3, 0), "#4f7a34", { y: 4.6 });
+      kit.add(new THREE.IcosahedronGeometry(2.2, 0), "#5c8a3c", { x: 1.6, y: 4, z: 0.8 });
+      break;
+    }
+    case "palm": {
+      // An oil palm: a tall bending trunk, a burst of fronds.
+      kit.add(new THREE.CylinderGeometry(0.22, 0.32, 8, 5), "#7a6448", { y: 4, rz: 0.08 });
+      for (let k = 0; k < 7; k += 1) {
+        const a = (k / 7) * Math.PI * 2;
+        kit.add(new THREE.BoxGeometry(3.4, 0.08, 0.7), k % 2 ? "#4f8a3a" : "#5e9a42", { x: Math.cos(a) * 1.5 + 0.6, y: 8, z: Math.sin(a) * 1.5, ry: -a, rz: -0.35 });
+      }
+      break;
+    }
+    case "bush": {
+      kit.add(new THREE.IcosahedronGeometry(1.3, 0), "#6e8b45", { y: 0.9 });
+      kit.add(new THREE.IcosahedronGeometry(1, 0), "#7d9a4e", { x: 1, y: 0.7, z: 0.4 });
+      break;
+    }
+  }
+  return kit.merged();
+}
+
+// --- Roadside life: kiosks and a filling station ------------------------------------------
+
+/** A roadside kiosk: a small shop with its bright awning, facing the road (+z). */
+export function kiosk(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
+  const k = new Kit();
+  k.box(3, 2.4, 2.4, pick(rand, WALLS));
+  k.add(new THREE.BoxGeometry(3.4, 0.12, 1.6), pick(rand, ["#c0392b", "#2a78d6", "#2b8a3e", "#e0a400", "#8e44ad", "#e67e22"]), { y: 2.3, z: 1.7, rx: 0.3 });
+  if (rand() < 0.5) k.box(1.2, 0.8, 0.8, "#8a6a45", 1.8, 2);
+  kit.place(k.merged(), x, 0, z, ry);
+}
+/** A filling station: a canopy on posts over two pumps, its shop behind, its sign by the road. */
+export function fillingStation(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
+  const k = new Kit();
+  const brand = pick(rand, ["#c0392b", "#2b8a3e", "#e0a400", "#1c7ed6"]);
+  for (const [px, pz] of [[-5, -3], [5, -3], [-5, 3], [5, 3]] as const) k.box(0.4, 4.5, 0.4, "#d9d3c7", px, pz);
+  // The canopy's roof above its coloured fascia: their faces never level with each other (they
+  // shared a top and flickered: "those green roofs, they are like glitching").
+  k.box(12, 0.35, 8, "#f2efe6", 0, 0, 4.85);
+  k.box(12.3, 0.45, 8.3, brand, 0, 0, 4.4);
+  for (const px of [-2.5, 2.5]) k.box(0.8, 1.6, 0.6, brand, px, 0);
+  k.box(8, 3.2, 5, "#e2ddd2", 0, -8);
+  k.box(0.3, 6, 0.3, "#5a5f66", 7.5, 5);
+  k.box(1.8, 1.4, 0.3, brand, 7.5, 5, 6);
+  kit.place(k.merged(), x, 0, z, ry);
+}
+
+// --- What you build at a town: each centred on (0, 0), its front toward +z, placed by view3d.ts ---
+
+/** A motor park: a paved lot, danfos in rows, the union's shelter and its sign. */
+export function motorPark(kit: Kit, rand: Rand, ry: number): void {
+  const k = new Kit();
+  k.box(30, 0.3, 20, "#8e9093");
+  for (let row = 0; row < 2; row += 1) for (let i = 0; i < 6; i += 1) {
+    k.box(2.2, 2, 4.8, rand() < 0.85 ? "#e8b400" : "#f2efe6", -11 + i * 4.4, -4 + row * 9, 0.3);
+    k.box(2.24, 0.25, 4.84, "#1e1e1e", -11 + i * 4.4, -4 + row * 9, 1.1);
+  }
+  k.box(12, 0.3, 4, "#2b8a3e", 0, 8.5, 3.6);
+  for (const px of [-5.5, 5.5]) k.box(0.3, 3.6, 0.3, "#5a5f66", px, 8.5);
+  k.box(0.3, 5, 0.3, "#5a5f66", 14, 9);
+  k.box(3, 1.4, 0.2, "#2b8a3e", 14, 9, 5);
+  kit.place(k.merged(), 0, 0, 0, ry);
+}
+/** A haulage yard: a fenced gravel lot, lorries, stacked goods, a gantry. */
+export function haulageYard(kit: Kit, rand: Rand, ry: number): void {
+  const k = new Kit();
+  k.box(34, 0.25, 24, "#b3a58c");
+  for (const [w, d, x, z] of [[34, 0.3, 0, -12], [34, 0.3, 0, 12], [0.3, 24, -17, 0], [0.3, 24, 17, 0]] as const) k.box(w, 1.8, d, "#7a7f85", x, z);
+  for (let i = 0; i < 4; i += 1) {
+    k.box(2.6, 2.6, 7, "#8a5a2b", -12 + i * 5, -5, 0.25);
+    k.box(2.4, 2.4, 2.2, "#e8e1d4", -12 + i * 5, -0.3, 0.25);
+  }
+  for (let i = 0; i < 6; i += 1) k.box(3, 1.2 + rand() * 1.6, 3, pick(rand, ["#c9a36b", "#8a6a45", "#6f8fa8", "#b4b9bc"]), 6 + (i % 3) * 3.6, 5 + Math.floor(i / 3) * 3.6, 0.25);
+  for (const px of [3, 15]) k.box(0.6, 8, 0.6, "#e0a400", px, 0);
+  k.box(13, 0.8, 0.8, "#e0a400", 9, 0, 8);
+  kit.place(k.merged(), 0, 0, 0, ry);
+}
+/** A rail station: a platform along the track (+x), its house with a red roof. */
+export function railStation(kit: Kit, rand: Rand, ry: number): void {
+  const k = new Kit();
+  k.box(40, 1, 4, "#cfc8bb");
+  k.box(12, 4, 6, pick(rand, ["#efe3c8", "#e2c79a", "#f2efe6"]), 0, 5.5);
+  k.gable(12.6, 6.6, 2.4, "#a0392b", 0, 5.5, 4);
+  k.box(16, 0.25, 3, "#a0392b", -14, 0, 3.6);
+  for (const px of [-21, -7]) k.box(0.25, 2.6, 0.25, "#5a5f66", px, 1, 1);
+  kit.place(k.merged(), 0, 0, 0, ry);
+}
+/** A metro entrance: a glazed pavilion over the stairs, its blue M. */
+export function metroEntrance(kit: Kit, ry: number): void {
+  const k = new Kit();
+  k.box(8, 0.3, 6, "#cfc8bb");
+  k.box(7, 3, 4.5, "#9fd0e6", 0, 0, 0.3);
+  k.box(7.6, 0.4, 5, "#1c5aa6", 0, 0, 3.3);
+  k.box(0.3, 5, 0.3, "#5a5f66", 4.5, 2.5);
+  k.box(1.8, 1.8, 0.3, "#1c5aa6", 4.5, 2.5, 5);
+  kit.place(k.merged(), 0, 0, 0, ry);
 }

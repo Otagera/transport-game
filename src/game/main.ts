@@ -80,6 +80,7 @@ import { createHintState, dismissHint, updateHints } from "./hints";
 import { createScreen } from "./screen";
 import { shortVerdict } from "./verdicts";
 import { waysFor } from "@engine/game/crossings";
+import { labelOf } from "@engine/game/labels";
 import { highBridgeCost } from "@engine/game/floods";
 import type { View3D } from "./view3d";
 
@@ -996,6 +997,17 @@ canvas.addEventListener("click", (event) => {
 });
 
 window.addEventListener("keydown", (event) => {
+  // Typing a name (labels.ts): Enter keeps it, Esc drops it; no key is a tool's while you type.
+  const field = event.target as HTMLElement;
+  if (field instanceof HTMLInputElement) {
+    const key = field.dataset.nameInput;
+    if (key && event.key === "Enter") {
+      const result = act({ label: "a name", towns: [] }, { kind: "label", key, name: field.value });
+      if (!result.ok) say(`Can't name it: ${result.reason}`, true, 5);
+      screen.stopRenaming();
+    } else if (key && event.key === "Escape") screen.stopRenaming();
+    return;
+  }
   if (event.key === "r" || event.key === "R") setTool("road");
   else if (event.key === "b" || event.key === "B") setTool("bus");
   else if (event.key === "m" || event.key === "M") setTool("minibus");
@@ -2784,6 +2796,15 @@ function onPanelClick(event: MouseEvent): void {
     renderPanel();
     return;
   }
+  if (target.dataset.colour) {
+    const bar = target.dataset.colour.lastIndexOf("|");
+    const [key, colour] = [target.dataset.colour.slice(0, bar), target.dataset.colour.slice(bar + 1)];
+    // The colour it has already: a second click clears it.
+    const result = act({ label: "a colour", towns: [] }, { kind: "label", key, colour: labelOf(world, key)?.colour === colour ? "" : colour });
+    if (!result.ok) say(`Can't: ${result.reason}`, true, 5);
+    renderPanel();
+    return;
+  }
   if (target.dataset.union) {
     const [unionId, answer] = target.dataset.union.split("|") as [string, "pay" | "concede" | "coop" | "refuse"];
     const result = act({ label: "an answer to the union", towns: [] }, { kind: "union", unionId, answer });
@@ -3092,7 +3113,8 @@ function frame(now: number): void {
     // Not while a button in a panel is pressed: redrawing replaces the button under
     // the pointer, and a click needs the same one pressed and released (playtest:
     // "Keep it up" took several clicks -- the panel redraws every quarter second).
-    if (!panelPressed) {
+    // Nor while you type a name in it: a redraw would take the field from under you.
+    if (!panelPressed && !(document.activeElement instanceof HTMLInputElement)) {
       renderPanel();
       screen.renderLog();
       // The revenue screen's charts are the days': once a second is plenty.

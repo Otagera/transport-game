@@ -107,6 +107,11 @@
       .route-card .net { font-weight: 650; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
       .route-card .name { display: flex; align-items: center; gap: 6px; font-weight: 650; font-size: 14px; margin: 2px 0; }
       .route-card .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+      /* Naming a route or road (labels.ts): a button or the field, and a route's colours. */
+      .namerow { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin: 4px 0 10px; }
+      .namerow .sw { width: 18px; height: 18px; min-width: 0; padding: 0; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+      .namerow .sw.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--ink); }
+      .namein { font: 600 14px system-ui, sans-serif; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); width: 14em; }
       .route-card .buttons { margin-left: auto; display: flex; gap: 4px; }
       .route-card button { width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 15px; line-height: 1; color: var(--ink); }
       .route-card button:hover { border-color: var(--ink); }
