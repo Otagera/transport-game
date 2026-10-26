@@ -1,3 +1,4 @@
+import { waysFor } from "./crossings";
 import { forgetRoute } from "./ledger";
 import type { TerrainField } from "../map/types";
 import type { PathResult, RoutingContext, Vehicle } from "../simulation/types";
@@ -121,7 +122,9 @@ export function trackCost(world: GameWorld, a: string, b: string, alignment: Ali
 
 export function checkTrack(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
   if (!world.tuning.railEnabled) return { ok: false, reason: SWITCHED_OFF };
-  if (alignment === "direct" && !world.tuning.straightAlignmentEnabled) return { ok: false, reason: SWITCHED_OFF };
+  if (alignment !== "cheapest" && !waysFor(world, (way) => planRail(world, a, b, way)).includes(alignment)) {
+    return { ok: false, reason: world.tuning.crossingsEnabled || world.tuning.straightAlignmentEnabled ? "that way isn't open for this track" : SWITCHED_OFF };
+  }
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (liveTrack(world, a, b)) return { ok: false, reason: "track already joins them" };
   if (trackAction(world, a, b) === "build" && !planRail(world, a, b, alignment)) return { ok: false, reason: "the water is too wide to bridge here" };

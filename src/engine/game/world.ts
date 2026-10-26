@@ -1,3 +1,4 @@
+import { waysFor } from "./crossings";
 import type { GeneratedMap, Segment } from "../map/types";
 import type { DemandPair, PathResult, Vehicle } from "../simulation/types";
 import { createSimulation } from "../simulation/simulate";
@@ -382,7 +383,9 @@ export function addBusLane(world: GameWorld, a: string, b: string): ActionResult
 
 export function checkRoad(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest"): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
-  if (alignment === "direct" && !world.tuning.straightAlignmentEnabled) return { ok: false, reason: SWITCHED_OFF };
+  if (alignment !== "cheapest" && !waysFor(world, (way) => planRoad(world, a, b, way)).includes(alignment)) {
+    return { ok: false, reason: world.tuning.crossingsEnabled || world.tuning.straightAlignmentEnabled ? "that way isn't open for this road" : SWITCHED_OFF };
+  }
   if (roadChain(world, a, b)) return { ok: false, reason: "already connected directly" };
   if (!planRoad(world, a, b, alignment)) return { ok: false, reason: "the water is too wide to bridge here" };
   if (!canAfford(world.economy, roadCost(world, a, b, alignment))) return { ok: false, reason: "can't afford it" };

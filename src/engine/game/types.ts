@@ -1,6 +1,7 @@
 import type { TermState } from "./term";
 import type { UnionState } from "./union";
 import type { FloodState } from "./floods";
+import type { Crossing } from "./crossings";
 import type { GameEvent } from "./settlement";
 import type { LaneState } from "./pushback";
 import type { NamedProject } from "./project";
@@ -235,6 +236,10 @@ export interface GameTuning {
   /** The far clusters' offers (clusters.ts): on; a limestone field's output against a quarry's; a farm belt's staple against a farm town's. Absent in older runs: off. */
   clusterOffersEnabled?: boolean;
   /** The rains (floods.ts, Revision 5, step 6): on; the first rains between these days; then every so many days; named this many days ahead; lasting; fords a season; how fast a flooded road runs; an all-weather bridge's price a cell of water. Absent in older runs: off. */
+  /** Named crossings and the way a road goes (crossings.ts, Revision 5, step 6): on. Absent in older runs: off. */
+  crossingsEnabled?: boolean;
+  /** A limestone field on the hill range between two clusters (crossings.ts): on. Absent in older runs: off. */
+  ridgeFieldEnabled?: boolean;
   floodsEnabled?: boolean;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
@@ -691,6 +696,8 @@ export interface GameWorld {
   /** The region's far clusters and their offers (clusters.ts); absent on the slice map. */
   /** The fords and the rains (floods.ts); absent when the floods are off. */
   floods?: FloodState;
+  /** Each river's named crossings (crossings.ts); absent when they're off. */
+  crossings?: Crossing[];
   clusters?: ClusterDef[];
   home?: { x: number; y: number; width: number; height: number };
   /** The map's rivers and sea as drawn lines, for the screen to draw smooth (the terrain's water is their cells). */
