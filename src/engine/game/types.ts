@@ -698,6 +698,8 @@ export interface GameWorld {
   /** The region's far clusters and their offers (clusters.ts); absent on the slice map. */
   /** The fords and the rains (floods.ts); absent when the floods are off. */
   floods?: FloodState;
+  /** Your names and colours for routes and roads (labels.ts), by key; absent until you name one. */
+  labels?: Record<string, import("./labels").Label>;
   /** Each river's named crossings (crossings.ts); absent when they're off. */
   crossings?: Crossing[];
   clusters?: ClusterDef[];

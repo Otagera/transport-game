@@ -1,5 +1,6 @@
 import { routeAlong, stanceWord, unionOf } from "@engine/game/union";
 import { fordBridgeCost, fordById } from "@engine/game/floods";
+import { LINE_COLOURS, labelOf, roadLabelKeyOf, routeLabelKey } from "@engine/game/labels";
 import { clusterOf, clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad } from "@engine/game/private";
 import { aWeekOnText, termVerdictText, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
@@ -90,7 +91,20 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   const days = (): RunDay[] => recorder.file.days;
   const nameOf = (id: string) => world.towns.get(id)?.name ?? world.ruins.get(id)?.name ?? id;
-  const routeName = (r: { a: string; b: string }) => `${nameOf(r.a)} ↔ ${nameOf(r.b)}`;
+  // Yours to name and colour (labels.ts): the name you gave it, else its towns.
+  const routeName = (r: { id?: string; a: string; b: string }) => (r.id && labelOf(world, routeLabelKey(r.id))?.name) || `${nameOf(r.a)} ↔ ${nameOf(r.b)}`;
+  const swatchOf = (r: { id: string; kind: string }) => labelOf(world, routeLabelKey(r.id))?.colour ?? `var(${KIND_COLOR[r.kind] ?? "--you"})`;
+  /** The route or road being named, its field open in the panel. */
+  let renaming: string | null = null;
+  /** A name, and for a route its colour: the field while naming, else a button and the swatches. */
+  function nameRow(key: string, colours: boolean): string {
+    const label = labelOf(world, key);
+    if (renaming === key) {
+      return `<div class="namerow"><input class="namein" data-name-input="${esc(key)}" maxlength="32" placeholder="A name" value="${esc(label?.name ?? "")}"> <span class="muted">Enter to keep · Esc</span></div>`;
+    }
+    const swatches = colours ? LINE_COLOURS.map((c) => `<button class="sw${label?.colour === c ? " on" : ""}" data-colour="${esc(key)}|${c}" style="background:${c}" title="Its colour on the map"></button>`).join("") : "";
+    return `<div class="namerow"><button data-rename="${esc(key)}">${label?.name ? "Rename" : "Name it"}</button>${swatches}</div>`;
+  }
   const kindOf = (id: string) => (id.startsWith("rail:") ? "train" : id.startsWith("mini:") ? "minibus" : id.startsWith("brt:") ? "brt" : "bus");
 
   /** A day's budget line from the cumulative tally: today less yesterday, rolled over five days. */
@@ -582,7 +596,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const lines = lorrySummaries(world);
     return `${hooks.moneyNote()}<h2>Your routes · ${all.length}${all.length ? `, ${losing} losing money` : ""}</h2>
       ${all.length ? `<table><thead><tr>${th("routes", "name", "Route")}${th("routes", "vehicles", "Veh.")}${th("routes", "riders", "Riders/day")}${th("routes", "load", "Full")}${th("routes", "net", "Net/day")}</tr></thead><tbody>
-      ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:var(${KIND_COLOR[r.kind] ?? "--you"})"></span>${esc(routeName(r))}</td><td>${r.vehicles}</td><td>${int(r.ridersPerDay)}</td><td>${pct(r.loadFactor)}</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("")}
+      ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${r.vehicles}</td><td>${int(r.ridersPerDay)}</td><td>${pct(r.loadFactor)}</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("")}
       </tbody></table>` : `<p class="muted">No routes yet. Pick the bus tool (B), click a town, then another.</p>`}
       ${lines.length ? `<h2>Freight lines and lorries</h2><table><tbody>${lines.map((g) => `<tr><td><span class="swatch" style="background:var(--goods)"></span>${esc(routeName(g))}</td><td>${g.lorries}</td><td class="${g.netPerDay < 0 ? "down" : ""}">${naira(g.netPerDay)}</td></tr>`).join("")}</tbody></table>` : ""}
       ${fold("routes-more", "More: lorries, corridors, your share", hooks.routesMore())}`;
@@ -631,7 +645,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="chart"><div class="t"><span>People, thousands</span><span>${t.target ? `heading for ${int(t.target)}k` : ""}</span></div>${chartSvg([{ name: "People (k)", color: css("--ink-2"), values: pop }], { height: 90 })}</div>
         ${t.fuel !== null || t.cement !== null ? `<div class="tiles">${t.fuel !== null ? tile("Fuel supplied", pct(t.fuel)) : ""}${t.cement !== null ? tile("Cement supplied", pct(t.cement), t.cementHeld > 1 ? `${int(t.cementHeld)}k fewer people for it` : "") : ""}${t.steel !== null ? tile("Steel supplied", pct(t.steel), t.steelHeld > 1 ? `${int(t.steelHeld)}k fewer people for it` : "past +80% of its start") : ""}</div>` : ""}
         <h2>Your routes here · ${here.length}</h2>
-        <table><tbody>${here.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:var(${KIND_COLOR[r.kind] ?? "--you"})"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
+        <table><tbody>${here.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
         ${fold("town", "More: its trips, parks, metro, strikes", hooks.townMore(t.id))}`;
     }
     if (sel.kind === "route") {
@@ -641,6 +655,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const first = Math.max(0, ds.findIndex((d) => d.routes.some((x) => x.id === r.id)));
       return `<div class="kicker">${r.kind === "train" ? "Train" : r.kind === "brt" ? "BRT" : r.kind === "minibus" ? "Minibus" : "Bus"} route${r.verdict ? ` · ${r.verdict}` : ""}</div>
         <div class="head"><div class="title">${esc(routeName(r))}</div><div class="num ${r.netPerDay < 0 ? "down" : "up"}">${naira(r.netPerDay)}/day</div></div>
+        ${labelOf(world, routeLabelKey(r.id))?.name ? `<div class="muted">${esc(nameOf(r.a))} ↔ ${esc(nameOf(r.b))}</div>` : ""}
+        ${nameRow(routeLabelKey(r.id), true)}
         ${problemHtml(routeProblem(r))}
         <div class="tiles">
           ${tile("Riders a day", int(r.ridersPerDay))}
@@ -680,6 +696,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         ${fold("site", "More: what it makes, expand, restore", hooks.townMore(t.id))}`;
     }
     const s = world.simulation.map.segments.find((x) => x.id === sel.id)!;
+    const roadKey = s.type === "road" ? roadLabelKeyOf(world, s.id) : null;
     const a = s.fromNodeId;
     const b = s.toNodeId;
     const cap = s.type === "rail" ? Infinity : roadCapacity(world, s.id);
@@ -694,7 +711,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ? { text: `Jammed: traffic at ${pct(speed)} of free speed`, button: toolButton("road", s.surface === "dirt" ? "Pave it (R)" : "A bus lane (R)") }
       : condition < 0.5 ? { text: "Worn: vehicles pay more on it", button: toolButton("fix", "Keep it up (F)") } : null;
     return `<div class="kicker">${s.type === "rail" ? "Track" : `Road · ${s.surface ?? ""}${s.busLane ? " · bus lane" : ""}`}</div>
-      <div class="head"><div class="title">${esc(nameOf(a))} – ${esc(nameOf(b))}</div></div>
+      <div class="head"><div class="title">${esc(roadKey && labelOf(world, roadKey)?.name ? labelOf(world, roadKey)!.name! : `${nameOf(a)} – ${nameOf(b)}`)}</div></div>
+      ${roadKey && labelOf(world, roadKey)?.name ? `<div class="muted">${esc(nameOf(a))} – ${esc(nameOf(b))}</div>` : ""}
+      ${roadKey && s.type === "road" ? nameRow(roadKey, false) : ""}
       ${problemHtml(problem)}
       <div class="tiles">
         ${tile("Traffic", pct(load), "of what it carries before it jams")}
@@ -888,7 +907,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="card wide treasury"><h3>The treasury</h3><div class="sub">Bonds, the named project, the chains, this period's budget</div><div class="panel-body">${hooks.treasuryMore()}</div></div>
         <div class="card wide"><h3>Your routes</h3><div class="sub">Click a column to sort · today's figures a day</div>
           <table><thead><tr>${th("revenue", "name", "Route")}${th("revenue", "riders", "Riders/day")}${th("revenue", "income", "Income")}${th("revenue", "cost", "Cost")}${th("revenue", "net", "Net")}</tr></thead><tbody>
-          ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:var(${KIND_COLOR[r.kind] ?? "--you"})"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}</td><td>${naira(r.incomePerDay)}</td><td>${naira(r.costPerDay)}</td><td class="${r.netPerDay < 0 ? "down" : "up"}">${naira(r.netPerDay)}</td></tr>`).join("")}
+          ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}</td><td>${naira(r.incomePerDay)}</td><td>${naira(r.costPerDay)}</td><td class="${r.netPerDay < 0 ? "down" : "up"}">${naira(r.netPerDay)}</td></tr>`).join("")}
           </tbody></table></div>
       </div>`;
     revenueEl.scrollTop = scroll;
@@ -904,8 +923,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   /** A click the screen handles itself: true when it did. Moves and old-card buttons are the page's. */
   function onClick(target: HTMLElement): boolean {
-    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict]");
+    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename]");
     if (!el || el.closest("details.more .panel-body")) return false;
+    if (el.dataset.rename) {
+      renaming = el.dataset.rename;
+      renderPanel();
+      document.querySelector<HTMLInputElement>("#panel .namein")?.focus();
+      return true;
+    }
     if (el.dataset.tab) { tab = el.dataset.tab as typeof tab; renderPanel(); return true; }
     if (el.dataset.back) { select(null); return true; }
     if (el.dataset.sort) {
@@ -966,6 +991,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     refreshVerdict: () => { if (verdictOpen()) renderVerdict(verdictMode); },
     onClick,
     select,
+    /** Naming done (kept or dropped): the field closes. */
+    stopRenaming: () => { renaming = null; renderPanel(); },
     /** The named move a problem line's button offers. */
     namedMove: (i: number): NamedMove | undefined => named[i],
     /** The towns and sites on Waiting on you: the map marks these, and only these. */

@@ -19,6 +19,7 @@ import { buildMetro } from "./metro";
 import { setFreightRate } from "./freightrates";
 import { issueBond, type BondPurpose } from "./bonds";
 import { bridgeFord } from "./floods";
+import { setLabel } from "./labels";
 
 // Every player action as plain data. Data, not a closure, so it can be
 // sent to a worker and replayed there: the forecast (forecast.ts) runs an
@@ -51,7 +52,8 @@ export type ActionSpec =
   | { kind: "pledge"; id: string }
   | { kind: "console"; op: "end-term" | "funds" | "rains"; amount?: number }
   | { kind: "union"; unionId: string; answer: "pay" | "concede" | "coop" | "refuse" }
-  | { kind: "bridgeFord"; fordId: string };
+  | { kind: "bridgeFord"; fordId: string }
+  | { kind: "label"; key: string; name?: string; colour?: string };
 
 /** `amount`: money charged (a repair) or returned (a sale), where the caller wants to say it. */
 export interface ActionOutcome {
@@ -78,6 +80,8 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       return consoleMove(world, spec.op, spec.amount);
     case "union":
       return answerDemand(world, spec.unionId, spec.answer);
+    case "label":
+      return setLabel(world, spec.key, spec.name, spec.colour);
     case "bridgeFord": {
       const result = bridgeFord(world, spec.fordId);
       return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };

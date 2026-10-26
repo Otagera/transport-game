@@ -1,4 +1,5 @@
 import { privateLoad } from "@engine/game/private";
+import { labelOf, routeLabelKey } from "@engine/game/labels";
 import type { GameTown, GameWorld } from "@engine/game/types";
 import type { RoutingContext, Vehicle } from "@engine/simulation/types";
 import { routingFor } from "@engine/game/rail";
@@ -274,6 +275,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   drawWardens(ctx, world, view);
   drawStrikeLabels(ctx, world, view);
   drawFords(ctx, world, view);
+  drawRoadNames(ctx, world, view);
   drawTakenLabels(ctx, world, view);
   // Last, so nothing on the map draws through the price.
   if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok, state.ghost.forecast);
@@ -622,6 +624,7 @@ function pill(ctx: CanvasRenderingContext2D, pose: { x: number; y: number; angle
 }
 
 function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, oneByOne: boolean): void {
+  const colourOf = (route: string | undefined) => (route && labelOf(world, routeLabelKey(route))?.colour) || COLORS.player;
   const routeOf = new Map<string, string>();
   for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
   for (const vehicle of world.simulation.vehicles) {
@@ -642,10 +645,11 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
       // Your freight: brown, filled by its load (a freight train longer).
       pill(ctx, pose, world.railVehicles.has(vehicle.id) ? 20 : 12, 5, COLORS.goods, COLORS.goods, full);
     } else if (world.railVehicles.has(vehicle.id)) {
-      pill(ctx, pose, 20, 5, COLORS.player, COLORS.rail, full);
+      pill(ctx, pose, 20, 5, colourOf(route), COLORS.rail, full);
     } else {
+      // In its route's colour, where you've given it one (labels.ts): your network as lines.
       const len = vehicle.id.startsWith("minibus-") ? 8 : vehicle.id.startsWith("brt-") ? 15 : 11;
-      pill(ctx, pose, len, vehicle.id.startsWith("minibus-") ? 4.5 : vehicle.id.startsWith("brt-") ? 5.5 : 5, COLORS.player, COLORS.player, full);
+      pill(ctx, pose, len, vehicle.id.startsWith("minibus-") ? 4.5 : vehicle.id.startsWith("brt-") ? 5.5 : 5, colourOf(route), colourOf(route), full);
     }
   }
   ctx.globalAlpha = 1;
@@ -826,6 +830,36 @@ function drawTakenLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: 
   }
   ctx.restore();
 }
+/** The roads you've named (labels.ts), written along them at their middle. */
+function drawRoadNames(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
+  if (!world.labels) return;
+  ctx.save();
+  ctx.font = "italic 600 12px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const [key, label] of Object.entries(world.labels)) {
+    if (!key.startsWith("road:") || !label.name) continue;
+    const [a, b] = key.slice(5).split("|") as [string, string];
+    const line = (roadChain(world, a, b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+    if (line.length < 2) continue;
+    const [before, rest] = splitPolyline(line, polylineLength(line) / 2);
+    const p = rest[0]!, q = rest.find((r) => Math.hypot(r.x - p.x, r.y - p.y) > 1e-6) ?? before[before.length - 2] ?? line[0]!;
+    let angle = Math.atan2(q.y - p.y, q.x - p.x);
+    if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI; // never upside down
+    const at = toScreen(view, p.x, p.y);
+    ctx.save();
+    ctx.translate(at.x, at.y);
+    ctx.rotate(angle);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.strokeText(label.name, 0, -9);
+    ctx.fillStyle = COLORS.ink;
+    ctx.fillText(label.name, 0, -9);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 /**
  * The fords (floods.ts): a season's named ones tagged with the day the water rises, flooded ones
  * in the water's blue; the rest named only zoomed in, where you'd look for a crossing.

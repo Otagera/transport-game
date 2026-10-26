@@ -1008,6 +1008,8 @@ Everything else folds into one of these or goes:
   - **Not in:** iron and coal on the range (a second iron source needs the steel chain changed; coal is a chain of its own).
   - **The crossing as a choice of kind** (agreed 2026-10-26, built the same day): a new road over water crosses on a *causeway* at the planner's price (₦40 a cell of water) -- and floods with the rains like a ford -- or on a *high bridge*, ₦1,200 a cell more (C): the same as raising a ford, so building high now or raising later cost the same. A causeway your buses cross is the first the rains name. Track's bridges stay all-weather. The road quote now wraps to a readable width (it had grown past the map's).
 
+- **Step 7, part 1 -- names and colours** (labels.ts): built 2026-10-26. A route of yours takes a name and one of eight line colours (its vehicles drawn in it, so your network reads as lines); a road takes a name, written along it on the map. In the route's and the road's panels ("Name it", Enter to keep). Recorded in the run file; nothing in the simulation reads them. Waypoints, the rest of "Your mark on it" 2, aren't in.
+
 ### Ideas parked (yours, 2026-10-24), with where they'd fit
 
 - **Private traffic** ("we did not account for other humans driving on our roads"). Next after the mandate. The original 3D game's Module 12 (`661492b`) is the design to reuse:
