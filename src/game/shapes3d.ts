@@ -40,8 +40,8 @@ export class Kit {
     this.parts.push(g);
   }
   /** A piece already coloured (another kit's merged()), moved into place. */
-  place(geo: THREE.BufferGeometry, x: number, y: number, z: number): void {
-    this.parts.push(geo.clone().translate(x, y, z));
+  place(geo: THREE.BufferGeometry, x: number, y: number, z: number, ry = 0): void {
+    this.parts.push(geo.clone().rotateY(ry).translate(x, y, z));
   }
   /** A box standing on y = 0 at its centre (x, z), w along x, d along z. */
   box(w: number, h: number, d: number, colour: string | number, x = 0, z = 0, y = 0, ry = 0): void {
@@ -76,9 +76,9 @@ export class Kit {
 
 // --- Buildings -----------------------------------------------------------------------------
 
-const WALLS = ["#efe3c8", "#e2c79a", "#d9a066", "#9cc5d6", "#b9d3a5", "#f2efe6", "#e8b8a0", "#c98d6a"];
-const ROOFS = ["#a7aeb3", "#9aa3a9", "#8c5a3c", "#a0603e", "#6f8fa8", "#b4b9bc"];
-const CONCRETE = ["#cfc8bb", "#d9d3c7", "#bfb8aa", "#e0d8c8"];
+export const WALLS = ["#efe3c8", "#e2c79a", "#d9a066", "#9cc5d6", "#b9d3a5", "#f2efe6", "#e8b8a0", "#c98d6a"];
+export const ROOFS = ["#a7aeb3", "#9aa3a9", "#8c5a3c", "#a0603e", "#6f8fa8", "#b4b9bc"];
+export const CONCRETE = ["#cfc8bb", "#d9d3c7", "#bfb8aa", "#e0d8c8"];
 
 /** A bungalow in its compound: plastered walls, a zinc hip roof, a wall round the yard. */
 export function bungalow(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
@@ -307,4 +307,28 @@ export function treeGeometry(kind: TreeKind): THREE.BufferGeometry {
     }
   }
   return kit.merged();
+}
+
+// --- Roadside life: kiosks and a filling station ------------------------------------------
+
+/** A roadside kiosk: a small shop with its bright awning, facing the road (+z). */
+export function kiosk(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
+  const k = new Kit();
+  k.box(3, 2.4, 2.4, pick(rand, WALLS));
+  k.add(new THREE.BoxGeometry(3.4, 0.12, 1.6), pick(rand, ["#c0392b", "#2a78d6", "#2b8a3e", "#e0a400", "#8e44ad", "#e67e22"]), { y: 2.3, z: 1.7, rx: 0.3 });
+  if (rand() < 0.5) k.box(1.2, 0.8, 0.8, "#8a6a45", 1.8, 2);
+  kit.place(k.merged(), x, 0, z, ry);
+}
+/** A filling station: a canopy on posts over two pumps, its shop behind, its sign by the road. */
+export function fillingStation(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
+  const k = new Kit();
+  const brand = pick(rand, ["#c0392b", "#2b8a3e", "#e0a400", "#1c7ed6"]);
+  for (const [px, pz] of [[-5, -3], [5, -3], [-5, 3], [5, 3]] as const) k.box(0.4, 4.5, 0.4, "#d9d3c7", px, pz);
+  k.box(12, 0.5, 8, "#f2efe6", 0, 0, 4.5);
+  k.box(12.1, 0.3, 8.1, brand, 0, 0, 4.7);
+  for (const px of [-2.5, 2.5]) k.box(0.8, 1.6, 0.6, brand, px, 0);
+  k.box(8, 3.2, 5, "#e2ddd2", 0, -8);
+  k.box(0.3, 6, 0.3, "#5a5f66", 7.5, 5);
+  k.box(1.8, 1.4, 0.3, brand, 7.5, 5, 6);
+  kit.place(k.merged(), x, 0, z, ry);
 }

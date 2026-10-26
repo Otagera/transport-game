@@ -23,6 +23,7 @@ import { tierOf, type Tier } from "./icons";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
+import { CONCRETE, ROOFS, WALLS, fillingStation, kiosk } from "./shapes3d";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
 
 const M = 8; // metres a map cell
@@ -86,8 +87,10 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
     if (!down || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5 || !built) return;
     down = null;
     ray.setFromCamera(new THREE.Vector2((event.clientX / innerWidth) * 2 - 1, -(event.clientY / innerHeight) * 2 + 1), camera);
-    const hit = ray.intersectObjects(built.pickable, false)[0];
-    const id = hit?.object.userData.townId as string | undefined;
+    const hit = ray.intersectObjects(built.pickable, true)[0];
+    let found: THREE.Object3D | null = hit?.object ?? null;
+    while (found && !found.userData.townId) found = found.parent;
+    const id = found?.userData.townId as string | undefined;
     if (id) onPick(id);
   });
 
@@ -120,8 +123,13 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
       controls.target.y += lift;
       camera.position.y += lift;
       built!.cullLabels(camera);
+      // The haze by how far out you are: in the distance up close, thin over the whole slab.
+      const fog = built!.scene.fog as THREE.Fog;
+      const away = camera.position.distanceTo(controls.target);
+      fog.near = away * 1.1 + 300;
+      fog.far = away * 3 + 1200;
       built!.sun.target.position.copy(controls.target);
-      built!.sun.position.copy(controls.target).add(new THREE.Vector3(-400, 700, -300));
+      built!.sun.position.copy(controls.target).add(new THREE.Vector3(-520, 520, -260));
       renderer.render(built!.scene, camera);
       labels.render(built!.scene, camera);
     },
@@ -147,10 +155,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const W = terrain.width;
   const H = terrain.height;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xcfe3ef);
-  scene.fog = new THREE.Fog(0xcfe3ef, 1200, 3400);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8070, 1.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  // A warm, lowish sun from the north-west (as the 2D map's relief is lit), a pale sky, and the
+  // harmattan's haze in the distance.
+  scene.background = new THREE.Color(0xd9e4ea);
+  scene.fog = new THREE.Fog(0xe3e2d6, 900, 3000);
+  scene.add(new THREE.HemisphereLight(0xe8f0f8, 0x8a7a5a, 1.45));
+  const sun = new THREE.DirectionalLight(0xfff0d4, 2.5);
+  sun.shadow.radius = 3;
+  sun.shadow.bias = -0.0004;
   sun.castShadow = true;
   sun.shadow.mapSize.set(4096, 4096);
   Object.assign(sun.shadow.camera, { left: -500, right: 500, top: 500, bottom: -500, near: 10, far: 2500 });
@@ -260,13 +272,45 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const land = new THREE.Mesh(geo, own(new THREE.MeshLambertMaterial({ vertexColors: true })));
     land.receiveShadow = true;
     scene.add(land);
-    // Beyond the map, the same plain running on into the haze.
-    // Its colour the savanna's own middle, so the map's edge doesn't show as a seam.
-    const skirt = new THREE.Mesh(own(new THREE.PlaneGeometry(W * M * 8, H * M * 8)), own(new THREE.MeshLambertMaterial({ color: new THREE.Color(0x9fb27a).lerp(new THREE.Color(0xc6b783), 0.45) })));
-    skirt.rotation.x = -Math.PI / 2;
-    skirt.position.set((W * M) / 2, -0.5, (H * M) / 2);
-    skirt.receiveShadow = true;
-    scene.add(skirt);
+    // The map's edge as a diorama's (your word: "good visuals for the cliff off"): the land
+    // ends in a clean cut, its side showing the ground below -- topsoil, red laterite,
+    // sandstone, rock -- rather than a plain running on, or the sea onto grass.
+    const STRATA: Array<[number, number]> = [[0, 0x6b5138], [1.5, 0x7a5a3e], [3, 0xa65d3a], [12, 0xb9733f], [16, 0xc9a36b], [30, 0xb8956a], [34, 0x8c8478], [48, 0x7a736a]];
+    const sides = [
+      Array.from({ length: W }, (_, x) => ({ x, y: 0 })),
+      Array.from({ length: H }, (_, y) => ({ x: W - 1, y })),
+      Array.from({ length: W }, (_, x) => ({ x: W - 1 - x, y: H - 1 })),
+      Array.from({ length: H }, (_, y) => ({ x: 0, y: H - 1 - y })),
+    ];
+    const verts: number[] = [], cols: number[] = [], index: number[] = [];
+    const tint = new THREE.Color();
+    for (const edge of sides) {
+      const start = verts.length / 3;
+      for (const p of edge) {
+        const top = elevationAt(p.x, p.y) * HEIGHT + (terrain.water[p.y * W + p.x] === 1 ? 0.6 : 0);
+        for (const [depth, hex] of STRATA) {
+          verts.push(p.x * M, depth === 0 ? top : -depth, p.y * M);
+          tint.setHex(depth === 0 && terrain.water[p.y * W + p.x] === 1 ? 0x4f86ad : hex);
+          cols.push(tint.r, tint.g, tint.b);
+        }
+      }
+      const rows = STRATA.length;
+      for (let i = 0; i < edge.length - 1; i += 1) for (let k = 0; k < rows - 1; k += 1) {
+        const a = start + i * rows + k, b = a + rows;
+        index.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+    }
+    const sideGeo = own(new THREE.BufferGeometry());
+    sideGeo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+    sideGeo.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
+    sideGeo.setIndex(index);
+    sideGeo.computeVertexNormals();
+    scene.add(new THREE.Mesh(sideGeo, own(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }))));
+    // Its underside, closed.
+    const under = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M)), own(new THREE.MeshLambertMaterial({ color: 0x6f675e, side: THREE.DoubleSide })));
+    under.rotation.x = -Math.PI / 2;
+    under.position.set(((W - 1) * M) / 2, -48, ((H - 1) * M) / 2);
+    scene.add(under);
   }
 
   // A ribbon along a polyline of cells, `width` metres (one each point, or one for all).
@@ -274,7 +318,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const decks = new Map<number, number>();
   const cellKey = (cx: number, cy: number) => Math.round(cy) * W + Math.round(cx);
   /** `piers`: bridge it over water, its piers added to this kit. */
-  function ribbonGeometry(points: Point[], width: number | number[], lift: number, piers?: Kit): THREE.BufferGeometry {
+  function ribbonGeometry(points: Point[], width: number | number[], lift: number, piers?: Kit, clampToMap = false): THREE.BufferGeometry {
     const widthAt = (k: number) => (Array.isArray(width) ? width[Math.min(width.length - 1, k)]! : width);
     const steps: Array<{ x: number; y: number; w: number }> = [];
     for (let k = 1; k < points.length; k += 1) {
@@ -318,6 +362,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         r.y = Math.max(r.y, level + lift);
         decks.set(cellKey(p.x, p.y), Math.max(decks.get(cellKey(p.x, p.y)) ?? -Infinity, level + lift));
       }
+      if (clampToMap) {
+        // Water cut at the map's edge, as the land is: the sea runs to the diorama's side, not past it.
+        for (const v of [l, r]) {
+          v.x = Math.max(0, Math.min((W - 1) * M, v.x));
+          v.z = Math.max(0, Math.min((H - 1) * M, v.z));
+          v.y = elevationAt(v.x / M, v.z / M) * HEIGHT + lift;
+        }
+      }
       verts.push(l.x, l.y, l.z, r.x, r.y, r.z);
     }
     const index: number[] = [];
@@ -331,11 +383,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
 
   // --- Water: the rivers and the coast from their own lines, as the 2D map draws them -------
   {
-    const water = own(new THREE.MeshLambertMaterial({ color: 0x6fa9cf, side: THREE.DoubleSide }));
+    // No shadows on the water: at a low sun they fell on it as long dark streaks (your
+    // playtest, 2026-10-26: "the water glitching"). Drawn a hair toward the eye of the land.
+    const water = own(new THREE.MeshLambertMaterial({ color: 0x6fa9cf, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
     for (const river of world.waterLines ?? []) {
       const widths = (river.widths ?? river.points.map(() => river.width)).map((w) => w * M);
-      const mesh = new THREE.Mesh(own(ribbonGeometry(river.points.map(([x, y]) => ({ x, y })), widths, 0.6)), water);
-      mesh.receiveShadow = true;
+      const mesh = new THREE.Mesh(own(ribbonGeometry(river.points.map(([x, y]) => ({ x, y })), widths, 0.6, undefined, true)), water);
       scene.add(mesh);
     }
   }
@@ -421,7 +474,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const siteAt = new Map<string, { x: number; y: number }>();
   let sites: GameTown[] = [];
   let people: GameTown[] = [];
+  /** A house of a town's fabric, in its town's frame: drawn as instances, walls and roof apart. */
+  interface House { x: number; y: number; z: number; w: number; d: number; h: number; rh: number; ry: number; wall: string; roof: string }
+  let fabric: House[] = [];
   function townKit(town: GameTown, tier: Tier): Kit {
+    fabric = [];
     const rand = seeded(town.id);
     const kit = new Kit();
     const base = elevationAt(town.x, town.y) * HEIGHT;
@@ -470,8 +527,35 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       put(12, 0.6, (k, rr) => (rand() < 0.5 ? mosque(k, rr, 0, 0, tier === "city" ? 1.4 : 1) : church(k, rr, 0, 0, tier === "city" ? 1.3 : 1)));
       if (tier !== "town") put(12, 0.6, (k, rr) => (rand() < 0.5 ? church(k, rr, 0, 0) : mosque(k, rr, 0, 0)));
     }
-    for (let i = 0; i < count; i += 1) {
-      const centre = i < count * 0.35;
+    // Its fabric (your word: "it all looks sparse"): houses packed on its street grid, densest
+    // in the middle, thinning outwards, a lane every few plots. Drawn as instances, so a city
+    // can have hundreds.
+    if (tier !== "village") {
+      const spacing = 10, cos = Math.cos(grid), sin = Math.sin(grid);
+      const n = Math.ceil(radius / spacing);
+      const dense = tier === "city" ? 0.97 : tier === "regional" ? 0.88 : 0.72;
+      for (let i = -n; i <= n; i += 1) for (let j = -n; j <= n; j += 1) {
+        if (i % 4 === 0 || j % 3 === 0) continue; // the streets
+        const lx = i * spacing + (rand() - 0.5) * 2, lz = j * spacing + (rand() - 0.5) * 2;
+        const x = lx * cos - lz * sin, z = lx * sin + lz * cos;
+        const d = Math.hypot(x, z) / radius;
+        if (d > 1 || rand() > dense - 0.65 * d ** 1.5) continue;
+        const cx = town.x + x / M, cy = town.y + z / M, r = 4.2;
+        if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + r)) continue;
+        if (wet(cx, cy, (r + 1) / M) || nearRoad(cx, cy, (r + 4) / M)) continue;
+        if (sites.some((s) => { const at = siteAt.get(s.id) ?? s; return Math.hypot(at.x - cx, at.y - cy) < (r + 22) / M; })) continue;
+        placed.push({ x, z, r: 3.6 });
+        const storeys = d < 0.45 && rand() < (tier === "city" ? 0.5 : 0.25) ? 2 : 1;
+        const flat = rand() < (d < 0.4 ? 0.45 : 0.15);
+        const y = Math.min(elevationAt(cx - 0.4, cy), elevationAt(cx + 0.4, cy), elevationAt(cx, cy - 0.4), elevationAt(cx, cy + 0.4)) * HEIGHT - base - 0.2;
+        fabric.push({
+          x, y, z, w: 6 + rand() * 2.5, d: 5 + rand() * 2.5, h: 3 * storeys, rh: flat ? 0.25 : 1.3 + rand() * 0.6, ry: grid + (rand() < 0.15 ? Math.PI / 2 : 0),
+          wall: WALLS[Math.floor(rand() * WALLS.length)]!, roof: flat ? CONCRETE[Math.floor(rand() * CONCRETE.length)]! : ROOFS[Math.floor(rand() * ROOFS.length)]!,
+        });
+      }
+    }
+    for (let i = 0; i < (tier === "village" ? count : Math.round(count * 0.7)); i += 1) {
+      const centre = i < count * 0.25;
       if (tier === "village") put(5, 1, (k, rr, ry) => (rand() < 0.55 ? hut(k, rr, 0, 0) : bungalow(k, rr, 0, 0, ry)));
       else if (tier === "city" && centre) put(11, 0.45, (k, rr, ry) => block(k, rr, 0, 0, ry, 3, 9));
       else if (tier === "regional" && centre) put(10, 0.5, (k, rr, ry) => (rand() < 0.5 ? block(k, rr, 0, 0, ry, 2, 4) : shophouse(k, rr, 0, 0, ry)));
@@ -506,6 +590,32 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     siteAt.set(town.id, { x: town.x + best.ox / M, y: town.y + best.oz / M });
     return { kit: best.kit, x: best.ox, z: best.oz };
   }
+  // The fabric's two shapes, shared: a unit box for walls, a unit hip roof.
+  const wallShape = own(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
+  const roofShape = own(new THREE.ConeGeometry(0.75, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0));
+  const fabricMaterial = own(new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  function houses(list: House[]): THREE.InstancedMesh[] {
+    const walls = new THREE.InstancedMesh(wallShape, fabricMaterial, list.length);
+    const roofs = new THREE.InstancedMesh(roofShape, fabricMaterial, list.length);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
+    list.forEach((h, i) => {
+      q.setFromAxisAngle(up, h.ry);
+      walls.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y, h.z), q, new THREE.Vector3(h.w, h.h, h.d)));
+      roofs.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y + h.h, h.z), q, new THREE.Vector3(h.w * 1.04, h.rh, h.d * 1.04)));
+      walls.setColorAt(i, c.set(h.wall));
+      roofs.setColorAt(i, c.set(h.roof));
+    });
+    for (const mesh of [walls, roofs]) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    }
+    return [walls, roofs];
+  }
+  /** A town's mesh gone: its fabric's instances with it (the shapes are shared, and stay). */
+  function dropTown(mesh: THREE.Mesh): void {
+    mesh.geometry.dispose();
+    for (const child of mesh.children) (child as THREE.InstancedMesh).dispose?.();
+  }
   function syncTowns(w: GameWorld): void {
     people = [...w.towns.values()].filter((t) => !t.industry);
     sites = [...w.towns.values()].filter((t) => t.industry);
@@ -518,13 +628,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const known = towns.get(town.id);
       if (known && known.key !== key) {
         scene.remove(known.mesh, known.label);
-        known.mesh.geometry.dispose();
+        dropTown(known.mesh);
         towns.delete(town.id);
       }
       if (!towns.has(town.id)) {
         const { kit, x, z } = town.industry ? siteKit(town) : { kit: townKit(town, tier), x: 0, z: 0 };
         const mesh = new THREE.Mesh(kit.merged(), material);
         mesh.position.copy(ground(town.x, town.y)).add(new THREE.Vector3(x, 0, z));
+        if (!town.industry && fabric.length) mesh.add(...houses(fabric));
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.userData.townId = town.id;
@@ -544,7 +655,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     for (const [id, entry] of towns) {
       if (w.towns.has(id)) continue;
       scene.remove(entry.mesh, entry.label);
-      entry.mesh.geometry.dispose();
+      dropTown(entry.mesh);
       towns.delete(id);
     }
   }
@@ -760,6 +871,61 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       groves.set(kind, mesh);
     }
   }
+  // Roadside life: kiosks strung along the roads just outside each town, and a filling station
+  // on each road out of a town of some size. One mesh, rebuilt when the network changes.
+  let roadside: THREE.Mesh | null = null;
+  function buildRoadside(w: GameWorld): void {
+    if (roadside) { scene.remove(roadside); roadside.geometry.dispose(); }
+    const kit = new Kit();
+    const rand = seeded(`roadside-${roadLines.length}`);
+    const people = [...w.towns.values()].filter((t) => !t.industry);
+    const taken: number[] = [];
+    const stand = (cx: number, cy: number, make: (k: Kit) => void) => {
+      const cell = Math.round(cy) * W + Math.round(cx);
+      if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2 || occupied[cell] === WET || occupied[cell] === ROAD || terrain.water[cell] === 1) return;
+      const one = new Kit();
+      make(one);
+      kit.place(one.merged(), cx * M, elevationAt(cx, cy) * HEIGHT - 0.1, cy * M);
+      taken.push(cell);
+    };
+    for (const line of roadLines) {
+      const length = polylineLength(line);
+      for (let along = 0.75; along < length; along += 1.4) {
+        const [, rest] = splitPolyline(line, along);
+        const p = rest[0]!, q = rest.find((r) => Math.hypot(r.x - p.x, r.y - p.y) > 1e-6) ?? line[line.length - 1]!;
+        const dir = Math.atan2(q.y - p.y, q.x - p.x);
+        const near = people.reduce<{ t: GameTown; d: number } | null>((best, t) => { const d = Math.hypot(t.x - p.x, t.y - p.y); return !best || d < best.d ? { t, d } : best; }, null);
+        if (!near) continue;
+        const r = reachCells.get(near.t.id) ?? 3;
+        if (near.d < r + 0.3 || near.d > r + 6 || rand() > 0.45) continue;
+        const side = rand() < 0.5 ? 1 : -1;
+        const nx = -Math.sin(dir) * side, ny = Math.cos(dir) * side;
+        // Facing the road: its front (+z) turned toward it.
+        stand(p.x + nx * 1.3, p.y + ny * 1.3, (k) => kiosk(k, rand, 0, 0, Math.atan2(-nx, -ny)));
+      }
+    }
+    // A filling station on each road out of a town of 30k and more, just past its houses.
+    for (const town of people.filter((t) => t.population >= 30)) {
+      const r = reachCells.get(town.id) ?? 3;
+      for (const line of roadLines) {
+        const first = line[0]!, last = line[line.length - 1]!;
+        const out = Math.hypot(first.x - town.x, first.y - town.y) < 1 ? line : Math.hypot(last.x - town.x, last.y - town.y) < 1 ? [...line].reverse() : null;
+        if (!out || polylineLength(out) < r + 4) continue;
+        const [, rest] = splitPolyline(out, r + 2.5);
+        const p = rest[0]!, q = rest[1] ?? out[out.length - 1]!;
+        const dir = Math.atan2(q.y - p.y, q.x - p.x);
+        const nx = -Math.sin(dir), ny = Math.cos(dir);
+        stand(p.x + nx * 2, p.y + ny * 2, (k) => fillingStation(k, rand, 0, 0, Math.atan2(-nx, -ny)));
+      }
+    }
+    if (kit.empty) { roadside = null; return; }
+    roadside = new THREE.Mesh(kit.merged(), material);
+    roadside.castShadow = true;
+    roadside.receiveShadow = true;
+    scene.add(roadside);
+    const cleared = new Set(taken);
+    clearTrees((cell) => cleared.has(cell));
+  }
   /** A road built since, or a town grown: the trees in its way go. */
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
   function clearTrees(gone: (cell: number) => boolean): void {
@@ -806,6 +972,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (planted) {
           markRoads(roadLines);
           clearTrees((cell) => occupied[cell] === ROAD);
+          buildRoadside(w);
         }
       }
       const now = performance.now();
@@ -813,7 +980,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         slowAt = now;
         colourRoads(w);
         syncTowns(w);
-        if (!planted) plant(w);
+        if (!planted) {
+          plant(w);
+          buildRoadside(w);
+        }
       }
       placeVehicles(w);
     },
