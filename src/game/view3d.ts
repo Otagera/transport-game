@@ -275,7 +275,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // The map's edge as a diorama's (your word: "good visuals for the cliff off"): the land
     // ends in a clean cut, its side showing the ground below -- topsoil, red laterite,
     // sandstone, rock -- rather than a plain running on, or the sea onto grass.
-    const STRATA: Array<[number, number]> = [[0, 0x6b5138], [1.5, 0x7a5a3e], [3, 0xa65d3a], [12, 0xb9733f], [16, 0xc9a36b], [30, 0xb8956a], [34, 0x8c8478], [48, 0x7a736a]];
+    // Crisp bands: each a depth and the colour down to the next (a grass lip, topsoil, red
+    // laterite, sandstone, rock); a band's top and bottom rows apart, so its edges are sharp.
+    const BANDS: Array<[number, number]> = [[0, 0x6f8a45], [0.8, 0x5e4630], [3, 0xa65d3a], [13, 0xc9a36b], [27, 0x8c8478], [48, 0x8c8478]];
+    const STRATA: Array<[number, number]> = BANDS.slice(0, -1).flatMap(([depth, hex], k) => [[depth, hex], [BANDS[k + 1]![0] - 0.01, hex]] as Array<[number, number]>);
     const sides = [
       Array.from({ length: W }, (_, x) => ({ x, y: 0 })),
       Array.from({ length: H }, (_, y) => ({ x: W - 1, y })),
@@ -289,8 +292,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       for (const p of edge) {
         const top = elevationAt(p.x, p.y) * HEIGHT + (terrain.water[p.y * W + p.x] === 1 ? 0.6 : 0);
         for (const [depth, hex] of STRATA) {
-          verts.push(p.x * M, depth === 0 ? top : -depth, p.y * M);
-          tint.setHex(depth === 0 && terrain.water[p.y * W + p.x] === 1 ? 0x4f86ad : hex);
+          verts.push(p.x * M, depth < 3 ? top - depth : Math.min(top - 3, -depth), p.y * M); // the lip and topsoil follow the ground
+          tint.setHex(depth < 0.8 && terrain.water[p.y * W + p.x] === 1 ? 0x4f86ad : hex);
           cols.push(tint.r, tint.g, tint.b);
         }
       }
@@ -385,7 +388,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   {
     // No shadows on the water: at a low sun they fell on it as long dark streaks (your
     // playtest, 2026-10-26: "the water glitching"). Drawn a hair toward the eye of the land.
-    const water = own(new THREE.MeshLambertMaterial({ color: 0x6fa9cf, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
+    // Unlit, one flat colour: the sea is one wide ribbon, and where it bends sharply it folds
+    // over itself -- lit, the folded triangles faced down and showed as dark slivers.
+    const water = own(new THREE.MeshBasicMaterial({ color: 0x78aed0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
     for (const river of world.waterLines ?? []) {
       const widths = (river.widths ?? river.points.map(() => river.width)).map((w) => w * M);
       const mesh = new THREE.Mesh(own(ribbonGeometry(river.points.map(([x, y]) => ({ x, y })), widths, 0.6, undefined, true)), water);

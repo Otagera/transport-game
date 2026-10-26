@@ -324,8 +324,10 @@ export function fillingStation(kit: Kit, rand: Rand, x: number, z: number, ry: n
   const k = new Kit();
   const brand = pick(rand, ["#c0392b", "#2b8a3e", "#e0a400", "#1c7ed6"]);
   for (const [px, pz] of [[-5, -3], [5, -3], [-5, 3], [5, 3]] as const) k.box(0.4, 4.5, 0.4, "#d9d3c7", px, pz);
-  k.box(12, 0.5, 8, "#f2efe6", 0, 0, 4.5);
-  k.box(12.1, 0.3, 8.1, brand, 0, 0, 4.7);
+  // The canopy's roof above its coloured fascia: their faces never level with each other (they
+  // shared a top and flickered: "those green roofs, they are like glitching").
+  k.box(12, 0.35, 8, "#f2efe6", 0, 0, 4.85);
+  k.box(12.3, 0.45, 8.3, brand, 0, 0, 4.4);
   for (const px of [-2.5, 2.5]) k.box(0.8, 1.6, 0.6, brand, px, 0);
   k.box(8, 3.2, 5, "#e2ddd2", 0, -8);
   k.box(0.3, 6, 0.3, "#5a5f66", 7.5, 5);
