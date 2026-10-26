@@ -155,6 +155,7 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   crossingsEnabled: true,
   ridgeFieldEnabled: true,
   floodsEnabled: true,
+  causewaysEnabled: true,
   floodFirstDayMin: 45,
   floodFirstDayMax: 75,
   floodEveryDays: 180,

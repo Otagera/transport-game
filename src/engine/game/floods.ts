@@ -1,5 +1,5 @@
 import type { Segment } from "../map/types";
-import type { GameWorld } from "./types";
+import type { GameTown, GameWorld } from "./types";
 import type { GameEvent } from "./settlement";
 import { SECONDS_PER_GAME_DAY as D, canAfford } from "../economy/state";
 import { overWater, polylineLength, segmentPolyline, splitPolyline, type Point } from "./roads";
@@ -34,6 +34,8 @@ export interface Ford {
   a: string;
   b: string;
   bridged: boolean;
+  /** A causeway you built (a new road over water, not raised to a high bridge): yours, not the old road's. */
+  built?: boolean;
 }
 
 export interface FloodState {
@@ -66,7 +68,9 @@ function hash(...parts: number[]): number {
 
 /** The wet runs of a road: where along it each crossing lies, and how wide. */
 function crossings(world: GameWorld, segment: Segment): Array<{ at: Point; span: number }> {
-  const line = segmentPolyline(world.simulation.map, segment);
+  return wetRuns(world, segmentPolyline(world.simulation.map, segment));
+}
+function wetRuns(world: GameWorld, line: Point[]): Array<{ at: Point; span: number }> {
   const length = polylineLength(line);
   const out: Array<{ at: Point; span: number }> = [];
   let start = -1;
@@ -81,6 +85,17 @@ function crossings(world: GameWorld, segment: Segment): Array<{ at: Point; span:
   return out;
 }
 
+/** A crossing's name: for the town it's nearer -- or, on a site's road, for the site -- unique among `used`. */
+function crossingName(a: GameTown, b: GameTown, at: Point, word: string, used: Set<string>): string {
+  const site = [a, b].find((t) => t.industry);
+  const [near, far] = [a, b].sort((p, q) => Math.hypot(p.x - at.x, p.y - at.y) - Math.hypot(q.x - at.x, q.y - at.y));
+  let name = site ? `${site.name} ${word}` : `${near!.name} ${word}`;
+  if (used.has(name) && !site) name = `${near!.name}–${far!.name} ${word}`;
+  for (let k = 2; used.has(name); k += 1) name = `${name.replace(/ \(\d+\)$/, "")} (${k})`;
+  used.add(name);
+  return name;
+}
+
 /** At a new game's start, after the warm-up (start.ts): the fords, and the first rains drawn. */
 export function startFloods(world: GameWorld): void {
   if (!world.tuning.floodsEnabled) return;
@@ -92,13 +107,7 @@ export function startFloods(world: GameWorld): void {
       const a = world.towns.get(segment.fromNodeId);
       const b = world.towns.get(segment.toNodeId);
       if (!a || !b) continue;
-      // Named for the town it's nearer -- or, on a site's road, for the site.
-      const site = [a, b].find((t) => t.industry);
-      const [near, far] = [a, b].sort((p, q) => Math.hypot(p.x - at.x, p.y - at.y) - Math.hypot(q.x - at.x, q.y - at.y));
-      let name = site ? `${site.name} ford` : `${near!.name} ford`;
-      if (used.has(name) && !site) name = `${near!.name}–${far!.name} ford`;
-      for (let k = 2; used.has(name); k += 1) name = `${name.replace(/ \(\d+\)$/, "")} (${k})`;
-      used.add(name);
+      const name = crossingName(a, b, at, "ford", used);
       fords.push({ id: `ford-${fords.length}`, name, x: at.x, y: at.y, span, a: segment.fromNodeId, b: segment.toNodeId, bridged: false });
     }
   }
@@ -122,7 +131,7 @@ export function fordById(world: GameWorld, id: string): Ford | undefined {
 function piecesAt(world: GameWorld, ford: Ford): string[] {
   const out: string[] = [];
   for (const segment of world.simulation.map.segments) {
-    if (segment.type !== "road" || segment.provenance !== "inherited" || segment.retiredAt !== undefined) continue;
+    if (segment.type !== "road" || segment.provenance !== (ford.built ? "built" : "inherited") || segment.retiredAt !== undefined) continue;
     const line = segmentPolyline(world.simulation.map, segment);
     const near = line.some((p, k) => k > 0 && distToSegment(ford, line[k - 1]!, p) < 0.9);
     if (near) out.push(segment.id);
@@ -204,6 +213,41 @@ export function updateFloods(world: GameWorld): GameEvent[] {
     floods.fallAt = floods.riseAt + (t.floodDays ?? 20) * D;
   }
   return events;
+}
+
+// Causeways or high bridges (brief, Revision 5, step 6: "the crossing as a choice of kind",
+// agreed 2026-10-26). A new road over water crosses it on a causeway, at the price the planner
+// quotes (₦40 a cell of water) -- and floods with the rains like an old ford -- unless you pay
+// for a high bridge: the same ₦1,200 a cell as raising a ford, so building high now and
+// raising later cost the same. Off in older runs (no causewaysEnabled): their roads' bridges
+// never flood.
+
+const causeways = (world: GameWorld) => on(world) && !!world.tuning.causewaysEnabled;
+
+/** What raising a planned road's crossings to a high bridge adds to its price; 0 where it crosses no water. */
+export function highBridgeCost(world: GameWorld, line: Point[]): number {
+  if (!causeways(world)) return 0;
+  return wetRuns(world, line).reduce((sum, run) => sum + Math.round(Math.max(1, run.span) * (world.tuning.fordBridgePerCell ?? 1200)), 0);
+}
+
+/** A road you've just built (world.ts buildRoad), not high: each of its crossings a causeway the rains can take. */
+export function addCauseways(world: GameWorld, segment: Segment): void {
+  if (!causeways(world)) return;
+  const floods = world.floods!;
+  const a = world.towns.get(segment.fromNodeId), b = world.towns.get(segment.toNodeId);
+  if (!a || !b) return;
+  const used = new Set(floods.fords.map((ford) => ford.name));
+  for (const { at, span } of crossings(world, segment)) {
+    floods.fords.push({ id: `ford-${floods.fords.length}`, name: crossingName(a, b, at, "causeway", used), x: at.x, y: at.y, span, a: a.id, b: b.id, bridged: false, built: true });
+  }
+  // Every ford bridged had stopped the rains (warnAt Infinity): a new causeway brings them back.
+  if (floods.riseAt === Infinity) {
+    const now = world.economy.elapsedSeconds;
+    const t = world.tuning;
+    floods.riseAt = now + ((t.floodEveryDays ?? 180) / 2) * D;
+    floods.warnAt = floods.riseAt - (t.floodWarnDays ?? 14) * D;
+    floods.fallAt = floods.riseAt + (t.floodDays ?? 20) * D;
+  }
 }
 
 /** The design console's "rains now" (term.ts consoleMove): this season's fords named at the next check. */

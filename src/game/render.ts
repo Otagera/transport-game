@@ -872,7 +872,7 @@ function drawFords(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
       if (site || markScale * markScale < 4) continue;
       ctx.font = "italic 10px system-ui, sans-serif";
       ctx.fillStyle = COLORS.labelMuted;
-      ctx.fillText(ford.bridged ? ford.name.replace(/ford$/, "bridge") : ford.name, p.x, p.y + 12 * markScale);
+      ctx.fillText(ford.bridged ? ford.name.replace(/(ford|causeway)$/, "bridge") : ford.name, p.x, p.y + 12 * markScale);
       ctx.font = "700 11px ui-monospace, monospace";
       continue;
     }
@@ -956,6 +956,7 @@ function drawGhostLine(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vi
   }
   ctx.setLineDash([]);
 }
+const LABEL_WIDTH = 420;
 function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, label: string, ok: boolean, forecast?: ForecastLine): void {
   const ghost = { to, label, ok };
   if (ghost.label) {
@@ -965,13 +966,23 @@ function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, 
     ctx.font = "12px system-ui, sans-serif";
     const subWidth = forecast ? ctx.measureText(forecast.text).width : 0;
     ctx.font = "600 13px system-ui, sans-serif";
-    const w = Math.max(ctx.measureText(ghost.label).width, subWidth) + 12;
-    const h = forecast ? 40 : 22;
-    // Flip left of the cursor rather than run under the side panel (main.ts
-    // fitView leaves it 300px when the window is wide enough to have one).
-    const right = window.innerWidth > 900 ? window.innerWidth - 300 : window.innerWidth;
-    const x = ghost.to.x + 12 + w > right - 8 ? Math.max(8, ghost.to.x - 12 - w) : ghost.to.x + 12;
-    const y = ghost.to.y - 26 - (h - 22);
+    // Wrapped at its " · " breaks to a readable width: a road's quote had grown past the map's
+    // width (price, why, the crossing, the other way, riders), and ran off both edges.
+    const lines: string[] = [];
+    for (const part of ghost.label.split(" · ")) {
+      const last = lines[lines.length - 1];
+      if (last !== undefined && ctx.measureText(`${last} · ${part}`).width <= LABEL_WIDTH) lines[lines.length - 1] = `${last} · ${part}`;
+      else lines.push(part);
+    }
+    const w = Math.max(...lines.map((line) => ctx.measureText(line).width), subWidth) + 12;
+    const h = lines.length * 17 + 5 + (forecast ? 18 : 0);
+    // Flip left of the cursor rather than run under the side panels (main.ts fitView leaves
+    // them their width when the window is wide enough to have them).
+    const wide = window.innerWidth > 900;
+    const right = wide ? window.innerWidth - 300 : window.innerWidth;
+    const left = wide ? 240 : 0;
+    const x = ghost.to.x + 12 + w > right - 8 ? Math.max(left + 8, ghost.to.x - 12 - w) : ghost.to.x + 12;
+    const y = Math.max(8, ghost.to.y - 4 - h);
     ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
     ctx.lineWidth = 1;
@@ -980,11 +991,11 @@ function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, 
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = ghost.ok ? COLORS.label : COLORS.ghostBad;
-    ctx.fillText(ghost.label, x + 6, y + 15);
+    lines.forEach((line, i) => ctx.fillText(line, x + 6, y + 15 + i * 17));
     if (forecast) {
       ctx.font = forecast.tone === "pending" ? "italic 12px system-ui, sans-serif" : "600 12px system-ui, sans-serif";
       ctx.fillStyle = forecast.tone === "good" ? COLORS.forecastGood : forecast.tone === "bad" ? COLORS.ghostBad : COLORS.labelMuted;
-      ctx.fillText(forecast.text, x + 6, y + 33);
+      ctx.fillText(forecast.text, x + 6, y + 15 + lines.length * 17);
     }
   }
 }

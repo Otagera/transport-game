@@ -241,6 +241,8 @@ export interface GameTuning {
   /** A limestone field on the hill range between two clusters (crossings.ts): on. Absent in older runs: off. */
   ridgeFieldEnabled?: boolean;
   floodsEnabled?: boolean;
+  /** A new road over water: a causeway that floods, or a high bridge (floods.ts). Absent in older runs: off. */
+  causewaysEnabled?: boolean;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;
