@@ -1,3 +1,4 @@
+import { rainsNow } from "./floods";
 import { clusterOf, clusterOfferShare } from "./clusters";
 import type { GameWorld } from "./types";
 import type { GameEvent } from "./settlement";
@@ -300,7 +301,8 @@ export function noteAction(world: GameWorld, spec: ActionSpec): void {
  * The design console's moves (behind ?dev=1 on the page; brief, Revision 5): end the term
  * now, or set the money. Actions like any other, so a run file records them as such.
  */
-export function consoleMove(world: GameWorld, op: "end-term" | "funds", amount = 0): { ok: boolean; reason?: string } {
+export function consoleMove(world: GameWorld, op: "end-term" | "funds" | "rains", amount = 0): { ok: boolean; reason?: string } {
+  if (op === "rains") return rainsNow(world);
   if (op === "funds") {
     world.economy.funds = amount;
     return { ok: true };

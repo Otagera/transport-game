@@ -1,4 +1,5 @@
 import { laneMood } from "@engine/game/union";
+import { fordBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
@@ -4190,5 +4191,89 @@ describe("the union as a party (union.ts; brief, Revision 5: the union, agreed 2
   test("a run played before it (no unionEnabled) has none", () => {
     const w = start({ unionEnabled: undefined });
     expect(w.unions).toBeUndefined();
+  }, 60_000);
+});
+
+describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the first shock)", () => {
+  // Short seasons: the rains on day 4-5, named 2 days ahead, 3 days of flood, every 10 days.
+  const quick = { floodFirstDayMin: 4, floodFirstDayMax: 5, floodWarnDays: 2, floodDays: 3, floodEveryDays: 10 };
+  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 2418, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, ...overrides });
+  const tick = (w: GameWorld, days: number) => { const events: GameEvent[] = []; for (let i = 0; i < days * SECONDS_PER_GAME_DAY * 30; i += 1) events.push(...gameTick(w, SIM_DT)); return events; };
+  const until = (w: GameWorld, kind: GameEvent["kind"], days = 20) => {
+    for (let i = 0; i < days * SECONDS_PER_GAME_DAY * 30; i += 1) {
+      const hit = gameTick(w, SIM_DT).find((e) => e.kind === kind);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  test("the old roads' river crossings are named fords; a road you build has its bridge", () => {
+    const w = start();
+    const fords = w.floods!.fords;
+    expect(fords.length).toBeGreaterThan(0);
+    for (const ford of fords) {
+      expect(ford.name).toMatch(/ford$/);
+      expect(ford.bridged).toBe(false);
+      expect(ford.span).toBeGreaterThanOrEqual(1);
+    }
+    expect(new Set(fords.map((f) => f.name)).size).toBe(fords.length);
+  }, 60_000);
+
+  test("named ahead, the busiest first; under water the road runs at floodSpeed; then the water falls and the next rains are drawn", () => {
+    const w = start();
+    const warning = until(w, "flood-warning");
+    expect(warning?.kind).toBe("flood-warning");
+    if (warning?.kind !== "flood-warning") return;
+    expect(warning.fords.length).toBe(2);
+    expect(warning.inDays).toBeGreaterThanOrEqual(1);
+    const rose = until(w, "flood-rose");
+    expect(rose?.kind).toBe("flood-rose");
+    tick(w, 0.2);
+    const flooded = [...w.floods!.flooded];
+    expect(flooded.length).toBeGreaterThan(0);
+    for (const id of flooded) {
+      expect(isFlooded(w, id)).toBe(true);
+      expect(w.segmentSpeed.get(id)).toBeLessThanOrEqual(w.tuning.floodSpeed!);
+    }
+    const riseAt = w.floods!.riseAt;
+    expect(until(w, "flood-fell")?.kind).toBe("flood-fell");
+    tick(w, 0.2);
+    expect(w.floods!.flooded.size).toBe(0);
+    for (const id of flooded) expect(w.segmentSpeed.get(id)!).toBeGreaterThan(w.tuning.floodSpeed!);
+    expect(w.floods!.riseAt).toBe(riseAt + 10 * SECONDS_PER_GAME_DAY);
+  }, 120_000);
+
+  test("a bridge raised before the water keeps that road open, for its price, and it never floods again", () => {
+    const w = start();
+    const warning = until(w, "flood-warning");
+    if (warning?.kind !== "flood-warning") throw new Error("no warning");
+    const [first, second] = warning.fords;
+    const ford = w.floods!.fords.find((f) => f.id === first!.id)!;
+    const funds = w.economy.funds;
+    const outcome = applyAction(w, { kind: "bridgeFord", fordId: ford.id });
+    expect(outcome.ok).toBe(true);
+    expect(outcome.amount).toBe(fordBridgeCost(w, ford));
+    expect(funds - w.economy.funds).toBeCloseTo(fordBridgeCost(w, ford), 0);
+    expect(applyAction(w, { kind: "bridgeFord", fordId: ford.id }).ok).toBe(false);
+    const rose = until(w, "flood-rose");
+    if (rose?.kind !== "flood-rose") throw new Error("no flood");
+    expect(rose.fords.map((f) => f.id)).toEqual([second!.id]);
+    expect(w.floods!.under).not.toContain(ford.id);
+  }, 120_000);
+
+  test("a bridge raised under the flood opens the road at once", () => {
+    const w = start();
+    until(w, "flood-rose");
+    tick(w, 0.2);
+    const id = w.floods!.under[0]!;
+    const before = w.floods!.flooded.size;
+    expect(applyAction(w, { kind: "bridgeFord", fordId: id }).ok).toBe(true);
+    expect(w.floods!.under).not.toContain(id);
+    expect(w.floods!.flooded.size).toBeLessThan(before);
+  }, 120_000);
+
+  test("a run played before it (no floodsEnabled) has no fords", () => {
+    const w = start({ floodsEnabled: undefined });
+    expect(w.floods).toBeUndefined();
   }, 60_000);
 });

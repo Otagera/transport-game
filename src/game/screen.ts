@@ -1,4 +1,5 @@
 import { routeAlong, stanceWord, unionOf } from "@engine/game/union";
+import { fordBridgeCost, fordById } from "@engine/game/floods";
 import { clusterOf, clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad } from "@engine/game/private";
 import { aWeekOnText, termVerdictText, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
@@ -297,6 +298,18 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (term && left > 0 && term.pledges.some((p) => !p.committed)) {
       items.push({ text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
     }
+    // The rains (floods.ts): the fords named for this season, and those under water now.
+    const floods = world.floods;
+    if (floods && (floods.phase === "warned" || floods.phase === "flood")) {
+      for (const id of floods.phase === "warned" ? floods.coming : floods.under) {
+        const ford = fordById(world, id);
+        if (!ford || ford.bridged) continue;
+        const when = floods.phase === "warned" ? `floods on day ${gameDay(world, floods.riseAt) - 1}, for ${Math.round((floods.fallAt - floods.riseAt) / D)} days` : `is under water until day ${gameDay(world, floods.fallAt) - 1}`;
+        const named = [ford.a, ford.b].find((id) => ford.name.startsWith(nameOf(id)));
+        const road = named ? `the road to ${nameOf(named === ford.a ? ford.b : ford.a)}` : `the ${nameOf(ford.a)} – ${nameOf(ford.b)} road`;
+        items.push({ text: `${ford.name} ${when}: everything on ${road} waits at the bank`, button: `<button data-ford="${ford.id}">Raise a bridge · ${nairaK(fordBridgeCost(world, ford))}</button>`, at: [ford.a, ford.b], weight: 8e7 });
+      }
+    }
     // The unions' demands (union.ts): who's asking, how he stands, his words, the deadline, and your answers.
     for (const union of world.unions ?? []) {
       const d = union.demand;
@@ -498,7 +511,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       </div>`;
     }).join("");
     const standing = term.replacedAtSeconds !== undefined ? ` · <b class="down">replaced</b>` : (term.failedInRow ?? 0) > 0 ? ` · <span class="down">a failed term behind you</span>` : "";
-    const console = hooks.dev ? `<div class="d">Console: <button data-console="end-term">End the term</button> <button data-console="funds">₦100k</button></div>` : "";
+    const console = hooks.dev ? `<div class="d">Console: <button data-console="end-term">End the term</button> <button data-console="funds">₦100k</button> <button data-console="rains">Rains now</button></div>` : "";
     return `<div class="stat term"><div class="k">Day ${day} · Term ${term.number}, day ${termDay} of ${length}${committed < MAX_COMMITTED ? ` · pledge ${MAX_COMMITTED - committed}` : ""}${standing}</div>${rows || `<div class="d muted">Nothing to pledge this term</div>`}<div class="d muted">${mapLine}</div>${console}</div>`;
   }
 
@@ -716,6 +729,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "project-lapse-warning": return { text: `${ab(e)}: the project money lapses soon`, tone: "bad", group: "money", select: { kind: "town", id: e.a } };
       case "project-lapsed": return { text: `${ab(e)}: the project lapsed, the treasury took ${nairaK(e.taken)}`, tone: "bad", group: "money", select: null };
       case "project-done": return { text: `${ab(e)}: the ${e.rung === "lane" ? "bus lane" : "rail"} is built`, tone: "good", group: "money", select: { kind: "town", id: e.a } };
+      case "flood-warning": return { text: `The rains in ${e.inDays} days: ${e.fords.map((f) => f.name).join(", ")} will flood`, tone: "bad", group: "trouble", select: null };
+      case "flood-rose": return { text: `Flooded: ${e.fords.map((f) => f.name).join(", ")}, for ${e.days} days`, tone: "bad", group: "trouble", select: null };
+      case "flood-fell": return { text: `The water's down at ${e.fords.map((f) => f.name).join(", ")}`, tone: "good", group: "trouble", select: null };
       case "union-demand": return { text: `${e.chairman}: "${e.text}"`, tone: "bad", group: "trouble", select: null };
       case "union-answered": return { text: `${e.chairman}: ${{ pay: "you paid his members", concede: "you eased the lane", coop: "you handed him the route", refuse: "you refused him", ignored: "you ignored him: he strikes" }[e.answer]}`, tone: e.answer === "refuse" || e.answer === "ignored" ? "bad" : "good", group: "trouble", select: null };
       case "union-stance": return { text: `${e.chairman}'s union is ${e.stance} now`, tone: e.stance === "with you" ? "good" : e.stance === "against you" ? "bad" : "", group: "trouble", select: null };

@@ -148,6 +148,17 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // The far clusters' offers (clusters.ts; brief, Revision 5): a limestone field for your
   // cement works, or a farm belt for your mill -- far, so reaching it is a project.
   // The union as a party (union.ts; agreed 2026-10-25): a chairman a cluster, with a stance and demands.
+  // The rains (floods.ts; brief, Revision 5, step 6): the old roads' fords flood twice a year,
+  // named two weeks ahead, unless you raise a bridge at them.
+  floodsEnabled: true,
+  floodFirstDayMin: 45,
+  floodFirstDayMax: 75,
+  floodEveryDays: 180,
+  floodWarnDays: 14,
+  floodDays: 20,
+  floodFordsPerSeason: 2,
+  floodSpeed: 0.08,
+  fordBridgePerCell: 1200,
   unionEnabled: true,
   unionDemandEveryDays: 20,
   unionDemandDays: 7,
