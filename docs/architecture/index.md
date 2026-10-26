@@ -104,6 +104,16 @@ turns into toasts and the run file records. Detail in [engine.md](engine.md) §g
   inputs). **Adding a dev-only surface means adding a string there.**
 - GitHub Actions CI runs all four in that order on push.
 
+## Deploy
+
+The game is hosted on a Coolify VPS, built from the repo's `Dockerfile` (Coolify's
+"Dockerfile" build pack, port 80). Stage one installs with Bun and runs `bun run build` and
+the bundle check, so a bundle that leaks a dev surface never ships; stage two serves `dist/`
+from nginx (`nginx.conf`: `/assets/` cached forever since Vite fingerprints it, `index.html`
+`no-cache` so a deploy reaches players at once). The image is ~80 MB and idles at ~15 MB of
+RAM. `.git` isn't in the build context, so `vite.config.ts` takes the run files' build stamp
+from Coolify's `SOURCE_COMMIT` build arg. Tests and typecheck stay in CI, not in the image.
+
 ## Live browser verification
 
 There is no automated E2E suite. Feature-level verification is done ad hoc with

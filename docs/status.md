@@ -189,6 +189,8 @@ goods/passengers balance** (a decision for you). **Then the slice closes:** the 
   `?wear=off` switch those systems off.
 - Calibrate: `bun scripts/game-probe.ts [days]`, with `GAME_TUNING='{"fare":5}'` to try
   overrides.
+- Deploy: the `Dockerfile` builds the game for the Coolify VPS (served by nginx);
+  [architecture/index.md](architecture/index.md) §Deploy.
 - Detail: [architecture/engine.md](architecture/engine.md) §slice/,
   [architecture/render-and-ui.md](architecture/render-and-ui.md) §7.
 

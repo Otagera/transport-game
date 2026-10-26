@@ -3,7 +3,9 @@ import { execSync } from "node:child_process";
 import { fileURLToPath, URL } from "node:url";
 // The commit the game was built from, for run files (src/engine/game/runlog.ts):
 // read when the dev server starts, so a long-running server reports where it began.
+// A Coolify build has no .git; it passes the commit as SOURCE_COMMIT (see Dockerfile).
 function gameBuild(): string {
+  if (process.env.SOURCE_COMMIT) return process.env.SOURCE_COMMIT.slice(0, 7);
   try {
     const hash = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
     const dirty = execSync("git status --porcelain", { encoding: "utf8" }).trim() !== "";
