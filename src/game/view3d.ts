@@ -20,6 +20,9 @@ import { inHome } from "@engine/game/fuel";
 import { isFlooded } from "@engine/game/floods";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { tierOf, type Tier } from "./icons";
+import { treeGeometry, type TreeKind } from "./shapes3d";
+import { farmTowns } from "@engine/game/food";
+import { inFarmBelt } from "@engine/game/clusters";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
 
 const M = 8; // metres a map cell
@@ -185,7 +188,49 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     return false;
   };
 
-  // --- The land: relief, greener low, olive on the hills -----------------------------------
+  /** How far out a town builds (metres): with its people, but not past its share of the gap to the next. */
+  function reachOf(town: GameTown, tier: Tier, among: GameTown[]): { wanted: number; radius: number } {
+    const wanted = (tier === "village" ? 3 : 4 + Math.sqrt(town.population) * 0.9) * M;
+    let limit = Infinity;
+    for (const t of among) {
+      if (t.id === town.id) continue;
+      const share = Math.sqrt(town.population) / (Math.sqrt(town.population) + Math.sqrt(t.population));
+      limit = Math.min(limit, Math.hypot(t.x - town.x, t.y - town.y) * 0.85 * share);
+    }
+    return { wanted, radius: Math.min(wanted, Math.max(2.5, limit) * M) };
+  }
+  const startPeople = [...world.towns.values()].filter((t) => !t.industry);
+  const startCity = startPeople.reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id;
+  /** Each town's reach at the start, in cells: its red earth, and where its fields begin. */
+  const reachCells = new Map(startPeople.map((t) => [t.id, reachOf(t, tierOf(t.population, t.id === startCity), startPeople).radius / M]));
+
+  // How far each cell is from a river's bank (cells; 0 in the water): the gallery forest along
+  // them, and their darker, greener banks.
+  const bankDist = new Float32Array(W * H).fill(99);
+  for (const river of world.waterLines ?? []) {
+    for (let k = 1; k < river.points.length; k += 1) {
+      const [ax, ay] = river.points[k - 1]!, [bx, by] = river.points[k]!;
+      const half = ((river.widths?.[k - 1] ?? river.width) + (river.widths?.[k] ?? river.width)) / 4;
+      const x0 = Math.max(0, Math.floor(Math.min(ax, bx) - half - 8)), x1 = Math.min(W - 1, Math.ceil(Math.max(ax, bx) + half + 8));
+      const y0 = Math.max(0, Math.floor(Math.min(ay, by) - half - 8)), y1 = Math.min(H - 1, Math.ceil(Math.max(ay, by) + half + 8));
+      for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
+        const d = Math.max(0, distToSegment(x, y, { x: ax, y: ay }, { x: bx, y: by }) - half);
+        if (d < bankDist[y * W + x]!) bankDist[y * W + x] = d;
+      }
+    }
+  }
+  // Soft patches across the land (value noise, seeded by the map): dry savanna and green.
+  const noiseSeed = seeded(`land-${W}-${H}-${startPeople.map((t) => t.id).join("")}`);
+  const LW = Math.ceil(W / 14) + 2;
+  const lattice = Array.from({ length: LW * (Math.ceil(H / 14) + 2) }, () => noiseSeed());
+  const patch = (cx: number, cy: number) => {
+    const gx = Math.max(0, cx) / 14, gy = Math.max(0, cy) / 14, x0 = Math.floor(gx), y0 = Math.floor(gy);
+    const tx = gx - x0, ty = gy - y0, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const v = (x: number, y: number) => lattice[y * LW + x] ?? 0.5;
+    return (v(x0, y0) * (1 - sx) + v(x0 + 1, y0) * sx) * (1 - sy) + (v(x0, y0 + 1) * (1 - sx) + v(x0 + 1, y0 + 1) * sx) * sy;
+  };
+
+  // --- The land: savanna in patches, greener by the rivers, red earth in the towns, olive on the hills
   {
     const geo = own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M, (W - 1) * 2, (H - 1) * 2));
     geo.rotateX(-Math.PI / 2);
@@ -193,11 +238,21 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const pos = geo.attributes.position!;
     const colours = new Float32Array(pos.count * 3);
     const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
-    const low = new THREE.Color(0xb3b98a), high = new THREE.Color(0x7d8f62), c = new THREE.Color();
+    const high = new THREE.Color(0x7d8f62), c = new THREE.Color();
+    const dry = new THREE.Color(0xc6b783), green = new THREE.Color(0x9fb27a), bankGreen = new THREE.Color(0x7c9a55), earth = new THREE.Color(0xb98a62);
     for (let i = 0; i < pos.count; i += 1) {
-      const e = elevationAt(pos.getX(i) / M, pos.getZ(i) / M);
+      const cx = pos.getX(i) / M, cy = pos.getZ(i) / M;
+      const e = elevationAt(cx, cy);
       pos.setY(i, e * HEIGHT);
-      c.copy(low).lerp(high, Math.min(1, e / top));
+      c.copy(green).lerp(dry, Math.max(0, Math.min(1, (patch(cx, cy) - 0.3) * 1.8)));
+      c.lerp(high, Math.min(1, e / top) * 0.8);
+      const bank = bankDist[Math.min(H - 1, Math.round(cy)) * W + Math.min(W - 1, Math.round(cx))]!;
+      if (bank < 5) c.lerp(bankGreen, 0.7 * (1 - bank / 5));
+      for (const t of startPeople) {
+        const r = reachCells.get(t.id)!;
+        const d = Math.hypot(t.x - cx, t.y - cy);
+        if (d < r) c.lerp(earth, 0.42 * (1 - (d / r) ** 2));
+      }
       colours.set([c.r, c.g, c.b], i * 3);
     }
     geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
@@ -206,7 +261,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     land.receiveShadow = true;
     scene.add(land);
     // Beyond the map, the same plain running on into the haze.
-    const skirt = new THREE.Mesh(own(new THREE.PlaneGeometry(W * M * 8, H * M * 8)), own(new THREE.MeshLambertMaterial({ color: low })));
+    // Its colour the savanna's own middle, so the map's edge doesn't show as a seam.
+    const skirt = new THREE.Mesh(own(new THREE.PlaneGeometry(W * M * 8, H * M * 8)), own(new THREE.MeshLambertMaterial({ color: new THREE.Color(0x9fb27a).lerp(new THREE.Color(0xc6b783), 0.45) })));
     skirt.rotation.x = -Math.PI / 2;
     skirt.position.set((W * M) / 2, -0.5, (H * M) / 2);
     skirt.receiveShadow = true;
@@ -372,14 +428,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // How far out, and how many buildings: grows with its people -- but not into the next
     // town (a close pair read as one sprawl). The gap between them is shared by size, and a
     // town hemmed in builds denser, not out.
-    const wanted = (tier === "village" ? 3 : 4 + Math.sqrt(town.population) * 0.9) * M;
-    let limit = Infinity;
-    for (const t of people) {
-      if (t.id === town.id) continue;
-      const share = Math.sqrt(town.population) / (Math.sqrt(town.population) + Math.sqrt(t.population));
-      limit = Math.min(limit, Math.hypot(t.x - town.x, t.y - town.y) * 0.85 * share);
-    }
-    const radius = Math.min(wanted, Math.max(2.5, limit) * M);
+    const { wanted, radius } = reachOf(town, tier, people);
     const room = Math.max(0.4, radius / wanted);
     const count = Math.round(room * Math.min(160, tier === "village" ? 5 + town.population * 0.5 : 8 + town.population * 0.9));
     const grid = rand() * Math.PI; // the way its streets run
@@ -574,6 +623,158 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
   }
 
+  // --- Fields and trees: the land between the towns ------------------------------------------
+  // What's where, a cell at a time, so neither lands on water, a road, a town or each other.
+  const FREE = 0, WET = 1, ROAD = 2, TOWN = 3, FIELD = 4;
+  const occupied = new Uint8Array(W * H);
+  const markRoads = (lines: Point[][]) => {
+    for (const line of lines) {
+      for (let k = 1; k < line.length; k += 1) {
+        const a = line[k - 1]!, b = line[k]!;
+        const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 2));
+        for (let i = 0; i <= n; i += 1) {
+          const x = Math.round(a.x + ((b.x - a.x) * i) / n), y = Math.round(a.y + ((b.y - a.y) * i) / n);
+          if (x >= 0 && y >= 0 && x < W && y < H && occupied[y * W + x] !== WET) occupied[y * W + x] = ROAD;
+        }
+      }
+    }
+  };
+  const fieldMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  const treeMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const trees: Array<{ kind: TreeKind; cell: number; at: THREE.Matrix4 }> = [];
+  const groves = new Map<TreeKind, THREE.InstancedMesh>();
+  let planted = false;
+
+  function plant(w: GameWorld): void {
+    planted = true;
+    const rand = seeded(`plant-${W}-${H}-${startPeople.map((t) => t.id).join("")}`);
+    for (let i = 0; i < W * H; i += 1) if (terrain.water[i] === 1 || bankDist[i]! < 0.6) occupied[i] = WET;
+    markRoads(roadLines);
+    for (const t of [...w.towns.values()]) {
+      const r = t.industry ? 3 : reachCells.get(t.id) ?? 3;
+      for (let y = Math.max(0, Math.floor(t.y - r)); y <= Math.min(H - 1, Math.ceil(t.y + r)); y += 1)
+        for (let x = Math.max(0, Math.floor(t.x - r)); x <= Math.min(W - 1, Math.ceil(t.x + r)); x += 1)
+          if (Math.hypot(x - t.x, y - t.y) <= r && occupied[y * W + x] === FREE) occupied[y * W + x] = TOWN;
+    }
+
+    // Fields: a ring round each town, beyond its houses; farm towns (food.ts) farm more, and a
+    // farm belt's (clusters.ts) most. Some in rows (ridged yam and maize), some plain.
+    const farming = new Set(farmTowns(w).map((t) => t.id));
+    const PALETTE = ["#8fa95a", "#a7b964", "#c9b57a", "#b39463", "#7f9e4f", "#d2c08a", "#9c7a52"];
+    const verts: number[] = [], cols: number[] = [], index: number[] = [];
+    const colour = new THREE.Color();
+    const quad = (corners: Point[], hex: string) => {
+      const base = verts.length / 3;
+      colour.set(hex);
+      for (const p of corners) {
+        const g = ground(p.x, p.y, 0.15);
+        verts.push(g.x, g.y, g.z);
+        cols.push(colour.r, colour.g, colour.b);
+      }
+      index.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    };
+    for (const town of startPeople) {
+      const r = reachCells.get(town.id) ?? 3;
+      const keen = (farming.has(town.id) ? 1.8 : 1) * (inFarmBelt(w, town.id) ? 1.6 : 1);
+      const ring = (3 + Math.sqrt(town.population) * 0.45) * keen;
+      const tries = Math.round((25 + town.population * 0.8) * keen);
+      const grid = rand() * Math.PI;
+      for (let n = 0; n < tries; n += 1) {
+        const a = rand() * Math.PI * 2, d = r + 0.5 + rand() * ring;
+        const cx = town.x + Math.cos(a) * d, cy = town.y + Math.sin(a) * d;
+        const fw = 1.2 + rand() * 2.4, fh = 1 + rand() * 1.8, turn = grid + (rand() - 0.5) * 0.3;
+        const u = { x: Math.cos(turn), y: Math.sin(turn) }, v = { x: -u.y, y: u.x };
+        const cells: number[] = [];
+        let clear = true;
+        for (let i = -fw / 2; i <= fw / 2 && clear; i += 0.5) for (let j = -fh / 2; j <= fh / 2 && clear; j += 0.5) {
+          const x = Math.round(cx + u.x * i + v.x * j), y = Math.round(cy + u.y * i + v.y * j);
+          if (x < 0 || y < 0 || x >= W || y >= H || occupied[y * W + x] !== FREE) clear = false;
+          else cells.push(y * W + x);
+        }
+        if (!clear) continue;
+        for (const c of cells) occupied[c] = FIELD;
+        const at = (i: number, j: number) => ({ x: cx + u.x * i + v.x * j, y: cy + u.y * i + v.y * j });
+        const hex = PALETTE[Math.floor(rand() * PALETTE.length)]!;
+        if (rand() < 0.5) {
+          // In rows: strips a third of a cell wide, the crop and the earth between.
+          const strips = Math.max(2, Math.round(fw / 0.33));
+          for (let k = 0; k < strips; k += 1) {
+            const i0 = -fw / 2 + (fw * k) / strips, i1 = -fw / 2 + (fw * (k + 1)) / strips;
+            quad([at(i0, -fh / 2), at(i1, -fh / 2), at(i1, fh / 2), at(i0, fh / 2)], k % 2 ? "#a88a5e" : hex);
+          }
+        } else quad([at(-fw / 2, -fh / 2), at(fw / 2, -fh / 2), at(fw / 2, fh / 2), at(-fw / 2, fh / 2)], hex);
+      }
+    }
+    if (index.length) {
+      const geo = own(new THREE.BufferGeometry());
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
+      geo.setIndex(index);
+      geo.computeVertexNormals();
+      const fields = new THREE.Mesh(geo, fieldMaterial);
+      fields.receiveShadow = true;
+      scene.add(fields);
+    }
+
+    // Trees: thin on the open savanna, a gallery forest along the rivers, bush on the hills,
+    // palms by the water and in the towns. Each kind one InstancedMesh.
+    const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    const pick = (weights: Array<[TreeKind, number]>) => {
+      let r = rand() * weights.reduce((t, [, wgt]) => t + wgt, 0);
+      for (const [kind, wgt] of weights) if ((r -= wgt) <= 0) return kind;
+      return weights[0]![0];
+    };
+    // Over the whole land, then again along the banks: the gallery forest is thick.
+    const riverside: number[] = [];
+    for (let i = 0; i < W * H; i += 1) if (bankDist[i]! > 0.6 && bankDist[i]! < 3.5) riverside.push(i);
+    const samples = Math.round(W * H * 1.3);
+    for (let n = 0; n < samples + riverside.length * 3; n += 1) {
+      let cx: number, cy: number;
+      if (n < samples) { cx = rand() * (W - 1); cy = rand() * (H - 1); }
+      else { const c = riverside[Math.floor(rand() * riverside.length)]!; cx = (c % W) + rand() - 0.5; cy = Math.floor(c / W) + rand() - 0.5; }
+      const cell = Math.round(cy) * W + Math.round(cx);
+      const what = occupied[cell];
+      if (what === WET || what === ROAD || what === FIELD) continue;
+      const bank = bankDist[cell]!;
+      const hill = elevationAt(cx, cy) / top;
+      let chance: number, kind: TreeKind;
+      if (what === TOWN) { chance = 0.05; kind = pick([["palm", 3], ["shade", 2]]); }
+      else if (bank < 3) { chance = 0.75; kind = pick([["shade", 5], ["palm", 3], ["acacia", 2]]); }
+      else if (bank < 7) { chance = 0.35; kind = pick([["shade", 3], ["acacia", 3], ["palm", 1], ["bush", 2]]); }
+      else if (hill > 0.3) { chance = 0.3; kind = pick([["bush", 5], ["acacia", 3]]); }
+      else { chance = 0.1 + 0.12 * patch(cx, cy); kind = pick([["acacia", 5], ["bush", 3], ["shade", 2]]); }
+      if (rand() > chance) continue;
+      const size = 0.7 + rand() * 0.6;
+      m.compose(ground(cx, cy, -0.1), q.setFromAxisAngle(up, rand() * Math.PI * 2), sc.set(size, size * (0.85 + rand() * 0.3), size));
+      trees.push({ kind, cell, at: m.clone() });
+    }
+    for (const kind of ["acacia", "shade", "palm", "bush"] as TreeKind[]) {
+      const mine = trees.filter((t) => t.kind === kind);
+      if (!mine.length) continue;
+      const mesh = new THREE.InstancedMesh(own(treeGeometry(kind)), treeMaterial, mine.length);
+      mine.forEach((t, i) => mesh.setMatrixAt(i, t.at));
+      mesh.castShadow = true;
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+      groves.set(kind, mesh);
+    }
+  }
+  /** A road built since, or a town grown: the trees in its way go. */
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  function clearTrees(gone: (cell: number) => boolean): void {
+    for (const kind of groves.keys()) {
+      const mesh = groves.get(kind)!;
+      let i = 0, changed = false;
+      for (const t of trees) {
+        if (t.kind !== kind) continue;
+        if (gone(t.cell)) { mesh.setMatrixAt(i, zero); changed = true; }
+        i += 1;
+      }
+      if (changed) mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
   // --- Frame the home cluster's biggest town ------------------------------------------------
   {
     const home = [...world.towns.values()].filter((t) => !t.industry && inHome(world, t)).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null);
@@ -602,12 +803,17 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       if (shape !== network) {
         network = shape;
         syncRoads(w);
+        if (planted) {
+          markRoads(roadLines);
+          clearTrees((cell) => occupied[cell] === ROAD);
+        }
       }
       const now = performance.now();
       if (now - slowAt > 500) {
         slowAt = now;
         colourRoads(w);
         syncTowns(w);
+        if (!planted) plant(w);
       }
       placeVehicles(w);
     },

@@ -268,3 +268,43 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
   }
   return kit.merged();
 }
+
+// --- Trees: the savanna's, standing on y = 0, about life size ------------------------------
+
+export type TreeKind = "acacia" | "shade" | "palm" | "bush";
+/** A tree's shape; each kind one InstancedMesh, scaled and turned per tree. */
+export function treeGeometry(kind: TreeKind): THREE.BufferGeometry {
+  const kit = new Kit();
+  const bark = "#6b4f36";
+  switch (kind) {
+    case "acacia": {
+      // The savanna's flat-topped tree: a forked trunk, a wide thin crown.
+      kit.add(new THREE.CylinderGeometry(0.25, 0.35, 4.5, 5), bark, { y: 2.25, rz: 0.12 });
+      kit.add(new THREE.CylinderGeometry(3.2, 2.6, 1.1, 7), "#6f8a3c", { y: 4.9 });
+      kit.add(new THREE.CylinderGeometry(2.2, 2.6, 0.7, 7), "#7f9a46", { x: 0.6, y: 5.6, z: -0.3 });
+      break;
+    }
+    case "shade": {
+      // A mango or shea: a short trunk under a round, dark crown.
+      kit.add(new THREE.CylinderGeometry(0.35, 0.45, 3, 5), bark, { y: 1.5 });
+      kit.add(new THREE.IcosahedronGeometry(3, 0), "#4f7a34", { y: 4.6 });
+      kit.add(new THREE.IcosahedronGeometry(2.2, 0), "#5c8a3c", { x: 1.6, y: 4, z: 0.8 });
+      break;
+    }
+    case "palm": {
+      // An oil palm: a tall bending trunk, a burst of fronds.
+      kit.add(new THREE.CylinderGeometry(0.22, 0.32, 8, 5), "#7a6448", { y: 4, rz: 0.08 });
+      for (let k = 0; k < 7; k += 1) {
+        const a = (k / 7) * Math.PI * 2;
+        kit.add(new THREE.BoxGeometry(3.4, 0.08, 0.7), k % 2 ? "#4f8a3a" : "#5e9a42", { x: Math.cos(a) * 1.5 + 0.6, y: 8, z: Math.sin(a) * 1.5, ry: -a, rz: -0.35 });
+      }
+      break;
+    }
+    case "bush": {
+      kit.add(new THREE.IcosahedronGeometry(1.3, 0), "#6e8b45", { y: 0.9 });
+      kit.add(new THREE.IcosahedronGeometry(1, 0), "#7d9a4e", { x: 1, y: 0.7, z: 0.4 });
+      break;
+    }
+  }
+  return kit.merged();
+}
