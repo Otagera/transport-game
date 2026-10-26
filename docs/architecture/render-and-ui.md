@@ -498,6 +498,16 @@ glides over to a newly selected place, keeping its angle (a drag of yours stops 
 Recoloured when the focus changes and on the roads' half-second recolour. From the outside
 review: selecting a place should show what it's connected to, or 3D is scenery.
 
+**The 3D view's look** (2026-10-26, borrowed from two procedural-landscape films the user
+pointed at, napali and procedural-alpine-lake). ACES filmic tone mapping at exposure 0.92 (1.25
+washed the land pale and lost the shadows); a soft vignette as a CSS gradient over the canvas
+(no post-processing pass); haze as aerial perspective, patched into three's `fog_fragment`
+once -- colour drains toward grey from 0.7 × the fog's near, then the land goes to the warm
+haze near and a cool blue far; and trees in groves -- a finer value noise (`grove`, 5-cell
+lattice) gathers the savanna's and hills' trees into clumps with open ground between, taller
+in a grove's heart, with one in thirty standing half again above the rest. The gallery forest
+by the banks and the towns' trees aren't clumped.
+
 **Kept from the old map, in the lab's style** (the lab had no need to show them): the build
 preview and its price label, the fix tool's road, strike and TAKEN/LOST tags, wardens, the
 yard/park/metro marks, emptied towns, rail track. **Gone from the map** (the cards, the overlays

@@ -34,6 +34,20 @@ const M = 8; // metres a map cell
 // playtest, 2026-10-26: "see another mountain in 3D").
 const HEIGHT = 2.2;
 const VEHICLE_SCALE = 1.6; // a little larger than life, to be seen from above
+// Haze as distance does it (aerial perspective), not a flat fog: colour drains first, then the land
+// goes to a warm harmattan haze near and a cool blue far off. Patched into three's fog chunk once;
+// three.js is this module's alone (main.ts loads it on demand).
+THREE.ShaderChunk.fog_fragment = /* glsl */ `
+#ifdef USE_FOG
+  float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+  float drain = smoothstep( fogNear * 0.7, fogFar, vFogDepth );
+  float grey = dot( gl_FragColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, vec3( grey ), drain * 0.3 );
+  vec3 haze = mix( fogColor, vec3( 0.70, 0.79, 0.88 ), smoothstep( fogNear, fogFar * 1.15, vFogDepth ) );
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, haze, fogFactor );
+#endif
+`;
+
 const ROAD_COLOURS = { paved: 0x56585b, dirt: 0xa47a55, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
 /** A selection: your colour (the 2D map's --player), lit on what it's connected to; the rest toward the ground's pale. */
 const FOCUS_COLOUR = 0x2a78d6;
@@ -63,7 +77,14 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
   renderer.setPixelRatio(Math.min(2, devicePixelRatio));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // A filmic grade: highlights roll off instead of clipping, the sun's warmth holds in the light.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.92;
   host.append(renderer.domElement);
+  // A soft vignette: the eye settles on the middle, where the camera's looking.
+  const vignette = document.createElement("div");
+  vignette.style.cssText = "position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 48%, rgba(0,0,0,0) 55%, rgba(40,30,20,0.22) 100%);";
+  host.append(vignette);
   const labels = new CSS2DRenderer();
   labels.domElement.style.cssText = "position:absolute;inset:0;pointer-events:none;";
   host.append(labels.domElement);
@@ -265,6 +286,15 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const noiseSeed = seeded(`land-${W}-${H}-${startPeople.map((t) => t.id).join("")}`);
   const LW = Math.ceil(W / 14) + 2;
   const lattice = Array.from({ length: LW * (Math.ceil(H / 14) + 2) }, () => noiseSeed());
+  // Groves: the same noise finer, so trees stand in clumps with open ground between.
+  const LG = Math.ceil(W / 5) + 2;
+  const groveLattice = Array.from({ length: LG * (Math.ceil(H / 5) + 2) }, () => noiseSeed());
+  const grove = (cx: number, cy: number) => {
+    const gx = Math.max(0, cx) / 5, gy = Math.max(0, cy) / 5, x0 = Math.floor(gx), y0 = Math.floor(gy);
+    const tx = gx - x0, ty = gy - y0, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const v = (x: number, y: number) => groveLattice[y * LG + x] ?? 0.5;
+    return (v(x0, y0) * (1 - sx) + v(x0 + 1, y0) * sx) * (1 - sy) + (v(x0, y0 + 1) * (1 - sx) + v(x0 + 1, y0 + 1) * sx) * sy;
+  };
   const patch = (cx: number, cy: number) => {
     const gx = Math.max(0, cx) / 14, gy = Math.max(0, cy) / 14, x0 = Math.floor(gx), y0 = Math.floor(gy);
     const tx = gx - x0, ty = gy - y0, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
@@ -946,8 +976,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       else if (bank < 7) { chance = 0.35; kind = pick([["shade", 3], ["acacia", 3], ["palm", 1], ["bush", 2]]); }
       else if (hill > 0.3) { chance = 0.3; kind = pick([["bush", 5], ["acacia", 3]]); }
       else { chance = 0.1 + 0.12 * patch(cx, cy); kind = pick([["acacia", 5], ["bush", 3], ["shade", 2]]); }
-      if (rand() > chance) continue;
-      const size = 0.7 + rand() * 0.6;
+      // Away from the banks' gallery forest, trees gather in groves with gaps between (the
+      // reference flights' "stand structure"): thicker in a grove's heart, bare between.
+      const g = grove(cx, cy);
+      const clump = what === TOWN || bank < 3 ? 1 : Math.max(0.12, Math.min(2.4, (g - 0.35) * 5));
+      if (rand() > chance * clump) continue;
+      // Taller in a grove's heart, young at its edge; now and then one stands above the rest.
+      const cohort = what === TOWN ? 1 : 0.65 + Math.max(0, g - 0.35) * 1.1;
+      const size = (0.55 + rand() * 0.45) * cohort * (rand() < 0.03 ? 1.5 : 1);
       m.compose(ground(cx, cy, -0.1), q.setFromAxisAngle(up, rand() * Math.PI * 2), sc.set(size, size * (0.85 + rand() * 0.3), size));
       trees.push({ kind, cell, at: m.clone() });
     }
