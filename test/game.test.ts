@@ -3,7 +3,7 @@ import { LINE_COLOURS, labelOf, roadLabelKey, routeLabelKey } from "@engine/game
 import { waysFor } from "@engine/game/crossings";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { SWITCHED_OFF } from "@engine/game/tuning";
-import { importsArriving, seaportLink } from "@engine/game/gateways";
+import { exportGateway, importsArriving, seaportLink } from "@engine/game/gateways";
 import { builtUp, homeBox } from "@engine/game/fuel";
 import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
@@ -2986,6 +2986,29 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     expect(home).toBeGreaterThan(0);
   }, 30_000);
 
+  test("the border crossing (gateways, step 2): one a map on its region's edge, on the network; each farm's crop out the way that nets more", () => {
+    const run = (seed: number, overrides = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, ...overrides });
+    for (let seed = 1; seed <= 8; seed += 1) {
+      const w = run(seed);
+      const b = w.towns.get(w.border!)!;
+      expect(b.industry).toBe("border");
+      expect(isCutOff(w, b.id)).toBe(false);
+      if (w.region === "southwest") expect(b.x).toBeLessThanOrEqual(5); // Idiroko, to Benin, on the west
+      // Each farm town's way out is the one that nets more a tonne by road.
+      const t = w.tuning;
+      for (const farm of farmTowns(w)) {
+        const way = exportGateway(w, farm.id)!;
+        const net = (to: string, pay: number) => { const p = roadPath(w, farm.id, to); return p ? pay - p.distance * t.goodsFarePerTonneCell : -Infinity; };
+        const sea = net(w.port!, t.exportPayPerTonne * importsArriving(w)), border = net(b.id, t.exportPayPerTonne * t.borderPayShare!);
+        expect(way.to).toBe(border > sea ? b.id : w.port!);
+      }
+      // Off (an older run): no border, every crop to the home city.
+      const off = run(seed, { borderCrossing: false });
+      expect(off.border).toBeUndefined();
+      for (const farm of farmTowns(off)) expect(exportGateway(off, farm.id)!.to).toBe(off.port!);
+    }
+  }, 60_000);
+
   test("map version 3: the port's sites stand past where it's built up, every site still placed", () => {
     const run = (seed: number, mapVersion: number) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion, warmUpDays: 0 });
     let inside2 = 0, inside3 = 0;
@@ -3060,7 +3083,7 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       expect(w.port).toBe(info.home.map.port!); // inland, a dry port
       // Steel's works and mine are placed over the whole region on purpose (steel.ts: a long haul),
       // and so are the far clusters' limestone fields (clusters.ts).
-      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field"); // the far fields are out there by design (clusters.ts, crossings.ts)
+      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field" && t.industry !== "border"); // the far fields and the border crossing are out there by design (clusters.ts, crossings.ts, border.ts)
       expect(sites.length).toBeGreaterThanOrEqual(4);
       for (const s of sites) expect(s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height).toBe(true);
     }

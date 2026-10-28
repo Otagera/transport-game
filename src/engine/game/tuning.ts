@@ -163,6 +163,8 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   seaportImports: true,
   importsOverDirt: 0.6,
   importsOverPaved: 0.9,
+  borderCrossing: true,
+  borderPayShare: 0.7,
   floodFirstDayMin: 45,
   floodFirstDayMax: 75,
   floodEveryDays: 180,

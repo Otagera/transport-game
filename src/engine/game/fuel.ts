@@ -229,7 +229,7 @@ export function cargoName(world: GameWorld, from: string, kind: "produce" | "sup
   if (food && site === "mill") return food.crops.food;
   if (food && site === "flourmill") return "flour";
   if (food && to !== undefined && to === food.flourMillId) return "wheat";
-  if (food && !site && kind === "produce") return to === world.port ? food.crops.cash : to === food.millId ? food.crops.staple : `${food.crops.staple} and ${food.crops.cash}`;
+  if (food && !site && kind === "produce") return to === world.port || (to !== undefined && to === world.border) ? food.crops.cash : to === food.millId ? food.crops.staple : `${food.crops.staple} and ${food.crops.cash}`;
   if (site === "oilfield" || site === "terminal") return "crude";
   if (site === "depot" || site === "refinery" || site === "newrefinery") return "fuel";
   if (site === "works" || site === "silo") return "cement";

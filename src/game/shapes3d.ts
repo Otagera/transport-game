@@ -176,6 +176,19 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     }
     return;
   }
+  // A border crossing (border.ts): the customs post, its barrier across the road, lorries waiting, flags.
+  if (kind === "border") {
+    kit.box(14, 4, 7, "#e2ddd2", 0, -8);
+    kit.box(15, 0.4, 8, "#2b8a3e", 0, -8, 4);
+    kit.box(3, 2.6, 3, "#cfc8bb", -6, 2);
+    kit.box(10, 0.5, 0.5, "#c0392b", 0, 2, 1.6);
+    for (const [x, colour] of [[6, "#2b8a3e"], [8.5, "#e8e4dc"]] as const) {
+      kit.cylinder(0.12, 7, "#5a5f66", x, -12, 0, 4);
+      kit.box(1.6, 1, 0.1, colour, x + 0.8, -12, 6);
+    }
+    for (let i = 0; i < 3; i += 1) kit.box(7, 3, 2.4, i % 2 ? "#a0603e" : "#6f8fa8", -14 + i * 9, 10);
+    return;
+  }
   if (kind === "quarry" || kind === "ironmine") {
     const heap = kind === "quarry" ? "#d8d2c4" : "#8a4b3a";
     for (let i = 0; i < 4; i += 1) kit.cone(4 + rand() * 3, 4 + rand() * 3, heap, -10 + i * 7, (rand() - 0.5) * 12, 0, 7, rand());

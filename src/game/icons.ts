@@ -29,6 +29,7 @@ export type Glyph =
   | "oilfield" | "terminal" | "refinery" | "newrefinery" | "depot"
   | "quarry" | "works" | "silo"
   | "mill" | "flourmill"
+  | "border"
   // The chains agreed next.
   | "steelport"
   | "ironmine" | "steelworks" | "plantation" | "palmmill" | "cottonfarm" | "textilemill" | "ranch" | "abattoir" | "cocoa" | "coalmine" | "powerstation" | "warehouse";
@@ -47,6 +48,7 @@ export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }
   ironmine: { family: "building", name: "Iron ore mine" },
   steelworks: { family: "building", name: "Steel works (Ajaokuta)" },
   steelport: { family: "building", name: "Steel import terminal" },
+  border: { family: "trade", name: "Border crossing" },
   plantation: { family: "food", name: "Oil-palm plantation", next: true },
   palmmill: { family: "food", name: "Palm-oil mill", next: true },
   cottonfarm: { family: "food", name: "Cotton farms", next: true },
@@ -184,6 +186,10 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
     case "ironmine": // a pick
       path(() => { ctx.moveTo(-7, -4); ctx.quadraticCurveTo(0, -10, 7, -4); }, false);
       path(() => { ctx.moveTo(0, -7); ctx.lineTo(0, 8); }, false);
+      break;
+    case "border": // a barrier pole across the road, its post
+      ctx.fillRect(-8, -1.2, 16, 2.4);
+      ctx.fillRect(-8, -6, 2.6, 12);
       break;
     case "steelport": // an I-beam by the sea
       ctx.fillRect(-6, -8, 12, 2.6);

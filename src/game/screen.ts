@@ -14,6 +14,9 @@ import { corridorSummaries } from "@engine/game/corridors";
 import { cargoName, fuelPlanned, fuelReach, fuelReachable } from "@engine/game/fuel";
 import { hasYard } from "@engine/game/yards";
 import { siteFigure, type FigureData } from "./seethrough";
+import { exportsBy, farmTowns } from "@engine/game/food";
+import { borderCountry } from "@engine/game/border";
+import { exportGateway, seaportLink } from "@engine/game/gateways";
 import { patchHtml } from "./patch";
 import { steadyFuel, steadySite } from "./steady";
 import { cementBreak, cementServed } from "@engine/game/cement";
@@ -625,10 +628,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   function sitesTable(): string {
     const use = (s: Site) => (s.capacity > 0 ? s.made / s.capacity : 0);
-    const rows = sortRows(sites().filter((s) => s.capacity > 0), "sites", { name: (s) => nameOf(s.id), use, made: (s) => s.made });
+    // The border crossing too (border.ts): it makes nothing, but its card is where to see what crosses.
+    const isBorder = (s: Site) => world.towns.get(s.id)?.industry === "border";
+    const rows = sortRows(sites().filter((s) => s.capacity > 0 || isBorder(s)), "sites", { name: (s) => nameOf(s.id), use, made: (s) => s.made });
     return `<h2>Sites · what each makes of what it could</h2>
       ${rows.length ? `<table><thead><tr>${th("sites", "name", "Site")}${th("sites", "made", "t/day")}${th("sites", "use", "Of capacity")}</tr></thead><tbody>
-      ${rows.map((s) => `<tr class="row" data-pick="site|${s.id}"><td>${use(s) < 0.6 ? "⚠ " : ""}${esc(nameOf(s.id))}</td><td>${int(s.made)}</td><td class="${use(s) < 0.6 ? "down" : ""}">${pct(use(s))}</td></tr>`).join("")}
+      ${rows.map((s) => isBorder(s)
+        ? `<tr class="row" data-pick="site|${s.id}"><td>${esc(nameOf(s.id))}</td><td>${int((exportsBy(world).find((e) => e.to === s.id)?.tonnes ?? 0) * D)}</td><td>open</td></tr>`
+        : `<tr class="row" data-pick="site|${s.id}"><td>${use(s) < 0.6 ? "⚠ " : ""}${esc(nameOf(s.id))}</td><td>${int(s.made)}</td><td class="${use(s) < 0.6 ? "down" : ""}">${pct(use(s))}</td></tr>`).join("")}
       </tbody></table>` : `<p class="muted">No sites working.</p>`}`;
   }
 
@@ -695,10 +702,16 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         ${problemHtml(siteProblem(s))}
         ${seeThrough(sel.id, out, inn)}
         <div class="tiles">
-          ${tile("Makes a day", `${int(s.made)} t`, s.product ?? "")}
-          ${tile("Of capacity", s.capacity > 0 ? pct(s.made / s.capacity) : "—", `${int(s.capacity)} t/day`)}
-          ${tile("Workers", s.staffing !== null ? pct(s.staffing) : "—")}
-          ${tile("Carried away", s.shipped !== null ? pct(s.shipped) : "—")}
+          ${t.industry === "border"
+            // A border crossing makes nothing: what crosses it, from how many farms, and its pay (border.ts).
+            ? `${tile("Out a day", `${int((exportsBy(world).find((e) => e.to === t.id)?.tonnes ?? 0) * D)} t`, world.food?.crops.cash ?? "")}
+               ${tile("To", borderCountry(world))}
+               ${tile("Farm towns", int(farmTowns(world).filter((f) => exportGateway(world, f.id)?.to === t.id).length))}
+               ${tile("Paid a tonne", `₦${Math.round(world.tuning.exportPayPerTonne * (world.tuning.borderPayShare ?? 0.7))}`, `₦${Math.round(world.tuning.exportPayPerTonne * seaportLink(world).share)} at the sea`)}`
+            : `${tile("Makes a day", `${int(s.made)} t`, s.product ?? "")}
+               ${tile("Of capacity", s.capacity > 0 ? pct(s.made / s.capacity) : "—", `${int(s.capacity)} t/day`)}
+               ${tile("Workers", s.staffing !== null ? pct(s.staffing) : "—")}
+               ${tile("Carried away", s.shipped !== null ? pct(s.shipped) : "—")}`}
         </div>
         ${out.length ? `<h2>Out · yours / hauliers' / spoiling</h2><table><tbody>${flowRows(out, (f) => f.to)}</tbody></table>` : ""}
         ${inn.length ? `<h2>In</h2><table><tbody>${flowRows(inn, (f) => f.from)}</tbody></table>` : ""}

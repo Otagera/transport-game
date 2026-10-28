@@ -61,3 +61,39 @@ export function seaportLink(world: GameWorld): SeaportLink {
 export function importsArriving(world: GameWorld): number {
   return seaportLink(world).share;
 }
+
+/** A farm town's way out for its cash crop: to the home city (and on to the seaport) or to the border. */
+export interface ExportGateway {
+  to: string;
+  /** Paid a tonne arriving there. */
+  pay: number;
+}
+
+const ways = new WeakMap<GameWorld, { at: number; byTown: Map<string, ExportGateway> }>();
+
+/**
+ * Goods leave by whichever gateway nets more a tonne by what's built (brief, The gateways): its pay
+ * less the goods fare to get it there by road. The sea pays `exportPayPerTonne` times the share
+ * that reaches the coast (seaportLink); the border (border.ts) `borderPayShare` of it, by the road
+ * to it. No road to either: the home city, as before. Without a border, the home city always.
+ */
+export function exportGateway(world: GameWorld, townId: string): ExportGateway | null {
+  const port = world.port;
+  if (!port) return null;
+  const t = world.tuning;
+  const sea = { to: port, pay: t.exportPayPerTonne * importsArriving(world) };
+  if (!world.border || !world.towns.has(world.border)) return sea;
+  const now = world.economy.elapsedSeconds;
+  let kept = ways.get(world);
+  if (!kept || kept.at !== now) ways.set(world, (kept = { at: now, byTown: new Map() }));
+  const known = kept.byTown.get(townId);
+  if (known) return known;
+  const border = { to: world.border, pay: t.exportPayPerTonne * (t.borderPayShare ?? 0.7) };
+  const net = (way: ExportGateway) => {
+    const path = townId === way.to ? { distance: 0 } : roadPath(world, townId, way.to);
+    return path ? way.pay - path.distance * t.goodsFarePerTonneCell : -Infinity;
+  };
+  const way = net(border) > net(sea) ? border : sea;
+  kept.byTown.set(townId, way);
+  return way;
+}

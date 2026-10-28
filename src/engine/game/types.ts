@@ -47,7 +47,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border";
 
 export interface GameRoadDef {
   a: string;
@@ -266,6 +266,10 @@ export interface GameTuning {
   /** The share of imports long-haul trucks bring up a dirt road from the seaport, and up a road paved end to end. */
   importsOverDirt?: number;
   importsOverPaved?: number;
+  /** One border crossing a map, cash crops leaving by it where it nets more (border.ts, gateways.ts). Absent in older runs: none. */
+  borderCrossing?: boolean;
+  /** What the state pays a tonne of cash crop over the border, as a share of the sea's. */
+  borderPayShare?: number;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;
@@ -830,6 +834,8 @@ export interface GameWorld {
   port: string | undefined;
   /** The map's seaport (gateways.ts); absent on maps drawn before it was kept. */
   seaport?: string;
+  /** The border crossing's site id (border.ts); absent without one. */
+  border?: string;
   /** segmentId -> rolling road space entering per second from lorries alone (heavier wear). */
   heavyFlowEMA: Map<string, number>;
   /** The original towns' starting sizes, thousands (growth.ts caps growth relative to these). */

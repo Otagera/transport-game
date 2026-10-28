@@ -1146,6 +1146,23 @@ replays as played. Seed 0 stays the hand-made map, alone.
   collapse (people at day 100 775k/771k, 840k/822k, 737k/731k; towns under 60% fuel 22/18, 13/17,
   19/19), the swings in net a day mostly the bot's choices diverging. The bot doesn't yet pave the
   highway or restore the railway for the imports: what it measures is the cost of ignoring the link.
+- **The border crossing** (`border.ts`, `gateways.ts exportGateway`; brief, The gateways, step 2;
+  2026-10-28). One a map, placed at the start after every other site behind `borderCrossing`
+  (absent in older runs: none): on the edge facing the neighbour as that part of Nigeria does
+  (south-west Idiroko to Benin on the west, north Jibia to Niger on the north, the east's Banki,
+  Belegete and Mfum to Cameroon), by the towns nearest it -- the home cluster's too, outside its box
+  -- up to 100 cells off on its own edge, 60 on another; no people of its own; an old road to the
+  nearest town on the network. 30 seeds: every map has one, the south-west's all on the west. Each
+  farm town's cash crop goes to the gateway that nets more a tonne: its pay (`exportPayPerTonne` ×
+  the seaport link's share at the sea, × `borderPayShare` 0.7 at the border) less the goods fare to
+  it by road (`goodsFarePerTonneCell`); `payExports` pays each gateway its rate (without a border,
+  the old sum to the bit). Its card and tiles: what crosses, from which farms, its pay against the
+  sea's. Eight maps unplayed for 20 days, on -> off: 41% of the cash crop by the border (C20:
+  wanted a fifth), exports reaching a gateway 7 -> 20 t a day (the border is within the hauliers'
+  reach where the coast isn't), export pay ₦102 -> ₦230 a day. Its placement rebuilds the networks,
+  which also brings in the ridge field's road (`crossings.ts placeRidgeField` adds it without a
+  rebuild: in older runs it isn't routed until your first build), so trips 503 -> 596 a day: the
+  field's commuters.
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of

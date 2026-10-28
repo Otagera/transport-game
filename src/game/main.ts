@@ -62,12 +62,13 @@ import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/me
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
 import { corridorSummaries } from "@engine/game/corridors";
 import { industryFlows, stoneServed } from "@engine/game/industries";
-import { seaportLink } from "@engine/game/gateways";
+import { exportGateway, seaportLink } from "@engine/game/gateways";
 import { cargoName, crudeArriving, fuelReach, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput } from "@engine/game/fuel";
 import { checkExpand, expandCost, expandLevel, siteScale } from "@engine/game/expand";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/game/bonds";
 import type { SiteLimit } from "@engine/game/production";
-import { exportsArriving, farmland, farmTowns, flourCapacity, flourOutput, flourWant, foodActive, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/game/food";
+import { borderCountry } from "@engine/game/border";
+import { exportsArriving, exportsBy, farmland, farmTowns, flourCapacity, flourOutput, flourWant, foodActive, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/game/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/game/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput, cementBreak } from "@engine/game/cement";
 import { isSteelSite, mineOutput, oreArriving, steelBreak, steelCapacity, steelImports, steelOutput, steelServed } from "@engine/game/steel";
@@ -1519,6 +1520,30 @@ function haulierMove(lorries: string, yard: string): string {
 // The town card (design lab, "the brief, step 8"): a kicker, the name, three
 // lines, the one problem here, then its trips. Its first screen fits without
 // scrolling (brief, text budget).
+// The border crossing's card (border.ts; brief, The gateways, step 2): what crosses it, from which
+// farm towns, what it's paid against the sea, and why each crop goes the way it does.
+function renderBorder(townId: string): void {
+  const site = world.towns.get(townId)!;
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const food = world.food;
+  const using = food ? farmTowns(world).filter((t) => exportGateway(world, t.id)?.to === townId) : [];
+  const here = exportsBy(world).find((e) => e.to === townId);
+  const sea = exportsBy(world).find((e) => e.to === world.port);
+  const t = world.tuning;
+  const crop = food?.crops.cash ?? "cash crops";
+  townEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">Border crossing · to ${borderCountry(world)}</div>
+      <div class="title">${site.name}</div>
+      <p class="townshare"><b>Out this way:</b> ${perDay(here?.tonnes ?? 0)} t of ${crop} a day, from ${using.length} farm town${using.length === 1 ? "" : "s"}${using.length ? ` (${using.slice(0, 5).map((u) => townName(u.id)).join(", ")}${using.length > 5 ? `, ${using.length - 5} more` : ""})` : ""}; ${perDay(sea?.tonnes ?? 0)} t a day go to the coast.</p>
+      <p class="townshare">The state pays ₦${Math.round(t.exportPayPerTonne * (t.borderPayShare ?? 0.7))} a tonne over the border, against ₦${Math.round(t.exportPayPerTonne * seaportLink(world).share)} for what reaches the sea. Each farm town's crop goes whichever way nets more a tonne by road: a better road here, or to the coast, moves it.</p>
+      ${seaportText()}
+      <ul>
+        <li>${t.truckersEnabled ? "Hauliers carry what's close enough; what's far waits for your lorries or trains." : "Nobody else carries it: what you don't move doesn't leave."}</li>
+      </ul>
+    </div>`;
+}
+
 // An industrial site's card (brief, Revision 2): what it is and for how
 // long, where its stone goes and how much of it arrives, and the one
 // problem with it -- no road, or nothing moved and the day it closes.
@@ -1528,6 +1553,7 @@ function renderIndustry(townId: string): void {
   if (isSteelSite(world.towns.get(townId))) return renderSteelSite(townId);
   if (world.towns.get(townId)?.industry === "mill") return renderMillSite(townId);
   if (world.towns.get(townId)?.industry === "flourmill") return renderFlourMillSite(townId);
+  if (world.towns.get(townId)?.industry === "border") return renderBorder(townId);
   const limestone = cementActive(world);
   const cargo = limestone ? "limestone" : "stone";
   const site = world.towns.get(townId)!;

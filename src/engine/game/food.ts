@@ -1,5 +1,5 @@
 import { inFarmBelt } from "./clusters";
-import { importsArriving } from "./gateways";
+import { exportGateway, importsArriving } from "./gateways";
 import type { GameTown, GameWorld } from "./types";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
@@ -141,7 +141,9 @@ export function foodFlows(world: GameWorld): GoodsFlow[] {
   const flows: GoodsFlow[] = [];
   for (const town of farmTowns(world)) {
     flows.push({ from: town.id, to: food.millId, kind: "produce", rate: perSecond(t.producePerThousandPerDay, farmland(world, town)) });
-    if (world.port && world.towns.has(world.port)) flows.push({ from: town.id, to: world.port, kind: "produce", rate: perSecond(t.cashCropPerThousandPerDay, farmland(world, town)) });
+    // Its cash crop to the gateway that nets more a tonne: the home city (on to the seaport) or the border (gateways.ts).
+    const out = exportGateway(world, town.id);
+    if (out && world.towns.has(out.to)) flows.push({ from: town.id, to: out.to, kind: "produce", rate: perSecond(t.cashCropPerThousandPerDay, farmland(world, town)) });
   }
   const split = (from: string, made: number, want: (id: string) => number) => {
     const takers = marketTowns(world).filter((town) => roadPath(world, from, town.id));
@@ -207,23 +209,34 @@ export function foodServed(world: GameWorld, townId: string): number {
   return Math.min(1, ((outcome?.delivered ?? 0) + (outcome?.trucked ?? 0)) / want);
 }
 
-/** Cash crop reaching the port now, tonnes a second (anyone's): what the export payment is paid on. */
-export function exportsArriving(world: GameWorld): number {
-  if (!foodActive(world) || !world.port) return 0;
-  let total = 0;
+/** Cash crop reaching a gateway now, tonnes a second (anyone's), and what it's paid: by each farm town's way out (gateways.ts). */
+export function exportsBy(world: GameWorld): Array<{ to: string; tonnes: number; pay: number }> {
+  if (!foodActive(world) || !world.port) return [];
+  const by = new Map<string, { to: string; tonnes: number; pay: number }>();
   for (const town of farmTowns(world)) {
-    const outcome = world.goods.outcomes.get(flowKey({ from: town.id, to: world.port, kind: "produce" }));
-    total += (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+    const out = exportGateway(world, town.id);
+    if (!out) continue;
+    const outcome = world.goods.outcomes.get(flowKey({ from: town.id, to: out.to, kind: "produce" }));
+    const entry = by.get(out.to) ?? { to: out.to, tonnes: 0, pay: out.pay };
+    entry.tonnes += (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+    by.set(out.to, entry);
   }
-  return total;
+  return [...by.values()];
+}
+
+/** Cash crop reaching its gateways now, tonnes a second (anyone's). */
+export function exportsArriving(world: GameWorld): number {
+  return exportsBy(world).reduce((sum, e) => sum + e.tonnes, 0);
 }
 
 /** The state's export payment this tick (tick.ts): a sum a tonne of cash crop that reaches the port. */
 export function payExports(world: GameWorld, dt: number): number {
   // Off, nothing -- and never 0 times a rate a run file from before food doesn't have (NaN).
   if (!foodActive(world)) return 0;
-  // Paid on what reaches the coast: a share of it where the seaport is a haul away (gateways.ts).
-  const paid = exportsArriving(world) * dt * world.tuning.exportPayPerTonne * importsArriving(world);
+  // Paid on what reaches each gateway at its rate: the coast's a share where the seaport is a haul
+  // away, the border's less (gateways.ts). Without a border, every tonne at the home city as before.
+  // (Without one, the sum as it always was, to the last bit: a run file replays as played.)
+  const paid = world.border ? exportsBy(world).reduce((sum, e) => sum + e.tonnes * e.pay, 0) * dt : exportsArriving(world) * dt * world.tuning.exportPayPerTonne * importsArriving(world);
   if (paid <= 0) return 0;
   world.economy.funds += paid;
   world.budget.exports += paid;

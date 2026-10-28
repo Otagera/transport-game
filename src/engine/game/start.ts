@@ -1,4 +1,5 @@
 import { startUnions } from "./union";
+import { placeBorder } from "./border";
 import { startFloods } from "./floods";
 import { placeCrossings, placeRidgeField } from "./crossings";
 import { placeClusterOffers } from "./clusters";
@@ -65,6 +66,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeClusterOffers(world);
   // And a limestone field on the hill range between two clusters (crossings.ts).
   placeRidgeField(world);
+  // And the border crossing (border.ts): last, so every other site sits where it did.
+  placeBorder(world);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) {
     gameTick(world, SIM_DT);

@@ -39,6 +39,7 @@ import { flowKey, goodsFlows, lorryEstimate, lorrySummaries } from "../src/engin
 import { siteProduction } from "../src/engine/game/production";
 import { expandCost } from "../src/engine/game/expand";
 import { checkBond } from "../src/engine/game/bonds";
+import { seaportLink } from "../src/engine/game/gateways";
 import { parkLevyGain } from "../src/engine/game/parks";
 import { freightLineSplit } from "../src/engine/game/freightrates";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "../src/engine/game/metro";
@@ -153,6 +154,18 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
     const town = world.towns.get(id)!;
     const near = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id)).sort((p, q) => Math.hypot(p.x - town.x, p.y - town.y) - Math.hypot(q.x - town.x, q.y - town.y))[0];
     if (near && spend(world, roadCost(world, id, near.id))) did(act(world, day, { kind: "road", a: id, b: near.id, alignment: "cheapest" }, "connect a cut-off town"));
+  }
+
+  // The seaport (gateways.ts): where imports come up a road from a far coast, pave it a leg a day
+  // (60% of them arriving over dirt, 90% paved end to end: ₦11-21k on maps 1, 4, 5), and restore the
+  // old railway to it -- all of them, ₦166-252k -- once it can pay for that outright.
+  const link = seaportLink(world);
+  if (link.by === "road" && world.port && day >= 10) {
+    const path = roadPath(world, world.port, link.seaport);
+    const leg = path?.nodeIds.slice(1).map((b, k) => ({ a: path.nodeIds[k]!, b })).find(({ a, b }) => Number.isFinite(paveCost(world, a, b)) && paveCost(world, a, b) > 0);
+    const rail = trackCost(world, world.port, link.seaport);
+    if (Number.isFinite(rail) && spend(world, rail)) did(act(world, day, { kind: "track", a: world.port, b: link.seaport, alignment: "cheapest" }, `imports: restore the railway to the seaport (${Math.round(link.share * 100)}% arriving)`));
+    else if (leg && spend(world, paveCost(world, leg.a, leg.b))) did(act(world, day, { kind: "pave", a: leg.a, b: leg.b }, `imports: pave the road to the seaport (${Math.round(link.share * 100)}% arriving)`));
   }
 
   // Passengers, by the route cards: another vehicle where a route is full or its riders wait,
