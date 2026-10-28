@@ -538,6 +538,13 @@ on map 2418) gets a spur at its own angle to the nearest road. Drawing
 them showed every building had stood mirrored to its own grid: three turns about y the other
 way to the grid's cos/sin, so a building faces its street at `-grid` (`facing`).
 
+**How close, and how low** (`view3d.ts`, 2026-10-28). The camera comes no closer than 120 m
+(it was 25: at street level a stall stood as big as a house and every prop read as a toy), and
+the closer it is, the more it looks down -- its tilt limit runs from 54° off vertical at the
+closest to 79° from 620 m out -- so close in it stays a diorama, while from further out the
+skyline over the savanna is still there to tilt down to. Market stalls are drawn at life size
+(a 3 m umbrella; at a 2.2 m radius they stood as wide as the trees).
+
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the

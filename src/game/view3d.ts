@@ -107,7 +107,10 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
   controls.minPolarAngle = 0.05;
   controls.zoomToCursor = true;
   controls.zoomSpeed = 1.4;
-  controls.minDistance = 25;
+  // No closer than a block or two away: at 25 m a stall stood as big as a house and every prop
+  // read as a toy (2026-10-28). And the closer in, the more it looks down: low, close in, the
+  // camera sat among the buildings; low from further out, the skyline over the savanna is good.
+  controls.minDistance = 120;
   controls.maxDistance = 2400;
   const resize = () => {
     camera.aspect = innerWidth / innerHeight;
@@ -170,6 +173,8 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
         camera.position.add(step);
         if (step.lengthSq() < 0.01) glideTo = null;
       }
+      const near = Math.min(1, Math.max(0, (camera.position.distanceTo(controls.target) - controls.minDistance) / 500));
+      controls.maxPolarAngle = Math.PI * (0.3 + 0.14 * near);
       controls.update();
       // The point you turn round stays on the ground, over hill or valley.
       const floor = built!.groundAt(controls.target.x, controls.target.z);

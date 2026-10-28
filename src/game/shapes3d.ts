@@ -145,10 +145,11 @@ export function church(kit: Kit, rand: Rand, x: number, z: number, scale = 1): v
 /** Market stalls under umbrellas, a few in a row. */
 export function market(kit: Kit, rand: Rand, x: number, z: number, stalls: number): void {
   for (let i = 0; i < stalls; i += 1) {
-    const sx = x + (i % 4) * 4.5 - 6.75, sz = z + Math.floor(i / 4) * 5 - 2.5;
-    kit.box(3, 1, 2, "#8a6a45", sx, sz);
-    kit.cylinder(0.08, 2.6, "#5a5f66", sx, sz, 0, 4);
-    kit.cone(2.2, 0.8, pick(rand, ["#c0392b", "#e0a400", "#2a78d6", "#2b8a3e", "#e67e22", "#ffffff"]), sx, sz, 2.4, 8, 0);
+    // At life size (a 3 m umbrella over a 2.4 m table): at 2.2 m a radius they stood as wide as the trees.
+    const sx = x + (i % 4) * 3.6 - 5.4, sz = z + Math.floor(i / 4) * 3.8 - 1.9;
+    kit.box(2.4, 0.9, 1.6, "#8a6a45", sx, sz);
+    kit.cylinder(0.07, 2.3, "#5a5f66", sx, sz, 0, 4);
+    kit.cone(1.5, 0.6, pick(rand, ["#c0392b", "#e0a400", "#2a78d6", "#2b8a3e", "#e67e22", "#ffffff"]), sx, sz, 2.15, 8, 0);
   }
 }
 
