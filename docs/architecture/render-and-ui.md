@@ -542,9 +542,12 @@ way to the grid's cos/sin, so a building faces its street at `-grid` (`facing`).
 
 **How close, and how low** (`view3d.ts`, 2026-10-28). The camera comes no closer than 120 m
 (it was 25: at street level a stall stood as big as a house and every prop read as a toy), and
-the closer it is, the more it looks down -- its tilt limit runs from 54° off vertical at the
-closest to 79° from 620 m out -- so close in it stays a diorama, while from further out the
-skyline over the savanna is still there to tilt down to. Market stalls are drawn at life size
+the closer it is, the more it looks down -- its tilt limit runs from 65° off vertical at the
+closest to 79° from ~370 m out (the first cut, 54° to 620 m, left a camera zoomed in already at its
+limit: "I can't tilt") -- so close in it stays a diorama, while from further out the skyline over
+the savanna is still there to tilt down to. Beside Map in 3D, buttons turn (⟲ ⟳) and tilt (▼ ▲),
+eased over a few frames (`View3D.turn`, `tilt`): right-drag is awkward on a trackpad (shift-drag
+turns too). Market stalls are drawn at life size
 (a 3 m umbrella; at a 2.2 m radius they stood as wide as the trees).
 
 **Labels that don't pile up** (`cullLabels`, 2026-10-28). Shown as near as each is readable
@@ -573,6 +576,12 @@ backdrop. The cut edge 90 m deep (48 under a 2 km slab read as a sheet of card):
 topsoil, red laterite, sandstone, rock, shaded by side and darker with depth rather than lit -- the
 face you mostly see looks south, away from the sun, and lit it sat in shadow, its bands one brown.
 And the point you turn round is held over the land: a pan could carry the map off the screen.
+
+**Day or night** (`View3D.setNight`, `Built.setNight`; the Night/Day button in 3D, kept in this
+browser, 2026-10-28). Night repaints the sky dome and the fog dark, makes the sun a dim blue moon
+and the hemisphere light low, lights the blocks' window bands from inside (their own material,
+emissive amber), and dims by hand what's drawn unlit -- the water, the road centre lines, the cut
+edge -- or it would glow. A toggle, not a clock: nothing in the game depends on the hour.
 
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:

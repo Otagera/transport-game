@@ -70,6 +70,11 @@ export interface View3D {
    */
   frame(world: GameWorld, focus?: Focus | null, selected?: string | null): void;
   readonly shown: boolean;
+  /** Turn round the point in view, or tilt toward the horizon (+) or overhead (−), eased over a few frames. */
+  turn(radians: number): void;
+  tilt(radians: number): void;
+  /** Day or night: the light, the sky, lit windows. */
+  setNight(night: boolean): void;
 }
 
 /** `onPick`: a town or site clicked (its mesh or its label) -- main.ts opens its panel. */
@@ -137,16 +142,29 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
   let shown = false;
   let lastSelected: string | null = null;
   let glideTo: THREE.Vector3 | null = null;
+  let pendingTurn = 0, pendingTilt = 0;
+  let night = false;
   // A drag of your own stops a glide.
   controls.addEventListener("start", () => (glideTo = null));
   return {
     get shown() {
       return shown;
     },
+    turn(radians) {
+      pendingTurn += radians;
+    },
+    tilt(radians) {
+      pendingTilt += radians;
+    },
+    setNight(on) {
+      night = on;
+      built?.setNight(on);
+    },
     show(world) {
       if (built?.world !== world) {
         built?.dispose();
         built = build(world, camera, controls, onPick);
+        built.setNight(night);
       }
       host.style.display = "block";
       shown = true;
@@ -171,8 +189,21 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
         camera.position.add(step);
         if (step.lengthSq() < 0.01) glideTo = null;
       }
-      const near = Math.min(1, Math.max(0, (camera.position.distanceTo(controls.target) - controls.minDistance) / 500));
-      controls.maxPolarAngle = Math.PI * (0.3 + 0.14 * near);
+      // Up close it looks down more (65° off vertical at the closest, 79° from ~370 m out). At 54°
+      // to 620 m (the first cut) a camera zoomed in was already at its limit: "I can't tilt".
+      const near = Math.min(1, Math.max(0, (camera.position.distanceTo(controls.target) - controls.minDistance) / 250));
+      controls.maxPolarAngle = Math.PI * (0.36 + 0.08 * near);
+      // A turn or tilt from the buttons, a fifth of what's left each frame.
+      if (Math.abs(pendingTurn) > 1e-4 || Math.abs(pendingTilt) > 1e-4) {
+        const turnStep = pendingTurn * 0.2, tiltStep = pendingTilt * 0.2;
+        pendingTurn -= turnStep;
+        pendingTilt -= tiltStep;
+        const offset = camera.position.clone().sub(controls.target);
+        const sph = new THREE.Spherical().setFromVector3(offset);
+        sph.theta += turnStep;
+        sph.phi = Math.max(controls.minPolarAngle, Math.min(controls.maxPolarAngle, sph.phi + tiltStep));
+        camera.position.copy(controls.target).add(offset.setFromSpherical(sph));
+      }
       controls.update();
       // The point you turn round stays over the land (a pan could carry the map off the screen,
       // leaving nothing but sky), and on the ground, over hill or valley.
@@ -214,6 +245,7 @@ interface Built {
   size: { x: number; z: number };
   /** The sky, kept round the camera. */
   sky: THREE.Mesh;
+  setNight(night: boolean): void;
   /** Labels shown only as near as they're readable: a village up close, the city from afar. */
   cullLabels(camera: THREE.Camera): void;
   /** What's selected and what it's connected to: those roads lit, the rest faded, a ring at the town. */
@@ -238,7 +270,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const HORIZON = 0xe4e0d2;
   scene.background = new THREE.Color(HORIZON);
   scene.fog = new THREE.Fog(HORIZON, 900, 3000);
-  scene.add(new THREE.HemisphereLight(0xe8f0f8, 0x8a7a5a, 1.45));
+  const hemi = new THREE.HemisphereLight(0xe8f0f8, 0x8a7a5a, 1.45);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff0d4, 2.5);
   sun.shadow.radius = 3;
   sun.shadow.bias = -0.0004;
@@ -274,23 +307,34 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const ground = (cx: number, cy: number, lift = 0) => new THREE.Vector3(cx * M, elevationAt(cx, cy) * HEIGHT + lift, cy * M);
   const disposables: Array<{ dispose(): void }> = [];
   const own = <T extends { dispose(): void }>(thing: T): T => (disposables.push(thing), thing);
-  const sky = (() => {
-    const geo = new THREE.SphereGeometry(5000, 32, 24);
-    const zenith = new THREE.Color(0x9dbfdc), horizon = new THREE.Color(HORIZON), below = new THREE.Color(0xbcc7d0), c = new THREE.Color();
-    const pos = geo.attributes.position!;
-    const colours = new Float32Array(pos.count * 3);
+  const skyGeo = new THREE.SphereGeometry(5000, 32, 24);
+  skyGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(skyGeo.attributes.position!.count * 3), 3));
+  /** The sky's colours: overhead, at the horizon (the fog's too), and below it. */
+  const paintSky = (zenithHex: number, horizonHex: number, belowHex: number) => {
+    const zenith = new THREE.Color(zenithHex), horizon = new THREE.Color(horizonHex), below = new THREE.Color(belowHex), c = new THREE.Color();
+    const pos = skyGeo.attributes.position!, colours = skyGeo.attributes.color!;
     for (let i = 0; i < pos.count; i += 1) {
       const up = pos.getY(i) / 5000;
       if (up >= 0) c.copy(horizon).lerp(zenith, Math.min(1, Math.pow(up, 0.6) * 1.1));
       else c.copy(horizon).lerp(below, Math.min(1, Math.pow(-up * 3, 0.7)));
-      colours.set([c.r, c.g, c.b], i * 3);
+      colours.setXYZ(i, c.r, c.g, c.b);
     }
-    geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+    colours.needsUpdate = true;
+    (scene.fog as THREE.Fog).color.setHex(horizonHex);
+  };
+  paintSky(0x9dbfdc, HORIZON, 0xbcc7d0);
+  const sky = (() => {
+    const geo = skyGeo;
     const mesh = new THREE.Mesh(own(geo), own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
     mesh.renderOrder = -1;
     scene.add(mesh);
     return mesh;
   })();
+  // What's drawn unlit (a flat colour whatever the light), dimmed by hand at night.
+  const edgeMaterial = own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  const waterMaterial = own(new THREE.MeshBasicMaterial({ color: 0x78aed0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
+  // The blocks' windows: their own material, lit from inside at night.
+  const windowMaterial = own(new THREE.MeshLambertMaterial({ color: 0xffffff }));
   const wetNear = (cx: number, cy: number) => {
     for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) if (isWater(terrain, Math.round(cx) + dx, Math.round(cy) + dy)) return true;
     return false;
@@ -480,7 +524,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     sideGeo.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
     sideGeo.setIndex(index);
     sideGeo.computeVertexNormals();
-    scene.add(new THREE.Mesh(sideGeo, own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }))));
+    scene.add(new THREE.Mesh(sideGeo, edgeMaterial));
     // Its underside, closed.
     const under = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M)), own(new THREE.MeshLambertMaterial({ color: 0x6f675e, side: THREE.DoubleSide })));
     under.rotation.x = -Math.PI / 2;
@@ -567,7 +611,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // playtest, 2026-10-26: "the water glitching"). Drawn a hair toward the eye of the land.
     // Unlit, one flat colour: the sea is one wide ribbon, and where it bends sharply it folds
     // over itself -- lit, the folded triangles faced down and showed as dark slivers.
-    const water = own(new THREE.MeshBasicMaterial({ color: 0x78aed0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
+    const water = waterMaterial;
     for (const river of world.waterLines ?? []) {
       const widths = (river.widths ?? river.points.map(() => river.width)).map((w) => w * M);
       const mesh = new THREE.Mesh(own(ribbonGeometry(river.points.map(([x, y]) => ({ x, y })), widths, 0.6, undefined, true)), water);
@@ -958,7 +1002,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const walls = new THREE.InstancedMesh(wallShape, fabricMaterial, list.length);
     const roofs = new THREE.InstancedMesh(roofShape, fabricMaterial, list.length);
     // A block's windows: a dark band round each floor above the ground, a touch proud of the wall.
-    const bands = new THREE.InstancedMesh(wallShape, fabricMaterial, Math.max(1, list.reduce((n, h) => n + Math.max(0, h.floors - 1), 0)));
+    const bands = new THREE.InstancedMesh(wallShape, windowMaterial, Math.max(1, list.reduce((n, h) => n + Math.max(0, h.floors - 1), 0)));
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
     let band = 0;
     list.forEach((h, i) => {
@@ -1482,6 +1526,21 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     groundAt: (x, z) => elevationAt(x / M, z / M) * HEIGHT,
     size: { x: (W - 1) * M, z: (H - 1) * M },
     sky,
+    setNight(dark) {
+      // Night: a dark sky and haze, a dim blue moon for the sun, lit windows; what's drawn unlit
+      // (the water, road lines, the map's cut edge) dimmed by hand, or it would glow.
+      paintSky(dark ? 0x0c1830 : 0x9dbfdc, dark ? 0x2a3450 : HORIZON, dark ? 0x1a2232 : 0xbcc7d0);
+      hemi.color.setHex(dark ? 0x7088c0 : 0xe8f0f8);
+      hemi.groundColor.setHex(dark ? 0x22222c : 0x8a7a5a);
+      hemi.intensity = dark ? 0.6 : 1.45;
+      sun.color.setHex(dark ? 0xa8bcff : 0xfff0d4);
+      sun.intensity = dark ? 0.5 : 2.5;
+      waterMaterial.color.setHex(dark ? 0x2a4466 : 0x78aed0);
+      lineMaterial.color.setHex(dark ? 0x77756e : 0xf2efe6);
+      edgeMaterial.color.setScalar(dark ? 0.3 : 1);
+      windowMaterial.emissive.setHex(dark ? 0xffc46a : 0x000000);
+      windowMaterial.emissiveIntensity = dark ? 1.1 : 0;
+    },
     cullLabels(cam) {
       // As near as each is readable; a selected place's connections keep their names whatever the
       // distance. Then none on top of another (pulled back, a city's name, its four sites' and its

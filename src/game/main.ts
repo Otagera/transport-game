@@ -239,6 +239,9 @@ let speed = 1;
 let paused = false;
 // The watch-only 3D view (view3d.ts): three.js loads the first time you switch to it.
 let view3d: View3D | null = null;
+// 3D by day or by night: the viewer's choice, kept in this browser.
+const NIGHT_3D_KEY = "game:night-3d";
+let night3d = (() => { try { return localStorage.getItem(NIGHT_3D_KEY) === "1"; } catch { return false; } })();
 let in3d = false;
 async function toggle3d(): Promise<void> {
   in3d = !in3d;
@@ -246,7 +249,10 @@ async function toggle3d(): Promise<void> {
     // A town or site clicked in 3D: its panel, as a click on the map would.
     screen.select({ kind: world.towns.get(id)?.industry ? "site" : "town", id });
   });
-  if (in3d) view3d?.show(world);
+  if (in3d) {
+    view3d?.setNight(night3d);
+    view3d?.show(world);
+  }
   else view3d?.hide();
   // The overlays, key and hints are the 2D map's (index.html hides them under body.in3d).
   document.body.classList.toggle("in3d", in3d);
@@ -338,12 +344,24 @@ function renderZoomControl(): void {
     el.addEventListener("click", (event) => {
       const z = (event.target as HTMLElement).dataset.zoom;
       if (z === "3d") void toggle3d();
+      // 3D's camera from buttons too (right-drag is awkward on a trackpad), and day or night.
+      else if (z === "turn-left" || z === "turn-right") view3d?.turn(z === "turn-left" ? Math.PI / 8 : -Math.PI / 8);
+      else if (z === "tilt-down" || z === "tilt-up") view3d?.tilt(z === "tilt-down" ? 0.18 : -0.18);
+      else if (z === "night") {
+        night3d = !night3d;
+        try { localStorage.setItem(NIGHT_3D_KEY, night3d ? "1" : "0"); } catch { /* the choice just isn't kept */ }
+        view3d?.setNight(night3d);
+        renderZoomControl();
+      }
       else if (z === "fit") { zoom = 1; applyZoom(); }
       else if (z) zoomAt(window.innerWidth / 2, window.innerHeight / 2, z === "in" ? 1.5 : 1 / 1.5);
     });
   }
-  const toggle = `<button data-zoom="3d" title="${in3d ? "Back to the map, to build" : "Watch your game in 3D (drag to turn, wheel to zoom)"}">${in3d ? "Map" : "3D"}</button>`;
-  el.innerHTML = in3d ? toggle : `<button data-zoom="in" title="Zoom in (or the wheel)">+</button><button data-zoom="out" title="Zoom out">−</button>${zoom > 1.0001 ? `<button data-zoom="fit" title="The whole map (0)">Fit · ${zoom.toFixed(1)}×</button>` : ""}${toggle}`;
+  const toggle = `<button data-zoom="3d" title="${in3d ? "Back to the map, to build" : "Watch your game in 3D (drag to pan, right- or shift-drag to turn and tilt, wheel to zoom)"}">${in3d ? "Map" : "3D"}</button>`;
+  const camera3d = `<button data-zoom="turn-left" title="Turn left">⟲</button><button data-zoom="turn-right" title="Turn right">⟳</button>`
+    + `<button data-zoom="tilt-down" title="Tilt toward the horizon">▼</button><button data-zoom="tilt-up" title="Tilt to look down">▲</button>`
+    + `<button data-zoom="night" title="${night3d ? "Daylight" : "Night: the towns' windows lit"}">${night3d ? "Day" : "Night"}</button>`;
+  el.innerHTML = in3d ? camera3d + toggle : `<button data-zoom="in" title="Zoom in (or the wheel)">+</button><button data-zoom="out" title="Zoom out">−</button>${zoom > 1.0001 ? `<button data-zoom="fit" title="The whole map (0)">Fit · ${zoom.toFixed(1)}×</button>` : ""}${toggle}`;
 }
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
