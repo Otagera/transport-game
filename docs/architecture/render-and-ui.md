@@ -516,7 +516,8 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the
   town card's "Roadside sellers sell fuel at a premium"), jerrycan stalls line the roads into it
   (`fuelSeller`, shapes3d.ts): a mesh a town, built the first time it's short, then shown or
-  hidden; all rebuilt only when the roads change. A town's shortage is a sawtooth (rising until
+  hidden by the steadied shortage (`steady.ts`, with a band under 35%); all rebuilt only when
+  the roads change. A town's shortage is a sawtooth (rising until
   a tanker lands, then 0), so which towns are short changed at half the half-second checks: the
   first cut, one merged mesh rebuilt on each change, was 18% of the main thread in 3D at 4x,
   with 92 long tasks in 12 s and a p90 frame of 83 ms (17 ms after, map 2418, 2026-10-28).
@@ -570,6 +571,21 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   redraw, and a click aimed between redraws hit nothing ("some buttons are not clickable").
   After: 100%, and 19 of 20 scripted row clicks opened their card (15 before, 4 more lost
   their row). Give a list's items a key when they can reorder.
+- **Steady readings** (`steady.ts`, 2026-10-28): goods arrive in loads, so a town's fuel ran
+  100% -> 72% -> 100% in a game day, a market's food fell and jumped, a mill's output came in
+  lumps. The screen showed each moment: a town card's "Danfo fares here..." sentence came and
+  went (its layout jumped in 26 of 59 redraws at 4x, moving buttons from under the pointer), a
+  mill's ⚠ flipped at the sites list's 60%, the 3D sellers set up and packed away with each
+  tanker. Fuel, food and a site's output and inputs are now shown as their average over two
+  game days (`steady`; `steadyFuel`, `steadyShortage`, `steadyFood`, `steadySite`), sampled for
+  every town and site at each panel redraw (`keepSteady`) so a card opened mid-swing shows the
+  average; a sentence or mark that turns on at a line keeps a band below it (`steadyOver`).
+  After: no layout change in 59 redraws on any list or card surveyed. **Display only:** the
+  simulation still runs on the moment (fares and parked danfos follow each tanker), nothing is
+  kept on the world, replays are untouched -- `production.ts`'s "carried away" was the
+  pattern. A source's share is told as its part of the averaged whole: averaged apart, capped
+  moment by moment, they read "75% supplied (86% imported)". Numbers that move because the
+  game is moving (a worn road's repair price climbing) are left alone: steady swings, not trends.
 
 ### Icons (2026-10-23): towns by tier, sites by glyph
 

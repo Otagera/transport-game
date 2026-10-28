@@ -17,13 +17,14 @@ import { privateLoad } from "@engine/game/private";
 import { roadCapacity } from "@engine/game/congestion";
 import { routingFor } from "@engine/game/rail";
 import { polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/game/roads";
-import { inHome, shortageAt } from "@engine/game/fuel";
+import { inHome } from "@engine/game/fuel";
 import { growthTrend } from "@engine/game/growth";
 import { MIN_CONDITION } from "@engine/map/decay";
 import { isFlooded } from "@engine/game/floods";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { tierOf, type Tier } from "./icons";
 import type { Focus } from "./render";
+import { steadyOver, steadyShortage } from "./steady";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
@@ -1046,7 +1047,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     for (const town of w.towns.values()) {
       if (town.industry) continue;
-      const short = shortageAt(w, town.id) >= 0.35;
+      const short = steadyOver(w, `sellers:${town.id}`, steadyShortage(w, town.id), 0.35);
       if (short && !sellers.has(town.id)) sellers.set(town.id, buildSellers(town));
       const mesh = sellers.get(town.id);
       if (mesh) mesh.visible = short;

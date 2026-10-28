@@ -10,12 +10,12 @@ import { diagnoseRoute, gameDay, roadPath, routeSummaries, townShare } from "@en
 import { growthTrend, roadFull, townGrowth } from "@engine/game/growth";
 import { averageHeadline, averageNet } from "@engine/game/history";
 import { goodsFlows, flowKey, lorrySummaries } from "@engine/game/goods";
-import { siteProduction } from "@engine/game/production";
 import { corridorSummaries } from "@engine/game/corridors";
-import { cargoName, fuelPlanned, fuelReach, fuelReachable, fuelSupply } from "@engine/game/fuel";
+import { cargoName, fuelPlanned, fuelReach, fuelReachable } from "@engine/game/fuel";
 import { hasYard } from "@engine/game/yards";
 import { siteFigure, type FigureData } from "./seethrough";
 import { patchHtml } from "./patch";
+import { steadyFuel, steadySite } from "./steady";
 import { cementBreak, cementServed } from "@engine/game/cement";
 import { steelBreak, steelServed } from "@engine/game/steel";
 import { railPath } from "@engine/game/rail";
@@ -150,7 +150,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       roadside: !t.industry && !world.basePopulation.has(id), trend: growthTrend(world, id), target: g?.target ?? null,
       cementHeld: g?.cementHeld ?? 0, steelHeld: g?.steelHeld ?? 0, expected: g?.expected ?? 0,
       share: { you: share.player, informal: share.informal, lost: share.lost },
-      fuel: fuelSupply(world, id)?.supplied ?? null, cement: world.cement ? cementServed(world, id) : null, steel: world.steel ? steelServed(world, id) : null,
+      fuel: steadyFuel(world, id)?.supplied ?? null, cement: world.cement ? cementServed(world, id) : null, steel: world.steel ? steelServed(world, id) : null,
       roadFull: full && full.road ? { next: full.next, thin: !!full.thin } : null,
     };
   }
@@ -158,7 +158,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   const homeTowns = () => [...world.towns.keys()].filter((id) => !world.towns.get(id)!.industry).map(town);
 
   function site(id: string) {
-    const p = siteProduction(world, id);
+    const p = steadySite(world, id);
     return { id, product: p?.product ?? null, made: p ? p.made * D : 0, capacity: p ? p.capacity * D : 0, limit: p?.limit ?? null, staffing: p?.staffing ?? null, shipped: p?.shipped ?? null };
   }
   type Site = ReturnType<typeof site>;
@@ -192,7 +192,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
    * town it sends to, from the numbers the panel already shows -- and, in a line, what's stuck.
    */
   function seeThrough(id: string, out: Array<{ to: string; perDay: number; yours: number; hauliers: number }>, inn: Array<{ from: string }>): string {
-    const p = siteProduction(world, id);
+    const p = steadySite(world, id);
     const t = world.towns.get(id)!;
     if (!p || p.capacity <= 0) return "";
     const fuelSite = t.industry === "refinery" || t.industry === "newrefinery" || t.industry === "depot";

@@ -62,11 +62,11 @@ import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/me
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
 import { corridorSummaries } from "@engine/game/corridors";
 import { industryFlows, stoneServed } from "@engine/game/industries";
-import { cargoName, crudeArriving, fuelReach, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput, shortageAt } from "@engine/game/fuel";
+import { cargoName, crudeArriving, fuelReach, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput } from "@engine/game/fuel";
 import { checkExpand, expandCost, expandLevel, siteScale } from "@engine/game/expand";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/game/bonds";
-import { siteProduction, type SiteLimit } from "@engine/game/production";
-import { exportsArriving, farmland, farmTowns, flourCapacity, flourOutput, flourServed, flourWant, foodActive, foodServed, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/game/food";
+import type { SiteLimit } from "@engine/game/production";
+import { exportsArriving, farmland, farmTowns, flourCapacity, flourOutput, flourWant, foodActive, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/game/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/game/workers";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput, cementBreak } from "@engine/game/cement";
 import { isSteelSite, mineOutput, oreArriving, steelBreak, steelCapacity, steelImports, steelOutput, steelServed } from "@engine/game/steel";
@@ -77,6 +77,7 @@ import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneSt
 import { averageBudget, averageNet } from "@engine/game/history";
 import { draw, fitView, focusFor, overlayCaption, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
+import { keepSteady, steadyFood, steadyFuel, steadyOver, steadyShortage, steadySite } from "./steady";
 import { createScreen } from "./screen";
 import { shortVerdict } from "./verdicts";
 import { waysFor } from "@engine/game/crossings";
@@ -1580,7 +1581,7 @@ function workersItem(siteId: string): string {
 // and what's holding it back, marked (playtest, map 2411: "we need
 // indications for the factories in terms of production").
 function productionHtml(siteId: string): string {
-  const p = siteProduction(world, siteId);
+  const p = steadySite(world, siteId);
   if (!p || p.capacity <= 0) return "";
   const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
   const tone = (share: number) => (share >= 0.8 ? "var(--good)" : share >= 0.4 ? "var(--danfo)" : "var(--bad)");
@@ -1608,7 +1609,7 @@ function expandHtml(siteId: string): string {
   const done = level > 0 ? `Expanded ${level === 1 ? "once" : `${level} times`}: ${pct(siteScale(world, siteId))} of what it was built to make. ` : "";
   if (cost === null) return `<p class="hint">${done}As big as it gets.</p>`;
   // Offered when it's near capacity: expanding a site that makes little adds nothing.
-  const p = siteProduction(world, siteId);
+  const p = steadySite(world, siteId);
   if (!p || p.made < 0.8 * p.capacity) return done ? `<p class="hint">${done}</p>` : "";
   const check = checkExpand(world, siteId);
   return `<p class="hint">${done}<span class="actions"><button data-expand="${siteId}" ${check.ok ? "" : `disabled title="${check.reason}"`}>Expand it: +${pct(t.expandStep)} capacity · ${naira(cost)}</button></span>${check.ok ? "" : ` <span class="muted">${check.reason}</span>`}</p>`;
@@ -1618,7 +1619,7 @@ function expandHtml(siteId: string): string {
 function siteProblem(siteId: string): string {
   const workers = workersProblem(siteId);
   if (workers) return workers;
-  const p = siteProduction(world, siteId);
+  const p = steadySite(world, siteId);
   if (!p || p.capacity <= 0 || p.limit === "idle") return "";
   const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
   const site = world.towns.get(siteId)!;
@@ -2004,13 +2005,13 @@ function foodText(townId: string): string {
   let out = "";
   if (foodWant(world, townId) > 0) {
     // The basket: the region's food, and flour from the port's mill where there is one.
-    const served = marketFed(world, townId);
-    const flour = food.flourMillId ? `, ${pct(flourServed(world, townId))} of its ${perDay(flourWant(world, townId))} t of flour` : "";
+    const served = steadyFood(world, townId).market;
+    const flour = food.flourMillId ? `, ${pct(steadyFood(world, townId).flour)} of its ${perDay(flourWant(world, townId))} t of flour` : "";
     const extra = Math.round(world.tuning.marketTripBoost * 100);
     const state = served >= 0.8 ? `Its market is busy: trade draws ${pct(world.tuning.marketTripBoost * served)} more trips to it.`
       : served >= 0.2 ? `Its market is ${served >= 0.5 ? "short" : "half empty"}: trade draws ${pct(world.tuning.marketTripBoost * served)} more trips to it, of a possible ${extra}%.`
       : `Its market is empty: fed, its trade would draw up to ${extra}% more trips. Carry ${food.crops.food} from ${townName(food.millId)}.`;
-    out += `<p class="townshare"><b>Food:</b> ${pct(foodServed(world, townId))} of the ${perDay(foodWant(world, townId))} t of ${food.crops.food} it wants a day${flour}. ${state}</p>`;
+    out += `<p class="townshare"><b>Food:</b> ${pct(steadyFood(world, townId).food)} of the ${perDay(foodWant(world, townId))} t of ${food.crops.food} it wants a day${flour}. ${state}</p>`;
   }
   if (farmTowns(world).some((town) => town.id === townId)) {
     const town = world.towns.get(townId)!;
@@ -2031,7 +2032,7 @@ function cementText(townId: string): string {
 
 // A town's fuel (fuel.ts): how well supplied, from where, and why not more.
 function fuelText(townId: string): string {
-  const supply = fuelSupply(world, townId);
+  const supply = steadyFuel(world, townId);
   if (!supply || !world.fuel) return "";
   const sources = [`${pct(Math.min(1, supply.imported))} imported`, ...(supply.refined > 0.005 ? [`${pct(supply.refined)} from the refinery`] : [])].join(", ");
   const why = isCutOff(world, townId)
@@ -2040,10 +2041,10 @@ function fuelText(townId: string): string {
       ? world.fuel.restored ? " Short: carry fuel to it, or get more crude to the refinery." : " Short: the tankers barely reach it. A working refinery would make up the rest."
       : "";
   // What the shortage is doing here (fuel.ts, step 1b).
-  const short = shortageAt(world, townId);
+  const short = steadyShortage(world, townId);
   const t = world.tuning;
-  const effects = short >= 0.1
-    ? ` Danfo fares here +${pct(t.fuelFarePremium * short)}, ${pct(t.fuelParked * short)} of their road space parked; your vehicles pay +${pct(t.fuelCostPremium * short)} to run here, and riders wait longer for you.${short >= 0.35 ? " Roadside sellers sell fuel at a premium." : ""}`
+  const effects = steadyOver(world, `fuel-effects:${townId}`, short, 0.1)
+    ? ` Danfo fares here +${pct(t.fuelFarePremium * short)}, ${pct(t.fuelParked * short)} of their road space parked; your vehicles pay +${pct(t.fuelCostPremium * short)} to run here, and riders wait longer for you.${steadyOver(world, `sellers:${townId}`, short, 0.35) ? " Roadside sellers sell fuel at a premium." : ""}`
     : "";
   return `<p class="townshare"><b>Fuel:</b> ${pct(supply.supplied)} supplied (${sources}).${why}${effects}</p>`;
 }
@@ -3125,6 +3126,7 @@ function frame(now: number): void {
   panelTimer += elapsed;
   if (panelTimer > 0.25) {
     panelTimer = 0;
+    keepSteady(world);
     renderStrip();
     // Not while a button in a panel is pressed: redrawing replaces the button under
     // the pointer, and a click needs the same one pressed and released (playtest:

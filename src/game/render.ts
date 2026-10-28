@@ -10,11 +10,11 @@ import { corridorChanges, corridorSummaries } from "@engine/game/corridors";
 import { noSeatPairs, seatMove } from "@engine/game/problems";
 import { polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/game/roads";
 import { roadCapacity } from "@engine/game/congestion";
-import { siteProduction } from "@engine/game/production";
 import { flowKey, goodsFlows, type GoodsFlow } from "@engine/game/goods";
 import { cargoName } from "@engine/game/fuel";
 import { farmTowns } from "@engine/game/food";
 import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, tierOf, tierRadius, type Badge, type Glyph, type SiteState, type Tier } from "./icons";
+import { steadySite } from "./steady";
 
 // The game's map, ported from the information lab (info-lab.html; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -813,7 +813,7 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   const lit = state.selectedTown === site.id || state.hoverTown === site.id;
   ctx.globalAlpha = focus && !focus.towns.has(site.id) ? 0.3 : 1;
   // Its tile and glyph (icons.ts): solid working, hollow idle, an amber corner held back.
-  const made = siteProduction(world, site.id, flows);
+  const made = steadySite(world, site.id, flows);
   const perDay = (x: number) => x * SECONDS_PER_GAME_DAY;
   const siteState: SiteState = !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
   const glyph = (site.industry && site.industry in GLYPHS ? site.industry : "quarry") as Glyph;
