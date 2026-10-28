@@ -830,7 +830,7 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   const made = steadySite(world, site.id, flows);
   const perDay = (x: number) => x * SECONDS_PER_GAME_DAY;
   // A border crossing makes nothing: it's open (border.ts).
-  const siteState: SiteState = site.industry === "border" ? "working" : !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
+  const siteState: SiteState = site.industry === "border" || site.industry === "gateway" ? "working" : !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
   const glyph = (site.industry && site.industry in GLYPHS ? site.industry : "quarry") as Glyph;
   drawSiteIcon(ctx, p.x, p.y, r * 2, glyph, siteState, COLORS.surface);
   if (lit) {

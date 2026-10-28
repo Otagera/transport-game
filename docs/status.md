@@ -34,7 +34,8 @@ beyond the home cluster drawn by region with a coast of estuary and bays (4), a 
 sea along its south (5), and 3D in the region's colours (engine.md, The region). **The gateways**
 (brief, The region, agreed 2026-10-28): step 1, the seaport, built -- imports land there and 60-100%
 reach the home city by its link (gateways.ts); step 2, one border crossing a map, cash crops out
-whichever way nets more (border.ts); next, the north landlocked. Next: the gateways (brief, The region, step 3) -- to discuss. **Open for you:**
+whichever way nets more (border.ts); step 3, the north landlocked, its sea trade by the coast road
+(map version 6). Later: the port's handling as a rung, imports over the border, coastal shipping. Next: the gateways (brief, The region, step 3) -- to discuss. **Open for you:**
 morphdom in place of `patch.ts`, or a lit-html spike on one panel. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

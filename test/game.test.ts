@@ -3009,6 +3009,32 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     }
   }, 60_000);
 
+  test("map version 6 (gateways, step 3): the north landlocked, its sea trade by the coast road on the south edge", () => {
+    const run = (seed: number, overrides = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, ...overrides });
+    const hasSea = (w: ReturnType<typeof run>) => (w.waterLines ?? []).some((r) => Math.max(...(r.widths ?? [r.width])) > 12);
+    let north = 0, south = 0;
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const w = run(seed);
+      if (["north", "northeast", "middleBelt"].includes(w.region ?? "")) {
+        north += 1;
+        expect(hasSea(w)).toBe(false);
+        const road = w.towns.get(w.seaport!)!;
+        expect(road.industry).toBe("gateway");
+        expect(road.y).toBeGreaterThanOrEqual(w.height - 6); // the south edge
+        expect(isCutOff(w, road.id)).toBe(false);
+        expect(seaportLink(w).by).toBe("road");
+        // Off (an older run): no coast road.
+        expect(run(seed, { landlockedNorth: false }).towns.has("coast-road")).toBe(false);
+      } else {
+        south += 1;
+        expect(hasSea(w)).toBe(true);
+        expect(w.towns.has("coast-road")).toBe(false);
+      }
+    }
+    expect(north).toBeGreaterThan(0);
+    expect(south).toBeGreaterThan(0);
+  }, 60_000);
+
   test("map version 3: the port's sites stand past where it's built up, every site still placed", () => {
     const run = (seed: number, mapVersion: number) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion, warmUpDays: 0 });
     let inside2 = 0, inside3 = 0;
@@ -3083,7 +3109,7 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       expect(w.port).toBe(info.home.map.port!); // inland, a dry port
       // Steel's works and mine are placed over the whole region on purpose (steel.ts: a long haul),
       // and so are the far clusters' limestone fields (clusters.ts).
-      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field" && t.industry !== "border"); // the far fields and the border crossing are out there by design (clusters.ts, crossings.ts, border.ts)
+      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field" && t.industry !== "border" && t.industry !== "gateway"); // the far fields, the border crossing and the coast road are out there by design (clusters.ts, crossings.ts, border.ts)
       expect(sites.length).toBeGreaterThanOrEqual(4);
       for (const s of sites) expect(s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height).toBe(true);
     }

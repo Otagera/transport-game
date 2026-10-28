@@ -177,7 +177,7 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     return;
   }
   // A border crossing (border.ts): the customs post, its barrier across the road, lorries waiting, flags.
-  if (kind === "border") {
+  if (kind === "border" || kind === "gateway") {
     kit.box(14, 4, 7, "#e2ddd2", 0, -8);
     kit.box(15, 0.4, 8, "#2b8a3e", 0, -8, 4);
     kit.box(3, 2.6, 3, "#cfc8bb", -6, 2);

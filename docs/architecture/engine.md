@@ -1163,6 +1163,16 @@ replays as played. Seed 0 stays the hand-made map, alone.
   which also brings in the ridge field's road (`crossings.ts placeRidgeField` adds it without a
   rebuild: in older runs it isn't routed until your first build), so trips 503 -> 596 a day: the
   field's commuters.
+- **Version 6: the north landlocked, and its coast road** (`region.ts landlocked`, `border.ts
+  placeCoastRoad`; brief, The gateways, step 3; 2026-10-28). A north, north-east or Middle Belt map
+  loses the sea down its side, its rivers that met it run on off the edge; at the start a gateway
+  site (`gateway`) on the south edge nearest the home city -- the Lagos road, the Middle Belt's the
+  Port Harcourt road -- on an old road to the nearest town, is its seaport (`world.seaport`): the
+  same shares as a far seaport, all of it by rail you lay to it. Behind `landlockedNorth` (absent
+  in older runs: off). 30 seeds: all five northern maps landlocked with a coast road 50-121 cells
+  from the home city; the north-east's Banki crossing now on its east edge. Six northern maps
+  unplayed for 20 days, version 5 -> 6: the same 42 sites working, fuel 24.8% -> 24.6%, trips 573 ->
+  574, export pay ₦220 -> ₦248 a day (their seaport was already a haul away).
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of

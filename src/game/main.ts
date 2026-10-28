@@ -1520,6 +1520,19 @@ function haulierMove(lorries: string, yard: string): string {
 // The town card (design lab, "the brief, step 8"): a kicker, the name, three
 // lines, the one problem here, then its trips. Its first screen fits without
 // scrolling (brief, text budget).
+// The coast road's card (border.ts placeCoastRoad; brief, The gateways, step 3): a landlocked map's way
+// to the sea -- its imports come up it and its exports go down it.
+function renderCoastRoad(townId: string): void {
+  const site = world.towns.get(townId)!;
+  townEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">Gateway · to the coast</div>
+      <div class="title">${site.name}</div>
+      <p class="townshare">No sea here: the region's imports come up from the ports in the south, and its exports go down to them, this way.</p>
+      ${seaportText()}
+    </div>`;
+}
+
 // The border crossing's card (border.ts; brief, The gateways, step 2): what crosses it, from which
 // farm towns, what it's paid against the sea, and why each crop goes the way it does.
 function renderBorder(townId: string): void {
@@ -1554,6 +1567,7 @@ function renderIndustry(townId: string): void {
   if (world.towns.get(townId)?.industry === "mill") return renderMillSite(townId);
   if (world.towns.get(townId)?.industry === "flourmill") return renderFlourMillSite(townId);
   if (world.towns.get(townId)?.industry === "border") return renderBorder(townId);
+  if (world.towns.get(townId)?.industry === "gateway") return renderCoastRoad(townId);
   const limestone = cementActive(world);
   const cargo = limestone ? "limestone" : "stone";
   const site = world.towns.get(townId)!;
@@ -1657,10 +1671,12 @@ function seaportText(): string {
   const t = world.tuning;
   const ends = [world.port, link.seaport].sort().join();
   const oldLine = world.simulation.map.segments.some((s) => s.type === "rail" && [s.fromNodeId, s.toNodeId].sort().join() === ends);
-  const rail = oldLine ? `restore the old railway to ${townName(link.seaport)} (K)` : `lay track to ${townName(link.seaport)} (K)`;
+  const there = sea.industry === "gateway" ? `the ${townName(link.seaport)}` : townName(link.seaport);
+  const rail = oldLine ? `restore the old railway to ${there} (K)` : `lay track to ${there} (K)`;
   const how = link.by === "rail" ? "by the railway" : link.by === "none" ? "-- no road joins them" : link.paved >= 0.99 ? "up a road paved all the way" : `up the old highway${link.paved > 0.01 ? `, ${pct(link.paved)} of it paved` : ""}`;
   const more = link.by === "rail" ? "" : link.paved < 0.99 && link.by === "road" ? ` Pave it for up to ${pct(t.importsOverPaved ?? 0.9)}, or ${rail} for all of it.` : ` To get all of it, ${rail}.`;
-  return `<p class="townshare"><b>Imports:</b> they land at ${townName(link.seaport)}, the seaport, ${away} cells off; ${pct(link.share)} reach ${townName(world.port)} ${how}, and as much of what's exported reaches the coast.${more}</p>`;
+  const where = sea.industry === "gateway" ? `come up from the coast by the ${townName(link.seaport)}, ${away} cells off` : `land at ${townName(link.seaport)}, the seaport, ${away} cells off`;
+  return `<p class="townshare"><b>Imports:</b> they ${where}; ${pct(link.share)} reach ${townName(world.port)} ${how}, and as much of what's exported reaches the coast.${more}</p>`;
 }
 
 // Expanding it (expand.ts): another line, more capacity -- offered once it's working, said why not when it can't.

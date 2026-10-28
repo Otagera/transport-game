@@ -103,6 +103,8 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
     // Version 4: the land by region and its coast, on the smoothed water, before the railway is laid over it.
     if (version >= 4) map = regionalLand(map, seed);
     if (turn) map = coastToSouth(map);
+    // Version 6: the north landlocked -- its sea trade comes up the coast road (border.ts placeCoastRoad).
+    if (version >= 6 && !SOUTHERN.has(generatedMapInfo(base, seed).region) && map.home) map = landlocked(map);
     map = laidOverLand(map);
   }
   // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
@@ -828,4 +830,29 @@ function coastToSouth(map: GameMapDef): GameMapDef {
     terrain: { ...map.terrain, rivers: map.terrain?.rivers?.map((r) => ({ ...r, points: r.points.map(point) })), hills: map.terrain?.hills?.map(town) },
     home: box,
   };
+}
+
+// --- Map version 6: the north landlocked ----------------------------------------------------
+// (brief, The gateways, step 3; your word, 2026-10-28: "it gives variety".) A north, north-east or
+// Middle Belt map loses the sea down its side -- Kano is a thousand kilometres from the coast --
+// and its big river runs on off the map's edge toward the Niger and the Benue. Its sea trade comes
+// up a road from the south (border.ts placeCoastRoad), its border is on a land edge. The towns
+// stood clear of the sea, so nothing moves but the water.
+
+function landlocked(map: GameMapDef): GameMapDef {
+  const rivers = map.terrain?.rivers ?? [];
+  const sea = rivers.find((r) => Math.max(...(r.widths ?? [r.width])) > 12);
+  if (!sea) return map;
+  const west = sea.points[0]![0] < map.width / 2;
+  const edge = west ? -2 : map.width + 1;
+  const kept = rivers.filter((r) => r !== sea).map((r) => {
+    // A river that met the sea runs on to the edge, as wide as its mouth.
+    const end = r.points[r.points.length - 1]!, start = r.points[0]!;
+    const near = (p: [number, number]) => (west ? p[0] < 16 : p[0] > map.width - 17);
+    const widths = r.widths ?? r.points.map(() => r.width);
+    if (near(end)) return { ...r, points: [...r.points, [edge, end[1]] as [number, number]], widths: [...widths, widths[widths.length - 1]!] };
+    if (near(start)) return { ...r, points: [[edge, start[1]] as [number, number], ...r.points], widths: [widths[0]!, ...widths] };
+    return r;
+  });
+  return { ...map, terrain: { ...map.terrain, rivers: kept } };
 }

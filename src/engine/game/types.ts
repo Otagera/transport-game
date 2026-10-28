@@ -47,7 +47,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway";
 
 export interface GameRoadDef {
   a: string;
@@ -255,7 +255,8 @@ export interface GameTuning {
    * meandering, the old railway laid over the land; 3 the sites round a town placed past where
    * it's built up, on one side of it (fuel.ts ringSpot); 4 the land beyond the home cluster drawn
    * by region, and the coast with an estuary and bays (regionalLand); 5 a southern region's coast
-   * along its south (coastToSouth). Absent in older runs: 1, so a run file
+   * along its south (coastToSouth); 6 the north, north-east and Middle Belt landlocked (landlocked).
+   * Absent in older runs: 1, so a run file
    * replays on the map it was played on.
    */
   mapVersion?: number;
@@ -270,6 +271,8 @@ export interface GameTuning {
   borderCrossing?: boolean;
   /** What the state pays a tonne of cash crop over the border, as a share of the sea's. */
   borderPayShare?: number;
+  /** The north, north-east and Middle Belt's sea trade by the coast road on the south edge (border.ts placeCoastRoad). Absent in older runs: off. */
+  landlockedNorth?: boolean;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;

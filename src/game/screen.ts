@@ -629,7 +629,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   function sitesTable(): string {
     const use = (s: Site) => (s.capacity > 0 ? s.made / s.capacity : 0);
     // The border crossing too (border.ts): it makes nothing, but its card is where to see what crosses.
-    const isBorder = (s: Site) => world.towns.get(s.id)?.industry === "border";
+    const isBorder = (s: Site) => world.towns.get(s.id)?.industry === "border" || world.towns.get(s.id)?.industry === "gateway";
     const rows = sortRows(sites().filter((s) => s.capacity > 0 || isBorder(s)), "sites", { name: (s) => nameOf(s.id), use, made: (s) => s.made });
     return `<h2>Sites · what each makes of what it could</h2>
       ${rows.length ? `<table><thead><tr>${th("sites", "name", "Site")}${th("sites", "made", "t/day")}${th("sites", "use", "Of capacity")}</tr></thead><tbody>
@@ -702,7 +702,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         ${problemHtml(siteProblem(s))}
         ${seeThrough(sel.id, out, inn)}
         <div class="tiles">
-          ${t.industry === "border"
+          ${t.industry === "gateway"
+            // The coast road (border.ts): the map's way to the sea -- how much gets through, and how.
+            ? `${tile("Imports arriving", pct(seaportLink(world).share), "of what lands at the coast")}
+               ${tile("By", seaportLink(world).by === "rail" ? "rail" : "road", seaportLink(world).by === "road" ? `${pct(seaportLink(world).paved)} paved` : "")}`
+            : t.industry === "border"
             // A border crossing makes nothing: what crosses it, from how many farms, and its pay (border.ts).
             ? `${tile("Out a day", `${int((exportsBy(world).find((e) => e.to === t.id)?.tonnes ?? 0) * D)} t`, world.food?.crops.cash ?? "")}
                ${tile("To", borderCountry(world))}
