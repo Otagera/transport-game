@@ -530,7 +530,11 @@ have internal roads showing"). The grid's lanes, drawn where a house stands on e
 instanced slab a plot; one-plot gaps along a lane closed and lone pieces dropped (laid only
 where a house was, a 15k town's lanes came out as scattered stubs); paved in a city's or
 regional town's heart, laterite elsewhere, paler and narrower than the roads between towns
-and 0.2 m under them, so those still lead. Not yet joined to the roads into town. Drawing
+and 0.2 m under them, so those still lead. Joined to the roads into town: houses stand back
+from a road, so the streets between them stopped a plot or two short; a run that ends short
+carries on along its lane up to three plots if that reaches a road, a town with none takes its
+shortest way out up to eight, and a town whose roads run alongside its lanes (Bida, Kontagora
+on map 2418) gets a spur at its own angle to the nearest road. Drawing
 them showed every building had stood mirrored to its own grid: three turns about y the other
 way to the grid's cos/sin, so a building faces its street at `-grid` (`facing`).
 

@@ -722,6 +722,34 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (on(i, j)) continue;
         if ((laneI(i) && on(i, j - 1) && on(i, j + 1)) || (laneJ(j) && on(i - 1, j) && on(i + 1, j))) street.add(`${i},${j}`);
       }
+      // Joined to the roads into town: a run that stops short carries on along its lane, up to
+      // three plots, if that reaches a road (houses stand back from the roads, so the streets
+      // between them ended a plot or two short and the grid sat apart from the town's roads).
+      // A town none of whose runs gets there takes its shortest way out, up to eight plots
+      // (map 2418: Bida's and Kontagora's roads pass 50-60 m from their nearest street).
+      const toRoad = (i: number, j: number, di: number, dj: number, most: number): string[] | null => {
+        const path: string[] = [];
+        for (let step = 1; step <= most; step += 1) {
+          const a = i + di * step, b = j + dj * step;
+          if (on(a, b)) return null;
+          const lx = a * spacing, lz = b * spacing;
+          const cx = town.x + (lx * cos - lz * sin) / M, cy = town.y + (lx * sin + lz * cos) / M;
+          if (wet(cx, cy, 0.3)) return null;
+          path.push(`${a},${b}`);
+          if (nearRoad(cx, cy, 4 / M)) return path;
+        }
+        return null;
+      };
+      const ways = (most: number) => [...street].flatMap((key) => {
+        const [i, j] = key.split(",").map(Number) as [number, number];
+        const out: Array<string[] | null> = [];
+        if (laneI(i)) for (const dj of [-1, 1]) if (!on(i, j + dj)) out.push(toRoad(i, j, 0, dj, most));
+        if (laneJ(j)) for (const di of [-1, 1]) if (!on(i + di, j)) out.push(toRoad(i, j, di, 0, most));
+        return out.filter((p): p is string[] => p !== null);
+      });
+      const short = ways(3);
+      const joins = short.length > 0 ? short : ways(8).sort((a, b) => a.length - b.length).slice(0, 1);
+      for (const path of joins) for (const key of path) street.add(key);
       // Each piece runs along its lane; a crossing, along whichever lanes go on from it.
       const alongJ = (i: number, j: number) => laneI(i) && (on(i, j - 1) || on(i, j + 1));
       const alongI = (i: number, j: number) => laneJ(j) && (on(i - 1, j) || on(i + 1, j));
@@ -742,6 +770,32 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const j_ = alongJ(i, j), i_ = alongI(i, j);
         if (j_) lay(i, j, "j");
         if (i_) lay(i, j, "i"); // neither: a lone piece, dropped
+      }
+      // Still not joined (its roads run alongside its lanes, never across them): a spur at its own
+      // angle, from the street nearest a road to the nearest point on that road.
+      if (joins.length === 0 && street.size > 0) {
+        let best: { from: { x: number; z: number }; to: { x: number; z: number }; d: number } | null = null;
+        for (const key of street) {
+          const [i, j] = key.split(",").map(Number) as [number, number];
+          const lx = i * spacing, lz = j * spacing;
+          const x = lx * cos - lz * sin, z = lx * sin + lz * cos;
+          const cx = town.x + x / M, cy = town.y + z / M;
+          for (const line of local) for (let k = 1; k < line.length; k += 1) {
+            const p = line[k - 1]!, q = line[k]!, dx = q.x - p.x, dy = q.y - p.y;
+            const t = Math.max(0, Math.min(1, ((cx - p.x) * dx + (cy - p.y) * dy) / (dx * dx + dy * dy || 1)));
+            const to = { x: (p.x + dx * t - town.x) * M, z: (p.y + dy * t - town.y) * M };
+            const d = Math.hypot(to.x - x, to.z - z);
+            if (!best || d < best.d) best = { from: { x, z }, to, d };
+          }
+        }
+        if (best && best.d < 12 * spacing) {
+          const mx = (best.from.x + best.to.x) / 2, mz = (best.from.z + best.to.z) / 2;
+          const cx = town.x + mx / M, cy = town.y + mz / M;
+          if (!wet(cx, cy, 0.3)) streets.push({
+            x: mx, z: mz, y: elevationAt(cx, cy) * HEIGHT - base + 0.15, long: best.d + 2, wide: 4,
+            ry: -Math.atan2(best.to.z - best.from.z, best.to.x - best.from.x), colour: STREET_DIRT,
+          });
+        }
       }
     }
     for (let i = 0; i < (tier === "village" ? count : Math.round(count * 0.7)); i += 1) {
