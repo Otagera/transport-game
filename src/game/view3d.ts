@@ -28,7 +28,7 @@ import { steadyOver, steadyShortage } from "./steady";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
-import { CONCRETE, ROOFS, WALLS, fillingStation, fuelSeller, haulageYard, kiosk, metroEntrance, motorPark, railStation } from "./shapes3d";
+import { BLOCK_WALLS, CONCRETE, ROOFS, WALLS, WINDOWS, fillingStation, fuelSeller, haulageYard, kiosk, metroEntrance, motorPark, railStation } from "./shapes3d";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
 
@@ -591,7 +591,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   let sites: GameTown[] = [];
   let people: GameTown[] = [];
   /** A house of a town's fabric, in its town's frame: drawn as instances, walls and roof apart. */
-  interface House { x: number; y: number; z: number; w: number; d: number; h: number; rh: number; ry: number; wall: string; roof: string }
+  /** `floors`: a block's, each banded with windows (0 for a house). */
+  interface House { x: number; y: number; z: number; w: number; d: number; h: number; rh: number; ry: number; floors: number; wall: string; roof: string }
   let fabric: House[] = [];
   function townKit(town: GameTown, tier: Tier, boom = false): Kit {
     fabric = [];
@@ -644,28 +645,49 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       if (tier !== "town") put(12, 0.6, (k, rr) => (rand() < 0.5 ? church(k, rr, 0, 0) : mosque(k, rr, 0, 0)));
     }
     // Its fabric (your word: "it all looks sparse"): houses packed on its street grid, densest
-    // in the middle, thinning outwards, a lane every few plots. Drawn as instances, so a city
-    // can have hundreds.
+    // in the middle, thinning outwards, a lane every few plots; at its heart, blocks that rise
+    // with its people. Drawn as instances, so a city can have hundreds. Size shows as density
+    // and height, not spread: a cell is 8 m and towns stand 15-20 cells apart, so the capital
+    // (135k, map 2418) had room for a radius of 88 m -- on a 10 m grid with a street every
+    // third plot, 21 houses and ~75 buildings all told, fewer than a 95k town with no
+    // neighbour (2026-10-28). Plots 8.5 m apart, a lane every fourth and fifth.
     if (tier !== "village") {
-      const spacing = 10, cos = Math.cos(grid), sin = Math.sin(grid);
+      const spacing = 8.5, cos = Math.cos(grid), sin = Math.sin(grid);
       const n = Math.ceil(radius / spacing);
-      const dense = tier === "city" ? 0.97 : tier === "regional" ? 0.88 : 0.72;
+      // A city is packed: fewer lanes, and it thins less toward its edge.
+      const dense = tier === "city" ? 1 : tier === "regional" ? 0.88 : 0.72;
+      const thins = tier === "city" ? 0.45 : 0.65;
+      const lanes = tier === "city" ? [6, 5] : [5, 4];
+      // The heart, and how high it rises: 135k up to 9 floors, 52k 6, 20k 4.
+      const core = tier === "city" ? 0.65 : tier === "regional" ? 0.45 : 0.25;
+      const tallest = Math.max(2, Math.round(1 + Math.sqrt(town.population) * 0.7));
       for (let i = -n; i <= n; i += 1) for (let j = -n; j <= n; j += 1) {
-        if (i % 4 === 0 || j % 3 === 0) continue; // the streets
-        const lx = i * spacing + (rand() - 0.5) * 2, lz = j * spacing + (rand() - 0.5) * 2;
+        if (i % lanes[0]! === 0 || j % lanes[1]! === 0) continue; // the lanes
+        const lx = i * spacing + (rand() - 0.5) * 1.5, lz = j * spacing + (rand() - 0.5) * 1.5;
         const x = lx * cos - lz * sin, z = lx * sin + lz * cos;
         const d = Math.hypot(x, z) / radius;
-        if (d > 1 || rand() > dense - 0.65 * d ** 1.5) continue;
-        const cx = town.x + x / M, cy = town.y + z / M, r = 4.2;
+        if (d > 1 || rand() > dense - thins * d ** 1.5) continue;
+        const cx = town.x + x / M, cy = town.y + z / M, r = 3.6;
         if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + r)) continue;
         if (wet(cx, cy, (r + 1) / M) || nearRoad(cx, cy, (r + 4) / M)) continue;
         if (sites.some((s) => { const at = siteAt.get(s.id) ?? s; return Math.hypot(at.x - cx, at.y - cy) < (r + 22) / M; })) continue;
-        placed.push({ x, z, r: 3.6 });
-        const storeys = d < 0.45 && rand() < (tier === "city" ? 0.5 : 0.25) ? 2 : 1;
-        const flat = rand() < (d < 0.4 ? 0.45 : 0.15);
+        placed.push({ x, z, r: 3.2 });
         const y = Math.min(elevationAt(cx - 0.4, cy), elevationAt(cx + 0.4, cy), elevationAt(cx, cy - 0.4), elevationAt(cx, cy + 0.4)) * HEIGHT - base - 0.2;
+        const ry = grid + (rand() < 0.15 ? Math.PI / 2 : 0);
+        if (d < core) {
+          // A block: concrete, flat-roofed, its floors banded with windows, tallest in the middle.
+          const t = 1 - d / core;
+          const floors = Math.max(2, Math.round(2 + (tallest - 2) * t * (0.6 + 0.4 * rand())));
+          fabric.push({
+            x, y, z, w: 6.5 + rand() * 1.5, d: 6 + rand() * 1.5, h: 3 * floors, rh: 0.25, ry, floors,
+            wall: BLOCK_WALLS[Math.floor(rand() * BLOCK_WALLS.length)]!, roof: CONCRETE[Math.floor(rand() * CONCRETE.length)]!,
+          });
+          continue;
+        }
+        const storeys = d < 0.6 && rand() < (tier === "city" ? 0.5 : 0.25) ? 2 : 1;
+        const flat = rand() < (d < 0.4 ? 0.45 : 0.15);
         fabric.push({
-          x, y, z, w: 6 + rand() * 2.5, d: 5 + rand() * 2.5, h: 3 * storeys, rh: flat ? 0.25 : 1.3 + rand() * 0.6, ry: grid + (rand() < 0.15 ? Math.PI / 2 : 0),
+          x, y, z, w: 5 + rand() * 2, d: 4.5 + rand() * 2, h: 3 * storeys, rh: flat ? 0.25 : 1.3 + rand() * 0.6, ry, floors: 0,
           wall: WALLS[Math.floor(rand() * WALLS.length)]!, roof: flat ? CONCRETE[Math.floor(rand() * CONCRETE.length)]! : ROOFS[Math.floor(rand() * ROOFS.length)]!,
         });
       }
@@ -719,19 +741,28 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   function houses(list: House[]): THREE.InstancedMesh[] {
     const walls = new THREE.InstancedMesh(wallShape, fabricMaterial, list.length);
     const roofs = new THREE.InstancedMesh(roofShape, fabricMaterial, list.length);
+    // A block's windows: a dark band round each floor above the ground, a touch proud of the wall.
+    const bands = new THREE.InstancedMesh(wallShape, fabricMaterial, Math.max(1, list.reduce((n, h) => n + Math.max(0, h.floors - 1), 0)));
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
+    let band = 0;
     list.forEach((h, i) => {
       q.setFromAxisAngle(up, h.ry);
       walls.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y, h.z), q, new THREE.Vector3(h.w, h.h, h.d)));
       roofs.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y + h.h, h.z), q, new THREE.Vector3(h.w * 1.04, h.rh, h.d * 1.04)));
       walls.setColorAt(i, c.set(h.wall));
       roofs.setColorAt(i, c.set(h.roof));
+      for (let f = 1; f < h.floors; f += 1) {
+        bands.setMatrixAt(band, m.compose(new THREE.Vector3(h.x, h.y + f * 3 + 1.1, h.z), q, new THREE.Vector3(h.w + 0.12, 0.9, h.d + 0.12)));
+        bands.setColorAt(band, c.set(WINDOWS));
+        band += 1;
+      }
     });
-    for (const mesh of [walls, roofs]) {
+    bands.count = band;
+    for (const mesh of [walls, roofs, bands]) {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
     }
-    return [walls, roofs];
+    return [walls, roofs, bands];
   }
   /** A town's mesh gone: its fabric's instances with it (the shapes are shared, and stay). */
   function dropTown(mesh: THREE.Mesh): void {

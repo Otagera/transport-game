@@ -511,6 +511,20 @@ lattice) gathers the savanna's and hills' trees into clumps with open ground bet
 in a grove's heart, with one in thirty standing half again above the rest. The gallery forest
 by the banks and the towns' trees aren't clumped.
 
+**A town's size, as density and height** (`view3d.ts townKit`, 2026-10-28). A cell is 8 m and
+towns stand 15-20 cells apart, and a town's reach is capped at its share of the gap to the
+next (so a close pair don't merge into one sprawl): the capital of map 2418 (Katsina-Ala,
+135k) got a radius of 88 m against the 116 it wanted, capped by Pankshin (13k) 17 cells off.
+On a 10 m grid with a street every third plot that held 21 houses, ~75 buildings all told --
+fewer than Kabba (95k, no near neighbour, 167), so a 135k city read as a 15k town. Spread
+can't fix that; density and height do. Plots 8.5 m apart, a lane every fifth and fourth (a
+city every sixth and fifth, and thinning less toward its edge); and a heart of blocks
+(`House.floors`: concrete, flat-roofed, a window band a floor, a third instanced draw) inside
+65% of a city's radius, 45% of a regional town's, 25% of a town's, as tall as
+`1 + 0.7·√thousands` floors in the middle (135k 9, 52k 6, 20k 4), falling off linearly --
+squared, the blocks that got built (the very middle is its road junction) came out 2-3
+floors. After: the capital 57 houses on its grid, 20 of them blocks, and a skyline.
+
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the

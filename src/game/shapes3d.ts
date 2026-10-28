@@ -79,6 +79,10 @@ export class Kit {
 export const WALLS = ["#efe3c8", "#e2c79a", "#d9a066", "#9cc5d6", "#b9d3a5", "#f2efe6", "#e8b8a0", "#c98d6a"];
 export const ROOFS = ["#a7aeb3", "#9aa3a9", "#8c5a3c", "#a0603e", "#6f8fa8", "#b4b9bc"];
 export const CONCRETE = ["#cfc8bb", "#d9d3c7", "#bfb8aa", "#e0d8c8"];
+/** A town's blocks at its heart (view3d.ts townKit): plastered concrete, paler than the houses. */
+export const BLOCK_WALLS = ["#e6dfd2", "#d8d0c2", "#efe9dd", "#cfd6d8", "#e3d3bd"];
+/** A block's window bands. */
+export const WINDOWS = "#5b6872";
 
 /** A bungalow in its compound: plastered walls, a zinc hip roof, a wall round the yard. */
 export function bungalow(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
