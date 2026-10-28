@@ -15,6 +15,7 @@ import { corridorSummaries } from "@engine/game/corridors";
 import { cargoName, fuelPlanned, fuelReach, fuelReachable, fuelSupply } from "@engine/game/fuel";
 import { hasYard } from "@engine/game/yards";
 import { siteFigure, type FigureData } from "./seethrough";
+import { patchHtml } from "./patch";
 import { cementBreak, cementServed } from "@engine/game/cement";
 import { steelBreak, steelServed } from "@engine/game/steel";
 import { railPath } from "@engine/game/rail";
@@ -551,7 +552,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     // The original towns' people, the score (the review: it wasn't in the strip at all).
     const base = (towns: Array<{ id: string; population: number }>) => towns.reduce((sum, t) => sum + (world.basePopulation.has(t.id) ? t.population : 0), 0);
     const peopleNow = base([...world.towns.values()]);
-    stripEl.innerHTML = `
+    patchHtml(stripEl, `
       ${termHtml(n.day, mapLine)}
       ${stat("People", "The towns you started with: their people now, thousands", `${int(peopleNow)}k`, peopleNow, ten ? base(ten.towns) : undefined, recent.map((d) => base(d.towns)), (x) => `${int(x)}k`, css("--good"))}
       ${stat("Trips made a day", "Trips between towns that happened, by anyone, a day: 5-day average", int(n.tripsMade), n.tripsMade, ten?.tripsMade, recent.map((d) => d.tripsMade), int)}
@@ -560,7 +561,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${stat("Net a day", "Income less running costs and upkeep, a day, over the last 5 days", naira(n.netPerDay), n.netPerDay, ten?.netPerDay, recent.map((d) => d.netPerDay), naira)}
       ${stat("Money", "What you hold", nairaK(n.funds), n.funds, ten?.funds, recent.map((d) => d.funds), nairaK)}
       <div class="spacer"></div>
-      <div class="actions">${world.term?.history.length ? `<button data-verdict="record">Your record ▸</button> ` : ""}<button data-revenue="open">Revenue ▸</button></div>`;
+      <div class="actions">${world.term?.history.length ? `<button data-verdict="record">Your record ▸</button> ` : ""}<button data-revenue="open">Revenue ▸</button></div>`);
   }
 
   // --- The side panel ----------------------------------------------------------------
@@ -584,10 +585,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const scroll = panelEl.scrollTop;
     if (selected && !exists(selected)) selected = null;
     if (selected) {
-      panelEl.innerHTML = `${waitingHtml()}<div class="pane"><button class="back" data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`;
+      patchHtml(panelEl, `${waitingHtml()}<div class="pane"><button class="back" data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`);
     } else {
       const tabs = `<div class="tabs">${(["routes", "towns", "sites"] as const).map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${t[0]!.toUpperCase()}${t.slice(1)}</button>`).join("")}</div>`;
-      panelEl.innerHTML = `${waitingHtml()}${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`;
+      patchHtml(panelEl, `${waitingHtml()}${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`);
     }
     panelEl.scrollTop = scroll;
   }
@@ -787,8 +788,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     logSize = entries.length;
     const groups: Array<[string, string]> = [["all", "All"], ["trouble", "Strikes"], ["sites", "Sites"], ["growth", "Growth"], ["corridors", "Corridors"], ["money", "Money"]];
     logShown = entries.filter((e) => logFilter === "all" || e.group === logFilter).reverse();
-    logEl.innerHTML = `<h2>What happened</h2><div id="logfilter">${groups.map(([id, label]) => `<button data-log="${id}" class="${logFilter === id ? "on" : ""}">${label}</button>`).join("")}</div>
-      ${logShown.map((e, i) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}`;
+    patchHtml(logEl, `<h2>What happened</h2><div id="logfilter">${groups.map(([id, label]) => `<button data-log="${id}" class="${logFilter === id ? "on" : ""}">${label}</button>`).join("")}</div>
+      ${logShown.map((e, i) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}`);
   }
 
   // --- The term's verdict and your record (brief, Revision 5, step 3) -----------------
@@ -916,7 +917,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const total = (k: string) => ((last?.budget ?? {}) as Record<string, number>)[k] ?? 0;
     const n = now();
     const scroll = revenueEl.scrollTop;
-    revenueEl.innerHTML = `
+    patchHtml(revenueEl, `
       <div class="top"><div class="title">Revenue · day ${n.day}</div>
         <div class="ranges">${[[0, "All"], [60, "60 days"], [30, "30 days"]].map(([k, label]) => `<button data-range="${k}" class="${range === k ? "on" : ""}">${label}</button>`).join("")}<button data-revenue="close">Back to the map ✕</button></div></div>
       <div class="heroes">
@@ -940,7 +941,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
           <table><thead><tr>${th("revenue", "name", "Route")}${th("revenue", "riders", "Riders/day")}${th("revenue", "income", "Income")}${th("revenue", "cost", "Cost")}${th("revenue", "net", "Net")}</tr></thead><tbody>
           ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}</td><td>${naira(r.incomePerDay)}</td><td>${naira(r.costPerDay)}</td><td class="${r.netPerDay < 0 ? "down" : "up"}">${naira(r.netPerDay)}</td></tr>`).join("")}
           </tbody></table></div>
-      </div>`;
+      </div>`);
     revenueEl.scrollTop = scroll;
   }
 

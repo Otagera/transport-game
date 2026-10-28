@@ -561,6 +561,15 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
 - **The revenue screen**: the lab's -- heroes, income and costs stacked, what the treasury
   took, net and money, totals since day 1, the routes table -- plus the treasury card.
   Esc closes it.
+- **Redrawn in place** (`patch.ts patchHtml`, 2026-10-28): the strip, log, panel and revenue
+  screen are still built as HTML strings from the world, but applied to the elements already
+  there -- text and attributes change, an element comes or goes only when the content does,
+  and rows and folds are matched by their `data-pick` / `data-fold` / `data-tab` / `data-key`
+  or `id`, so a row that moves is the same row. Set as `innerHTML` four times a second, every
+  button was new each time: on map 2418 at 4x only 16% of the panel's elements outlived a
+  redraw, and a click aimed between redraws hit nothing ("some buttons are not clickable").
+  After: 100%, and 19 of 20 scripted row clicks opened their card (15 before, 4 more lost
+  their row). Give a list's items a key when they can reorder.
 
 ### Icons (2026-10-23): towns by tier, sites by glyph
 
