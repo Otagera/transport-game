@@ -665,6 +665,18 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   moment by moment, they read "75% supplied (86% imported)". Numbers that move because the
   game is moving (a worn road's repair price climbing) are left alone: steady swings, not trends.
 
+### The start (2026-10-28: "it loads and shows the game but for a few seconds nothing happens")
+
+Between the loading card going and the term's pledge card the page froze 7.1 s (map 2418). Two
+causes. Opening the card names each pledge's move with its price; "Connect a town by road" took
+the cheapest of `roadMoves` -- a road planned from every cut-off town to every connected one,
+~180 terrain plans on the region, ~5 s. `moves.ts cheapestRoadFrom` plans from the one town,
+nearest first, stopping where even a straight road at the base price per cell would cost more
+than the best so far (a road is never cheaper: cost.ts), so the answer is the same (44 towns on 8
+seeds: identical; 178 s of plans -> 0.15 s). And the 2D map's first frame paints its land once
+(`terrainCanvas`): three arrays made a pixel to write four bytes, ~1 s; written straight in.
+After: the card opens ~0.35 s after the game shows, 5.2 s from the page opening (12.8 before).
+
 ### Styles and tokens (2026-10-28)
 
 The page's CSS is in `src/game/styles/`, linked from `index.html` (not imported from

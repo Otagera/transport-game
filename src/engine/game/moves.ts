@@ -79,6 +79,30 @@ export function roadMoves(world: GameWorld): RoadMove[] {
   return moves;
 }
 
+/**
+ * The cheapest road joining a cut-off town to the network (`keep`: which towns may be the other end),
+ * the same answer as the cheapest of roadMoves from it -- without planning a road to every town
+ * (on the region, ~180 plans: opening the term's pledge card froze the page ~5 s, 2026-10-28).
+ * Towns are tried nearest first, and none past where even a straight road at the base price per
+ * cell would cost more than the best so far: a road's price is never under that (cost.ts: base on
+ * every cell, climbs and bridges on top).
+ */
+export function cheapestRoadFrom(world: GameWorld, town: string, keep: (id: string) => boolean = () => true): RoadMove | null {
+  const from = world.towns.get(town);
+  if (!from || !isCutOff(world, town)) return null;
+  const order = [...world.towns.keys()].filter((id) => id !== town && !isCutOff(world, id) && keep(id));
+  const near = order.map((id, rank) => ({ id, rank, d: Math.hypot(world.towns.get(id)!.x - from.x, world.towns.get(id)!.y - from.y) })).sort((p, q) => p.d - q.d);
+  let best: { move: RoadMove; rank: number } | null = null;
+  for (const { id, rank, d } of near) {
+    if (best && world.tuning.roadCostPerCell * d - 0.5 > best.move.price) break;
+    const price = roadCost(world, town, id);
+    if (!Number.isFinite(price)) continue;
+    // Ties as roadMoves would break them: the earlier town in the world's order.
+    if (!best || price < best.move.price || (price === best.move.price && rank < best.rank)) best = { move: { action: { kind: "road", a: town, b: id, alignment: "cheapest" }, price }, rank };
+  }
+  return best?.move ?? null;
+}
+
 export interface PaveMove {
   action: Extract<ActionSpec, { kind: "pave" }>;
   price: number;

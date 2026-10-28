@@ -405,7 +405,12 @@ function terrainCanvas(world: GameWorld): HTMLCanvasElement {
       const contour = level > 0.5 && toLine < 1 ? 0.35 * (1 - toLine) : 0;
       const k = Math.min(0.2, height * 0.2) + (shade < 0 ? -shade * 0.35 : 0) + contour;
       const l = shade > 0 ? shade * 0.5 : 0;
-      img.data.set([0, 1, 2].map((i) => land[i]! * (1 - k - l) + hill[i]! * k + lit[i]! * l).concat(255), (py * c.width + px) * 4);
+      // Each channel written straight in (three arrays made a pixel was most of a ~1 s first frame).
+      const o = (py * c.width + px) * 4, a = 1 - k - l;
+      img.data[o] = land[0]! * a + hill[0]! * k + lit[0]! * l;
+      img.data[o + 1] = land[1]! * a + hill[1]! * k + lit[1]! * l;
+      img.data[o + 2] = land[2]! * a + hill[2]! * k + lit[2]! * l;
+      img.data[o + 3] = 255;
     }
   }
   g.putImageData(img, 0, 0);

@@ -9,7 +9,7 @@ import { townGrowth } from "./growth";
 import { serviceMove, townNoSeat, type NamedMove } from "./problems";
 import { cementBreak, cementServed } from "./cement";
 import { fuelPlanned, fuelReachable, fuelSupply, inHome } from "./fuel";
-import { roadMoves } from "./moves";
+import { cheapestRoadFrom } from "./moves";
 import { fieldId } from "./clusters";
 
 // Terms and pledges (docs/brief.md, Revision 5, step 2: the probe). Play runs in terms
@@ -132,7 +132,7 @@ export function pledgeMove(world: GameWorld, pledge: Pledge): NamedMove | null {
   // The cheapest road that joins a cut-off place to a town on the network (not to a site:
   // "a road Epe–Ilugun Garri Mill" joined it to a mill, not to anyone's trips).
   const road = (townId: string): NamedMove | null => {
-    const best = roadMoves(world).filter((m) => m.action.a === townId && !world.towns.get(m.action.b)?.industry).sort((p, q) => p.price - q.price)[0];
+    const best = cheapestRoadFrom(world, townId, (id) => !world.towns.get(id)?.industry);
     return best ? { action: best.action, price: best.price, label: `A road ${nameOf(world, townId)}–${nameOf(world, best.action.b)} (R)` } : null;
   };
   const finite = (move: NamedMove | null | undefined) => (move && Number.isFinite(move.price) ? move : null);
