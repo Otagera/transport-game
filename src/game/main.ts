@@ -148,11 +148,11 @@ const world = await (async () => {
   const pill = (x: number, w: number, fill: string) => `<rect x="${x}" y="2" width="${w}" height="12" rx="5" style="fill:${fill}" stroke="#fff" stroke-width="1.5"/>${Array.from({ length: Math.floor((w - 8) / 6) }, (_, k) => `<rect x="${x + 4 + k * 6}" y="5" width="4" height="3.5" rx="1" fill="#fff" opacity="0.85"/>`).join("")}`;
   const vehicle = ride === "train"
     ? `<svg width="111" height="24" viewBox="0 0 74 16">${pill(1, 34, "var(--you)")}${pill(38, 34, "var(--you)")}</svg>`
-    : `<svg width="54" height="24" viewBox="0 0 36 16">${pill(1, ride === "bus" ? 34 : 26, ride === "bus" ? "var(--you)" : "var(--danfo)")}</svg>`;
+    : `<svg width="54" height="24" viewBox="0 0 36 16">${pill(1, ride === "bus" ? 34 : 26, ride === "bus" ? "var(--you)" : "var(--informal)")}</svg>`;
   const rider = loading.querySelector<HTMLElement>(".bar .vehicle")!;
   rider.innerHTML = vehicle;
   loading.querySelector<HTMLElement>(".bar")!.classList.toggle("rail", ride === "train");
-  if (ride === "danfo") bar.style.background = "var(--danfo)";
+  if (ride === "danfo") bar.style.background = "var(--informal)";
   const label = loading.querySelector<HTMLElement>(".progress")!;
   const days = DEFAULT_GAME_TUNING.warmUpDays;
   const steps = startRunSteps(GAME_MAP, seed, switches, devFunds);
@@ -1521,7 +1521,7 @@ function renderIndustry(townId: string): void {
       const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
       const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
       const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
-      return `<div class="trip"><span class="name">${townName(flow.to)}${flow.to === world.port ? " <span class=\"muted\">· the port</span>" : ""}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+      return `<div class="trip"><span class="name">${townName(flow.to)}${flow.to === world.port ? " <span class=\"muted\">· the port</span>" : ""}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--informal)"></i></div></div>`;
     })
     .join("");
   const now = world.economy.elapsedSeconds;
@@ -1584,7 +1584,7 @@ function productionHtml(siteId: string): string {
   const p = steadySite(world, siteId);
   if (!p || p.capacity <= 0) return "";
   const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
-  const tone = (share: number) => (share >= 0.8 ? "var(--good)" : share >= 0.4 ? "var(--danfo)" : "var(--bad)");
+  const tone = (share: number) => (share >= 0.8 ? "var(--good)" : share >= 0.4 ? "var(--informal)" : "var(--bad)");
   const gauge = (share: number) => `<div class="bar"><i style="width:${pct(Math.min(1, share))};background:${tone(share)}"></i></div>`;
   const held = (what: SiteLimit) => (p.limit === what ? ` <span class="held">holding it back</span>` : "");
   const made = p.made / p.capacity;
@@ -1693,7 +1693,7 @@ function renderFuelSite(townId: string): void {
       const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
       const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
       const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
-      return `<div class="trip"><span class="name">${townName(flow.to)}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+      return `<div class="trip"><span class="name">${townName(flow.to)}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--informal)"></i></div></div>`;
     })
     .join("");
   const nearestTown = [...world.towns.values()].filter((other) => !other.industry && !isCutOff(world, other.id)).sort((p, q) => Math.hypot(p.x - site.x, p.y - site.y) - Math.hypot(q.x - site.x, q.y - site.y))[0];
@@ -1784,7 +1784,7 @@ function renderCementSite(townId: string): void {
       const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
       const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
       const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
-      return `<div class="trip"><span class="name">${townName(flow.to)}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+      return `<div class="trip"><span class="name">${townName(flow.to)}</span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--informal)"></i></div></div>`;
     })
     .join("");
   const capacity = perDay(worksCapacity(world));
@@ -1846,7 +1846,7 @@ function renderSteelSite(townId: string): void {
       const total = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) + (outcome?.spoiled ?? 0);
       const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
       const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
-      return `<div class="trip"><span class="name">${townName(flow.to)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+      return `<div class="trip"><span class="name">${townName(flow.to)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--informal)"></i></div></div>`;
     })
     .join("");
   let kicker = "";
@@ -1920,7 +1920,7 @@ function renderMillSite(townId: string): void {
       const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
       const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
       const other = flow.from === townId ? flow.to : flow.from;
-      return `<div class="trip"><span class="name">${flow.from === townId ? "→" : "←"} ${townName(other)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+      return `<div class="trip"><span class="name">${flow.from === townId ? "→" : "←"} ${townName(other)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--informal)"></i></div></div>`;
     })
     .join("");
   const out = perDay(millOutput(world));
@@ -1973,7 +1973,7 @@ function renderFlourMillSite(townId: string): void {
       const delivered = total > 0 ? (outcome?.delivered ?? 0) / total : 0;
       const trucked = total > 0 ? (outcome?.trucked ?? 0) / total : 0;
       const other = flow.from === townId ? flow.to : flow.from;
-      return `<div class="trip"><span class="name">${flow.from === townId ? "→" : "←"} ${townName(other)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--danfo)"></i></div></div>`;
+      return `<div class="trip"><span class="name">${flow.from === townId ? "→" : "←"} ${townName(other)} <span class="muted">· ${cargoName(world, flow.from, flow.kind, flow.to)}</span></span><span class="num">${perDay(flow.rate)} t/day</span><div class="bar"><i style="width:${pct(delivered)};background:var(--goods)"></i><i style="width:${pct(trucked)};background:var(--informal)"></i></div></div>`;
     })
     .join("");
   const out = perDay(flourOutput(world));
@@ -2060,7 +2060,7 @@ function renderTown(townId: string): void {
     .map((trip) => {
       const s = trip.share;
       const bar = s.player + s.informal + s.lost > 0
-        ? `<i style="width:${pct(s.player)};background:var(--player)"></i><i style="width:${pct(s.informal)};background:var(--danfo)"></i><i style="width:${pct(s.lost)};background:var(--home)"></i>`
+        ? `<i style="width:${pct(s.player)};background:var(--you)"></i><i style="width:${pct(s.informal)};background:var(--informal)"></i><i style="width:${pct(s.lost)};background:var(--home)"></i>`
         : "";
       return `
         <div class="trip${trip.reachable ? "" : " cut"}">
@@ -2275,9 +2275,9 @@ function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
   const long = d ? forVehicle(reasonText(d, s.buses, s.costPerDay, s.netPerDay), s.id).replace(/<[^>]+>/g, "") : "";
   const bar = d
     ? `<div class="bar" title="you / informal took them from your stop / gave up, then informal / stayed home">
-        <i style="width:${pct(d.carried)};background:var(--player)"></i>
-        <i style="width:${pct(d.poached)};background:var(--danfo)"></i>
-        <i style="width:${pct(d.gaveUp)};background:var(--danfo-light)"></i>
+        <i style="width:${pct(d.carried)};background:var(--you)"></i>
+        <i style="width:${pct(d.poached)};background:var(--informal)"></i>
+        <i style="width:${pct(d.gaveUp)};background:var(--informal-light)"></i>
         <i style="width:${pct(d.lost)};background:var(--home)"></i>
       </div>`
     : "";
@@ -2390,7 +2390,7 @@ function budgetParts() {
   const held = project ? heldForProject(world) : 0;
   const saving = project
     ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside${!world.tuning.remittanceEnabled ? `${project.affordableAt === null ? "." : ": you can afford it now."}` : `, safe from the treasury`}${!world.tuning.remittanceEnabled ? "" : project.affordableAt === null ? ` while you save. Once you can afford it, you have ${world.tuning.projectLapseDays} days to build it` : `: you can afford it, so build it by day ${gameDay(world, projectLapsesAt(world, project))} or the savings lapse`}.
-        <span class="bar project-bar" title="${pct(held / project.price)} set aside"><i style="width:${pct(Math.min(1, held / project.price))};background:var(--player)"></i></span>
+        <span class="bar project-bar" title="${pct(held / project.price)} set aside"><i style="width:${pct(Math.min(1, held / project.price))};background:var(--you)"></i></span>
         <span class="actions">${bondButton("project")}<button data-drop-project="1">Drop it</button></span></p>`
     : "";
   const costs = ["Running costs", "Fuel above the pump price", "Road upkeep", "Lane enforcement"];
@@ -2510,7 +2510,7 @@ function corridorsHtml(): string {
       return `
         <div class="corridor">
           <div class="top"><span class="name">${townName(c.a)} – ${townName(c.b)}</span>${state}</div>
-          <div class="bar" title="you / informal / stayed home"><i style="width:${pct(c.you)};background:var(--player)"></i><i style="width:${pct(c.informal)};background:var(--danfo)"></i><i style="width:${pct(c.lost)};background:var(--home)"></i></div>
+          <div class="bar" title="you / informal / stayed home"><i style="width:${pct(c.you)};background:var(--you)"></i><i style="width:${pct(c.informal)};background:var(--informal)"></i><i style="width:${pct(c.lost)};background:var(--home)"></i></div>
           <div class="hint">You ${pct(c.you)} · informal ${pct(c.informal)}${costs.length > 0 ? ` · ${costs.join(" · ")}` : ""}</div>
           ${seatLine}
           ${wear}
@@ -2545,7 +2545,7 @@ function wearLine(a: string, b: string): string {
 function shareHtml(): string {
   const share = networkShare(world);
   return `<h2 class="section">Who carried trips between towns</h2>
-    <div class="bar share-bar"><i style="width:${pct(share.player)};background:var(--player)"></i><i style="width:${pct(share.informal)};background:var(--danfo)"></i><i style="width:${pct(share.lost)};background:var(--home)"></i></div>
+    <div class="bar share-bar"><i style="width:${pct(share.player)};background:var(--you)"></i><i style="width:${pct(share.informal)};background:var(--informal)"></i><i style="width:${pct(share.lost)};background:var(--home)"></i></div>
     <p class="hint">You ${pct(share.player)} · informal ${pct(share.informal)} · stayed home ${pct(share.lost)}</p>`;
 }
 

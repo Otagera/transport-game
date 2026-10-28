@@ -26,7 +26,8 @@ connections; 3D's look (a filmic grade, haze, trees in groves) and its state (fu
 a growing town's market); your buses go round a flooded ford by a dry road you built
 (`floodDetour`). **A steadier screen** (2026-10-28, from your "some buttons are not clickable"):
 3D and the 2D map without their stutter, the panel redrawn in place (`patch.ts`), fuel, food and
-sites shown as two-day averages (`steady.ts`; render-and-ui.md, The screen). **Open for you:**
+sites shown as two-day averages (`steady.ts`; render-and-ui.md, The screen); the styles out of
+`index.html` into `src/game/styles/`, one set of tokens the map reads too. **Open for you:**
 morphdom in place of `patch.ts`, or a lit-html spike on one panel. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

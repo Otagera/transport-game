@@ -11,6 +11,8 @@
       at /info-lab.html, never a build input. Data: src/info-lab/snapshot.json
       (scripts/info-snapshot.ts).
     -->
+    <!-- The game's tokens first (render.ts reads them); this lab's own below override them. -->
+    <link rel="stylesheet" href="/src/game/styles/tokens.css" />
     <style>
       /* Neutral cool greys (the brown paper went: 2026-10-23). */
       :root {

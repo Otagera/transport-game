@@ -30,39 +30,48 @@ import { steadySite } from "./steady";
 // bridge decks, contours and ground names, waiting dots, fuel cans, milestone tags, desire lines)
 // is gone from the map: the cards, the overlays and the log carry it.
 
+/** A design token (styles/tokens.css): the page and the map read the same colours. */
+function token(name: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!value) throw new Error(`render.ts: ${name} isn't in styles/tokens.css`);
+  return value;
+}
+
 export const COLORS = {
-  ground: "#f4f6f3",
-  groundEdge: "#dde3ea",
-  water: "#b7d4e8",
-  hill: "#6e786e",
-  surface: "#ffffff",
-  kept: "#ffffff",
-  ink: "#1b2129",
-  ink2: "#4a5563",
-  muted: "#7b8694",
-  rail: "#3f4852",
-  player: "#2a78d6",
-  danfo: "#e0a400",
-  goods: "#8a5a2b",
-  home: "#a3abb5",
-  grow: "#2b8a3e",
-  free: "#c3cbd4",
-  busy: "#e8742c",
-  jammed: "#c92a2a",
-  warn: "#c77700",
+  ground: token("--map-ground"),
+  groundEdge: token("--line"),
+  water: token("--map-water"),
+  hill: token("--map-hill"),
+  surface: token("--surface"),
+  kept: token("--surface"),
+  onFill: token("--on-fill"),
+  ink: token("--ink"),
+  ink2: token("--ink-2"),
+  muted: token("--muted"),
+  rail: token("--rail"),
+  player: token("--you"),
+  danfo: token("--informal"),
+  goods: token("--goods"),
+  home: token("--home"),
+  grow: token("--good"),
+  free: token("--road-free"),
+  busy: token("--road-busy"),
+  jammed: token("--bad"),
+  warn: token("--warn"),
+  flood: token("--flood"),
   // Kept names the page and the previews use.
-  label: "#1b2129",
-  labelMuted: "#7b8694",
-  selection: "#1b2129",
-  ghostOk: "#1b2129",
-  ghostBad: "#c92a2a",
-  forecastGood: "#2b8a3e",
-  strike: "#c92a2a",
-  slow: "#e8742c",
+  label: token("--ink"),
+  labelMuted: token("--muted"),
+  selection: token("--ink"),
+  ghostOk: token("--ink"),
+  ghostBad: token("--bad"),
+  forecastGood: token("--good"),
+  strike: token("--bad"),
+  slow: token("--road-busy"),
   // The goods overlay, by chain (the lab's validated categorical slots).
-  fuel: "#e34948",
-  building: "#6250d6",
-  food: "#1baf7a",
+  fuel: token("--s5"),
+  building: token("--s4"),
+  food: token("--s3"),
 };
 
 /** The page's route swatches: every route is your blue on the map now; the list keeps a hue each to tell them apart. */
@@ -798,7 +807,7 @@ function drawWaitingMark(ctx: CanvasRenderingContext2D, mx: number, my: number):
   ctx.beginPath();
   ctx.arc(mx, my, 6 * markScale, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#fff";
+  ctx.fillStyle = COLORS.onFill;
   ctx.font = `700 ${Math.round(9 * markScale)}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -854,13 +863,13 @@ function drawWardens(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     const [, rest] = splitPolyline(line, polylineLength(line) / 2);
     const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
     ctx.fillStyle = COLORS.player;
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = COLORS.onFill;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(mid.x - 16, mid.y, 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = COLORS.onFill;
     ctx.font = "700 9px ui-monospace, monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -884,7 +893,7 @@ function drawTakenLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: 
     ctx.beginPath();
     ctx.roundRect(mid.x - 14 - width, mid.y - 9, width, 18, 4);
     ctx.fill();
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = COLORS.onFill;
     ctx.fillText(text, mid.x - 14 - width / 2, mid.y);
   }
   ctx.restore();
@@ -956,8 +965,8 @@ function drawFords(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
     const coming = floods.phase === "warned" && floods.coming.includes(ford.id);
     const under = floods.phase === "flood" && floods.under.includes(ford.id);
     const p = toScreen(view, ford.x, ford.y);
-    const tag = under ? { text: `${ford.name} · FLOODED`, fill: "#2a6f97", ink: "#fff" }
-      : coming ? { text: `${ford.name} · floods day ${gameDay(world, floods.riseAt) - 1}`, fill: COLORS.slow, ink: "#fff" }
+    const tag = under ? { text: `${ford.name} · FLOODED`, fill: COLORS.flood, ink: COLORS.onFill }
+      : coming ? { text: `${ford.name} · floods day ${gameDay(world, floods.riseAt) - 1}`, fill: COLORS.slow, ink: COLORS.onFill }
       : null;
     if (!tag) {
       // Quiet otherwise: a town's crossing named zoomed in, a site's short road's not at all.
@@ -993,8 +1002,8 @@ function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view:
   for (const lane of world.lanes) {
     const last = lane.lastStrike;
     const tag =
-      lane.strikeUntil > now ? { text: "STRIKE", fill: COLORS.strike, ink: "#fff" }
-      : lane.strikeAt > now ? { text: `STRIKE DAY ${gameDay(world, lane.strikeAt)}`, fill: COLORS.slow, ink: "#fff" }
+      lane.strikeUntil > now ? { text: "STRIKE", fill: COLORS.strike, ink: COLORS.onFill }
+      : lane.strikeAt > now ? { text: `STRIKE DAY ${gameDay(world, lane.strikeAt)}`, fill: COLORS.slow, ink: COLORS.onFill }
       : last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY
         ? { text: `struck day ${gameDay(world, last.startedAt)}${last.cost === null ? "" : last.cost < 1 ? " · no loss" : ` · ₦${Math.round(last.cost).toLocaleString()}`}`, fill: "rgba(201, 42, 42, 0.14)", ink: COLORS.strike }
         : null;
@@ -1124,7 +1133,7 @@ function drawMetroMark(ctx: CanvasRenderingContext2D, x: number, y: number, line
   ctx.beginPath();
   ctx.arc(x + 5, y + 5, 5.5, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#fff";
+  ctx.fillStyle = COLORS.onFill;
   ctx.font = "700 7px ui-monospace, monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";

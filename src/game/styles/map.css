@@ -1,0 +1,59 @@
+/* Over the map: the overlay modes, zoom, 3D labels, toolbar, controls, hints, toasts, the key. */
+#overlays { position: fixed; left: calc(var(--left) + 12px); top: calc(var(--top) + 12px); display: flex; gap: 4px; z-index: 4; background: var(--surface); padding: 5px; border-radius: 10px; box-shadow: 0 2px 10px var(--shadow); }
+#overlays button { font: 600 12px system-ui, sans-serif; padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+#overlays button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+#zoom-control { position: fixed; right: calc(var(--right) + 12px); top: calc(var(--top) + 12px); display: flex; gap: 4px; z-index: 4; }
+#zoom-control button { font: 600 13px system-ui, sans-serif; min-width: 30px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+#zoom-control button:hover { border-color: var(--muted); }
+/* The 3D view's labels (view3d.ts): towns by tier, sites quieter; villages only up close. */
+body.in3d #overlays, body.in3d #overlay-caption, body.in3d #hint, body.in3d #key { display: none !important; }
+/* What the overlay shows, in a line under its buttons (outside review, 2026-10-26). */
+#overlay-caption { position: fixed; left: calc(var(--left) + 12px); top: calc(var(--top) + 54px); max-width: 520px; z-index: 4; background: var(--surface); padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 10px var(--shadow); font-size: 12px; line-height: 1.4; color: var(--ink); }
+#overlay-caption[hidden] { display: none; }
+.label3d { pointer-events: auto; cursor: pointer; font: 600 12px system-ui, sans-serif; color: var(--ink); background: rgba(255,255,255,0.82); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+.label3d.city { font-size: 14px; }
+.label3d.village { font-weight: 500; font-size: 11px; opacity: 0.85; }
+.label3d.site { font-weight: 500; font-size: 11px; color: var(--goods-ink); }
+#toolbar {
+  /* Right of the key, left of the side panel: nine tools don't fit centred over a wide key. */
+  position: fixed; right: calc(var(--right) + 16px); bottom: 16px;
+  display: flex; gap: 4px; align-items: flex-end; padding: 4px; background: rgb(255 255 255 / 0.78); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--line); border-radius: var(--radius);
+}
+#toolbar button { border: 1px solid transparent; background: none; border-radius: 7px; padding: 6px 8px; font: inherit; cursor: pointer; color: var(--ink); white-space: nowrap; }
+#toolbar button.active { background: var(--ink); color: var(--surface); }
+#toolbar kbd { font: 11px ui-monospace, monospace; opacity: 0.6; margin-left: 4px; }
+#toolbar .group { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 4px 4px; border-radius: 8px; }
+#toolbar .cap { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+#toolbar .row { display: flex; gap: 2px; align-items: center; }
+#toolbar .group.road { background: rgba(150, 160, 175, 0.22); }
+#toolbar .group.rail { background: rgba(30, 40, 55, 0.1); }
+#toolbar .group.build { border: 1px dashed var(--line); }
+#toolbar .group.time { margin-left: 4px; }
+#toolbar .switch { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; padding: 1px; }
+#toolbar .switch button { padding: 4px 8px; border-radius: 6px; }
+#toolbar .switch button.on { background: var(--ink); color: var(--surface); }
+#toolbar .switch kbd { margin: 0 4px; }
+/* Control hint line, over the toolbar (lab: "One line above the toolbar"). */
+#controls a { color: inherit; }
+#controls { position: fixed; right: 20px; top: 9px; max-width: 230px; text-align: right; font-size: 11px; line-height: 1.45; color: var(--muted); z-index: 3; }
+body:not([data-dev="true"]) #toolbar { right: auto; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); transform: translateX(-50%); }
+/* A hint: beside the town it's about, else over the control line. */
+/* Top-left, under the mode bar: at the map's middle it sat over the network it explained (outside review, 2026-10-26). */
+#hint { position: fixed; left: calc(var(--left) + 12px); top: calc(var(--top) + 60px); max-width: 320px; display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px 8px 12px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--you); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(20, 30, 45, 0.18); font-size: 13px; line-height: 1.35; }
+#hint.anchored { bottom: auto; top: auto; transform: none; }
+#overlay-caption:not([hidden]) ~ #hint:not(.anchored) { top: calc(var(--top) + 118px); }
+#hint[hidden] { display: none; }
+#hint button { flex: none; border: 1px solid var(--line); background: none; border-radius: 6px; padding: 1px 6px; cursor: pointer; font: 11px var(--label-font); color: var(--muted); }
+#hint button:hover { color: var(--ink); border-color: var(--ink); }
+#toast {
+  position: fixed; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); bottom: 90px; transform: translateX(-50%); z-index: 7;
+  background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  opacity: 0; transition: opacity 0.4s; pointer-events: none; max-width: calc(100% - 32px);
+}
+#toast[data-bad="true"] { background: var(--bad); }
+#key { position: fixed; left: calc(var(--left) + 12px); bottom: 16px; max-width: 470px; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 11px; color: var(--muted); }
+#key b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+#key i.fam { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin: 0 3px 0 4px; }
+#key summary { cursor: pointer; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+#key:not([open]) { padding: 6px 12px; }
+@media (max-width: 1100px) { #key { display: none; } }

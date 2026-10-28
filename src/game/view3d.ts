@@ -53,7 +53,7 @@ THREE.ShaderChunk.fog_fragment = /* glsl */ `
 `;
 
 const ROAD_COLOURS = { paved: 0x56585b, dirt: 0xa47a55, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
-/** A selection: your colour (the 2D map's --player), lit on what it's connected to; the rest toward the ground's pale. */
+/** A selection: your colour (the 2D map's --you), lit on what it's connected to; the rest toward the ground's pale. */
 const FOCUS_COLOUR = 0x2a78d6;
 const FOCUS_GLOW = 0x0c2a52;
 const FOCUS = new THREE.Color(FOCUS_COLOUR);

@@ -64,6 +64,8 @@ src/
     eras/         types.ts only (calendar eras retired; eras return as vehicle generations)
   game/           The game's page: 2D canvas map (render.ts), panels and cards (main.ts),
                   hints, verdicts, the hand-made map (map.ts) -- render-and-ui.md §7
+    styles/       The page's CSS, linked from index.html: tokens.css (every colour the
+                  page and the 2D map share), then base, cards, map, screen, fullscreen
   design-lab/     The design lab (dev-only) -- dev-studio.md §4
   info-lab/       The information lab (dev-only): the three layers on a played game -- §5
 index.html        The game

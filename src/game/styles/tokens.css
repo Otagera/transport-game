@@ -1,0 +1,62 @@
+/*
+ * Design tokens: every colour, font and size the page shares with the 2D map (render.ts reads
+ * them at start: change one here and the map follows). Neutral cool greys (the information lab,
+ * 2026-10-23); otherwise the design lab's step 8 look: blue, mono labels, soft corners.
+ * Named by role, not by hue. The 3D view keeps its own palette (shapes3d.ts: the buildings'
+ * paint), and the engine its line colours (labels.ts): they're data, not the page's look.
+ */
+:root {
+  /* Paper and ink */
+  --bg: #e9edf1;
+  --surface: #ffffff;
+  --surface-2: #f3f5f8;
+  --ink: #1b2129;
+  --ink-2: #4a5563;
+  --muted: #7b8694;
+  --line: #dde3ea;
+  --on-fill: #ffffff; /* text on a filled colour: a button pressed, a badge */
+  --shadow: rgba(20, 30, 45, 0.14);
+
+  /* Who: you, the other side, everyone else, goods, track */
+  --you: #2a78d6;
+  --informal: #e0a400;
+  --informal-light: #f8e08a;
+  --informal-ink: #9a7a00; /* the informal colour as text, readable on white */
+  --home: #a3abb5;
+  --goods: #8a5a2b;
+  --goods-ink: #6b4520;
+  --rail: #3f4852;
+
+  /* How it's going */
+  --good: #2b8a3e;
+  --bad: #c92a2a;
+  --bad-bg: #fff0f0;
+  --warn: #c77700;
+  --strike: #f08c00;
+  --strike-ink: #9a4f00;
+  --flood: #2a6f97;
+
+  /* Series: the revenue screen's charts, the goods overlay's chains (fuel --s5, building --s4, food --s3) */
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #6250d6;
+  --s5: #e34948;
+
+  /* The map: land, water, hills, and roads by how full (traffic: free, busy, jammed is --bad) */
+  --map-ground: #f4f6f3;
+  --map-water: #b7d4e8;
+  --map-hill: #6e786e;
+  --road-free: #c3cbd4;
+  --road-busy: #e8742c;
+
+  /* Type and shape */
+  --label-font: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --label-tracking: 0.12em;
+  --radius: 16px;
+
+  /* The map sits between the log (left) and the panel (right), under the strip (--top, measured). */
+  --top: 92px;
+  --left: 240px;
+  --right: 360px;
+}

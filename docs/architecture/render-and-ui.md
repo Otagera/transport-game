@@ -587,6 +587,27 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   moment by moment, they read "75% supplied (86% imported)". Numbers that move because the
   game is moving (a worn road's repair price climbing) are left alone: steady swings, not trends.
 
+### Styles and tokens (2026-10-28)
+
+The page's CSS is in `src/game/styles/`, linked from `index.html` (not imported from
+`main.ts`: a linked sheet loads before the loading card shows). `index.css` imports the
+rest **in cascade order** -- tokens, base, cards, map, screen, fullscreen -- the order the
+one `<style>` block had, so a later file still wins on equal selectors; a rule moved
+between files can change what wins. Vite swaps an edited sheet in place: a style tweak no
+longer reloads the page and its warm-up.
+
+`tokens.css` is the one place a colour is set, named by role (`--you`, `--informal`,
+`--road-busy`, `--strike`...), never by hue. The 2D map reads them (`render.ts COLORS`,
+through `token()`, once at start; a missing token throws), so the canvas and the panels
+can't drift apart; the info lab links the same file before its own block. Merged when the
+file was made: `--player` into `--you`, `--danfo` into `--informal`, `--panel` into
+`--surface` (each pair the same colour under two names), and the raw hex in the sheets and
+the map named (`--on-fill`, `--bad-bg`, `--strike-ink`, `--flood`, `--map-*`...).
+Checked by every element's computed style on a paused game (pledges, the lists, a town card
+with More open, the revenue screen) and the screenshots' pixels: no difference.
+Not tokens: the 3D buildings' paint (shapes3d.ts) and the engine's line colours
+(labels.ts) are data; the key's site-family swatches mirror icons.ts.
+
 ### Icons (2026-10-23): towns by tier, sites by glyph
 
 `icons.ts` is the icon set agreed in the information lab (its icon sheet), drawn on canvas with

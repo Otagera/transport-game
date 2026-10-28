@@ -1,0 +1,7 @@
+/* The game's styles, in cascade order: later files override earlier ones on equal selectors. */
+@import "./tokens.css";
+@import "./base.css";
+@import "./cards.css";
+@import "./map.css";
+@import "./screen.css";
+@import "./fullscreen.css";
