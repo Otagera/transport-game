@@ -159,6 +159,7 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   floodDetour: true,
   riverValleys: true,
   mapVersion: 3,
+  fuelPledgeNeedsMove: true,
   floodFirstDayMin: 45,
   floodFirstDayMax: 75,
   floodEveryDays: 180,

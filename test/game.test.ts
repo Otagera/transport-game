@@ -3748,8 +3748,10 @@ describe("Revision 4, step 4: a second, private refinery (fuel.ts)", () => {
     expect(isCutOff(w, site.id)).toBe(true);
     const port = w.towns.get(w.port!)!;
     const source = w.towns.get(fuel.sourceId)!;
-    expect(Math.hypot(site.x - port.x, site.y - port.y)).toBeLessThanOrEqual(16.5);
-    expect(Math.hypot(site.x - source.x, site.y - source.y)).toBeGreaterThan(Math.hypot(port.x - source.x, port.y - source.y) - 16.5);
+    // By the port: on its 10-16 ring, or at map version 3 a ring as wide starting past where it's built up.
+    const ring = Math.max(16, Math.ceil(builtUp(port.population) + 2) + 6) + 0.5;
+    expect(Math.hypot(site.x - port.x, site.y - port.y)).toBeLessThanOrEqual(ring);
+    expect(Math.hypot(site.x - source.x, site.y - source.y)).toBeGreaterThan(Math.hypot(port.x - source.x, port.y - source.y) - ring);
     expect(updateNewRefinery(w)).toBeNull(); // once
     // Seeded: the same map opens it on the same day.
     expect(game().fuel!.newRefineryAt).toBe(opensAt);

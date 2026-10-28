@@ -255,6 +255,8 @@ export interface GameTuning {
    * replays on the map it was played on.
    */
   mapVersion?: number;
+  /** A fuel pledge offered only where it has a move to name (term.ts). Absent in older runs: off, offered as it was. */
+  fuelPledgeNeedsMove?: boolean;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;

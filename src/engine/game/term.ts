@@ -205,7 +205,11 @@ function offerPledges(world: GameWorld, number: number, missedLast: Set<string>)
     const fuel = fuelSupply(world, town.id)?.supplied;
     const planned = fuelPlanned(world, town.id);
     if (fuel !== undefined && fuel < 0.6 && planned !== null && planned < 0.6 && fuelReachable(world, town.id)) {
-      candidates.push({ pledge: { kind: "fuel", townId: town.id, text: `Fuel in ${name}: 80% supplied`, from: fuel, target: 0.8 }, weight: town.population * (1 - fuel) });
+      const pledge = { kind: "fuel" as const, townId: town.id, text: `Fuel in ${name}: 80% supplied`, from: fuel, target: 0.8 };
+      // Only with a move to name (a pledge names its move and price): a town a tank farm reaches,
+      // whose yard there wouldn't plan it more and which the refinery can't reach, was offered a
+      // fuel pledge with nothing to do about it (map 2418, version 3: Kabba).
+      if (!world.tuning.fuelPledgeNeedsMove || pledgeMove(world, { ...pledge, id: "", committed: false, kept: null })) candidates.push({ pledge, weight: town.population * (1 - fuel) });
     }
     const seat = townNoSeat(world, town.id);
     if (seat && seat.perDay >= 40) {
