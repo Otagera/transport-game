@@ -543,6 +543,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     roadLines = segments.filter((s) => s.retiredAt === undefined).map((s) => segmentPolyline(w.simulation.map, s));
   }
   let focused: Focus | null = null;
+  let selectedId: string | null = null;
   let focusKey = "";
   // A ring on the ground round the selected town, pulsing a little.
   const ringMaterial = own(new THREE.MeshBasicMaterial({ color: FOCUS_COLOUR, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
@@ -584,7 +585,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   }
 
   // --- Towns: each one merged mesh, rebuilt when its tier or size step changes ------------
-  const towns = new Map<string, { mesh: THREE.Mesh; key: string; label: CSS2DObject; text: HTMLElement; reach: number }>();
+  /** `rank`: whose label wins where two would overlap (lower first): city, regional, town, village, site. */
+  const towns = new Map<string, { mesh: THREE.Mesh; key: string; label: CSS2DObject; text: HTMLElement; reach: number; rank: number; size?: { w: number; h: number; text: string } }>();
+  const RANK: Record<string, number> = { city: 0, regional: 1, town: 2, village: 3, site: 4 };
   // How far off (metres) each kind of label still shows.
   const REACH: Record<string, number> = { city: 3000, regional: 1500, town: 900, village: 420, site: 600 };
   const material = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -924,7 +927,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const label = new CSS2DObject(text);
         label.position.copy(ground(town.x + x / M, town.y + z / M, town.industry ? 30 : 45));
         scene.add(label);
-        towns.set(town.id, { mesh, key, label, text, reach: REACH[town.industry ? "site" : tier] ?? 900 });
+        towns.set(town.id, { mesh, key, label, text, reach: REACH[town.industry ? "site" : tier] ?? 900, rank: RANK[town.industry ? "site" : tier] ?? 4 });
       }
       const entry = towns.get(town.id)!;
       const words = town.industry ? town.name : `${town.name} · ${Math.round(town.population)}k`;
@@ -1383,8 +1386,31 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     },
     groundAt: (x, z) => elevationAt(x / M, z / M) * HEIGHT,
     cullLabels(cam) {
-      // A selected place's connections keep their names whatever the distance.
-      for (const [id, t] of towns) t.label.visible = cam.position.distanceTo(t.label.position) < t.reach || !!focused?.towns.has(id);
+      // As near as each is readable; a selected place's connections keep their names whatever the
+      // distance. Then none on top of another (pulled back, a city's name, its four sites' and its
+      // neighbour's piled into one knot): placed in order -- the selected place, its connections,
+      // then city, regional town, town, village, site -- and any that would overlap one already
+      // placed is hidden, as the 2D map's labels are.
+      const wanted = [...towns].filter(([id, t]) => cam.position.distanceTo(t.label.position) < t.reach || !!focused?.towns.has(id));
+      for (const [, t] of towns) t.label.visible = false;
+      const order = (id: string, t: { rank: number }) => (id === selectedId ? -2 : focused?.towns.has(id) ? -1 : 0) * 10 + t.rank;
+      wanted.sort(([a, s], [b, t]) => order(a, s) - order(b, t));
+      const halfW = innerWidth / 2, halfH = innerHeight / 2, taken: Array<{ l: number; r: number; t: number; b: number }> = [];
+      const p = new THREE.Vector3();
+      for (const [, t] of wanted) {
+        p.copy(t.label.position).project(cam);
+        if (p.z > 1) continue; // behind the camera
+        // Its size on screen, measured once a text (a measure is a layout; the text rarely changes).
+        // A label not yet shown measures nothing (display: none): estimated until it has been.
+        const words = t.text.textContent ?? "";
+        if ((!t.size || t.size.text !== words) && t.text.offsetWidth > 0) t.size = { w: t.text.offsetWidth, h: t.text.offsetHeight, text: words };
+        const size = t.size?.text === words ? t.size : { w: words.length * 7 + 14, h: 20 };
+        const x = (p.x + 1) * halfW, y = (1 - p.y) * halfH;
+        const box = { l: x - size.w / 2 - 3, r: x + size.w / 2 + 3, t: y - size.h / 2 - 2, b: y + size.h / 2 + 2 };
+        if (taken.some((o) => box.l < o.r && box.r > o.l && box.t < o.b && box.b > o.t)) continue;
+        taken.push(box);
+        t.label.visible = true;
+      }
       if (ring.visible) ringMaterial.opacity = 0.45 + 0.2 * Math.sin(performance.now() / 300);
     },
     centreOf(id) {
@@ -1396,6 +1422,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       if (key === focusKey) return;
       focusKey = key;
       focused = focus;
+      selectedId = selected;
       colourRoads(world);
       const entry = selected ? towns.get(selected) : undefined;
       ring.visible = !!entry;

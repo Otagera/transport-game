@@ -545,6 +545,13 @@ closest to 79° from 620 m out -- so close in it stays a diorama, while from fur
 skyline over the savanna is still there to tilt down to. Market stalls are drawn at life size
 (a 3 m umbrella; at a 2.2 m radius they stood as wide as the trees).
 
+**Labels that don't pile up** (`cullLabels`, 2026-10-28). Shown as near as each is readable
+(and a selected place's connections at any distance), then placed in order -- the selected
+place, its connections, city, regional town, town, village, site -- and any that would overlap
+one already placed is hidden, as on the 2D map: pulled back with the capital selected, its
+name, its four sites' and Lokoja's had piled into one knot. Each label's size is measured once
+a text (a label not yet shown measures nothing and is estimated until it has been).
+
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the
