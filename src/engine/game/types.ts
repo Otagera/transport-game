@@ -252,7 +252,8 @@ export interface GameTuning {
    * Which drawing of a seed's map (region.ts gameMap): 1 as first drawn; 2 rivers smoothed and
    * meandering, the old railway laid over the land; 3 the sites round a town placed past where
    * it's built up, on one side of it (fuel.ts ringSpot); 4 the land beyond the home cluster drawn
-   * by region, and the coast with an estuary and bays (regionalLand). Absent in older runs: 1, so a run file
+   * by region, and the coast with an estuary and bays (regionalLand); 5 a southern region's coast
+   * along its south (coastToSouth). Absent in older runs: 1, so a run file
    * replays on the map it was played on.
    */
   mapVersion?: number;

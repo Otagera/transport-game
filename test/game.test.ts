@@ -2904,7 +2904,7 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       expect(v2.rails!.every((r) => (r.via?.length ?? 0) > 0)).toBe(true);
     }
     expect(gameMap(GAME_MAP, 0, { regionEnabled: true, mapVersion: 2 })).toEqual(gameMap(GAME_MAP, 0, { regionEnabled: true }));
-  });
+  }, 30_000); // dozens of maps drawn: over bun's 5 s on a busy machine
 
   test("map version 4: the land by region beyond the home box, towns dry, the home cluster untouched", () => {
     let changed = 0;
@@ -2923,7 +2923,33 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       if (JSON.stringify(v4.terrain) !== JSON.stringify(v3.terrain)) changed += 1;
     }
     expect(changed).toBeGreaterThanOrEqual(9); // a map falls back to version 3 only where the guards refuse it
-  });
+  }, 30_000); // dozens of maps drawn: over bun's 5 s on a busy machine
+
+  test("map version 5: a southern region's sea lies to the south, its home cluster turned whole; the north's is not turned", () => {
+    let southern = 0;
+    for (let seed = 1; seed <= 16; seed += 1) {
+      const info = generatedMapInfo(GAME_MAP, seed);
+      const map = gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 5 });
+      expect([map.width, map.height]).toEqual([REGION_WIDTH, REGION_HEIGHT]);
+      buildGameTerrain(map); // throws on a town in the water
+      const sea = map.terrain!.rivers!.find((r) => Math.max(...(r.widths ?? [r.width])) > 12)!;
+      const meanY = sea.points.reduce((s, p) => s + p[1], 0) / sea.points.length;
+      const meanX = sea.points.reduce((s, p) => s + p[0], 0) / sea.points.length;
+      if (["southwest", "southeast", "southSouth"].includes(info.region)) {
+        southern += 1;
+        expect(meanY).toBeGreaterThan(map.height * 0.8); // along the bottom
+        // The home cluster turned, not stretched: every distance between its towns as on the slice map.
+        const home = info.map.towns;
+        const at = new Map(map.towns.map((t) => [t.id, t]));
+        for (const [i, a] of home.entries()) for (const b of home.slice(i + 1)) {
+          expect(Math.hypot(at.get(a.id)!.x - at.get(b.id)!.x, at.get(a.id)!.y - at.get(b.id)!.y)).toBeCloseTo(Math.hypot(a.x - b.x, a.y - b.y), 6);
+        }
+      } else {
+        expect(meanX < map.width * 0.2 || meanX > map.width * 0.8).toBe(true); // still down a side, for now
+      }
+    }
+    expect(southern).toBeGreaterThan(0);
+  }, 30_000);
 
   test("map version 3: the port's sites stand past where it's built up, every site still placed", () => {
     const run = (seed: number, mapVersion: number) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion, warmUpDays: 0 });

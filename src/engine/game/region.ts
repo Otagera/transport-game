@@ -92,10 +92,17 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
   let map = tuning.regionEnabled ? regionMap(base, seed) : generatedMapInfo(base, seed).map;
   // Map version 2 (2026-10-28): rivers that wind, and an old railway that follows the land.
   const version = tuning.mapVersion ?? 1;
+  // Version 5: a southern region's coast is its south -- drawn on its side, then turned.
+  let turn = false;
+  if (version >= 5 && tuning.regionEnabled && seed !== 0 && SOUTHERN.has(generatedMapInfo(base, seed).region)) {
+    const sideways = regionInfo(base, seed, { w: REGION_HEIGHT, h: REGION_WIDTH });
+    if (sideways.rejected < MAX_DRAWS) [map, turn] = [sideways.map, true];
+  }
   if (version >= 2 && seed !== 0) {
     map = naturalWater(map, seed);
     // Version 4: the land by region and its coast, on the smoothed water, before the railway is laid over it.
     if (version >= 4) map = regionalLand(map, seed);
+    if (turn) map = coastToSouth(map);
     map = laidOverLand(map);
   }
   // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
@@ -106,18 +113,21 @@ export function regionMap(base: GameMapDef, seed: number): GameMapDef {
   return regionInfo(base, seed).map;
 }
 
-export function regionInfo(base: GameMapDef, seed: number): RegionInfo {
+export function regionInfo(base: GameMapDef, seed: number, frame: Frame = STANDARD): RegionInfo {
   const home = generatedMapInfo(base, seed);
   if (seed === 0) return { map: home.map, home, hubs: [home.trunk[0]], seaport: home.map.port!, rejected: 0 };
   const rng = createRng(seed + 3_000_017);
   for (let draw = 0; draw < MAX_DRAWS; draw += 1) {
-    const result = drawRegion(rng, home);
+    const result = drawRegion(rng, home, frame);
     if (result) return { ...result, home, rejected: draw };
   }
   return { map: home.map, home, hubs: [home.trunk[0]], seaport: home.map.port!, rejected: MAX_DRAWS };
 }
 
 type Box = { x: number; y: number; width: number; height: number };
+/** The frame a region is drawn in: 250 × 160, or on its side (160 × 250) to be turned so its coast is the south (version 5). */
+type Frame = { w: number; h: number };
+const STANDARD: Frame = { w: REGION_WIDTH, h: REGION_HEIGHT };
 
 /**
  * Clear of the water by `clearance`, each river as wide as the terrain draws it
@@ -159,14 +169,14 @@ function along(points: Array<[number, number]>, at: number, across: boolean): nu
  * and headlands. A coast home city's own sea is kept as the slice map drew it
  * where the home box is.
  */
-function drawCoast(rng: Rng, side: -1 | 1, depth: number, keep?: GameRiverDef): GameRiverDef {
+function drawCoast(rng: Rng, side: -1 | 1, depth: number, keep: GameRiverDef | undefined, frame: Frame): GameRiverDef {
   const offMap = 8;
-  const edgeX = side < 0 ? -offMap : REGION_WIDTH - 1 + offMap;
+  const edgeX = side < 0 ? -offMap : frame.w - 1 + offMap;
   const out = keep ? keep.points.map((p, i) => ({ p, w: keep.widths?.[i] ?? keep.width })) : [];
   const top = out.length > 0 ? Math.min(...out.map((o) => o.p[1])) - 8 : Infinity;
   const bottom = out.length > 0 ? Math.max(...out.map((o) => o.p[1])) + 8 : -Infinity;
   let d = depth;
-  for (let y = -2; y <= REGION_HEIGHT + 2; y += 10) {
+  for (let y = -2; y <= frame.h + 2; y += 10) {
     if (y >= top && y <= bottom) continue;
     d = Math.max(3, Math.min(14, d + between(rng, -3.5, 3.5)));
     out.push({ p: [Math.round(edgeX + side * between(rng, -1, 1)), y], w: 2 * (offMap + d) });
@@ -187,19 +197,19 @@ function coastAt(coast: GameRiverDef, side: -1 | 1, y: number): number {
  * meandering across to the sea, beside the home box rather than through it
  * (the home map's water is its own), widening as it goes, with two fords.
  */
-function drawMainRiver(rng: Rng, seaSide: -1 | 1, coast: GameRiverDef, box: Box): GameRiverDef {
+function drawMainRiver(rng: Rng, seaSide: -1 | 1, coast: GameRiverDef, box: Box, frame: Frame): GameRiverDef {
   const above: [number, number] = [12, box.y - 12];
-  const below: [number, number] = [box.y + box.height + 12, REGION_HEIGHT - 12];
+  const below: [number, number] = [box.y + box.height + 12, frame.h - 12];
   const band = above[1] - above[0] >= below[1] - below[0] ? above : below;
   const nearBox = (x: number) => x >= box.x - 28 && x <= box.x + box.width + 28;
   const points: Array<[number, number]> = [];
   let y = between(rng, band[0], band[1]);
-  for (let x = seaSide < 0 ? REGION_WIDTH + 2 : -2; ; x += seaSide * 14) {
-    y = Math.max(10, Math.min(REGION_HEIGHT - 10, y + between(rng, -9, 9)));
+  for (let x = seaSide < 0 ? frame.w + 2 : -2; ; x += seaSide * 14) {
+    y = Math.max(10, Math.min(frame.h - 10, y + between(rng, -9, 9)));
     if (nearBox(x)) y = Math.max(band[0], Math.min(band[1], y));
     const shore = coastAt(coast, seaSide, y);
     if (seaSide < 0 ? x <= shore : x >= shore) {
-      points.push([Math.round(Math.max(0, Math.min(REGION_WIDTH - 1, shore + seaSide * 6))), Math.round(y)]);
+      points.push([Math.round(Math.max(0, Math.min(frame.w - 1, shore + seaSide * 6))), Math.round(y)]);
       break;
     }
     points.push([Math.round(x), Math.round(y)]);
@@ -269,9 +279,9 @@ function toBox(p: Point, box: { x: number; y: number; width: number; height: num
   return Math.hypot(dx, dy);
 }
 
-function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" | "rejected"> | null {
-  const W = REGION_WIDTH;
-  const H = REGION_HEIGHT;
+function drawRegion(rng: Rng, home: GeneratedMapInfo, frame: Frame = STANDARD): Omit<RegionInfo, "home" | "rejected"> | null {
+  const W = frame.w;
+  const H = frame.h;
   const homeRivers = home.map.terrain?.rivers ?? [];
   // A coast city's sea is the second water: the region's coast is on its side.
   const homeSea = home.setting === "coast" ? homeRivers[1] : undefined;
@@ -291,8 +301,8 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
   // end and rising just past the home box at the other; a tributary or two.
   const shift = (r: GameRiverDef): GameRiverDef => ({ ...r, points: r.points.map(([x, y]): [number, number] => [x + ox, y + oy]) });
   const seaDepth = Math.round(between(rng, ...SEA_DEPTH));
-  const coast = drawCoast(rng, seaSide, seaDepth, homeSea ? shift(homeSea) : undefined);
-  const main = drawMainRiver(rng, seaSide, coast, { x: ox, y: oy, width: HOME_WIDTH, height: HOME_HEIGHT });
+  const coast = drawCoast(rng, seaSide, seaDepth, homeSea ? shift(homeSea) : undefined, frame);
+  const main = drawMainRiver(rng, seaSide, coast, { x: ox, y: oy, width: HOME_WIDTH, height: HOME_HEIGHT }, frame);
   const water: GameRiverDef[] = [coast, main];
   const mainAt = (x: number) => along(main.points, x, true);
   for (const r of homeRivers.filter((r) => r !== homeSea)) {
@@ -646,7 +656,7 @@ function laidOverLand(map: GameMapDef): GameMapDef {
 function regionalLand(map: GameMapDef, seed: number): GameMapDef {
   const rivers = map.terrain?.rivers;
   const box = map.home;
-  if (!rivers?.length || !box || map.width < REGION_WIDTH) return map;
+  if (!rivers?.length || !box) return map;
   const rng = createRng(seed + 4_000_037);
   const W = map.width, H = map.height;
   const water: Array<GameRiverDef & { widths: number[] }> = rivers.map((r) => ({ ...r, points: [...r.points], widths: [...(r.widths ?? r.points.map(() => r.width))] }));
@@ -779,4 +789,42 @@ function regionalLand(map: GameMapDef, seed: number): GameMapDef {
     for (const o of nearest) if (!reach.connected(t.id, o.id) && planCorridor(terrain, [t, o], "auto", new Set([0, 1]))) reach.union(t.id, o.id);
   }
   return reach.componentCount() === 1 ? next : map;
+}
+
+// --- Map version 5: the sea to the south --------------------------------------------------
+// (2026-10-28, "in all of them, why is the ocean to the side?") The region grew round the seed's
+// slice map, whose sea is down its west or east edge, and carried that coast on down the same
+// edge -- so every map had its ocean to one side, the north's too. Nigeria's coast is its south.
+// A southern region (south-west, south-east, south-south) is drawn on its side, 160 × 250, with
+// the generator as it is, then turned a quarter so its coast lies along the bottom. A turn keeps
+// every distance, so the home cluster's prices land as measured. The north keeps its side coast
+// for now: inland, its trade should come through the gateways (brief, The region, step 3).
+
+const SOUTHERN = new Set(["southwest", "southeast", "southSouth"]);
+
+/** A map drawn on its side (coast down its west or east edge) turned a quarter, that coast to the south. */
+function coastToSouth(map: GameMapDef): GameMapDef {
+  const sea = map.terrain?.rivers?.find((r) => Math.max(...(r.widths ?? [r.width])) > 12);
+  const west = sea ? sea.points[0]![0] < map.width / 2 : true;
+  const W = map.width, H = map.height;
+  // West edge to the south: (x, y) -> (y, W - 1 - x); east edge: (x, y) -> (H - 1 - y, x). Both turns, not mirrors.
+  const at = (x: number, y: number): [number, number] => (west ? [y, W - 1 - x] : [H - 1 - y, x]);
+  const point = ([x, y]: [number, number]): [number, number] => at(x, y);
+  const town = <T extends { x: number; y: number }>(t: T): T => { const [x, y] = at(t.x, t.y); return { ...t, x, y }; };
+  const road = (r: GameRoadDef): GameRoadDef => (r.via ? { ...r, via: r.via.map(point) } : r);
+  const box = map.home && (() => {
+    const corners = [at(map.home!.x, map.home!.y), at(map.home!.x + map.home!.width, map.home!.y + map.home!.height)];
+    const x = Math.min(corners[0]![0], corners[1]![0]), y = Math.min(corners[0]![1], corners[1]![1]);
+    return { x, y, width: map.home!.height, height: map.home!.width };
+  })();
+  return {
+    ...map,
+    width: H,
+    height: W,
+    towns: map.towns.map(town),
+    roads: map.roads.map(road),
+    rails: map.rails?.map(road),
+    terrain: { ...map.terrain, rivers: map.terrain?.rivers?.map((r) => ({ ...r, points: r.points.map(point) })), hills: map.terrain?.hills?.map(town) },
+    home: box,
+  };
 }

@@ -158,7 +158,7 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   causewaysEnabled: true,
   floodDetour: true,
   riverValleys: true,
-  mapVersion: 4,
+  mapVersion: 5,
   fuelPledgeNeedsMove: true,
   floodFirstDayMin: 45,
   floodFirstDayMax: 75,

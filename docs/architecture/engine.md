@@ -1118,6 +1118,19 @@ replays as played. Seed 0 stays the hand-made map, alone.
   region for the 3D view's palette (render-and-ui.md). `scripts/region-sheet.ts` now draws each
   map in its region's colours with relief on one scale, its water from its lines, and its region
   and map version in the caption.
+- **Version 5: a southern region's sea is its south** (`region.ts coastToSouth`; 2026-10-28, "in
+  all of them, why is the ocean to the side?"). The region grew round the seed's slice map, whose
+  sea is down its west or east edge, and carried that coast down the same edge, so every map had
+  its ocean to one side. A south-west, south-east or south-south map is now drawn on its side (the
+  generator unchanged, its frame 160 × 250: `regionInfo`'s `frame`, threaded through `drawCoast`,
+  `drawMainRiver`, `drawRegion`), smoothed and given its land (versions 2 and 4) in that frame,
+  then turned a quarter so the coast lies along the bottom, before the railway is laid. A turn,
+  not a mirror, keeps every distance: tested, every distance between home-cluster towns as on
+  the slice map. 40 seeds: all 34 southern ones drawn on their side (rejections 0-1), slowest
+  361 ms. Twelve southern seeds unplayed for 15 days against version 4: fuel 28.8% -> 31.2%,
+  trips 578 -> 543 a day, the same chains (quarries 3-4 and a cement silo vary by map, as before).
+  The north, north-east and Middle Belt keep a side coast until the gateways (brief, The region,
+  step 3) give an inland map its trade.
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of
