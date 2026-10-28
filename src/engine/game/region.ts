@@ -88,8 +88,10 @@ export interface RegionInfo {
 }
 
 /** The map a game is played on: the region when its tuning says so, else the seed's slice map. */
-export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?: boolean; riverValleys?: boolean }): GameMapDef {
-  const map = tuning.regionEnabled ? regionMap(base, seed) : generatedMapInfo(base, seed).map;
+export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?: boolean; riverValleys?: boolean; mapVersion?: number }): GameMapDef {
+  let map = tuning.regionEnabled ? regionMap(base, seed) : generatedMapInfo(base, seed).map;
+  // Map version 2 (2026-10-28): rivers that wind, and an old railway that follows the land.
+  if ((tuning.mapVersion ?? 1) >= 2 && seed !== 0) map = laidOverLand(naturalWater(map, seed));
   // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
   return tuning.riverValleys ? { ...map, terrain: { ...map.terrain, valleys: true } } : map;
 }
@@ -511,4 +513,116 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo): Omit<RegionInfo, "home" |
   map.clusters = clusters.map((cluster, k) => ({ hub: cluster[0]!.id, towns: cluster.map((t) => t.id), offer: offers[k]! }));
 
   return { map, hubs: [city.id, ...hubs.map((h) => h.id)], seaport };
+}
+
+// --- Map version 2: water that winds, a railway laid over the land ------------------------
+// (2026-10-28, a contact sheet of twelve seeds: rivers ruled in straight runs with a corner
+// every 10-14 cells, tributaries meeting at right angles, the old railway one straight line
+// over rivers and ridge.) Both after the map is drawn and without drawing from its stream, so
+// towns, roads and sites stay where they were; only the water's line and the railway's change.
+
+/** A deterministic number in 0..1 from a seed and a key (no stream drawn from). */
+function hashed(seed: number, key: number): number {
+  let h = (seed * 2654435761) ^ (key * 2246822519);
+  h = Math.imul(h ^ (h >>> 15), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Corner-cutting (Chaikin): each pass replaces a corner with two points a quarter in; the ends stay. */
+function chaikin(points: Array<[number, number]>, widths: number[], passes: number): { points: Array<[number, number]>; widths: number[] } {
+  let p = points, w = widths;
+  for (let pass = 0; pass < passes; pass += 1) {
+    const np: Array<[number, number]> = [p[0]!], nw = [w[0]!];
+    for (let k = 1; k < p.length; k += 1) {
+      const [ax, ay] = p[k - 1]!, [bx, by] = p[k]!;
+      if (k > 1) { np.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25]); nw.push(w[k - 1]! * 0.75 + w[k]! * 0.25); }
+      if (k < p.length - 1) { np.push([ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75]); nw.push(w[k - 1]! * 0.25 + w[k]! * 0.75); }
+    }
+    np.push(p[p.length - 1]!);
+    nw.push(w[w.length - 1]!);
+    p = np;
+    w = nw;
+  }
+  return { points: p, widths: w };
+}
+
+/**
+ * Meanders: the line resampled every 1.5 cells and swung side to side, a wavelength of a
+ * dozen cells or so (longer for a wider river), its swing rising and falling along it, and
+ * nothing at either end (where it joins another river or leaves the map).
+ */
+function meandering(points: Array<[number, number]>, widths: number[], seed: number, key: number): { points: Array<[number, number]>; widths: number[] } {
+  const lengths = [0];
+  for (let k = 1; k < points.length; k += 1) lengths.push(lengths[k - 1]! + Math.hypot(points[k]![0] - points[k - 1]![0], points[k]![1] - points[k - 1]![1]));
+  const total = lengths[lengths.length - 1]!;
+  if (total < 8) return { points, widths };
+  const phase = hashed(seed, key) * Math.PI * 2, phase2 = hashed(seed, key + 101) * Math.PI * 2;
+  const out: Array<[number, number]> = [], outW: number[] = [];
+  let k = 1;
+  for (let s = 0; s <= total + 1e-6; s = Math.min(total, s + 1.5)) {
+    while (k < points.length - 1 && lengths[k]! < s) k += 1;
+    const t = (s - lengths[k - 1]!) / (lengths[k]! - lengths[k - 1]! || 1);
+    const [ax, ay] = points[k - 1]!, [bx, by] = points[k]!;
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    const width = widths[k - 1]! + (widths[k]! - widths[k - 1]!) * t;
+    const wave = 10 + width * 2.5;
+    const ends = Math.min(1, s / 6, (total - s) / 6);
+    const swing = (0.7 + 0.25 * width) * (0.55 + 0.45 * Math.sin((s / (wave * 3.7)) * Math.PI * 2 + phase2)) * ends;
+    const off = swing * Math.sin((s / wave) * Math.PI * 2 + phase);
+    out.push([ax + (bx - ax) * t - ((by - ay) / len) * off, ay + (by - ay) * t + ((bx - ax) / len) * off]);
+    outW.push(width);
+    if (s >= total) break;
+  }
+  return { points: out, widths: outW };
+}
+
+/** Every river smoothed, the inland ones meandering -- each kept as drawn where that would bring water within a cell of a town. */
+function naturalWater(map: GameMapDef, seed: number): GameMapDef {
+  const rivers = map.terrain?.rivers;
+  if (!rivers?.length) return map;
+  const round = (points: Array<[number, number]>) => points.map(([x, y]): [number, number] => [Math.round(x * 100) / 100, Math.round(y * 100) / 100]);
+  const clear = (river: GameRiverDef) => map.towns.every((t) => dryOf([river], t, 1));
+  const next = rivers.map((river, i) => {
+    const widths = river.widths ?? river.points.map(() => river.width);
+    const smooth = chaikin(river.points, widths, 3);
+    // The sea is drawn as a very wide river off the map's edge: its coast smoothed, not swung.
+    const sea = Math.max(...widths) > 12;
+    const wound = sea ? smooth : meandering(smooth.points, smooth.widths, seed, i + 1);
+    // Each point as wide as the river as drawn at its nearest point: averaged instead, a ford's
+    // narrow (1.2 cells at one point, a cheap crossing) spread to ~2.1 and was gone.
+    const widthAt = ([x, y]: [number, number]) => {
+      let best = Infinity, width = river.width;
+      for (let k = 1; k < river.points.length; k += 1) {
+        const [ax, ay] = river.points[k - 1]!, [bx, by] = river.points[k]!;
+        const dx = bx - ax, dy = by - ay, lengthSq = dx * dx + dy * dy;
+        const t = lengthSq === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / lengthSq));
+        const d = Math.hypot(x - (ax + t * dx), y - (ay + t * dy));
+        if (d < best) [best, width] = [d, widths[k - 1]! + (widths[k]! - widths[k - 1]!) * t];
+      }
+      return width;
+    };
+    for (const tried of [wound, smooth]) {
+      const candidate = { ...river, points: round(tried.points), widths: tried.points.map((p) => Math.round(widthAt(p) * 100) / 100) };
+      if (clear(candidate)) return candidate;
+    }
+    return river;
+  });
+  return { ...map, terrain: { ...map.terrain, rivers: next } };
+}
+
+/** The old railway planned over the land, round the hills and over the rivers at their narrows, as a road you build is. */
+function laidOverLand(map: GameMapDef): GameMapDef {
+  if (!map.rails?.length) return map;
+  const terrain = buildGameTerrain(map);
+  const at = (id: string) => map.towns.find((t) => t.id === id)!;
+  const rails = map.rails.map((rail) => {
+    const plan = planCorridor(terrain, [at(rail.a), at(rail.b)], "auto", new Set([0, 1]));
+    if (!plan || plan.polyline.length <= 2) return rail;
+    // Its corners eased (a railway curves; planned, it ran in straight and 45° legs).
+    const line = straightened(terrain, plan.polyline).map((p): [number, number] => [p.x, p.y]);
+    const eased = chaikin(line, line.map(() => 0), 2).points;
+    return { ...rail, via: eased.slice(1, -1).map(([x, y]): [number, number] => [Math.round(x * 100) / 100, Math.round(y * 100) / 100]) };
+  });
+  return { ...map, rails };
 }

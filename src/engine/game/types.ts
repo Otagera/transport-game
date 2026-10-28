@@ -248,6 +248,12 @@ export interface GameTuning {
   floodDetour?: boolean;
   /** Rivers cut valleys through the hills (terrain.ts). Absent in older runs: off, their maps as drawn. */
   riverValleys?: boolean;
+  /**
+   * Which drawing of a seed's map (region.ts gameMap): 1 as first drawn; 2 rivers smoothed and
+   * meandering, the old railway laid over the land. Absent in older runs: 1, so a run file
+   * replays on the map it was played on.
+   */
+  mapVersion?: number;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;

@@ -2877,6 +2877,35 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     expect(gameMap(GAME_MAP, 7, { regionEnabled: true })).toEqual(gameMap(GAME_MAP, 7, { regionEnabled: true }));
   });
 
+  test("map version 2: rivers wind and keep their narrows, towns stay dry, the railway follows the land; version 1 is the map as drawn", () => {
+    const narrowest = (r: { width: number; widths?: number[] }) => Math.min(...(r.widths ?? [r.width]));
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const v1 = gameMap(GAME_MAP, seed, { regionEnabled: true });
+      expect(v1).toEqual(gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 1 }));
+      const v2 = gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 2 });
+      // Only the water's line and the railway's change.
+      expect(v2.towns).toEqual(v1.towns);
+      expect(v2.roads).toEqual(v1.roads);
+      const before = v1.terrain!.rivers!, after = v2.terrain!.rivers!;
+      expect(after.length).toBe(before.length);
+      // Smoothed (more points), each as narrow at its narrowest as drawn -- a ford stays a ford.
+      after.forEach((r, i) => {
+        expect(r.points.length).toBeGreaterThanOrEqual(before[i]!.points.length);
+        // (resampled every 1.5 cells, a point may fall a little off the narrowest one)
+        expect(narrowest(r)).toBeGreaterThanOrEqual(narrowest(before[i]!) - 0.01);
+        expect(narrowest(r)).toBeLessThanOrEqual(narrowest(before[i]!) * 1.15 + 0.05);
+      });
+      // No town in the water, nor within a cell of it (buildGameTerrain throws on a wet town).
+      const terrain = buildGameTerrain(v2);
+      for (const t of v2.towns) {
+        for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) expect(isWater(terrain, Math.round(t.x) + dx, Math.round(t.y) + dy)).toBe(false);
+      }
+      // The old railway planned over the land.
+      expect(v2.rails!.every((r) => (r.via?.length ?? 0) > 0)).toBe(true);
+    }
+    expect(gameMap(GAME_MAP, 0, { regionEnabled: true, mapVersion: 2 })).toEqual(gameMap(GAME_MAP, 0, { regionEnabled: true }));
+  });
+
   test("every seed: the home cluster is the seed's slice map moved whole; clusters beyond it; one dominant city; a port; all reachable", () => {
     for (let seed = 1; seed <= 30; seed += 1) {
       const info = regionInfo(GAME_MAP, seed);

@@ -30,21 +30,35 @@ export function buildGameTerrain(def: GameMapDef): TerrainField {
   // banks, back to the hill's own height VALLEY cells out. A range a river crosses has a gorge.
   const valleys = !!def.terrain?.valleys;
   const VALLEY = 5;
+  // Each river segment marks only the cells within its half-width and a valley's reach of it:
+  // past that a cell is dry and its valley factor 1 whatever the distance, so the result is the
+  // same as checking every cell against every segment -- which, once rivers were smoothed into
+  // hundreds of segments (map version 2), took 2 s a map (2026-10-28).
+  const bankOf = new Float64Array(width * height).fill(Infinity);
+  for (const river of rivers) {
+    for (let k = 1; k < river.points.length; k += 1) {
+      const [ax, ay] = river.points[k - 1]!;
+      const [bx, by] = river.points[k]!;
+      const widest = river.widths ? Math.max(river.widths[k - 1]!, river.widths[k]!) : river.width;
+      const reach = widest / 2 + VALLEY + 1;
+      const x0 = Math.max(0, Math.floor(Math.min(ax, bx) - reach)), x1 = Math.min(width - 1, Math.ceil(Math.max(ax, bx) + reach));
+      const y0 = Math.max(0, Math.floor(Math.min(ay, by) - reach)), y1 = Math.min(height - 1, Math.ceil(Math.max(ay, by) + reach));
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const i = y * width + x;
+          const { distance, t } = nearestOnSegment(x, y, ax, ay, bx, by);
+          // A river narrows and widens between its points: a narrow stretch is a cheap crossing.
+          const w = river.widths ? river.widths[k - 1]! + (river.widths[k]! - river.widths[k - 1]!) * t : river.width;
+          if (distance <= w / 2) water[i] = 1;
+          if (distance - w / 2 < bankOf[i]!) bankOf[i] = distance - w / 2;
+        }
+      }
+    }
+  }
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const i = y * width + x;
-      let bank = Infinity;
-      for (const river of rivers) {
-        for (let k = 1; k < river.points.length; k += 1) {
-          const [ax, ay] = river.points[k - 1]!;
-          const [bx, by] = river.points[k]!;
-          const { distance, t } = nearestOnSegment(x, y, ax, ay, bx, by);
-          // A river narrows and widens between its points: a narrow stretch is a cheap crossing.
-          const width = river.widths ? river.widths[k - 1]! + (river.widths[k]! - river.widths[k - 1]!) * t : river.width;
-          if (distance <= width / 2) water[i] = 1;
-          bank = Math.min(bank, distance - width / 2);
-        }
-      }
+      const bank = bankOf[i]!;
       // A hill is a smooth bump: full height at its centre, zero at its
       // radius. Elevation isn't bounded to 0..1 here -- the slice decides
       // water explicitly, so a hill is as high as its climb should cost.

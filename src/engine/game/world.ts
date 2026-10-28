@@ -184,10 +184,10 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
   // every bus from a condition nothing can change would be a parameter with
   // no decision in it (principles §2).
   for (const segment of map.segments) segment.condition = tuning.wearEnabled ? tuning.inheritedRoadCondition : 1;
-  // And the old railway arrives out of service, straight as it was laid.
+  // And the old railway arrives out of service, as it was laid: straight, or over the land (mapVersion 2).
   (def.rails ?? []).forEach((rail, i) => {
     const id = `inherited-rail-${i}`;
-    addRoadToMap(map, id, rail.a, rail.b, "inherited");
+    addRoadToMap(map, id, rail.a, rail.b, "inherited", rail.via ? laidOver(def, rail) : undefined);
     const segment = map.segments.find((s) => s.id === id)!;
     segment.type = "rail";
     segment.condition = 0.3;

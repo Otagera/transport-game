@@ -1074,6 +1074,24 @@ replays as played. Seed 0 stays the hand-made map, alone.
   30 seeds for the guards, 20 for the water draining and the hills off the home box, three
   for every site in the home box; over 200 seeds the most draws needed is two.
   `scripts/region-sheet.ts` draws a dozen seeds on one page, to judge the generator by eye.
+- **Map versions** (`GameTuning.mapVersion`, `region.ts gameMap`; 2026-10-28). A run file
+  replays its seed's map by regenerating it, so a change to the drawing goes behind a version:
+  absent (older runs) is 1, the map as first drawn; new games take the latest. Each version is
+  applied after the map is drawn and draws nothing from its stream, so towns, roads and sites
+  stay put. **Version 2** (a contact sheet of twelve seeds: rivers ruled in straight runs with a
+  corner every 10-14 cells, tributaries at right angles, the old railway one straight line over
+  rivers and ridge): every river's line corner-cut three times (Chaikin) and the inland ones
+  swung into meanders (`meandering`: resampled every 1.5 cells, a wavelength of 10 + 2.5×width
+  cells, the swing rising and falling along it, nothing at either end); each point as wide as the
+  river as drawn at its nearest point, so a ford's 1.2-cell narrow stays narrow (averaged, it
+  spread to ~2.1); a river kept as drawn where its new line would bring water within a cell of a
+  town. The old railway planned over the land like a built road, its corners eased
+  (`laidOverLand`; laid along its `via` in `world.ts`). Tested over 20 seeds: towns, roads
+  unchanged, towns dry, narrows kept, version 1 as before. **The terrain built per river segment**
+  (`terrain.ts`): smoothed rivers have ~8× the segments, and checking every cell against every
+  segment took 2.1 s a map; each segment now marks only the cells within its half-width and a
+  valley's reach, which is the same result (21 seeds, byte for byte) in 19 ms -- 286 ms before,
+  on maps of either version.
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of
