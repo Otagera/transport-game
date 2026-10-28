@@ -315,33 +315,95 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   };
 
   // --- The land: savanna in patches, greener by the rivers, red earth in the towns, olive on the hills
+  // Painted, not coloured by vertex (2026-10-28, "the ground looks like stickers"): a vertex is
+  // 4 m apart, so the land could only change colour in soft blobs, and the fields sat on it as
+  // separate flat quads with hard edges. One texture instead, 8 px a cell: the broad colour
+  // worked out at 2 px a cell and scaled up smooth, a grain over it, sandy banks along the
+  // rivers, and the fields painted in once they're laid (plant).
+  const PX = 8;
+  const groundCanvas = document.createElement("canvas");
+  groundCanvas.width = (W - 1) * PX;
+  groundCanvas.height = (H - 1) * PX;
+  const paint = groundCanvas.getContext("2d")!;
+  const groundTexture = own(new THREE.CanvasTexture(groundCanvas));
+  groundTexture.colorSpace = THREE.SRGBColorSpace;
+  groundTexture.anisotropy = 8;
+  {
+    const BASE = 2;
+    const small = document.createElement("canvas");
+    small.width = (W - 1) * BASE;
+    small.height = (H - 1) * BASE;
+    const image = small.getContext("2d")!.createImageData(small.width, small.height);
+    // Each town's red earth, worked out over its own square only.
+    const earthShare = new Float32Array(small.width * small.height);
+    for (const t of startPeople) {
+      const r = reachCells.get(t.id)!;
+      for (let py = Math.max(0, Math.floor((t.y - r) * BASE)); py < Math.min(small.height, Math.ceil((t.y + r) * BASE)); py += 1) {
+        for (let px = Math.max(0, Math.floor((t.x - r) * BASE)); px < Math.min(small.width, Math.ceil((t.x + r) * BASE)); px += 1) {
+          const d = Math.hypot(t.x - (px + 0.5) / BASE, t.y - (py + 0.5) / BASE);
+          if (d < r) earthShare[py * small.width + px] = Math.max(earthShare[py * small.width + px]!, 0.42 * (1 - (d / r) ** 2));
+        }
+      }
+    }
+    const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
+    const high = new THREE.Color(0x7d8f62), c = new THREE.Color(), rgb = { r: 0, g: 0, b: 0 };
+    const dry = new THREE.Color(0xc6b783), green = new THREE.Color(0x9fb27a), bankGreen = new THREE.Color(0x7c9a55), earth = new THREE.Color(0xb98a62);
+    for (let py = 0; py < small.height; py += 1) for (let px = 0; px < small.width; px += 1) {
+      const cx = (px + 0.5) / BASE, cy = (py + 0.5) / BASE;
+      c.copy(green).lerp(dry, Math.max(0, Math.min(1, (patch(cx, cy) - 0.3) * 1.8)));
+      c.lerp(high, Math.min(1, elevationAt(cx, cy) / top) * 0.8);
+      const bank = bankDist[Math.min(H - 1, Math.round(cy)) * W + Math.min(W - 1, Math.round(cx))]!;
+      if (bank < 5) c.lerp(bankGreen, 0.7 * (1 - bank / 5));
+      const e = earthShare[py * small.width + px]!;
+      if (e > 0) c.lerp(earth, e);
+      // three's colours are linear; a canvas holds sRGB (written as they were, the land came out dark).
+      c.getRGB(rgb, THREE.SRGBColorSpace);
+      const k = (py * small.width + px) * 4;
+      image.data[k] = rgb.r * 255;
+      image.data[k + 1] = rgb.g * 255;
+      image.data[k + 2] = rgb.b * 255;
+      image.data[k + 3] = 255;
+    }
+    small.getContext("2d")!.putImageData(image, 0, 0);
+    paint.imageSmoothingEnabled = true;
+    paint.imageSmoothingQuality = "high";
+    paint.drawImage(small, 0, 0, groundCanvas.width, groundCanvas.height);
+    // A grain: flecks a shade lighter and darker, so a plain reads as ground, not paint.
+    const grain = document.createElement("canvas");
+    grain.width = grain.height = 128;
+    const g = grain.getContext("2d")!;
+    const fleck = seeded(`grain-${W}-${H}`);
+    for (let i = 0; i < 2600; i += 1) {
+      g.fillStyle = fleck() < 0.5 ? `rgba(60,45,25,${0.05 + fleck() * 0.07})` : `rgba(255,250,230,${0.04 + fleck() * 0.06})`;
+      g.fillRect(Math.floor(fleck() * 128), Math.floor(fleck() * 128), 1 + Math.floor(fleck() * 2), 1 + Math.floor(fleck() * 2));
+    }
+    paint.fillStyle = paint.createPattern(grain, "repeat")!;
+    paint.fillRect(0, 0, groundCanvas.width, groundCanvas.height);
+    // The rivers' banks, under their water: a darker damp margin, then pale sand at the edge.
+    paint.lineJoin = paint.lineCap = "round";
+    for (const [extra, style] of [[2.6, "rgba(70,90,45,0.28)"], [1.1, "rgba(214,196,150,0.95)"]] as const) {
+      for (const river of world.waterLines ?? []) {
+        for (let k = 1; k < river.points.length; k += 1) {
+          const [ax, ay] = river.points[k - 1]!, [bx, by] = river.points[k]!;
+          paint.strokeStyle = style;
+          paint.lineWidth = (((river.widths?.[k - 1] ?? river.width) + (river.widths?.[k] ?? river.width)) / 2 + extra) * PX;
+          paint.beginPath();
+          paint.moveTo(ax * PX, ay * PX);
+          paint.lineTo(bx * PX, by * PX);
+          paint.stroke();
+        }
+      }
+    }
+    groundTexture.needsUpdate = true;
+  }
   {
     const geo = own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M, (W - 1) * 2, (H - 1) * 2));
     geo.rotateX(-Math.PI / 2);
     geo.translate(((W - 1) * M) / 2, 0, ((H - 1) * M) / 2);
     const pos = geo.attributes.position!;
-    const colours = new Float32Array(pos.count * 3);
-    const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
-    const high = new THREE.Color(0x7d8f62), c = new THREE.Color();
-    const dry = new THREE.Color(0xc6b783), green = new THREE.Color(0x9fb27a), bankGreen = new THREE.Color(0x7c9a55), earth = new THREE.Color(0xb98a62);
-    for (let i = 0; i < pos.count; i += 1) {
-      const cx = pos.getX(i) / M, cy = pos.getZ(i) / M;
-      const e = elevationAt(cx, cy);
-      pos.setY(i, e * HEIGHT);
-      c.copy(green).lerp(dry, Math.max(0, Math.min(1, (patch(cx, cy) - 0.3) * 1.8)));
-      c.lerp(high, Math.min(1, e / top) * 0.8);
-      const bank = bankDist[Math.min(H - 1, Math.round(cy)) * W + Math.min(W - 1, Math.round(cx))]!;
-      if (bank < 5) c.lerp(bankGreen, 0.7 * (1 - bank / 5));
-      for (const t of startPeople) {
-        const r = reachCells.get(t.id)!;
-        const d = Math.hypot(t.x - cx, t.y - cy);
-        if (d < r) c.lerp(earth, 0.42 * (1 - (d / r) ** 2));
-      }
-      colours.set([c.r, c.g, c.b], i * 3);
-    }
-    geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+    for (let i = 0; i < pos.count; i += 1) pos.setY(i, elevationAt(pos.getX(i) / M, pos.getZ(i) / M) * HEIGHT);
     geo.computeVertexNormals();
-    const land = new THREE.Mesh(geo, own(new THREE.MeshLambertMaterial({ vertexColors: true })));
+    const land = new THREE.Mesh(geo, own(new THREE.MeshLambertMaterial({ map: groundTexture })));
     land.receiveShadow = true;
     scene.add(land);
     // The map's edge as a diorama's (your word: "good visuals for the cliff off"): the land
@@ -1062,7 +1124,6 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
   };
-  const fieldMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   const treeMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
   const trees: Array<{ kind: TreeKind; cell: number; at: THREE.Matrix4 }> = [];
   const groves = new Map<TreeKind, THREE.InstancedMesh>();
@@ -1083,18 +1144,19 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // Fields: a ring round each town, beyond its houses; farm towns (food.ts) farm more, and a
     // farm belt's (clusters.ts) most. Some in rows (ridged yam and maize), some plain.
     const farming = new Set(farmTowns(w).map((t) => t.id));
-    const PALETTE = ["#8fa95a", "#a7b964", "#c9b57a", "#b39463", "#7f9e4f", "#d2c08a", "#9c7a52"];
-    const verts: number[] = [], cols: number[] = [], index: number[] = [];
-    const colour = new THREE.Color();
-    const quad = (corners: Point[], hex: string) => {
-      const base = verts.length / 3;
-      colour.set(hex);
-      for (const p of corners) {
-        const g = ground(p.x, p.y, 0.15);
-        verts.push(g.x, g.y, g.z);
-        cols.push(colour.r, colour.g, colour.b);
-      }
-      index.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    // Painted into the ground (the land's texture), not laid on it as quads: those had hard
+    // edges, cut into slopes at their corners, and their colours stood off the land like stickers.
+    // Colours a step from the savanna's; corners nudged, so no field is a perfect rectangle.
+    const PALETTE = ["#9fae69", "#b0b770", "#c4b27d", "#b39a6c", "#93a660", "#cbbd8c", "#a88a62"];
+    const nudge = () => (rand() - 0.5) * 0.25;
+    const quad = (corners: Point[], hex: string, alpha = 0.82) => {
+      paint.globalAlpha = alpha;
+      paint.fillStyle = hex;
+      paint.beginPath();
+      corners.forEach((p, k) => (k ? paint.lineTo((p.x + nudge()) * PX, (p.y + nudge()) * PX) : paint.moveTo((p.x + nudge()) * PX, (p.y + nudge()) * PX)));
+      paint.closePath();
+      paint.fill();
+      paint.globalAlpha = 1;
     };
     for (const town of startPeople) {
       const r = reachCells.get(town.id) ?? 3;
@@ -1118,26 +1180,19 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         for (const c of cells) occupied[c] = FIELD;
         const at = (i: number, j: number) => ({ x: cx + u.x * i + v.x * j, y: cy + u.y * i + v.y * j });
         const hex = PALETTE[Math.floor(rand() * PALETTE.length)]!;
+        const whole = [at(-fw / 2, -fh / 2), at(fw / 2, -fh / 2), at(fw / 2, fh / 2), at(-fw / 2, fh / 2)];
+        quad(whole, hex);
         if (rand() < 0.5) {
-          // In rows: strips a third of a cell wide, the crop and the earth between.
+          // In rows (ridged yam and maize): darker furrows across it, faint, a third of a cell apart.
           const strips = Math.max(2, Math.round(fw / 0.33));
-          for (let k = 0; k < strips; k += 1) {
+          for (let k = 1; k < strips; k += 2) {
             const i0 = -fw / 2 + (fw * k) / strips, i1 = -fw / 2 + (fw * (k + 1)) / strips;
-            quad([at(i0, -fh / 2), at(i1, -fh / 2), at(i1, fh / 2), at(i0, fh / 2)], k % 2 ? "#a88a5e" : hex);
+            quad([at(i0, -fh / 2), at(i1, -fh / 2), at(i1, fh / 2), at(i0, fh / 2)], "#7d6544", 0.22);
           }
-        } else quad([at(-fw / 2, -fh / 2), at(fw / 2, -fh / 2), at(fw / 2, fh / 2), at(-fw / 2, fh / 2)], hex);
+        }
       }
     }
-    if (index.length) {
-      const geo = own(new THREE.BufferGeometry());
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-      geo.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
-      geo.setIndex(index);
-      geo.computeVertexNormals();
-      const fields = new THREE.Mesh(geo, fieldMaterial);
-      fields.receiveShadow = true;
-      scene.add(fields);
-    }
+    groundTexture.needsUpdate = true;
 
     // Trees: thin on the open savanna, a gallery forest along the rivers, bush on the hills,
     // palms by the water and in the towns. Each kind one InstancedMesh.

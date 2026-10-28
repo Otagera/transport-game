@@ -552,6 +552,17 @@ one already placed is hidden, as on the 2D map: pulled back with the capital sel
 name, its four sites' and Lokoja's had piled into one knot. Each label's size is measured once
 a text (a label not yet shown measures nothing and is estimated until it has been).
 
+**The ground, painted** (`view3d.ts`, the land, `plant`; 2026-10-28, "the ground looks like
+stickers"). The land had been coloured by vertex -- 4 m apart, so it could only change colour in
+soft blobs -- and the fields laid on it as separate flat quads 0.15 m up, hard-edged, cutting
+into slopes at their corners, in colours that stood off the land. Now one texture, 8 px a cell
+(~2000 × 1280): the same savanna, river-green, hill and red-earth colouring worked out at 2 px a
+cell and scaled up smooth (converted from three's linear colours to the canvas's sRGB -- written
+as they were, the land came out dark and saturated), a grain of lighter and darker flecks, a
+damp margin and pale sand along every river under its water, and the fields painted in once
+they're laid, in colours a step from the savanna's with corners nudged off square and their
+rows as faint furrows. One mesh, nothing floating.
+
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the
