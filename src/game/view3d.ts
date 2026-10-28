@@ -52,6 +52,9 @@ THREE.ShaderChunk.fog_fragment = /* glsl */ `
 #endif
 `;
 
+/** A town's own streets (townKit): paler than the roads between towns, so those still lead. */
+const STREET_DIRT = 0xae855e;
+const STREET_PAVED = 0x77797b;
 const ROAD_COLOURS = { paved: 0x56585b, dirt: 0xa47a55, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
 /** A selection: your colour (the 2D map's --you), lit on what it's connected to; the rest toward the ground's pale. */
 const FOCUS_COLOUR = 0x2a78d6;
@@ -594,8 +597,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   /** `floors`: a block's, each banded with windows (0 for a house). */
   interface House { x: number; y: number; z: number; w: number; d: number; h: number; rh: number; ry: number; floors: number; wall: string; roof: string }
   let fabric: House[] = [];
+  /** A piece of a town's own street, in its town's frame: one plot long, laid along `ry`. */
+  interface Street { x: number; y: number; z: number; long: number; wide: number; ry: number; colour: number }
+  let streets: Street[] = [];
   function townKit(town: GameTown, tier: Tier, boom = false): Kit {
     fabric = [];
+    streets = [];
     const rand = seeded(town.id);
     const kit = new Kit();
     const base = elevationAt(town.x, town.y) * HEIGHT;
@@ -606,6 +613,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const room = Math.max(0.4, radius / wanted);
     const count = Math.round(room * Math.min(160, tier === "village" ? 5 + town.population * 0.5 : 8 + town.population * 0.9));
     const grid = rand() * Math.PI; // the way its streets run
+    // three turns about y the other way to the grid's cos/sin: a building faces its street at -grid
+    // (at +grid every house stood mirrored to its grid -- unseen until the streets were drawn).
+    const facing = -grid;
     // Keep off the roads: only those passing near this town are checked.
     const reachCells = radius / M + 3;
     const local = roadLines.filter((line) => line.some((p) => Math.hypot(p.x - town.x, p.y - town.y) < reachCells + 20));
@@ -630,7 +640,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         })) continue;
         placed.push({ x, z, r });
         const one = new Kit();
-        make(one, rand, grid + (rand() < 0.8 ? 0 : Math.PI / 2));
+        make(one, rand, facing + (rand() < 0.8 ? 0 : Math.PI / 2));
         // Sunk a little where the ground falls away, so nothing floats.
         const y = Math.min(elevationAt(cx - r / M, cy), elevationAt(cx + r / M, cy), elevationAt(cx, cy - r / M), elevationAt(cx, cy + r / M)) * HEIGHT - base - 0.2;
         kit.place(one.merged(), x, y, z);
@@ -661,6 +671,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       // The heart, and how high it rises: 135k up to 9 floors, 52k 6, 20k 4.
       const core = tier === "city" ? 0.65 : tier === "regional" ? 0.45 : 0.25;
       const tallest = Math.max(2, Math.round(1 + Math.sqrt(town.population) * 0.7));
+      const built = new Set<string>();
       for (let i = -n; i <= n; i += 1) for (let j = -n; j <= n; j += 1) {
         if (i % lanes[0]! === 0 || j % lanes[1]! === 0) continue; // the lanes
         const lx = i * spacing + (rand() - 0.5) * 1.5, lz = j * spacing + (rand() - 0.5) * 1.5;
@@ -672,8 +683,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (wet(cx, cy, (r + 1) / M) || nearRoad(cx, cy, (r + 4) / M)) continue;
         if (sites.some((s) => { const at = siteAt.get(s.id) ?? s; return Math.hypot(at.x - cx, at.y - cy) < (r + 22) / M; })) continue;
         placed.push({ x, z, r: 3.2 });
+        built.add(`${i},${j}`);
         const y = Math.min(elevationAt(cx - 0.4, cy), elevationAt(cx + 0.4, cy), elevationAt(cx, cy - 0.4), elevationAt(cx, cy + 0.4)) * HEIGHT - base - 0.2;
-        const ry = grid + (rand() < 0.15 ? Math.PI / 2 : 0);
+        const ry = facing + (rand() < 0.15 ? Math.PI / 2 : 0);
         if (d < core) {
           // A block: concrete, flat-roofed, its floors banded with windows, tallest in the middle.
           const t = 1 - d / core;
@@ -690,6 +702,46 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
           x, y, z, w: 5 + rand() * 2, d: 4.5 + rand() * 2, h: 3 * storeys, rh: flat ? 0.25 : 1.3 + rand() * 0.6, ry, floors: 0,
           wall: WALLS[Math.floor(rand() * WALLS.length)]!, roof: flat ? CONCRETE[Math.floor(rand() * CONCRETE.length)]! : ROOFS[Math.floor(rand() * ROOFS.length)]!,
         });
+      }
+      // Its streets: the grid's lanes, where they serve a house on either side -- a lane into
+      // empty ground isn't one -- with one-plot gaps closed and lone pieces dropped, so they read
+      // as a network, not dashes (a small town's lanes came out as scattered stubs). Paved in a
+      // city's or regional town's heart, laterite elsewhere; a little narrower and paler than
+      // the roads between towns, and under them where they cross.
+      const has = (i: number, j: number) => built.has(`${i},${j}`);
+      const laneI = (i: number) => i % lanes[0]! === 0, laneJ = (j: number) => j % lanes[1]! === 0;
+      const serves = (i: number, j: number) =>
+        laneI(i) && laneJ(j) ? has(i - 1, j - 1) || has(i + 1, j - 1) || has(i - 1, j + 1) || has(i + 1, j + 1)
+        : laneI(i) ? has(i - 1, j) || has(i + 1, j)
+        : laneJ(j) ? has(i, j - 1) || has(i, j + 1) : false;
+      const street = new Set<string>();
+      for (let i = -n; i <= n; i += 1) for (let j = -n; j <= n; j += 1) if (serves(i, j)) street.add(`${i},${j}`);
+      const on = (i: number, j: number) => street.has(`${i},${j}`);
+      // Gaps of one plot along a lane, closed.
+      for (let i = -n; i <= n; i += 1) for (let j = -n; j <= n; j += 1) {
+        if (on(i, j)) continue;
+        if ((laneI(i) && on(i, j - 1) && on(i, j + 1)) || (laneJ(j) && on(i - 1, j) && on(i + 1, j))) street.add(`${i},${j}`);
+      }
+      // Each piece runs along its lane; a crossing, along whichever lanes go on from it.
+      const alongJ = (i: number, j: number) => laneI(i) && (on(i, j - 1) || on(i, j + 1));
+      const alongI = (i: number, j: number) => laneJ(j) && (on(i - 1, j) || on(i + 1, j));
+      const lay = (i: number, j: number, along: "i" | "j") => {
+        const lx = i * spacing, lz = j * spacing;
+        const x = lx * cos - lz * sin, z = lx * sin + lz * cos;
+        const cx = town.x + x / M, cy = town.y + z / M;
+        if (wet(cx, cy, 0.3)) return;
+        if (sites.some((s) => { const at = siteAt.get(s.id) ?? s; return Math.hypot(at.x - cx, at.y - cy) < 18 / M; })) return;
+        const paved = tier !== "town" && Math.hypot(x, z) / radius < core;
+        streets.push({
+          x, z, y: elevationAt(cx, cy) * HEIGHT - base + 0.15, long: spacing + 0.4, wide: paved ? 4.6 : 4,
+          ry: along === "i" ? facing : facing - Math.PI / 2, colour: paved ? STREET_PAVED : STREET_DIRT,
+        });
+      };
+      for (const key of street) {
+        const [i, j] = key.split(",").map(Number) as [number, number];
+        const j_ = alongJ(i, j), i_ = alongI(i, j);
+        if (j_) lay(i, j, "j");
+        if (i_) lay(i, j, "i"); // neither: a lone piece, dropped
       }
     }
     for (let i = 0; i < (tier === "village" ? count : Math.round(count * 0.7)); i += 1) {
@@ -764,6 +816,18 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     return [walls, roofs, bands];
   }
+  /** A town's streets: one instanced draw, a flat slab a plot long each. */
+  function streetMesh(list: Street[]): THREE.InstancedMesh {
+    const mesh = new THREE.InstancedMesh(wallShape, fabricMaterial, list.length);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
+    list.forEach((s, i) => {
+      q.setFromAxisAngle(up, s.ry);
+      mesh.setMatrixAt(i, m.compose(new THREE.Vector3(s.x, s.y - 0.12, s.z), q, new THREE.Vector3(s.long, 0.12, s.wide)));
+      mesh.setColorAt(i, c.setHex(s.colour));
+    });
+    mesh.receiveShadow = true;
+    return mesh;
+  }
   /** A town's mesh gone: its fabric's instances with it (the shapes are shared, and stay). */
   function dropTown(mesh: THREE.Mesh): void {
     mesh.geometry.dispose();
@@ -790,6 +854,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const mesh = new THREE.Mesh(kit.merged(), material);
         mesh.position.copy(ground(town.x, town.y)).add(new THREE.Vector3(x, 0, z));
         if (!town.industry && fabric.length) mesh.add(...houses(fabric));
+        if (!town.industry && streets.length) mesh.add(streetMesh(streets));
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.userData.townId = town.id;

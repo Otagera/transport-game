@@ -525,6 +525,15 @@ city every sixth and fifth, and thinning less toward its edge); and a heart of b
 squared, the blocks that got built (the very middle is its road junction) came out 2-3
 floors. After: the capital 57 houses on its grid, 20 of them blocks, and a skyline.
 
+**A town's own streets** (`townKit`, `Street`, `streetMesh`, 2026-10-28; your word: "they don't
+have internal roads showing"). The grid's lanes, drawn where a house stands on either side, one
+instanced slab a plot; one-plot gaps along a lane closed and lone pieces dropped (laid only
+where a house was, a 15k town's lanes came out as scattered stubs); paved in a city's or
+regional town's heart, laterite elsewhere, paler and narrower than the roads between towns
+and 0.2 m under them, so those still lead. Not yet joined to the roads into town. Drawing
+them showed every building had stood mirrored to its own grid: three turns about y the other
+way to the grid's cos/sin, so a building faces its street at `-grid` (`facing`).
+
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the
