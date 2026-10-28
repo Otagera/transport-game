@@ -785,6 +785,18 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 | C20 | The way out matters | Connecting a second gateway moves at least a fifth of a chain's exports to it |
 | C21 | It still reads | At the start, framed on the home cluster, the screen reads like today's map (your playtest: "I knew where to start") |
 
+### The gateways (agreed 2026-10-28)
+
+**Today there is one gateway, the home city.** Imports appear from nowhere at its sites (the tank farm's fuel, the flour mill's wheat, the steel terminal's and the silo's imports) and exports vanish there; the coast, the far clusters and the old railway don't matter to trade. `region.ts` names a seaport on an inland map, but nothing reads it.
+
+**Your answers, 2026-10-28:** imports land at the gateway and must be carried from there ("yeah"); the north's maps landlocked ("it gives variety"); the seaport first.
+
+1. **The seaport, a real place.** Imports land at the seaport and travel to the sites that use them; exports, and their payment, go to it. Where the home city is the seaport nothing changes; where it isn't, there is a real haul from the coast. Hauliers carry it by default, so nothing starves on day 1, but a railway or paved highway to the port carries it cheaper and faster, and shows on fuel and flour. Behind its own tuning key (older runs replay as played). Measured with the strategist before and after, on maps where the seaport is near and far: a home city starved of fuel from day 1 is the risk.
+2. **Border crossings,** one or two on land edges by region (Benin, Niger, Chad, Cameroon): cheaper and slower than the sea, a different mix of goods. Goods leave by whichever gateway is cheapest by what's built (C20).
+3. **The north landlocked:** the north, north-east and Middle Belt lose their side coast (map version 5 turned only the south's); their sea trade comes through a gateway on the southern edge -- the road to the coast, its port off the map -- and their border crossings.
+
+Later, not in the first cut: the port's handling as a rung, coastal shipping and river barges (Open item 4).
+
 ## More industries, more chains (agreed 2026-10-23)
 
 **Your ask, 2026-10-23:** "we need more industries and more product chains"; the seven below, "chains look good". Built one at a time after the icons (icons.ts already draws every one), each measured with the strategist and played.
