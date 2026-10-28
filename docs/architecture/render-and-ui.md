@@ -494,8 +494,10 @@ mode bar, not in the map's middle over the network it explains (outside review, 
 zoom and pan in `main.ts`, with marks growing by the square root of the zoom (`growOf`).
 
 **The 3D view's focus** (`view3d.ts`, 2026-10-26). The 2D map's focus (`focusFor`) is passed to
-`View3D.frame` as well. A selected town's or route's roads and track are tinted in your colour and
-lit, the rest fade toward the ground's pale; a thin pulsing ring marks the selected town's
+`View3D.frame` as well. A selected town's or route's roads and track carry a line in your colour
+down their middle (2.2 m; `focusLine`, made the first time a road is lit), the rest fade a little
+toward the ground's pale -- until 2026-10-28 the roads themselves were recoloured and lit, 7.5-10 m
+of glowing blue that covered the map round a selection and hid each road's traffic colour; a thin pulsing ring marks the selected town's
 built-up heart; the names of the towns it connects to stay up whatever the zoom; and the camera
 glides over to a newly selected place, keeping its angle (a drag of yours stops the glide).
 Recoloured when the focus changes and on the roads' half-second recolour. From the outside
@@ -562,6 +564,15 @@ as they were, the land came out dark and saturated), a grain of lighter and dark
 damp margin and pale sand along every river under its water, and the fields painted in once
 they're laid, in colours a step from the savanna's with corners nudged off square and their
 rows as faint furrows. One mesh, nothing floating.
+
+**The sky and the map's edge** (2026-10-28, "look at the ledge fall off, it's not right"). A sky
+dome kept round the camera: blue overhead, a warm haze at the horizon that is the fog's own colour
+(a blue-grey background against a beige fog had turned the land's far end a beige wedge), and a
+cool blue-grey below the horizon, round and under the map, so the warm land stands off its
+backdrop. The cut edge 90 m deep (48 under a 2 km slab read as a sheet of card): grass lip,
+topsoil, red laterite, sandstone, rock, shaded by side and darker with depth rather than lit -- the
+face you mostly see looks south, away from the sun, and lit it sat in shadow, its bands one brown.
+And the point you turn round is held over the land: a pan could carry the map off the screen.
 
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:

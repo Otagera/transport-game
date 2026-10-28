@@ -58,8 +58,6 @@ const STREET_PAVED = 0x77797b;
 const ROAD_COLOURS = { paved: 0x56585b, dirt: 0xa47a55, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
 /** A selection: your colour (the 2D map's --you), lit on what it's connected to; the rest toward the ground's pale. */
 const FOCUS_COLOUR = 0x2a78d6;
-const FOCUS_GLOW = 0x0c2a52;
-const FOCUS = new THREE.Color(FOCUS_COLOUR);
 const FADED_TO = new THREE.Color(0xd9d3c4);
 
 export interface View3D {
@@ -176,11 +174,20 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
       const near = Math.min(1, Math.max(0, (camera.position.distanceTo(controls.target) - controls.minDistance) / 500));
       controls.maxPolarAngle = Math.PI * (0.3 + 0.14 * near);
       controls.update();
-      // The point you turn round stays on the ground, over hill or valley.
+      // The point you turn round stays over the land (a pan could carry the map off the screen,
+      // leaving nothing but sky), and on the ground, over hill or valley.
+      const { size } = built!;
+      const keepX = Math.max(0, Math.min(size.x, controls.target.x)) - controls.target.x;
+      const keepZ = Math.max(0, Math.min(size.z, controls.target.z)) - controls.target.z;
+      controls.target.x += keepX;
+      controls.target.z += keepZ;
+      camera.position.x += keepX;
+      camera.position.z += keepZ;
       const floor = built!.groundAt(controls.target.x, controls.target.z);
       const lift = floor - controls.target.y;
       controls.target.y += lift;
       camera.position.y += lift;
+      built!.sky.position.copy(camera.position);
       built!.cullLabels(camera);
       // The haze by how far out you are: in the distance up close, thin over the whole slab.
       const fog = built!.scene.fog as THREE.Fog;
@@ -203,6 +210,10 @@ interface Built {
   pickable: THREE.Object3D[];
   /** The ground's height under a point of the 3D world. */
   groundAt(x: number, z: number): number;
+  /** The land's extent (metres), to keep the camera over it. */
+  size: { x: number; z: number };
+  /** The sky, kept round the camera. */
+  sky: THREE.Mesh;
   /** Labels shown only as near as they're readable: a village up close, the city from afar. */
   cullLabels(camera: THREE.Camera): void;
   /** What's selected and what it's connected to: those roads lit, the rest faded, a ring at the town. */
@@ -220,8 +231,13 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const scene = new THREE.Scene();
   // A warm, lowish sun from the north-west (as the 2D map's relief is lit), a pale sky, and the
   // harmattan's haze in the distance.
-  scene.background = new THREE.Color(0xd9e4ea);
-  scene.fog = new THREE.Fog(0xe3e2d6, 900, 3000);
+  // A sky, not a flat colour: blue overhead, a warm haze at the horizon -- the fog's own colour,
+  // so far land melts into it (with a blue-grey background and a beige fog, the land's far end
+  // went to a beige wedge against the sky) -- and a cool blue-grey below it, round and under the
+  // map, so the warm land stands off it (beige there, the slab sank into its backdrop).
+  const HORIZON = 0xe4e0d2;
+  scene.background = new THREE.Color(HORIZON);
+  scene.fog = new THREE.Fog(HORIZON, 900, 3000);
   scene.add(new THREE.HemisphereLight(0xe8f0f8, 0x8a7a5a, 1.45));
   const sun = new THREE.DirectionalLight(0xfff0d4, 2.5);
   sun.shadow.radius = 3;
@@ -258,6 +274,23 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const ground = (cx: number, cy: number, lift = 0) => new THREE.Vector3(cx * M, elevationAt(cx, cy) * HEIGHT + lift, cy * M);
   const disposables: Array<{ dispose(): void }> = [];
   const own = <T extends { dispose(): void }>(thing: T): T => (disposables.push(thing), thing);
+  const sky = (() => {
+    const geo = new THREE.SphereGeometry(5000, 32, 24);
+    const zenith = new THREE.Color(0x9dbfdc), horizon = new THREE.Color(HORIZON), below = new THREE.Color(0xbcc7d0), c = new THREE.Color();
+    const pos = geo.attributes.position!;
+    const colours = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i += 1) {
+      const up = pos.getY(i) / 5000;
+      if (up >= 0) c.copy(horizon).lerp(zenith, Math.min(1, Math.pow(up, 0.6) * 1.1));
+      else c.copy(horizon).lerp(below, Math.min(1, Math.pow(-up * 3, 0.7)));
+      colours.set([c.r, c.g, c.b], i * 3);
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+    const mesh = new THREE.Mesh(own(geo), own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
+    mesh.renderOrder = -1;
+    scene.add(mesh);
+    return mesh;
+  })();
   const wetNear = (cx: number, cy: number) => {
     for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) if (isWater(terrain, Math.round(cx) + dx, Math.round(cy) + dy)) return true;
     return false;
@@ -411,7 +444,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // sandstone, rock -- rather than a plain running on, or the sea onto grass.
     // Crisp bands: each a depth and the colour down to the next (a grass lip, topsoil, red
     // laterite, sandstone, rock); a band's top and bottom rows apart, so its edges are sharp.
-    const BANDS: Array<[number, number]> = [[0, 0x6f8a45], [0.8, 0x5e4630], [3, 0xa65d3a], [13, 0xc9a36b], [27, 0x8c8478], [48, 0x8c8478]];
+    // 90 m deep (2026-10-28: at 48 m under a 2 km slab it read as a sheet of card), and shaded by
+    // side and depth rather than lit -- the face you mostly see looks south, away from the sun,
+    // and lit it sat in shadow, its laterite and sandstone muddied to one brown.
+    const BANDS: Array<[number, number]> = [[0, 0x6f8a45], [1, 0x5e4630], [4, 0xa65d3a], [24, 0xc9a36b], [52, 0x9a9083], [90, 0x8a8277]];
+    const DEEPEST = 90;
+    const SIDE_SHADE = [1, 0.8, 0.9, 0.94]; // north, east, south, west faces
     const STRATA: Array<[number, number]> = BANDS.slice(0, -1).flatMap(([depth, hex], k) => [[depth, hex], [BANDS[k + 1]![0] - 0.01, hex]] as Array<[number, number]>);
     const sides = [
       Array.from({ length: W }, (_, x) => ({ x, y: 0 })),
@@ -421,13 +459,13 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     ];
     const verts: number[] = [], cols: number[] = [], index: number[] = [];
     const tint = new THREE.Color();
-    for (const edge of sides) {
+    sides.forEach((edge, side) => {
       const start = verts.length / 3;
       for (const p of edge) {
         const top = elevationAt(p.x, p.y) * HEIGHT + (terrain.water[p.y * W + p.x] === 1 ? 0.6 : 0);
         for (const [depth, hex] of STRATA) {
-          verts.push(p.x * M, depth < 3 ? top - depth : Math.min(top - 3, -depth), p.y * M); // the lip and topsoil follow the ground
-          tint.setHex(depth < 0.8 && terrain.water[p.y * W + p.x] === 1 ? 0x4f86ad : hex);
+          verts.push(p.x * M, depth < 4 ? top - depth : Math.min(top - 4, -depth), p.y * M); // the lip and topsoil follow the ground
+          tint.setHex(depth < 1 && terrain.water[p.y * W + p.x] === 1 ? 0x4f86ad : hex).multiplyScalar(SIDE_SHADE[side]! * (1 - 0.3 * (depth / DEEPEST)));
           cols.push(tint.r, tint.g, tint.b);
         }
       }
@@ -436,17 +474,17 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const a = start + i * rows + k, b = a + rows;
         index.push(a, b, a + 1, b, b + 1, a + 1);
       }
-    }
+    });
     const sideGeo = own(new THREE.BufferGeometry());
     sideGeo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
     sideGeo.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
     sideGeo.setIndex(index);
     sideGeo.computeVertexNormals();
-    scene.add(new THREE.Mesh(sideGeo, own(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }))));
+    scene.add(new THREE.Mesh(sideGeo, own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }))));
     // Its underside, closed.
     const under = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M)), own(new THREE.MeshLambertMaterial({ color: 0x6f675e, side: THREE.DoubleSide })));
     under.rotation.x = -Math.PI / 2;
-    under.position.set(((W - 1) * M) / 2, -48, ((H - 1) * M) / 2);
+    under.position.set(((W - 1) * M) / 2, -DEEPEST, ((H - 1) * M) / 2);
     scene.add(under);
   }
 
@@ -538,7 +576,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   }
 
   // --- Roads: one mesh each, rebuilt when the network changes, recoloured as traffic does ----
-  const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean; rail: boolean; base: number; look: string }>();
+  /** `line`, `lift`: where it runs and how high, for its focus line (drawn the first time it's lit). */
+  const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean; rail: boolean; base: number; look: string; line: Point[]; lift: number; focusLine?: THREE.Mesh }>();
+  const focusLineMaterial = own(new THREE.MeshBasicMaterial({ color: FOCUS_COLOUR, side: THREE.DoubleSide }));
   const railMaterial = own(new THREE.MeshLambertMaterial({ color: 0x3b3a38, side: THREE.DoubleSide }));
   // Every line a road runs (for keeping buildings off them).
   let roadLines: Point[][] = [];
@@ -594,7 +634,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         mesh.add(legs);
       }
       scene.add(mesh);
-      roads.set(segment.id, { mesh, material, retired, rail, base, look: roadLook(segment) });
+      roads.set(segment.id, { mesh, material, retired, rail, base, look: roadLook(segment), line, lift });
     }
     for (const [id, road] of roads) {
       if (seen.has(id)) continue;
@@ -618,17 +658,17 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     for (const [id, road] of roads) {
       if (road.retired) continue;
       colourRoad(w, id, road);
-      // A selected town's or route's roads in your colour, lit; the rest pale (outside review,
-      // 2026-10-26: selecting a place should show what it's connected to, or 3D is scenery).
-      if (!focused) road.material.emissive.setHex(0x000000);
-      else if (focused.segments.has(id)) {
-        road.material.color.lerp(FOCUS, 0.7);
-        road.material.emissive.setHex(FOCUS_GLOW);
+      // A selected town's or route's roads carry a line in your colour down their middle; the
+      // rest fade a little (outside review, 2026-10-26: selecting a place should show what it's
+      // connected to, or 3D is scenery). The line, not the road: recoloured whole, 7.5-10 m of
+      // glowing blue covered the map round a selection and hid each road's own traffic colour.
+      const lit = !!focused?.segments.has(id);
+      if (lit && !road.focusLine) {
+        road.focusLine = new THREE.Mesh(ribbonGeometry(road.line, road.rail ? 1.6 : 2.2, road.lift + 0.35), focusLineMaterial);
+        road.mesh.add(road.focusLine);
       }
-      else {
-        road.material.emissive.setHex(0x000000);
-        road.material.color.lerp(FADED_TO, 0.7);
-      }
+      if (road.focusLine) road.focusLine.visible = lit;
+      if (focused && !lit) road.material.color.lerp(FADED_TO, 0.45);
     }
   }
   function colourRoad(w: GameWorld, id: string, road: { material: THREE.MeshLambertMaterial; rail: boolean; base: number }): void {
@@ -1440,6 +1480,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       return [...towns.values()].map((t) => t.mesh);
     },
     groundAt: (x, z) => elevationAt(x / M, z / M) * HEIGHT,
+    size: { x: (W - 1) * M, z: (H - 1) * M },
+    sky,
     cullLabels(cam) {
       // As near as each is readable; a selected place's connections keep their names whatever the
       // distance. Then none on top of another (pulled back, a city's name, its four sites' and its
