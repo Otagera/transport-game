@@ -3,7 +3,7 @@ import { LINE_COLOURS, labelOf, roadLabelKey, routeLabelKey } from "@engine/game
 import { waysFor } from "@engine/game/crossings";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { SWITCHED_OFF } from "@engine/game/tuning";
-import { homeBox } from "@engine/game/fuel";
+import { builtUp, homeBox } from "@engine/game/fuel";
 import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
@@ -2904,6 +2904,21 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       expect(v2.rails!.every((r) => (r.via?.length ?? 0) > 0)).toBe(true);
     }
     expect(gameMap(GAME_MAP, 0, { regionEnabled: true, mapVersion: 2 })).toEqual(gameMap(GAME_MAP, 0, { regionEnabled: true }));
+  });
+
+  test("map version 3: the port's sites stand past where it's built up, every site still placed", () => {
+    const run = (seed: number, mapVersion: number) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion, warmUpDays: 0 });
+    let inside2 = 0, inside3 = 0;
+    for (const seed of [3, 11, 17, 42, 101, 256]) {
+      const [v2, v3] = [run(seed, 2), run(seed, 3)];
+      const sites = (w: typeof v2) => [...w.towns.values()].filter((t) => t.industry);
+      expect(sites(v3).map((t) => t.id).sort()).toEqual(sites(v2).map((t) => t.id).sort());
+      const inside = (w: typeof v2) => { const port = w.towns.get(w.port!)!; return sites(w).filter((t) => Math.hypot(t.x - port.x, t.y - port.y) < builtUp(port.population)).length; };
+      inside2 += inside(v2);
+      inside3 += inside(v3);
+    }
+    // At most a fifth as many inside the city as at version 2 (on twelve seeds, 46 -> 5).
+    expect(inside3).toBeLessThanOrEqual(Math.floor(inside2 / 5));
   });
 
   test("every seed: the home cluster is the seed's slice map moved whole; clusters beyond it; one dominant city; a port; all reachable", () => {

@@ -372,8 +372,36 @@ export function nearestDistance(world: GameWorld, x: number, y: number): number 
   return Math.min(...[...world.towns.values()].map((town) => Math.hypot(town.x - x, town.y - y)));
 }
 
-/** A dry spot `minR`-`maxR` cells from (cx, cy) and at least `clear` from every town and site; the one scoring best. */
+/** How far a town is built up, cells: the 3D view builds it to this (view3d.ts reachOf). */
+export function builtUp(population: number): number {
+  return 4 + Math.sqrt(population) * 0.9;
+}
+
+/**
+ * A dry spot `minR`-`maxR` cells from (cx, cy) and at least `clear` from every town and site; the one scoring best.
+ *
+ * Map version 3 (2026-10-28): round a town, the ring starts past where it's built up, and keeps
+ * to one side of it -- its industrial side, toward the second city from the port, away from the
+ * port elsewhere. Rings of 6-13 cells round a capital built up to 14 put its tank farm, terminal,
+ * flour mill and steel terminal all through its streets, on every side (map 2418, in 3D: the
+ * capital's heart was four sites). Each falls back -- the whole ring, then the ring as before --
+ * so a chain never loses a site to it.
+ */
 export function ringSpot(world: GameWorld, cx: number, cy: number, minR: number, maxR: number, clear: number, score: (x: number, y: number) => number): { x: number; y: number } | null {
+  const town = (world.tuning.mapVersion ?? 1) >= 3 ? [...world.towns.values()].find((t) => !t.industry && t.x === cx && t.y === cy) : undefined;
+  if (town) {
+    const from = Math.max(minR, Math.ceil(builtUp(town.population) + 2));
+    const to = from + (maxR - minR);
+    const port = world.port ? world.towns.get(world.port) : undefined;
+    const second = [...world.towns.values()].filter((t) => t.id !== port?.id && !t.industry && inHome(world, t)).sort((p, q) => q.population - p.population)[0];
+    const toward = town === port && second ? Math.atan2(second.y - cy, second.x - cx) : port && port !== town ? Math.atan2(cy - port.y, cx - port.x) : null;
+    const side = (x: number, y: number) => toward === null || Math.abs(Math.atan2(Math.sin(Math.atan2(y - cy, x - cx) - toward), Math.cos(Math.atan2(y - cy, x - cx) - toward))) <= Math.PI / 3;
+    return ringSpotIn(world, cx, cy, from, to, clear, score, side) ?? ringSpotIn(world, cx, cy, from, to, clear, score) ?? ringSpotIn(world, cx, cy, minR, maxR, clear, score);
+  }
+  return ringSpotIn(world, cx, cy, minR, maxR, clear, score);
+}
+
+function ringSpotIn(world: GameWorld, cx: number, cy: number, minR: number, maxR: number, clear: number, score: (x: number, y: number) => number, keep: (x: number, y: number) => boolean = () => true): { x: number; y: number } | null {
   let best: { x: number; y: number; s: number } | null = null;
   for (let r = minR; r <= maxR; r += 1) {
     for (let k = 0; k < 24; k += 1) {
@@ -381,7 +409,7 @@ export function ringSpot(world: GameWorld, cx: number, cy: number, minR: number,
       const x = Math.round(cx + r * Math.cos(angle));
       const y = Math.round(cy + r * Math.sin(angle));
       // In the home cluster's box (region.ts): a ring round its second city can't spill out of it.
-      if (!dry(world, x, y, 1) || !inHomeBox(world, x, y) || nearestDistance(world, x, y) < clear) continue;
+      if (!dry(world, x, y, 1) || !inHomeBox(world, x, y) || nearestDistance(world, x, y) < clear || !keep(x, y)) continue;
       const s = score(x, y);
       if (!best || s > best.s) best = { x, y, s };
     }

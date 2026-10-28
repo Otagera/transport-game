@@ -250,7 +250,8 @@ export interface GameTuning {
   riverValleys?: boolean;
   /**
    * Which drawing of a seed's map (region.ts gameMap): 1 as first drawn; 2 rivers smoothed and
-   * meandering, the old railway laid over the land. Absent in older runs: 1, so a run file
+   * meandering, the old railway laid over the land; 3 the sites round a town placed past where
+   * it's built up, on one side of it (fuel.ts ringSpot). Absent in older runs: 1, so a run file
    * replays on the map it was played on.
    */
   mapVersion?: number;

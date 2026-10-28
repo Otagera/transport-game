@@ -1092,6 +1092,16 @@ replays as played. Seed 0 stays the hand-made map, alone.
   segment took 2.1 s a map; each segment now marks only the cells within its half-width and a
   valley's reach, which is the same result (21 seeds, byte for byte) in 19 ms -- 286 ms before,
   on maps of either version.
+- **Version 3: the sites stand outside the town** (`fuel.ts ringSpot`, `builtUp`). The port's
+  sites went on rings 6-13 cells round it -- the tank farm, the cement and steel terminals, the
+  flour mill, the second refinery -- and a 135k capital is built up 14 cells out (4 + 0.9√k, as
+  the 3D view builds it), so they stood through its streets on every side (map 2418 in 3D: the
+  capital's heart was four sites). At version 3 a ring round a town starts two cells past where
+  it's built up, keeps its width, and keeps to a 120° side: from the port toward the second
+  city, elsewhere away from the port -- an industrial side. Falling back to the whole ring, then
+  the ring as before, so no chain loses a site. Twelve seeds, 20 days with nobody playing: sites
+  inside the city 46 -> 5, every site placed (138), working sites 86 -> 85; **fuel supplied
+  32.6% -> 28.0%** (the tank farm's tankers go further), the one change to play.
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of
