@@ -2906,6 +2906,25 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     expect(gameMap(GAME_MAP, 0, { regionEnabled: true, mapVersion: 2 })).toEqual(gameMap(GAME_MAP, 0, { regionEnabled: true }));
   });
 
+  test("map version 4: the land by region beyond the home box, towns dry, the home cluster untouched", () => {
+    let changed = 0;
+    for (const seed of [3, 11, 17, 42, 101, 256, 777, 2411, 2418, 9001]) {
+      const v3 = gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 3 });
+      const v4 = gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 4 });
+      expect(v4.towns).toEqual(v3.towns);
+      expect(v4.roads).toEqual(v3.roads);
+      buildGameTerrain(v4); // throws on a town in the water
+      // Whatever's new stands outside the home cluster's box.
+      const box = v4.home!;
+      const inBox = (x: number, y: number) => x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
+      const oldHills = new Set(v3.terrain!.hills!.map((h) => `${h.x},${h.y}`));
+      for (const h of v4.terrain!.hills!.filter((h) => !oldHills.has(`${h.x},${h.y}`))) expect(inBox(h.x, h.y)).toBe(false);
+      for (const r of v4.terrain!.rivers!.slice(v3.terrain!.rivers!.length)) for (const [x, y] of r.points) expect(inBox(x, y)).toBe(false);
+      if (JSON.stringify(v4.terrain) !== JSON.stringify(v3.terrain)) changed += 1;
+    }
+    expect(changed).toBeGreaterThanOrEqual(9); // a map falls back to version 3 only where the guards refuse it
+  });
+
   test("map version 3: the port's sites stand past where it's built up, every site still placed", () => {
     const run = (seed: number, mapVersion: number) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion, warmUpDays: 0 });
     let inside2 = 0, inside3 = 0;

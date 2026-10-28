@@ -1102,6 +1102,22 @@ replays as played. Seed 0 stays the hand-made map, alone.
   the ring as before, so no chain loses a site. Twelve seeds, 20 days with nobody playing: sites
   inside the city 46 -> 5, every site placed (138), working sites 86 -> 85; **fuel supplied
   32.6% -> 28.0%** (the tank farm's tankers go further), the one change to play.
+- **Version 4: the land by region, and its coast** (`region.ts regionalLand`; 2026-10-28, "I am
+  eager to see the variety"). Every map had the same bones whatever its region. Now, beyond the
+  home cluster's box only (its trunk's prices are as measured), each region drawn as it is:
+  south-west rolling hills and a lagoon behind the shore with a channel to the sea; south-east
+  steeper hills; south-south a delta (two or three creeks leave the big river ~30 cells above its
+  mouth and wind to the sea) and no new hills; Middle Belt a plateau (hills overlapping on a grid
+  in an ellipse, its edge broken where one would stand on a town) and rocks; north and
+  north-east rocks on the plain and the rivers a third thinner, a ford's narrow kept. On every
+  coast an estuary (the big river's last 18 cells widening to the sea) and one to three bays or
+  headlands. From a stream of its own (seed + 4,000,037); each feature clear of the towns (water
+  by WATER_CLEARANCE) and the home box; the whole kept only if every town can still be reached,
+  else version 3's map. Twelve seeds, 15 days unplayed, against version 3: the same 138 sites,
+  85 working, fuel 28.3% -> 28.6%, trips 527 -> 533 a day. `world.region` carries the map's
+  region for the 3D view's palette (render-and-ui.md). `scripts/region-sheet.ts` now draws each
+  map in its region's colours with relief on one scale, its water from its lines, and its region
+  and map version in the caption.
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of

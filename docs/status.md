@@ -27,7 +27,11 @@ a growing town's market); your buses go round a flooded ford by a dry road you b
 (`floodDetour`). **A steadier screen** (2026-10-28, from your "some buttons are not clickable"):
 3D and the 2D map without their stutter, the panel redrawn in place (`patch.ts`), fuel, food and
 sites shown as two-day averages (`steady.ts`; render-and-ui.md, The screen); the styles out of
-`index.html` into `src/game/styles/`, one set of tokens the map reads too. **Open for you:**
+`index.html` into `src/game/styles/`, one set of tokens the map reads too. **The map's
+generation** (2026-10-28, behind `mapVersion`, so saved runs replay as played): rivers that wind
+and an old railway over the land (2), the port's sites outside the city on one side (3), the land
+beyond the home cluster drawn by region with a coast of estuary and bays (4), and 3D in the
+region's colours (engine.md, The region). Next: the gateways (brief, The region, step 3) -- to discuss. **Open for you:**
 morphdom in place of `patch.ts`, or a lit-html spike on one panel. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

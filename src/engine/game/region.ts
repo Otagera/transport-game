@@ -91,7 +91,13 @@ export interface RegionInfo {
 export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?: boolean; riverValleys?: boolean; mapVersion?: number }): GameMapDef {
   let map = tuning.regionEnabled ? regionMap(base, seed) : generatedMapInfo(base, seed).map;
   // Map version 2 (2026-10-28): rivers that wind, and an old railway that follows the land.
-  if ((tuning.mapVersion ?? 1) >= 2 && seed !== 0) map = laidOverLand(naturalWater(map, seed));
+  const version = tuning.mapVersion ?? 1;
+  if (version >= 2 && seed !== 0) {
+    map = naturalWater(map, seed);
+    // Version 4: the land by region and its coast, on the smoothed water, before the railway is laid over it.
+    if (version >= 4) map = regionalLand(map, seed);
+    map = laidOverLand(map);
+  }
   // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
   return tuning.riverValleys ? { ...map, terrain: { ...map.terrain, valleys: true } } : map;
 }
@@ -625,4 +631,152 @@ function laidOverLand(map: GameMapDef): GameMapDef {
     return { ...rail, via: eased.slice(1, -1).map(([x, y]): [number, number] => [Math.round(x * 100) / 100, Math.round(y * 100) / 100]) };
   });
   return { ...map, rails };
+}
+
+// --- Map version 4: the land by region, and its coast ----------------------------------------
+// (2026-10-28: every map had the same bones -- a big river across, the sea down one edge, one
+// ridge, the home cluster boxed in a corner -- whatever its region.) The land beyond the home
+// cluster drawn as its region is: rolling hills and a lagoon in the south-west, steeper hills in
+// the south-east, a delta in the south-south, a plateau and rocks in the Middle Belt, rocks on a
+// drier plain in the north; on every coast an estuary, bays and headlands. Nothing new in the
+// home cluster's box (its trunk's prices are as measured: brief, The region), every feature clear
+// of the towns, and the map kept only if every town can still be reached -- else version 3's.
+
+/** The region's map with its land and coast drawn in (version 4). */
+function regionalLand(map: GameMapDef, seed: number): GameMapDef {
+  const rivers = map.terrain?.rivers;
+  const box = map.home;
+  if (!rivers?.length || !box || map.width < REGION_WIDTH) return map;
+  const rng = createRng(seed + 4_000_037);
+  const W = map.width, H = map.height;
+  const water: Array<GameRiverDef & { widths: number[] }> = rivers.map((r) => ({ ...r, points: [...r.points], widths: [...(r.widths ?? r.points.map(() => r.width))] }));
+  const hills: GameHillDef[] = [...(map.terrain?.hills ?? [])];
+  const sea = water.find((r) => Math.max(...r.widths!) > 12);
+  const seaSide: -1 | 1 | null = sea ? (sea.points[0]![0] < W / 2 ? -1 : 1) : null;
+  const main = water.filter((r) => r !== sea).sort((a, b) => Math.max(...b.widths!) - Math.max(...a.widths!))[0];
+  const nearHome = (x: number, y: number, pad: number) => toBox({ x, y }, box) < pad;
+  const inside = (x: number, y: number, pad: number) => x >= pad && y >= pad && x <= W - 1 - pad && y <= H - 1 - pad;
+  // A hill is free where it stands clear of every town and of the home box.
+  const hillFree = (h: GameHillDef) => inside(h.x, h.y, 4) && !nearHome(h.x, h.y, h.radius + 4) && map.towns.every((t) => distance(t, h) >= h.radius + 2);
+  // A river is free where every point is clear of the towns by WATER_CLEARANCE and of the home box.
+  const riverFree = (r: GameRiverDef) => map.towns.every((t) => dryOf([r], t, WATER_CLEARANCE)) && r.points.every(([x, y]) => !nearHome(x, y, 4));
+  const addHills = (count: number, radius: [number, number], height: [number, number]) => {
+    for (let n = 0, tries = 0; n < count && tries < count * 30; tries += 1) {
+      const h = { x: Math.round(between(rng, 6, W - 7)), y: Math.round(between(rng, 6, H - 7)), radius: Math.round(between(rng, ...radius)), height: Math.round(between(rng, ...height) * 10) / 10 };
+      if (!hillFree(h) || !dryOf(water, h, 1)) continue;
+      hills.push(h);
+      n += 1;
+    }
+  };
+  const wind = (r: GameRiverDef, key: number): GameRiverDef & { widths: number[] } => {
+    const s = chaikin(r.points, r.widths ?? r.points.map(() => r.width), 2);
+    const m = meandering(s.points, s.widths, seed, key);
+    return { ...r, points: m.points.map(([x, y]): [number, number] => [Math.round(x * 100) / 100, Math.round(y * 100) / 100]), widths: m.widths.map((w) => Math.round(w * 100) / 100) };
+  };
+
+  switch (map.region) {
+    case "southwest":
+      addHills(14, [7, 11], [1, 1.8]);
+      break;
+    case "southeast":
+      addHills(18, [6, 10], [1.6, 2.8]);
+      break;
+    case "middleBelt": {
+      // A plateau: hills overlapping on a grid inside an ellipse, its edge broken where a hill
+      // would stand on a town; then rocks about the plain.
+      for (let tries = 0; tries < 40; tries += 1) {
+        const cx = between(rng, 30, W - 30), cy = between(rng, 25, H - 25);
+        const rx = between(rng, 18, 26), ry = between(rng, 11, 16), turn = rng() * Math.PI;
+        if (nearHome(cx, cy, rx + 6)) continue;
+        const top: GameHillDef[] = [];
+        for (let gy = -ry; gy <= ry; gy += 8) for (let gx = -rx; gx <= rx; gx += 8) {
+          if ((gx / rx) ** 2 + (gy / ry) ** 2 > 1) continue;
+          const h = { x: Math.round(cx + gx * Math.cos(turn) - gy * Math.sin(turn) + between(rng, -1.5, 1.5)), y: Math.round(cy + gx * Math.sin(turn) + gy * Math.cos(turn) + between(rng, -1.5, 1.5)), radius: 8, height: Math.round(between(rng, 1.4, 1.8) * 10) / 10 };
+          if (hillFree(h)) top.push(h);
+        }
+        if (top.length >= 6) { hills.push(...top); break; }
+      }
+      addHills(6, [3, 4], [3, 4.5]);
+      break;
+    }
+    case "north":
+    case "northeast":
+      // A drier plain: rocks standing out of it, and its rivers thinner (a ford's narrow kept).
+      addHills(12, [2.5, 4], [4, 6]);
+      for (const r of water) if (r !== sea) r.widths = r.widths!.map((w) => Math.max(Math.min(w, 1.2), w * 0.7));
+      break;
+    case "southSouth": {
+      // A delta: two or three creeks leave the big river some 30 cells above its mouth and wind to the sea.
+      if (!main || !sea || seaSide === null) break;
+      const pts = main.points;
+      let along = 0, k = pts.length - 1;
+      while (k > 1 && along < 30) { along += Math.hypot(pts[k]![0] - pts[k - 1]![0], pts[k]![1] - pts[k - 1]![1]); k -= 1; }
+      const fork = { x: pts[k]![0], y: pts[k]![1] };
+      const mouthY = pts[pts.length - 1]![1];
+      const creeks = 2 + (rng() < 0.5 ? 1 : 0);
+      for (let c = 0, tries = 0; c < creeks && tries < 24; tries += 1) {
+        const y = Math.round(Math.max(8, Math.min(H - 9, mouthY + (rng() < 0.5 ? -1 : 1) * between(rng, 10, 28))));
+        const to = { x: Math.round(coastAt(sea, seaSide, y) + seaSide * 3), y };
+        if (!inside(to.x, to.y, 0) && (to.x < 0 || to.x > W - 1)) to.x = Math.max(0, Math.min(W - 1, to.x));
+        const creek = wind(meander(rng, fork, to, 1.8, 3), 900 + c);
+        if (!riverFree(creek)) continue;
+        water.push(creek);
+        c += 1;
+      }
+      break;
+    }
+  }
+
+  // The coast: an estuary where the big river meets the sea, then bays and headlands.
+  if (sea && seaSide !== null) {
+    if (main) {
+      const before = main.widths!;
+      let along = 0;
+      const widened = [...before];
+      for (let k = main.points.length - 1; k > 0 && along < 18; k -= 1) {
+        widened[k] = before[k]! * (1 + 1.6 * (1 - along / 18));
+        along += Math.hypot(main.points[k]![0] - main.points[k - 1]![0], main.points[k]![1] - main.points[k - 1]![1]);
+      }
+      if (map.towns.every((t) => dryOf([{ ...main, widths: widened }], t, WATER_CLEARANCE))) main.widths = widened;
+    }
+    const shoreWidths = sea.widths!;
+    for (let b = 0, tries = 0, bays = 1 + Math.floor(rng() * 3); b < bays && tries < 20; tries += 1) {
+      const y0 = between(rng, 10, H - 10), span = between(rng, 8, 16), depth = (rng() < 0.7 ? 1 : -0.6) * between(rng, 6, 12);
+      if (nearHome(coastAt(sea, seaSide, y0), y0, span + 8)) continue;
+      const tried = shoreWidths.map((w, i) => {
+        const d = Math.abs(sea.points[i]![1] - y0) / span;
+        return d < 1 ? Math.max(18, w + depth * Math.cos((d * Math.PI) / 2) ** 2) : w;
+      });
+      if (!map.towns.every((t) => dryOf([{ ...sea, widths: tried }], t, WATER_CLEARANCE))) continue;
+      sea.widths = tried;
+      shoreWidths.splice(0, shoreWidths.length, ...tried);
+      b += 1;
+    }
+    // A lagoon behind the shore (the south-west's: Lagos's), joined to the sea by a channel.
+    if (map.region === "southwest") {
+      for (let tries = 0; tries < 16; tries += 1) {
+        const y0 = between(rng, 12, H - 60), length = between(rng, 35, 55), inset = between(rng, 5, 8);
+        const points: Array<[number, number]> = [];
+        for (let y = y0; y <= y0 + length; y += 4) points.push([Math.round(coastAt(sea, seaSide, y) - seaSide * (inset + between(rng, -1, 1))), Math.round(y)]);
+        const lagoon = wind({ points, width: 3, widths: points.map((_, i) => 2 + 1.6 * Math.sin((i / (points.length - 1)) * Math.PI)) }, 950);
+        const mid = points[Math.floor(points.length / 2)]!;
+        const channel: GameRiverDef & { widths: number[] } = { points: [mid, [Math.round(coastAt(sea, seaSide, mid[1]) + seaSide * 3), mid[1]]], width: 1.6, widths: [1.6, 1.6] };
+        if (!riverFree(lagoon) || !riverFree(channel)) continue;
+        water.push(lagoon, channel);
+        break;
+      }
+    }
+  }
+
+  const next: GameMapDef = { ...map, terrain: { ...map.terrain, rivers: water, hills } };
+  // The generator's guards, again: no town in the water, and every town reachable by building roads.
+  let terrain: TerrainField;
+  try { terrain = buildGameTerrain(next); } catch { return map; }
+  const reach = new UnionFind(next.towns.map((t) => t.id));
+  for (const road of next.roads) reach.union(road.a, road.b);
+  for (const t of next.towns) {
+    const nearest = next.towns.filter((o) => o !== t).sort((a, b) => distance(t, a) - distance(t, b)).slice(0, 3);
+    for (const o of nearest) if (!reach.connected(t.id, o.id) && planCorridor(terrain, [t, o], "auto", new Set([0, 1]))) reach.union(t.id, o.id);
+  }
+  return reach.componentCount() === 1 ? next : map;
 }

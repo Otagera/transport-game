@@ -583,6 +583,12 @@ and the hemisphere light low, lights the blocks' window bands from inside (their
 emissive amber), and dims by hand what's drawn unlit -- the water, the road centre lines, the cut
 edge -- or it would glow. A toggle, not a clock: nothing in the game depends on the hour.
 
+**The land by region** (`view3d.ts BIOMES`, from `world.region`; 2026-10-28). The painted ground
+and the trees take the map's region: the north and north-east dry ochre with a third to a half
+the trees, the south-east greener and thicker, the south-south lush (1.7× the trees), the Middle
+Belt's high ground grey rock; the south-west as before. Map version 4 draws the shape (hills,
+plateau, delta, lagoon); this, the look.
+
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the

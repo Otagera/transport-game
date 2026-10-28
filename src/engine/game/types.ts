@@ -251,7 +251,8 @@ export interface GameTuning {
   /**
    * Which drawing of a seed's map (region.ts gameMap): 1 as first drawn; 2 rivers smoothed and
    * meandering, the old railway laid over the land; 3 the sites round a town placed past where
-   * it's built up, on one side of it (fuel.ts ringSpot). Absent in older runs: 1, so a run file
+   * it's built up, on one side of it (fuel.ts ringSpot); 4 the land beyond the home cluster drawn
+   * by region, and the coast with an estuary and bays (regionalLand). Absent in older runs: 1, so a run file
    * replays on the map it was played on.
    */
   mapVersion?: number;
@@ -837,6 +838,8 @@ export interface GameWorld {
   plans: TripPlans | null;
   /** pairKey -> road path, or null if the pair isn't connected. Cleared on every road change. */
   pathCache: Map<string, PathResult | null>;
+  /** The map's region (generate.ts NameRegion: "north", "southSouth"...): what the 3D view draws its land as. Nothing simulated reads it. */
+  region?: string;
   /** Planned roads by `a:b` (roads.ts planRoad). Terrain never changes, so plans never go stale. */
   roadPlans: Map<string, RoadPlan | null>;
   nextId: number;

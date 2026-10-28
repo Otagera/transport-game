@@ -55,6 +55,19 @@ THREE.ShaderChunk.fog_fragment = /* glsl */ `
 /** A town's own streets (townKit): paler than the roads between towns, so those still lead. */
 const STREET_DIRT = 0xae855e;
 const STREET_PAVED = 0x77797b;
+/**
+ * The land by the map's region (world.region; map version 4 draws its shape, this its look): the
+ * plain's dry and green, the banks, high ground, how dry the plain leans and how thick the trees.
+ * The north dry and open, the south-south lush, the Middle Belt's high ground grey rock.
+ */
+const BIOMES: Record<string, { dry: number; green: number; bank: number; high: number; dryness: number; trees: number }> = {
+  southwest: { dry: 0xc6b783, green: 0x9fb27a, bank: 0x7c9a55, high: 0x7d8f62, dryness: 0, trees: 1 },
+  southeast: { dry: 0xb9b47f, green: 0x8fae68, bank: 0x6f9450, high: 0x6c8a52, dryness: -0.12, trees: 1.35 },
+  southSouth: { dry: 0xadb57c, green: 0x84a75f, bank: 0x5c8846, high: 0x6c8a52, dryness: -0.28, trees: 1.7 },
+  middleBelt: { dry: 0xc6b783, green: 0x9fb27a, bank: 0x7c9a55, high: 0x948e80, dryness: 0.05, trees: 0.9 },
+  north: { dry: 0xd4bf8a, green: 0xb7b37c, bank: 0x8c9c5a, high: 0xa08f74, dryness: 0.32, trees: 0.45 },
+  northeast: { dry: 0xd8c18c, green: 0xbab47c, bank: 0x8c9c5a, high: 0xa38f72, dryness: 0.38, trees: 0.4 },
+};
 const ROAD_COLOURS = { paved: 0x56585b, dirt: 0xa47a55, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
 /** A selection: your colour (the 2D map's --you), lit on what it's connected to; the rest toward the ground's pale. */
 const FOCUS_COLOUR = 0x2a78d6;
@@ -398,6 +411,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   // worked out at 2 px a cell and scaled up smooth, a grain over it, sandy banks along the
   // rivers, and the fields painted in once they're laid (plant).
   const PX = 8;
+  const biome = BIOMES[world.region ?? "southwest"] ?? BIOMES.southwest!;
   const groundCanvas = document.createElement("canvas");
   groundCanvas.width = (W - 1) * PX;
   groundCanvas.height = (H - 1) * PX;
@@ -423,11 +437,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
     const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
-    const high = new THREE.Color(0x7d8f62), c = new THREE.Color(), rgb = { r: 0, g: 0, b: 0 };
-    const dry = new THREE.Color(0xc6b783), green = new THREE.Color(0x9fb27a), bankGreen = new THREE.Color(0x7c9a55), earth = new THREE.Color(0xb98a62);
+    const high = new THREE.Color(biome.high), c = new THREE.Color(), rgb = { r: 0, g: 0, b: 0 };
+    const dry = new THREE.Color(biome.dry), green = new THREE.Color(biome.green), bankGreen = new THREE.Color(biome.bank), earth = new THREE.Color(0xb98a62);
     for (let py = 0; py < small.height; py += 1) for (let px = 0; px < small.width; px += 1) {
       const cx = (px + 0.5) / BASE, cy = (py + 0.5) / BASE;
-      c.copy(green).lerp(dry, Math.max(0, Math.min(1, (patch(cx, cy) - 0.3) * 1.8)));
+      c.copy(green).lerp(dry, Math.max(0, Math.min(1, (patch(cx, cy) - 0.3 + biome.dryness) * 1.8)));
       c.lerp(high, Math.min(1, elevationAt(cx, cy) / top) * 0.8);
       const bank = bankDist[Math.min(H - 1, Math.round(cy)) * W + Math.min(W - 1, Math.round(cx))]!;
       if (bank < 5) c.lerp(bankGreen, 0.7 * (1 - bank / 5));
@@ -1310,7 +1324,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       // reference flights' "stand structure"): thicker in a grove's heart, bare between.
       const g = grove(cx, cy);
       const clump = what === TOWN || bank < 3 ? 1 : Math.max(0.12, Math.min(2.4, (g - 0.35) * 5));
-      if (rand() > chance * clump) continue;
+      if (rand() > chance * clump * (what === TOWN ? 1 : biome.trees)) continue;
       // Taller in a grove's heart, young at its edge; now and then one stands above the rest.
       const cohort = what === TOWN ? 1 : 0.65 + Math.max(0, g - 0.35) * 1.1;
       const size = (0.55 + rand() * 0.45) * cohort * (rand() < 0.03 ? 1.5 : 1);

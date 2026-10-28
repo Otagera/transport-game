@@ -26,6 +26,11 @@ const maps = seeds.map((seed) => {
     port: w.port ?? null,
     water: Buffer.from(terrain.water).toString("base64"),
     height8: Buffer.from(terrain.elevation.map((e) => Math.round((e / highest) * 255))).toString("base64"),
+    // Elevation on one scale for every map (a unit = 40), so relief compares across the sheet.
+    relief: Buffer.from(terrain.elevation.map((e) => Math.max(0, Math.min(255, Math.round(e * 40))))).toString("base64"),
+    rivers: (w.waterLines ?? []).map((r) => ({ points: r.points, widths: r.widths ?? r.points.map(() => r.width) })),
+    region: w.region ?? "?",
+    version: w.tuning.mapVersion ?? 1,
     lines: corridors.map((c) => ({ rail: kind.get(c.id) === "rail", points: c.polyline.map((p) => [p.x, p.y]) })),
     towns: [...w.towns.values()].map((t) => ({ name: t.name, x: t.x, y: t.y, population: t.population, site: t.industry ?? null })),
   };
@@ -42,11 +47,21 @@ for (const m of maps) {
   c.width = m.width * S; c.height = m.height * S;
   const g = c.getContext("2d");
   const water = Uint8Array.from(atob(m.water), (ch) => ch.charCodeAt(0));
-  const h = Uint8Array.from(atob(m.height8), (ch) => ch.charCodeAt(0));
+  const h = Uint8Array.from(atob(m.relief), (ch) => ch.charCodeAt(0));
+  // The land in its region's colours (view3d.ts BIOMES), shaded from the north-west and darker up high.
+  const base = { north: [212, 191, 138], northeast: [216, 193, 140], middleBelt: [198, 183, 131], southwest: [190, 182, 128], southeast: [170, 176, 120], southSouth: [150, 172, 112] }[m.region] || [200, 190, 140];
+  const at = (x, y) => h[Math.max(0, Math.min(m.height - 1, y)) * m.width + Math.max(0, Math.min(m.width - 1, x))];
   for (let y = 0; y < m.height; y++) for (let x = 0; x < m.width; x++) {
     const i = y * m.width + x;
-    if (water[i]) g.fillStyle = "#a9c8e4"; else { const v = 246 - h[i] * 0.35; g.fillStyle = "rgb(" + v + "," + (v - 2) + "," + (v - 10) + ")"; }
+    const shade = Math.max(0.55, Math.min(1.35, 1 + (at(x - 1, y - 1) - at(x + 1, y + 1)) * 0.035)) * (1 - h[i] / 900);
+    g.fillStyle = "rgb(" + base.map((v) => Math.round(v * shade)).join(",") + ")";
     g.fillRect(x * S, y * S, S, S);
+  }
+  // Water from its own lines, as the game draws it.
+  g.strokeStyle = "#8fb8dc"; g.lineCap = g.lineJoin = "round";
+  for (const r of m.rivers) for (let k = 1; k < r.points.length; k++) {
+    g.lineWidth = ((r.widths[k - 1] + r.widths[k]) / 2) * S;
+    g.beginPath(); g.moveTo(r.points[k - 1][0] * S, r.points[k - 1][1] * S); g.lineTo(r.points[k][0] * S, r.points[k][1] * S); g.stroke();
   }
   if (m.home) { g.strokeStyle = "#c33"; g.setLineDash([6, 4]); g.strokeRect(m.home.x * S, m.home.y * S, m.home.width * S, m.home.height * S); g.setLineDash([]); }
   for (const l of m.lines) {
@@ -61,7 +76,7 @@ for (const m of maps) {
     g.beginPath(); g.arc(t.x * S, t.y * S, r, 0, 7); g.fill();
     g.fillText(t.name + " " + Math.round(t.population) + "k", t.x * S, t.y * S - r - 3);
   }
-  const cap = document.createElement("figcaption"); cap.textContent = "seed " + m.seed + "  (" + m.width + "x" + m.height + ")";
+  const cap = document.createElement("figcaption"); cap.textContent = "seed " + m.seed + " · " + m.region + " · map version " + m.version;
   fig.append(c, cap); document.querySelector("main").append(fig);
 }
 </script>`;
