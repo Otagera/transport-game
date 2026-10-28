@@ -1031,45 +1031,55 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
   }
   // Fuel sellers (fuel.ts): where a town is a third or more short, jerrycans line the roads into
-  // it, as the town card says ("Roadside sellers sell fuel at a premium"). Rebuilt when which
-  // towns are short changes.
-  let sellers: THREE.Mesh | null = null;
-  let sellersKey = "";
+  // it, as the town card says ("Roadside sellers sell fuel at a premium"). A mesh a town, built
+  // the first time it's short and then shown or hidden: a town's shortage is a sawtooth, rising
+  // until a tanker lands and dropping to nothing, so which towns are short changed at half the
+  // half-second checks, and rebuilding them all each time was a sixth of a 3D frame's work.
+  // Built again only when the roads change.
+  const sellers = new Map<string, THREE.Mesh | null>();
+  let sellersRoads = -1;
   function syncSellers(w: GameWorld): void {
-    const short = [...w.towns.values()].filter((t) => !t.industry && shortageAt(w, t.id) >= 0.35);
-    const key = short.map((t) => t.id).sort().join("|") + `#${roadLines.length}`;
-    if (key === sellersKey) return;
-    sellersKey = key;
-    if (sellers) { scene.remove(sellers); sellers.geometry.dispose(); sellers = null; }
-    if (!short.length) return;
+    if (sellersRoads !== roadLines.length) {
+      sellersRoads = roadLines.length;
+      for (const mesh of sellers.values()) if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
+      sellers.clear();
+    }
+    for (const town of w.towns.values()) {
+      if (town.industry) continue;
+      const short = shortageAt(w, town.id) >= 0.35;
+      if (short && !sellers.has(town.id)) sellers.set(town.id, buildSellers(town));
+      const mesh = sellers.get(town.id);
+      if (mesh) mesh.visible = short;
+    }
+  }
+  function buildSellers(town: GameTown): THREE.Mesh | null {
     const kit = new Kit();
-    for (const town of short) {
-      const rand = seeded(`sellers-${town.id}`);
-      const r = reachCells.get(town.id) ?? 3;
-      for (const line of roadLines) {
-        if (!line.some((p) => Math.hypot(p.x - town.x, p.y - town.y) < r + 4)) continue;
-        const length = polylineLength(line);
-        for (let along = 0.3; along < length; along += 0.45) {
-          const [, rest] = splitPolyline(line, along);
-          const p = rest[0]!, q = rest.find((o) => Math.hypot(o.x - p.x, o.y - p.y) > 1e-6) ?? line[line.length - 1]!;
-          const d = Math.hypot(p.x - town.x, p.y - town.y);
-          if (d < r * 0.6 || d > r + 3.5 || rand() > 0.7) continue;
-          const dir = Math.atan2(q.y - p.y, q.x - p.x);
-          const side = rand() < 0.5 ? 1 : -1;
-          const nx = -Math.sin(dir) * side, ny = Math.cos(dir) * side;
-          const cx = p.x + nx * 0.9, cy = p.y + ny * 0.9;
-          const cell = Math.round(cy) * W + Math.round(cx);
-          if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2 || terrain.water[cell] === 1 || occupied[cell] === WET) continue;
-          const one = new Kit();
-          fuelSeller(one, rand, 0, 0, Math.atan2(-nx, -ny));
-          kit.place(one.merged(), cx * M, elevationAt(cx, cy) * HEIGHT - 0.05, cy * M);
-        }
+    const rand = seeded(`sellers-${town.id}`);
+    const r = reachCells.get(town.id) ?? 3;
+    for (const line of roadLines) {
+      if (!line.some((p) => Math.hypot(p.x - town.x, p.y - town.y) < r + 4)) continue;
+      const length = polylineLength(line);
+      for (let along = 0.3; along < length; along += 0.45) {
+        const [, rest] = splitPolyline(line, along);
+        const p = rest[0]!, q = rest.find((o) => Math.hypot(o.x - p.x, o.y - p.y) > 1e-6) ?? line[line.length - 1]!;
+        const d = Math.hypot(p.x - town.x, p.y - town.y);
+        if (d < r * 0.6 || d > r + 3.5 || rand() > 0.7) continue;
+        const dir = Math.atan2(q.y - p.y, q.x - p.x);
+        const side = rand() < 0.5 ? 1 : -1;
+        const nx = -Math.sin(dir) * side, ny = Math.cos(dir) * side;
+        const cx = p.x + nx * 0.9, cy = p.y + ny * 0.9;
+        const cell = Math.round(cy) * W + Math.round(cx);
+        if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2 || terrain.water[cell] === 1 || occupied[cell] === WET) continue;
+        const one = new Kit();
+        fuelSeller(one, rand, 0, 0, Math.atan2(-nx, -ny));
+        kit.place(one.merged(), cx * M, elevationAt(cx, cy) * HEIGHT - 0.05, cy * M);
       }
     }
-    if (kit.empty) return;
-    sellers = new THREE.Mesh(kit.merged(), material);
-    sellers.castShadow = true;
-    scene.add(sellers);
+    if (kit.empty) return null;
+    const mesh = new THREE.Mesh(kit.merged(), material);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    return mesh;
   }
   // Roadside life: kiosks strung along the roads just outside each town, and a filling station
   // on each road out of a town of some size. One mesh, rebuilt when the network changes.
@@ -1282,6 +1292,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         town.label.element.remove();
       }
       for (const mesh of fleets.values()) mesh.dispose();
+      for (const mesh of sellers.values()) mesh?.geometry.dispose();
       for (const thing of disposables) thing.dispose();
     },
   };

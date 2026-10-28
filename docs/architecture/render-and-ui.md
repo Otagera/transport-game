@@ -233,7 +233,10 @@ terrain isn't applied: the map still draws shaded hills.
   problem here" (short of its input, naming where from; or most of it waiting). On the map, a
   gauge under each site's square (green ≥80%, amber ≥40%, red below; grey idle). The map
   passes `goodsFlows` in once a frame (playtest, map 2411: "we need indications for the
-  factories in terms of production").
+  factories in terms of production"). **Keep passing it:** `siteProduction` works the flows
+  out itself when not handed them, and the site icons' redraw had dropped the argument -- on
+  map 2418 at 4x, `drawSite` was then 15% of the page's main-thread time and the 2D map
+  stuttered (p99 frame 50 ms; 17.6 ms with it back, 2026-10-28).
 - **Map labels** (`render.ts draw`, `occupied`): towns draw first, biggest first, and take
   their circle and name; then sites, each with its name only (muted) at rest -- what it makes
   only when hovered or selected, "idle · restore it" and "no road" always -- placed below,
@@ -512,7 +515,11 @@ by the banks and the towns' trees aren't clumped.
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the
   town card's "Roadside sellers sell fuel at a premium"), jerrycan stalls line the roads into it
-  (`fuelSeller`, shapes3d.ts): one merged mesh, rebuilt when which towns are short changes.
+  (`fuelSeller`, shapes3d.ts): a mesh a town, built the first time it's short, then shown or
+  hidden; all rebuilt only when the roads change. A town's shortage is a sawtooth (rising until
+  a tanker lands, then 0), so which towns are short changed at half the half-second checks: the
+  first cut, one merged mesh rebuilt on each change, was 18% of the main thread in 3D at 4x,
+  with 92 long tasks in 12 s and a p90 frame of 83 ms (17 ms after, map 2418, 2026-10-28).
 - **Dust.** Behind each road vehicle on a piece worn past 45% of the way to the floor (its
   `condition`, as `roughCostFactor` reads it), three pale puffs: one instanced mesh, up to 3,000.
 - **A booming town.** A town `growthTrend` calls growing gets extra market umbrellas through its

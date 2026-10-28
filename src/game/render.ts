@@ -11,7 +11,7 @@ import { noSeatPairs, seatMove } from "@engine/game/problems";
 import { polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/game/roads";
 import { roadCapacity } from "@engine/game/congestion";
 import { siteProduction } from "@engine/game/production";
-import { flowKey, goodsFlows } from "@engine/game/goods";
+import { flowKey, goodsFlows, type GoodsFlow } from "@engine/game/goods";
 import { cargoName } from "@engine/game/fuel";
 import { farmTowns } from "@engine/game/food";
 import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, tierOf, tierRadius, type Badge, type Glyph, type SiteState, type Tier } from "./icons";
@@ -274,8 +274,10 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   cityId = [...world.towns.values()].filter((t) => !t.industry).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id ?? null;
   farms = world.food ? new Set(farmTowns(world).map((t) => t.id)) : new Set();
   labelled = labelledTowns(world, view, state);
+  // The goods flows once a frame, for every site's gauge: worked out per site, they were half of drawing the map.
+  const flows = goodsFlows(world);
   for (const town of [...world.towns.values()].sort((p, q) => p.population - q.population)) {
-    if (town.industry) drawSite(ctx, world, view, town, state);
+    if (town.industry) drawSite(ctx, world, view, town, state, flows);
     else drawTown(ctx, world, view, town, state);
   }
   drawWardens(ctx, world, view);
@@ -805,13 +807,13 @@ function drawWaitingMark(ctx: CanvasRenderingContext2D, mx: number, my: number):
   ctx.textAlign = "left";
 }
 
-function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, site: GameTown, state: DrawState): void {
+function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, site: GameTown, state: DrawState, flows: GoodsFlow[]): void {
   const p = toScreen(view, site.x, site.y);
   const r = townRadius(site, view);
   const lit = state.selectedTown === site.id || state.hoverTown === site.id;
   ctx.globalAlpha = focus && !focus.towns.has(site.id) ? 0.3 : 1;
   // Its tile and glyph (icons.ts): solid working, hollow idle, an amber corner held back.
-  const made = siteProduction(world, site.id);
+  const made = siteProduction(world, site.id, flows);
   const perDay = (x: number) => x * SECONDS_PER_GAME_DAY;
   const siteState: SiteState = !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
   const glyph = (site.industry && site.industry in GLYPHS ? site.industry : "quarry") as Glyph;
