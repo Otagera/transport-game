@@ -172,6 +172,7 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
     lorryRoutes: [],
     goods: createGoodsState(),
     port: def.port,
+    seaport: def.seaport,
     region: def.region,
     heavyFlowEMA: new Map(),
     maintained: new Set(),

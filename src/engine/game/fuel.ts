@@ -1,4 +1,5 @@
 import type { GameTown, GameWorld } from "./types";
+import { importsArriving } from "./gateways";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand, type GameEvent } from "./settlement";
 import { addRoadToMap, isCutOff, roadPath, type ActionResult } from "./world";
@@ -159,7 +160,8 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
   let refined = refineryOutput(world);
   let made = newRefineryOutput(world);
   // Each site makes what its workers let it (workers.ts).
-  let imported = world.tuning.fuelImportShare * fuel.baseDemand * staffFactor(world, fuel.depotId);
+  // A share of it, where the seaport is a haul away (gateways.ts).
+  let imported = world.tuning.fuelImportShare * fuel.baseDemand * staffFactor(world, fuel.depotId) * importsArriving(world);
   const unmet = (x: (typeof towns)[number]) => x.need - x.fromRefinery - x.fromDepot - x.fromNew;
   const fill = (source: "refinery" | "depot" | "new", order: typeof towns) => {
     for (const x of order) {

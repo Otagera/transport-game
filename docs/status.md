@@ -31,7 +31,9 @@ sites shown as two-day averages (`steady.ts`; render-and-ui.md, The screen); the
 generation** (2026-10-28, behind `mapVersion`, so saved runs replay as played): rivers that wind
 and an old railway over the land (2), the port's sites outside the city on one side (3), the land
 beyond the home cluster drawn by region with a coast of estuary and bays (4), a southern map's
-sea along its south (5), and 3D in the region's colours (engine.md, The region). Next: the gateways (brief, The region, step 3) -- to discuss. **Open for you:**
+sea along its south (5), and 3D in the region's colours (engine.md, The region). **The gateways**
+(brief, The region, agreed 2026-10-28): step 1, the seaport, built -- imports land there and 60-100%
+reach the home city by its link (gateways.ts); next, border crossings, then the north landlocked. Next: the gateways (brief, The region, step 3) -- to discuss. **Open for you:**
 morphdom in place of `patch.ts`, or a lit-html spike on one panel. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

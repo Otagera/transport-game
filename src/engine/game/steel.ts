@@ -1,4 +1,5 @@
 import type { GameTown, GameWorld } from "./types";
+import { importsArriving } from "./gateways";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
 import { isCutOff, roadPath, type ActionResult } from "./world";
@@ -95,7 +96,7 @@ export function mineOutput(world: GameWorld): number {
 /** Imported steel through the terminal, tonnes a second. */
 export function steelImports(world: GameWorld): number {
   const steel = world.steel;
-  return steel?.terminalId ? world.tuning.steelImportShare * steel.baseDemand * staffFactor(world, steel.terminalId) : 0;
+  return steel?.terminalId ? world.tuning.steelImportShare * steel.baseDemand * staffFactor(world, steel.terminalId) * importsArriving(world) : 0;
 }
 
 /**

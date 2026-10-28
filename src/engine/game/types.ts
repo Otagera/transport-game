@@ -87,6 +87,8 @@ export interface GameMapDef {
   terrain?: { rivers?: GameRiverDef[]; hills?: GameHillDef[]; valleys?: boolean };
   /** Step 4: the port city, where supplies come from (goods.ts). Absent means no supplies. */
   port?: string;
+  /** Where imports land from the sea (region.ts): the home city on a coast, else the coast cluster's regional town. */
+  seaport?: string;
   /** Step 4: inherited railway, straight and out of service until restored (rail.ts). */
   rails?: GameRoadDef[];
   /** The region (region.ts): the home cluster's box, where you start and the camera frames. Absent: the whole map is home. */
@@ -259,6 +261,11 @@ export interface GameTuning {
   mapVersion?: number;
   /** A fuel pledge offered only where it has a move to name (term.ts). Absent in older runs: off, offered as it was. */
   fuelPledgeNeedsMove?: boolean;
+  /** Imports land at the seaport and a share reaches the home city (gateways.ts). Absent in older runs: off, landing at the home city. */
+  seaportImports?: boolean;
+  /** The share of imports long-haul trucks bring up a dirt road from the seaport, and up a road paved end to end. */
+  importsOverDirt?: number;
+  importsOverPaved?: number;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;
@@ -821,6 +828,8 @@ export interface GameWorld {
   goods: GoodsState;
   /** Where supplies come from (the map def's port). */
   port: string | undefined;
+  /** The map's seaport (gateways.ts); absent on maps drawn before it was kept. */
+  seaport?: string;
   /** segmentId -> rolling road space entering per second from lorries alone (heavier wear). */
   heavyFlowEMA: Map<string, number>;
   /** The original towns' starting sizes, thousands (growth.ts caps growth relative to these). */

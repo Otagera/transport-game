@@ -62,6 +62,7 @@ import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/me
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
 import { corridorSummaries } from "@engine/game/corridors";
 import { industryFlows, stoneServed } from "@engine/game/industries";
+import { seaportLink } from "@engine/game/gateways";
 import { cargoName, crudeArriving, fuelReach, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput } from "@engine/game/fuel";
 import { checkExpand, expandCost, expandLevel, siteScale } from "@engine/game/expand";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/game/bonds";
@@ -1615,7 +1616,25 @@ function productionHtml(siteId: string): string {
     ...(p.staffing === null ? [] : [`<div class="prow"><span>Workers: ${pct(p.staffing)} of a full shift${held("workers")}</span><span class="num">${pct(p.staffing)}</span>${gauge(p.staffing)}</div>`]),
     ...(p.made * SECONDS_PER_GAME_DAY >= 1 ? [`<div class="prow"><span>Carried away: ${pct(p.shipped)} of it${p.shipped < 0.5 ? ` <span class="held">the rest waits</span>` : ""}</span><span class="num">${pct(p.shipped)}</span>${gauge(p.shipped)}</div>`] : []),
   ];
-  return `<div class="production">${rows.join("")}${expandHtml(siteId)}</div>`;
+  // An import's site: where its imports land, and how much of them gets here (gateways.ts).
+  const imports = ["depot", "silo", "steelport", "flourmill"].includes(world.towns.get(siteId)?.industry ?? "") ? seaportText() : "";
+  return `${imports}<div class="production">${rows.join("")}${expandHtml(siteId)}</div>`;
+}
+
+// The seaport (gateways.ts, brief: The gateways): where imports land when the home city isn't on
+// the coast, how much of them reaches it and how, and the move that brings more.
+function seaportText(): string {
+  const link = seaportLink(world);
+  if (link.by === "here" || !world.port) return "";
+  const home = world.towns.get(world.port)!, sea = world.towns.get(link.seaport)!;
+  const away = Math.round(Math.hypot(home.x - sea.x, home.y - sea.y));
+  const t = world.tuning;
+  const ends = [world.port, link.seaport].sort().join();
+  const oldLine = world.simulation.map.segments.some((s) => s.type === "rail" && [s.fromNodeId, s.toNodeId].sort().join() === ends);
+  const rail = oldLine ? `restore the old railway to ${townName(link.seaport)} (K)` : `lay track to ${townName(link.seaport)} (K)`;
+  const how = link.by === "rail" ? "by the railway" : link.by === "none" ? "-- no road joins them" : link.paved >= 0.99 ? "up a road paved all the way" : `up the old highway${link.paved > 0.01 ? `, ${pct(link.paved)} of it paved` : ""}`;
+  const more = link.by === "rail" ? "" : link.paved < 0.99 && link.by === "road" ? ` Pave it for up to ${pct(t.importsOverPaved ?? 0.9)}, or ${rail} for all of it.` : ` To get all of it, ${rail}.`;
+  return `<p class="townshare"><b>Imports:</b> they land at ${townName(link.seaport)}, the seaport, ${away} cells off; ${pct(link.share)} reach ${townName(world.port)} ${how}, and as much of what's exported reaches the coast.${more}</p>`;
 }
 
 // Expanding it (expand.ts): another line, more capacity -- offered once it's working, said why not when it can't.
@@ -2116,6 +2135,7 @@ function renderTown(townId: string): void {
       ${growthText(townId, town.name)}
       ${serviceText(townId, town.name)}
       ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
+      ${world.tuning.goodsEnabled && (townId === world.port || townId === world.seaport) ? seaportText() : ""}
       ${world.tuning.goodsEnabled ? fuelText(townId) : ""}
       ${world.tuning.goodsEnabled ? cementText(townId) : ""}
       ${world.tuning.goodsEnabled ? foodText(townId) : ""}

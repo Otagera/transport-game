@@ -1,4 +1,5 @@
 import { inFarmBelt } from "./clusters";
+import { importsArriving } from "./gateways";
 import type { GameTown, GameWorld } from "./types";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
@@ -152,7 +153,7 @@ export function foodFlows(world: GameWorld): GoodsFlow[] {
   split(food.millId, millOutput(world), (id) => foodWant(world, id));
   // The flour chain (3c): imported wheat from the port to the flour mill, its flour to the markets.
   if (food.flourMillId && world.port && world.towns.has(world.port)) {
-    flows.push({ from: world.port, to: food.flourMillId, kind: "supplies", rate: t.wheatImportShare * t.wheatPerFlour * food.baseFlourWant * siteScale(world, food.flourMillId) });
+    flows.push({ from: world.port, to: food.flourMillId, kind: "supplies", rate: t.wheatImportShare * t.wheatPerFlour * food.baseFlourWant * siteScale(world, food.flourMillId) * importsArriving(world) });
     split(food.flourMillId, flourOutput(world), (id) => flourWant(world, id));
   }
   return flows;
@@ -221,7 +222,8 @@ export function exportsArriving(world: GameWorld): number {
 export function payExports(world: GameWorld, dt: number): number {
   // Off, nothing -- and never 0 times a rate a run file from before food doesn't have (NaN).
   if (!foodActive(world)) return 0;
-  const paid = exportsArriving(world) * dt * world.tuning.exportPayPerTonne;
+  // Paid on what reaches the coast: a share of it where the seaport is a haul away (gateways.ts).
+  const paid = exportsArriving(world) * dt * world.tuning.exportPayPerTonne * importsArriving(world);
   if (paid <= 0) return 0;
   world.economy.funds += paid;
   world.budget.exports += paid;

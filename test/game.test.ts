@@ -3,6 +3,7 @@ import { LINE_COLOURS, labelOf, roadLabelKey, routeLabelKey } from "@engine/game
 import { waysFor } from "@engine/game/crossings";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { SWITCHED_OFF } from "@engine/game/tuning";
+import { importsArriving, seaportLink } from "@engine/game/gateways";
 import { builtUp, homeBox } from "@engine/game/fuel";
 import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
@@ -2951,6 +2952,40 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     expect(southern).toBeGreaterThan(0);
   }, 30_000);
 
+  test("the seaport (gateways, step 1): imports come up from it in part by the old highway, all of it by the old railway restored", () => {
+    const run = (seed: number, overrides = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, ...overrides });
+    let far = 0, home = 0, restored = 0;
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const w = run(seed);
+      const link = seaportLink(w);
+      if (!w.seaport || w.seaport === w.port) {
+        home += 1;
+        expect(link).toMatchObject({ by: "here", share: 1 });
+        continue;
+      }
+      far += 1;
+      // Up the old dirt highway: the dirt share (the inherited roads are dirt).
+      expect(link.by).toBe("road");
+      expect(link.share).toBeCloseTo(w.tuning.importsOverDirt!, 6);
+      expect(importsArriving(w)).toBeCloseTo(w.tuning.importsOverDirt!, 6);
+      // Off (an older run): everything lands at the home city as before.
+      expect(seaportLink(run(seed, { seaportImports: false })).share).toBe(1);
+      // The old railway restored between the two: all of it.
+      w.economy.funds = 1e9;
+      const ends = [w.port!, w.seaport].sort().join();
+      const rail = w.simulation.map.segments.find((s) => s.type === "rail" && w.railOutOfService.has(s.id) && [s.fromNodeId, s.toNodeId].sort().join() === ends);
+      if (rail) {
+        expect(applyAction(w, { kind: "track", a: w.port!, b: w.seaport, alignment: "cheapest" }).ok).toBe(true);
+        w.economy.elapsedSeconds += 1; // a new tick's reading
+        expect(seaportLink(w)).toMatchObject({ by: "rail", share: 1 });
+        restored += 1;
+      }
+    }
+    expect(far).toBeGreaterThan(0);
+    expect(restored).toBeGreaterThan(0);
+    expect(home).toBeGreaterThan(0);
+  }, 30_000);
+
   test("map version 3: the port's sites stand past where it's built up, every site still placed", () => {
     const run = (seed: number, mapVersion: number) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion, warmUpDays: 0 });
     let inside2 = 0, inside3 = 0;
@@ -3093,7 +3128,8 @@ describe("the steel chain (steel.ts; brief, More industries, more chains)", () =
     const flows = steelFlows(w);
     expect(flows.some((f) => f.from === steel.mineId)).toBe(false);
     const imported = flows.filter((f) => f.from === steel.terminalId).reduce((sum, f) => sum + f.rate, 0);
-    expect(imported).toBeCloseTo(w.tuning.steelImportShare * steel.baseDemand, 6);
+    // Of what lands at the seaport, the share that reaches the home city (gateways.ts).
+    expect(imported).toBeCloseTo(w.tuning.steelImportShare * steel.baseDemand * importsArriving(w), 6);
     w.economy.funds = w.tuning.steelRestoreCost;
     expect(restoreSteel(w).ok).toBe(true);
     expect(w.economy.funds).toBe(0);

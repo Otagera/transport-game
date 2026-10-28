@@ -1131,6 +1131,21 @@ replays as played. Seed 0 stays the hand-made map, alone.
   trips 578 -> 543 a day, the same chains (quarries 3-4 and a cement silo vary by map, as before).
   The north, north-east and Middle Belt keep a side coast until the gateways (brief, The region,
   step 3) give an inland map its trade.
+- **The seaport, a real place** (`gateways.ts`; brief, The region, The gateways, step 1; 2026-10-28).
+  The map keeps its seaport (`GameMapDef.seaport`, `world.seaport`: the home city on a coast, else
+  the coast cluster's regional town). On 41 of 60 maps it isn't the home city but 99-222 cells off,
+  past a haulier's 40, so the haul is a share, not trucks: `seaportLink` (once a tick) is all of it
+  by the old railway restored between the two (`railPath`), else up the road `importsOverDirt` (0.6)
+  rising to `importsOverPaved` (0.9) with the share of its length paved. `importsArriving` scales the
+  four imports where they land -- the tank farm's fuel (`fuel.ts`), the silo's cement, the steel
+  terminal's steel, the flour mill's wheat flow -- and the export payment (`food.ts payExports`):
+  exports have to reach the coast. Behind `seaportImports` (absent in older runs: off). The port's
+  and seaport's town cards and the import sites' cards say where imports land, how much gets here
+  and how, and the move that brings more (`main.ts seaportText`). The strategist, maps 1, 4, 5 (far
+  seaport) and 9 (the home city is the seaport) to day 120, on -> off: map 9 identical; elsewhere no
+  collapse (people at day 100 775k/771k, 840k/822k, 737k/731k; towns under 60% fuel 22/18, 13/17,
+  19/19), the swings in net a day mostly the bot's choices diverging. The bot doesn't yet pave the
+  highway or restore the railway for the imports: what it measures is the cost of ignoring the link.
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of

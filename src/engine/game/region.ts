@@ -493,6 +493,7 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo, frame: Frame = STANDARD): 
     towns,
     roads,
     port,
+    seaport,
     rails,
     terrain: { rivers: water, hills },
     region: home.map.region,
