@@ -1,5 +1,5 @@
 import type { GameTown, GameWorld } from "./types";
-import { importsArriving } from "./gateways";
+import { importsArriving, portScale } from "./gateways";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
 import { addRoadToMap, isCutOff, roadPath, type ActionResult } from "./world";
@@ -91,7 +91,7 @@ export function worksOutput(world: GameWorld): number {
 
 /** Imported cement through the terminal, tonnes a second (idle-works maps only). */
 export function cementImports(world: GameWorld): number {
-  return world.cement?.siloId ? world.tuning.cementImportShare * world.cement.baseDemand * staffFactor(world, world.cement.siloId) * importsArriving(world) : 0;
+  return world.cement?.siloId ? world.tuning.cementImportShare * world.cement.baseDemand * staffFactor(world, world.cement.siloId) * importsArriving(world) * portScale(world) : 0;
 }
 
 /**

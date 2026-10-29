@@ -1,4 +1,5 @@
 import { answerDemand, unionAfterAction } from "./union";
+import { upgradePort } from "./gateways";
 import { commitPledge, consoleMove, noteAction } from "./term";
 import type { GameWorld } from "./types";
 import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
@@ -40,6 +41,7 @@ export type ActionSpec =
   | { kind: "retire" | "restore" | "repair"; segmentId: string }
   | { kind: "dropProject" }
   | { kind: "restoreRefinery" }
+  | { kind: "upgradePort" }
   | { kind: "restoreWorks" }
   | { kind: "restoreSteel" }
   | { kind: "expand"; siteId: string }
@@ -131,6 +133,10 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
     case "dropProject":
       dropProject(world);
       return { ok: true };
+    case "upgradePort": {
+      const result = upgradePort(world);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason ?? "can't" };
+    }
     case "restoreRefinery": {
       const result = restoreRefinery(world);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };

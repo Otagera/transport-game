@@ -97,3 +97,51 @@ export function exportGateway(world: GameWorld, townId: string): ExportGateway |
   kept.byTown.set(townId, way);
   return way;
 }
+
+// --- Growing the port (brief, The region: "its handling (tonnes a day) is a rung like a road's") --
+// Imports were set at day 1's need -- the tank farm brings in 100% of what the towns burned on day
+// 1 -- so as towns grow, the only answer to the shortage that follows was the refinery. The port's
+// rungs are the other: a deep-water berth lands `portImportScale[1]` of day 1's need, a container
+// terminal `[2]`, bought once each at the seaport (or the coast road's gateway). The link's share
+// still applies on top: a bigger port up a dirt road still loses its 40%. Behind `portRungs`
+// (absent in older runs: off, every import at day 1's need).
+
+/** How much the port lands, as a multiple of day 1's need: 1 until it's grown. */
+export function portScale(world: GameWorld): number {
+  const t = world.tuning;
+  if (!t.portRungs) return 1;
+  return t.portImportScale?.[world.portLevel ?? 0] ?? 1;
+}
+
+/** The next rung's name and price; null at the top or switched off. */
+export function nextPortRung(world: GameWorld): { name: string; price: number; scale: number } | null {
+  const t = world.tuning;
+  if (!t.portRungs || !world.port) return null;
+  const level = world.portLevel ?? 0;
+  const price = t.portUpgradeCosts?.[level];
+  const scale = t.portImportScale?.[level + 1];
+  if (price === undefined || scale === undefined) return null;
+  return { name: level === 0 ? "a deep-water berth" : "a container terminal", price, scale };
+}
+
+export function upgradePort(world: GameWorld): { ok: boolean; reason?: string; charged?: number } {
+  const next = nextPortRung(world);
+  if (!next) return { ok: false, reason: world.tuning.portRungs ? "the port is as big as it gets" : "switched off" };
+  if (world.economy.funds < next.price) return { ok: false, reason: "can't afford it" };
+  world.economy.funds -= next.price;
+  world.portLevel = (world.portLevel ?? 0) + 1;
+  return { ok: true, charged: next.price };
+}
+
+// --- Fuel over the border ------------------------------------------------------------------
+// Where the crossing is to Benin (Idiroko) or Niger (Jibia), cheap fuel comes over it informally
+// (kpayo, as it does), `borderFuelShare` of day 1's need, carried by tanker from the crossing to the
+// towns in reach (fuel.ts fuelFlows). Cameroon's crossings bring none. Behind `borderFuel` (absent
+// in older runs: none).
+
+/** The border site fuel comes over, or null. */
+export function borderFuelSite(world: GameWorld): string | null {
+  if (!world.tuning.borderFuel || !world.border) return null;
+  const name = world.towns.get(world.border)?.name ?? "";
+  return name.startsWith("Idiroko") || name.startsWith("Jibia") ? world.border : null;
+}

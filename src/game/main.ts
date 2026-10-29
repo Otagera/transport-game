@@ -62,7 +62,7 @@ import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/me
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
 import { corridorSummaries } from "@engine/game/corridors";
 import { industryFlows, stoneServed } from "@engine/game/industries";
-import { exportGateway, seaportLink } from "@engine/game/gateways";
+import { exportGateway, nextPortRung, portScale, seaportLink } from "@engine/game/gateways";
 import { cargoName, crudeArriving, fuelReach, fuelSupply, isFuelSite, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput } from "@engine/game/fuel";
 import { checkExpand, expandCost, expandLevel, siteScale } from "@engine/game/expand";
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/game/bonds";
@@ -1530,6 +1530,7 @@ function renderCoastRoad(townId: string): void {
       <div class="title">${site.name}</div>
       <p class="townshare">No sea here: the region's imports come up from the ports in the south, and its exports go down to them, this way.</p>
       ${seaportText()}
+      ${portHtml()}
     </div>`;
 }
 
@@ -1657,8 +1658,18 @@ function productionHtml(siteId: string): string {
     ...(p.made * SECONDS_PER_GAME_DAY >= 1 ? [`<div class="prow"><span>Carried away: ${pct(p.shipped)} of it${p.shipped < 0.5 ? ` <span class="held">the rest waits</span>` : ""}</span><span class="num">${pct(p.shipped)}</span>${gauge(p.shipped)}</div>`] : []),
   ];
   // An import's site: where its imports land, and how much of them gets here (gateways.ts).
-  const imports = ["depot", "silo", "steelport", "flourmill"].includes(world.towns.get(siteId)?.industry ?? "") ? seaportText() : "";
+  const imports = ["depot", "silo", "steelport", "flourmill"].includes(world.towns.get(siteId)?.industry ?? "") ? seaportText() + portHtml() : "";
   return `${imports}<div class="production">${rows.join("")}${expandHtml(siteId)}</div>`;
+}
+
+// The port's rungs (gateways.ts): what it lands of day 1's need, and the next rung with its button.
+function portHtml(): string {
+  if (!world.tuning.portRungs || !world.port) return "";
+  const scale = portScale(world);
+  const next = nextPortRung(world);
+  const now = `<b>The port:</b> lands ${pct(scale)} of what the towns needed on day 1.`;
+  if (!next) return `<p class="townshare">${now} As big as it gets.</p>`;
+  return `<p class="townshare">${now} As they grow, ${next.name} lands ${pct(next.scale)} -- the other answer to a shortage, beside the refinery. <button data-upgrade-port="1">Build ${next.name} · ${naira(next.price)}</button></p>`;
 }
 
 // The seaport (gateways.ts, brief: The gateways): where imports land when the home city isn't on
@@ -2177,7 +2188,7 @@ function renderTown(townId: string): void {
       ${growthText(townId, town.name)}
       ${serviceText(townId, town.name)}
       ${world.tuning.railEnabled ? haltText(townId, town.name) : ""}
-      ${world.tuning.goodsEnabled && (townId === world.port || townId === world.seaport) ? seaportText() : ""}
+      ${world.tuning.goodsEnabled && (townId === world.port || townId === world.seaport) ? seaportText() + portHtml() : ""}
       ${world.tuning.goodsEnabled ? fuelText(townId) : ""}
       ${world.tuning.goodsEnabled ? cementText(townId) : ""}
       ${world.tuning.goodsEnabled ? foodText(townId) : ""}
@@ -2916,6 +2927,13 @@ function onPanelClick(event: MouseEvent): void {
     say(result.ok
       ? `${first ? "Metro opened" : "Another metro line"} in ${townName(town)} for ${naira(result.amount ?? 0)}: it carries ${Math.round(metroRiders(world, town).riders).toLocaleString()} of the town's inside trips a day, at ${naira(world.tuning.metroFare)} each.`
       : `Can't build it: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.upgradePort) {
+    const next = nextPortRung(world);
+    const result = act({ label: `building ${next?.name ?? "the port"}`, towns: world.seaport ? [world.seaport] : [] }, { kind: "upgradePort" });
+    say(result.ok ? `${next?.name ? next.name[0]!.toUpperCase() + next.name.slice(1) : "The port"} built for ${naira(result.amount ?? 0)}: the port now lands ${pct(portScale(world))} of day 1's need.` : `Can't build it: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

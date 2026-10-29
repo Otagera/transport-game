@@ -3,7 +3,7 @@ import { LINE_COLOURS, labelOf, roadLabelKey, routeLabelKey } from "@engine/game
 import { waysFor } from "@engine/game/crossings";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { SWITCHED_OFF } from "@engine/game/tuning";
-import { exportGateway, importsArriving, seaportLink } from "@engine/game/gateways";
+import { borderFuelSite, exportGateway, importsArriving, portScale, seaportLink } from "@engine/game/gateways";
 import { builtUp, homeBox } from "@engine/game/fuel";
 import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
@@ -3033,6 +3033,54 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     }
     expect(north).toBeGreaterThan(0);
     expect(south).toBeGreaterThan(0);
+  }, 60_000);
+
+  test("the port's rungs: a berth, then a container terminal, each landing more of day 1's need; off, it stays as it was", () => {
+    const run = (overrides = {}) => startRun(GAME_MAP, 9, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, ...overrides });
+    const w = run();
+    // The tank farm sends only what the towns its tankers reach still need, and day 1's imports
+    // were for the whole region (map 9: 25.2 landed, 11.6 wanted within reach): the rungs show once
+    // the towns in reach outgrow it -- here, every town three times its size (34.7 wanted).
+    for (const town of w.towns.values()) if (!town.industry) town.population *= 3;
+    const landed = () => siteProduction(w, w.fuel!.depotId)!.capacity;
+    const fuelIn = () => fuelFlows(w).filter((f) => f.from === w.fuel!.depotId).reduce((sum, f) => sum + f.rate, 0);
+    const [cap0, in0] = [landed(), fuelIn()];
+    w.economy.funds = 1e6;
+    const t = w.tuning;
+    expect(applyAction(w, { kind: "upgradePort" }).ok).toBe(true);
+    expect(w.economy.funds).toBe(1e6 - t.portUpgradeCosts![0]!);
+    expect(landed()).toBeCloseTo(cap0 * t.portImportScale![1]!, 6);
+    expect(fuelIn()).toBeGreaterThan(in0 * 1.1);
+    expect(applyAction(w, { kind: "upgradePort" }).ok).toBe(true);
+    expect(landed()).toBeCloseTo(cap0 * t.portImportScale![2]!, 6);
+    expect(applyAction(w, { kind: "upgradePort" }).ok).toBe(false); // as big as it gets
+    const off = run({ portRungs: false });
+    off.economy.funds = 1e6;
+    expect(applyAction(off, { kind: "upgradePort" }).ok).toBe(false);
+    expect(portScale(off)).toBe(1);
+  });
+
+  test("fuel over the border: from Benin and Niger, to the towns in tanker reach; none from Cameroon, none switched off", () => {
+    const run = (seed: number, overrides = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, ...overrides });
+    let over = 0, none = 0;
+    for (let seed = 1; seed <= 8; seed += 1) {
+      const w = run(seed);
+      const name = w.towns.get(w.border!)!.name;
+      const fromBorder = fuelFlows(w).filter((f) => f.from === w.border);
+      if (name.startsWith("Idiroko") || name.startsWith("Jibia")) {
+        over += 1;
+        expect(borderFuelSite(w)).toBe(w.border!);
+        for (const f of fromBorder) expect(roadPath(w, w.border!, f.to)!.distance).toBeLessThanOrEqual(w.tuning.tankerMaxHaulCells);
+        expect(fromBorder.reduce((s, f) => s + f.rate, 0)).toBeLessThanOrEqual(w.tuning.borderFuelShare! * w.fuel!.baseDemand + 1e-9);
+        expect(fuelFlows(run(seed, { borderFuel: false })).some((f) => f.from === w.border)).toBe(false);
+      } else {
+        none += 1;
+        expect(borderFuelSite(w)).toBeNull();
+        expect(fromBorder.length).toBe(0);
+      }
+    }
+    expect(over).toBeGreaterThan(0);
+    expect(none).toBeGreaterThan(0);
   }, 60_000);
 
   test("map version 3: the port's sites stand past where it's built up, every site still placed", () => {

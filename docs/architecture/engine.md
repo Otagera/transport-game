@@ -1180,6 +1180,22 @@ replays as played. Seed 0 stays the hand-made map, alone.
   from the home city; the north-east's Banki crossing now on its east edge. Six northern maps
   unplayed for 20 days, version 5 -> 6: the same 42 sites working, fuel 24.8% -> 24.6%, trips 573 ->
   574, export pay ₦220 -> ₦248 a day (their seaport was already a haul away).
+- **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
+  region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
+  a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought
+  once each from the port's, seaport's and import sites' cards: a deep-water berth (₦40k) lands 1.3×
+  day 1's need, a container terminal (₦120k) 1.7×, at the four import points (and their sites'
+  capacities), the seaport link's share on top. Behind `portRungs` (absent: off, ×1 exactly). It
+  pays only once the towns the tankers reach want more than was landed: day 1's imports were for
+  the whole region, most of it out of reach (map 9: 25.2 landed, 11.6 wanted within 200 cells; the
+  towns in reach must outgrow that, or your roads bring more within it).
+- **Fuel over the border** (`gateways.ts borderFuelSite`, `fuel.ts fuelFlows`; 2026-10-29). Over a
+  crossing to Benin (Idiroko) or Niger (Jibia), cheap fuel comes in informally (kpayo):
+  `borderFuelShare` (0.2) of day 1's need, after the tank farm's and before the refinery's, to the
+  towns within a tanker's reach of the crossing, carried by hauliers as tanker loads
+  (`truckers.ts`); Cameroon's crossings bring none. Behind `borderFuel` (absent: none). Six maps
+  unplayed 15 days, off -> on: the home towns' fuel 24->39, 30->31, 31->35, 20->34, 25->48, 23->40%:
+  strong -- `borderFuelShare` is the dial if shortages come too easy.
 - **Speed: the region costs ~5.4x a tick** (map 2418: 31 towns and sites against 16; ~1.6
   ms a tick against 0.3, a game day 1.4 s against 0.27). Within 4x at 60 frames, but the
   7-day warm-up holds the page ~9 s before it shows. Demand is worked over every pair of

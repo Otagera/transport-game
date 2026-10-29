@@ -273,6 +273,13 @@ export interface GameTuning {
   borderPayShare?: number;
   /** The north, north-east and Middle Belt's sea trade by the coast road on the south edge (border.ts placeCoastRoad). Absent in older runs: off. */
   landlockedNorth?: boolean;
+  /** The port grows (gateways.ts): imports up to `portImportScale[level]` of day 1's need, each rung bought for `portUpgradeCosts[level]`. Absent in older runs: off. */
+  portRungs?: boolean;
+  portImportScale?: number[];
+  portUpgradeCosts?: number[];
+  /** Fuel over a crossing to Benin or Niger (gateways.ts borderFuelSite), `borderFuelShare` of day 1's need. Absent in older runs: none. */
+  borderFuel?: boolean;
+  borderFuelShare?: number;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;
@@ -839,6 +846,8 @@ export interface GameWorld {
   seaport?: string;
   /** The border crossing's site id (border.ts); absent without one. */
   border?: string;
+  /** The port's rungs built (gateways.ts upgradePort): 0 as it was, 1 a deep-water berth, 2 a container terminal. */
+  portLevel?: number;
   /** segmentId -> rolling road space entering per second from lorries alone (heavier wear). */
   heavyFlowEMA: Map<string, number>;
   /** The original towns' starting sizes, thousands (growth.ts caps growth relative to these). */

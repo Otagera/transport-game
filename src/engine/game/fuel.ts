@@ -1,5 +1,5 @@
 import type { GameTown, GameWorld } from "./types";
-import { importsArriving } from "./gateways";
+import { borderFuelSite, importsArriving, portScale } from "./gateways";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand, type GameEvent } from "./settlement";
 import { addRoadToMap, isCutOff, roadPath, type ActionResult } from "./world";
@@ -156,16 +156,21 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
   // By road, as the tankers go: a town that looks near the refinery may be a long drive from it.
   const byRoad = (from: string, to: string) => roadPath(world, from, to)?.distance ?? Infinity;
   const second = newRefinery(world);
-  const towns = burners(world).map((town) => ({ town, need: fuelDemand(world, town.id), fromRefinery: 0, fromDepot: 0, fromNew: 0, dr: byRoad(refinery.id, town.id), dd: byRoad(depot.id, town.id), dn: second ? byRoad(second.id, town.id) : Infinity }));
+  const borderSite = borderFuelSite(world);
+  const towns = burners(world).map((town) => ({ town, need: fuelDemand(world, town.id), fromRefinery: 0, fromDepot: 0, fromNew: 0, fromBorder: 0, dr: byRoad(refinery.id, town.id), dd: byRoad(depot.id, town.id), dn: second ? byRoad(second.id, town.id) : Infinity, db: borderSite ? byRoad(borderSite, town.id) : Infinity }));
   let refined = refineryOutput(world);
   let made = newRefineryOutput(world);
   // Each site makes what its workers let it (workers.ts).
   // A share of it, where the seaport is a haul away (gateways.ts).
-  let imported = world.tuning.fuelImportShare * fuel.baseDemand * staffFactor(world, fuel.depotId) * importsArriving(world);
-  const unmet = (x: (typeof towns)[number]) => x.need - x.fromRefinery - x.fromDepot - x.fromNew;
-  const fill = (source: "refinery" | "depot" | "new", order: typeof towns) => {
+  let imported = world.tuning.fuelImportShare * fuel.baseDemand * staffFactor(world, fuel.depotId) * importsArriving(world) * portScale(world);
+  // Fuel over the border, where there's a crossing to Benin or Niger (border.ts borderFuel): informal,
+  // after the tank farm's and before the refinery's, to the towns its tankers reach.
+  const border = borderFuelSite(world);
+  let smuggled = border ? (world.tuning.borderFuelShare ?? 0.2) * fuel.baseDemand : 0;
+  const unmet = (x: (typeof towns)[number]) => x.need - x.fromRefinery - x.fromDepot - x.fromNew - x.fromBorder;
+  const fill = (source: "refinery" | "depot" | "new" | "border", order: typeof towns) => {
     for (const x of order) {
-      const left = source === "refinery" ? refined : source === "new" ? made : imported;
+      const left = source === "refinery" ? refined : source === "new" ? made : source === "border" ? smuggled : imported;
       const take = Math.min(unmet(x), left);
       if (take <= 0) continue;
       if (source === "refinery") {
@@ -174,6 +179,9 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
       } else if (source === "new") {
         x.fromNew += take;
         made -= take;
+      } else if (source === "border") {
+        x.fromBorder += take;
+        smuggled -= take;
       } else {
         x.fromDepot += take;
         imported -= take;
@@ -192,6 +200,7 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
   // gets its share: it waits for one, and its card says so); then the
   // refinery fills what's still short, nearest it first -- the far side.
   fill("depot", within ? byDepot.filter((x) => reaches(depot.id, x.dd, x.town.id)) : byDepot);
+  if (border) fill("border", [...towns].filter((x) => Number.isFinite(x.db) && x.db <= world.tuning.tankerMaxHaulCells).sort((p, q) => p.db - q.db));
   // The fuel the refinery would have sent out of reach: what's still short there, before it fills.
   const outOfReach = within ? byRefinery.filter((x) => Number.isFinite(x.dr) && !reaches(refinery.id, x.dr, x.town.id)).reduce((sum, x) => sum + Math.max(0, unmet(x)), 0) : 0;
   fill("refinery", byRefinery.filter((x) => Number.isFinite(x.dr) && reaches(refinery.id, x.dr, x.town.id)));
@@ -202,6 +211,7 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
     if (x.fromRefinery > 0) flows.push({ from: fuel.refineryId, to: x.town.id, kind: "supplies", rate: x.fromRefinery });
     if (x.fromDepot > 0) flows.push({ from: fuel.depotId, to: x.town.id, kind: "supplies", rate: x.fromDepot });
     if (second && x.fromNew > 0) flows.push({ from: second.id, to: x.town.id, kind: "supplies", rate: x.fromNew });
+    if (border && x.fromBorder > 0) flows.push({ from: border, to: x.town.id, kind: "supplies", rate: x.fromBorder });
   }
   // What it would have sent out of reach leaves through the port instead, as the second
   // refinery's surplus does; on a map where every town is in reach, nothing changes.
@@ -231,6 +241,7 @@ export function cargoName(world: GameWorld, from: string, kind: "produce" | "sup
   if (food && to !== undefined && to === food.flourMillId) return "wheat";
   if (food && !site && kind === "produce") return to === world.port || (to !== undefined && to === world.border) ? food.crops.cash : to === food.millId ? food.crops.staple : `${food.crops.staple} and ${food.crops.cash}`;
   if (site === "oilfield" || site === "terminal") return "crude";
+  if (site === "border" && kind === "supplies") return "fuel"; // over the border (gateways.ts borderFuelSite)
   if (site === "depot" || site === "refinery" || site === "newrefinery") return "fuel";
   if (site === "works" || site === "silo") return "cement";
   if (site === "steelworks" || site === "steelport") return "steel";
@@ -251,7 +262,10 @@ export function fuelSupply(world: GameWorld, townId: string): { supplied: number
   const imported = got(fuel.depotId);
   const second = fuel.newRefineryId && world.tuning.newRefineryEnabled ? got(fuel.newRefineryId) : 0;
   const refined = got(fuel.refineryId) + second;
-  return { supplied: Math.min(1, imported + refined), imported, refined, second };
+  // Over the border (border.ts): counted with what's supplied, apart from the port's imports.
+  const border = borderFuelSite(world);
+  const overBorder = border ? got(border) : 0;
+  return { supplied: Math.min(1, imported + refined + overBorder), imported, refined, second };
 }
 
 /**

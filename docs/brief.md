@@ -795,7 +795,7 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 2. **Border crossings,** one or two on land edges by region (Benin, Niger, Chad, Cameroon): cheaper and slower than the sea, a different mix of goods. Goods leave by whichever gateway is cheapest by what's built (C20).
 3. **The north landlocked:** the north, north-east and Middle Belt lose their side coast (map version 5 turned only the south's); their sea trade comes through a gateway on the southern edge -- the road to the coast, its port off the map -- and their border crossings.
 
-Later, not in the first cut: the port's handling as a rung, coastal shipping and river barges (Open item 4).
+Later, not in the first cut: the port's handling as a rung, coastal shipping and river barges (Open item 4). **Built 2026-10-29:** the port's two rungs (a berth 1.3×, a container terminal 1.7× day 1's imports) and fuel over the crossings to Benin and Niger (a fifth of day 1's need, informal); coastal shipping and barges still later, after a playtest of the gateways.
 
 ## More industries, more chains (agreed 2026-10-23)
 

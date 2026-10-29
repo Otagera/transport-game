@@ -1,4 +1,5 @@
 import { isFuelSite } from "./fuel";
+import { borderFuelSite } from "./gateways";
 import type { GameWorld } from "./types";
 import type { GoodsKind } from "./goods";
 import { roadPath } from "./world";
@@ -59,7 +60,9 @@ export function truckersPickUp(world: GameWorld, dt: number): void {
       const atYard = tuning.yardsEnabled && hasYard(world, from);
       // Against your freight line's rate (freightrates.ts): keener against a dear one, less against a cheap.
       const pull = haulierPull(world, from, to);
-      const reach = Math.max(isFuelSite(world.towns.get(from)) ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells, atYard ? tuning.yardReachCells : 0) * pull;
+      // Fuel over the border goes by tanker too (gateways.ts borderFuelSite).
+      const tankerLoad = isFuelSite(world.towns.get(from)) || (kind === "supplies" && from === borderFuelSite(world));
+      const reach = Math.max(tankerLoad ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells, atYard ? tuning.yardReachCells : 0) * pull;
       // No more than a few loads held a destination (truckerHoldLoads): the rest stays at the
       // yard, where it shows as waiting and spoils if nobody comes (map 2418, day 233:
       // hauliers held 4,214 t of cement for Katsina-Ala, delivering none -- it vanished).
@@ -97,7 +100,7 @@ export function dispatchTrucks(world: GameWorld, takings: Takings, fits: (segmen
     // A tanker isn't held back by the danfos' share of the road: fuel gets
     // through a jammed road slowly, never not at all (fuel.ts). It still
     // takes its road space and slows what's there.
-    const tanker = isFuelSite(world.towns.get(from));
+    const tanker = isFuelSite(world.towns.get(from)) || (kind === "supplies" && from === borderFuelSite(world));
     // Freight isn't held to the danfos' share of the road either, now goods depend on
     // hauliers (Revision 4): waiting for it, trucks never left busy towns (map 2418).
     const free = tanker || tuning.trucksFreeOfDanfoBudget;

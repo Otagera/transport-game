@@ -1,5 +1,5 @@
 import { inFarmBelt } from "./clusters";
-import { exportGateway, importsArriving } from "./gateways";
+import { exportGateway, importsArriving, portScale } from "./gateways";
 import type { GameTown, GameWorld } from "./types";
 import { flowKey, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
@@ -155,7 +155,7 @@ export function foodFlows(world: GameWorld): GoodsFlow[] {
   split(food.millId, millOutput(world), (id) => foodWant(world, id));
   // The flour chain (3c): imported wheat from the port to the flour mill, its flour to the markets.
   if (food.flourMillId && world.port && world.towns.has(world.port)) {
-    flows.push({ from: world.port, to: food.flourMillId, kind: "supplies", rate: t.wheatImportShare * t.wheatPerFlour * food.baseFlourWant * siteScale(world, food.flourMillId) * importsArriving(world) });
+    flows.push({ from: world.port, to: food.flourMillId, kind: "supplies", rate: t.wheatImportShare * t.wheatPerFlour * food.baseFlourWant * siteScale(world, food.flourMillId) * importsArriving(world) * portScale(world) });
     split(food.flourMillId, flourOutput(world), (id) => flourWant(world, id));
   }
   return flows;

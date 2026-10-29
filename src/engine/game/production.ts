@@ -1,4 +1,5 @@
 import type { GameWorld } from "./types";
+import { portScale } from "./gateways";
 import { flowKey, goodsFlows, type GoodsFlow } from "./goods";
 import { crudeArriving, newRefineryCapacity, newRefineryCrude, newRefineryOutput, refineryCapacity, refineryOutput } from "./fuel";
 import { siteScale } from "./expand";
@@ -113,12 +114,12 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
       break;
     case "depot":
       product = "imported fuel";
-      capacity = fuel ? t.fuelImportShare * fuel.baseDemand : 0;
+      capacity = fuel ? t.fuelImportShare * fuel.baseDemand * portScale(world) : 0;
       made = capacity * staffFactor(world, siteId);
       break;
     case "silo":
       product = "imported cement";
-      capacity = cement ? t.cementImportShare * cement.baseDemand : 0;
+      capacity = cement ? t.cementImportShare * cement.baseDemand * portScale(world) : 0;
       made = cementImports(world);
       break;
     // The steel chain (steel.ts).
@@ -137,7 +138,7 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
       break;
     case "steelport":
       product = "imported steel";
-      capacity = world.steel ? t.steelImportShare * world.steel.baseDemand : 0;
+      capacity = world.steel ? t.steelImportShare * world.steel.baseDemand * portScale(world) : 0;
       made = steelImports(world);
       break;
     case "oilfield":
