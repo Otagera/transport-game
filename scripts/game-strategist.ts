@@ -38,7 +38,8 @@ import { averageNet } from "../src/engine/game/history";
 import { flowKey, goodsFlows, lorryEstimate, lorrySummaries } from "../src/engine/game/goods";
 import { siteProduction } from "../src/engine/game/production";
 import { expandCost } from "../src/engine/game/expand";
-import { checkBond } from "../src/engine/game/bonds";
+import { bondAmount, checkBond as gameCheckBond } from "../src/engine/game/bonds";
+import type { BondPurpose } from "../src/engine/game/bonds";
 import { seaportLink } from "../src/engine/game/gateways";
 import { parkLevyGain } from "../src/engine/game/parks";
 import { freightLineSplit } from "../src/engine/game/freightrates";
@@ -80,6 +81,16 @@ interface Day {
 const ticksPerDay = Math.round(D / SIM_DT);
 const pop = (world: GameWorld) => [...world.towns.values()].filter((t) => !t.industry).reduce((s, t) => s + t.population, 0);
 const spend = (world: GameWorld, price: number) => world.economy.funds - price >= RESERVE;
+
+// A bond only where its repayments fit in half of what it nets a day (2026-10-29): the game lends
+// up to 30% of income, and on region maps the bot borrowed ₦60k for a refinery at ₦1,200 a day
+// against a net of ~₦500, and sank into debt.
+function checkBond(world: GameWorld, purpose: BondPurpose): { ok: boolean } {
+  const t = world.tuning;
+  const lent = bondAmount(world, purpose) ?? 0;
+  const perDay = (lent * (1 + t.bondInterest)) / t.bondTermDays;
+  return gameCheckBond(world, purpose).ok && perDay <= 0.5 * averageNet(world) ? { ok: true } : { ok: false };
+}
 
 // Routes it sold, and the day: it doesn't buy back into a loser for SOLD_DAYS (the screen
 // keeps naming a seat move on a route that can't pay; a player learns, so does this).
@@ -223,7 +234,14 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   const fuel = world.fuel;
   if (fuel) {
     const short = [...world.basePopulation.keys()].filter((id) => (fuelSupply(world, id)?.supplied ?? 1) < 0.6).length;
-    if (!fuel.restored && short >= 3) {
+    // Not without a way for crude to reach it (2026-10-29: on region maps it borrowed ₦60k for a
+    // refinery its crude could never reach -- "crude in 0 of 842 t/day" -- and repaid ₦1,200 a day
+    // into debt): the crude road first, then the refinery.
+    const crudeWay = roadPath(world, fuel.sourceId, fuel.refineryId) || railPath(world, fuel.sourceId, fuel.refineryId);
+    if (!fuel.restored && short >= 3 && !crudeWay && spend(world, roadCost(world, fuel.sourceId, fuel.refineryId))) {
+      did(act(world, day, { kind: "road", a: fuel.sourceId, b: fuel.refineryId, alignment: "cheapest" }, "towns short of fuel: first a road for crude to the refinery"));
+    }
+    if (!fuel.restored && short >= 3 && (roadPath(world, fuel.sourceId, fuel.refineryId) || railPath(world, fuel.sourceId, fuel.refineryId))) {
       if (spend(world, world.tuning.refineryRestoreCost)) did(act(world, day, { kind: "restoreRefinery" }, "towns short of fuel: restore the refinery"));
       else if (checkBond(world, "refinery").ok) did(act(world, day, { kind: "bond", purpose: "refinery" }, "towns short of fuel: borrow for the refinery"));
     }

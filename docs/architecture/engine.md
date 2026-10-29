@@ -1144,8 +1144,15 @@ replays as played. Seed 0 stays the hand-made map, alone.
   and how, and the move that brings more (`main.ts seaportText`). The strategist, maps 1, 4, 5 (far
   seaport) and 9 (the home city is the seaport) to day 120, on -> off: map 9 identical; elsewhere no
   collapse (people at day 100 775k/771k, 840k/822k, 737k/731k; towns under 60% fuel 22/18, 13/17,
-  19/19), the swings in net a day mostly the bot's choices diverging. The bot doesn't yet pave the
-  highway or restore the railway for the imports: what it measures is the cost of ignoring the link.
+  19/19), the swings in net a day mostly the bot's choices diverging. **Then the bot fixed**
+  (2026-10-29, `scripts/game-strategist.ts`): it paves the road to a far seaport a leg a day
+  (₦11-21k end to end on maps 1, 4, 5; the railway's last tenth costs ₦166-252k); restores the
+  refinery only once crude has a road to it; and borrows only where repayments fit in half its net
+  -- on region maps it had borrowed ₦60k for a refinery its crude never reached, at ₦1,200 a day
+  against ~₦500 net, and sank ₦30-72k into debt by day 100. Again, day 100, on -> off: money
+  ₦8k/-₦5k, ₦10k/₦11k, -₦15k/-₦56k; net a day ₦4,326/₦2,008, ₦2,355/₦5,059, ₦585/₦484; people
+  891k/877k, 855k/881k, 740k/746k; map 9 identical. No map collapses at 60%; map 5 stays in debt
+  either way (another weakness, unchased).
 - **The border crossing** (`border.ts`, `gateways.ts exportGateway`; brief, The gateways, step 2;
   2026-10-28). One a map, placed at the start after every other site behind `borderCrossing`
   (absent in older runs: none): on the edge facing the neighbour as that part of Nigeria does
