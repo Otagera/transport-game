@@ -589,6 +589,19 @@ the trees, the south-east greener and thicker, the south-south lush (1.7× the t
 Belt's high ground grey rock; the south-west as before. Map version 4 draws the shape (hills,
 plateau, delta, lagoon); this, the look.
 
+**Water** (`view3d.ts makeWaterMaterial`, 2026-10-29; ideas from Ultra-Water, an FFT ocean for
+three.js, borrowed in this map's look rather than adopted: it renders an open ocean round a camera
+at sea level, photoreal, at 3-5 ms a frame -- this is a diorama of rivers seen from 120 m up). One
+shader for every river and the sea: shallow at the banks to deep mid-channel (the sea deepening
+from its shore); ripples in each river's own frame (metres along it, across it), carried downstream
+faster where it narrows, the sea barely drifting; a soft foam band where it meets land, broken and
+drifting, never at the map's cut edge (where the sea is clamped: `aShore`); a little sky at low
+angles and the sun's glint; moonlight and darker colours at night (`setWaterNight`). The ribbons
+carry the frame (`ribbonGeometry`'s `water`: `aAcross`, `aAlong`, `aWidth`, `aShore`). Shaded as if
+the surface faced up with the ripples on top, never from the mesh's normals -- the sea's ribbon
+folds at sharp bends, and lit by its own normals the folds showed as dark slivers. Into three's fog
+chunks, so the haze still falls on it. Frame times unchanged (p99 16.8 ms, 3D at 4x).
+
 **The world's state, drawn in 3D** (2026-10-26, from an outside review's "make the systemic state
 legible at a glance"). Each reads a rule the game already has; nothing new is simulated:
 - **Fuel sellers.** Where a town is 35% or more short (`shortageAt`, the same threshold as the

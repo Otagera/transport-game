@@ -52,6 +52,136 @@ THREE.ShaderChunk.fog_fragment = /* glsl */ `
 #endif
 `;
 
+// --- Water (2026-10-29, after Ultra-Water's ideas, in this map's look) ------------------------
+// A flat colour until now. A shader of its own: shallow at the banks, deep mid-channel; ripples
+// that run downstream along each river, faster where it narrows; a soft band of foam where it meets
+// land (not at the map's cut edge, where the sea is clamped); sun glints and a little sky at low
+// angles; moonlight at night. Shaded as if the surface faced straight up with the ripples on top,
+// never from the mesh's normals: the sea's wide ribbon folds over itself at sharp bends, and lit
+// by its own normals those folds showed as dark slivers (why it was unlit).
+
+const WATER_DAY = { deep: 0x3f86b4, shallow: 0x7fbdd2, sky: 0xd6e6ee, foam: 0xeae6da, glint: 0xfff4dc, glintStrength: 0.55 };
+const WATER_NIGHT = { deep: 0x15253c, shallow: 0x253f5c, sky: 0x2a3450, foam: 0x4f5b6a, glint: 0xb8c8ff, glintStrength: 0.35 };
+const waterMaterials = new Set<THREE.ShaderMaterial>();
+
+function makeWaterMaterial(): THREE.ShaderMaterial {
+  const c = (hex: number) => new THREE.Color(hex);
+  const material = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    fog: true,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -2,
+    uniforms: {
+      ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
+      uTime: { value: 0 },
+      uSun: { value: new THREE.Vector3(-520, 520, -260).normalize() },
+      uDeep: { value: c(WATER_DAY.deep) },
+      uShallow: { value: c(WATER_DAY.shallow) },
+      uSky: { value: c(WATER_DAY.sky) },
+      uFoam: { value: c(WATER_DAY.foam) },
+      uGlint: { value: c(WATER_DAY.glint) },
+      uGlintStrength: { value: WATER_DAY.glintStrength },
+    },
+    vertexShader: /* glsl */ `
+      attribute float aAcross;
+      attribute float aAlong;
+      attribute float aWidth;
+      attribute vec2 aShore;
+      varying float vAcross;
+      varying float vAlong;
+      varying float vWidth;
+      varying vec2 vShore;
+      varying vec3 vWorld;
+      #include <fog_pars_vertex>
+      void main() {
+        vAcross = aAcross;
+        vAlong = aAlong;
+        vWidth = aWidth;
+        vShore = aShore;
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vWorld = world.xyz;
+        vec4 mvPosition = viewMatrix * world;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform vec3 uSun;
+      uniform vec3 uDeep;
+      uniform vec3 uShallow;
+      uniform vec3 uSky;
+      uniform vec3 uFoam;
+      uniform vec3 uGlint;
+      uniform float uGlintStrength;
+      varying float vAcross;
+      varying float vAlong;
+      varying float vWidth;
+      varying vec2 vShore;
+      varying vec3 vWorld;
+      #include <fog_pars_fragment>
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+      }
+      // Ripples in the river's own frame (metres along, metres across), carried downstream.
+      float ripples(vec2 p, float flow) {
+        vec2 q = p - vec2(flow, 0.0);
+        return noise(q * vec2(0.09, 0.16)) * 0.6 + noise(q * vec2(0.27, 0.45) + 7.3) * 0.3 + noise(q * 0.8 + 3.1) * 0.1;
+      }
+      void main() {
+        float metres = vWidth; // ribbons are built in metres (a cell is 8 m)
+        bool sea = metres > 96.0;
+        // Narrower runs faster; the sea barely drifts.
+        float speed = sea ? 0.4 : clamp(144.0 / max(metres, 8.0), 2.0, 9.0);
+        vec2 p = vec2(vAlong, vAcross * metres * 0.5);
+        float flow = uTime * speed;
+        float h = ripples(p, flow);
+        float e = 0.6;
+        vec2 grad = vec2(ripples(p + vec2(e, 0.0), flow) - h, ripples(p + vec2(0.0, e), flow) - h) / e;
+        vec3 n = normalize(vec3(-grad.x * 0.9, 1.0, -grad.y * 0.9));
+        // Shallow at the banks, deep mid-channel; the sea deepens away from its shore.
+        float edge = abs(vAcross);
+        float shoreSide = vAcross < 0.0 ? vShore.x : vShore.y;
+        float toShore = sea ? (shoreSide > 0.5 ? 1.0 - edge : 1.0) * metres * 0.5 : (1.0 - edge) * metres * 0.5;
+        float depth = smoothstep(0.0, sea ? 90.0 : max(6.0, metres * 0.35), toShore);
+        vec3 col = mix(uShallow, uDeep, depth);
+        // A little sky at low angles, and the sun's glint.
+        vec3 view = normalize(cameraPosition - vWorld);
+        float fresnel = pow(1.0 - max(dot(n, view), 0.0), 4.0);
+        col = mix(col, uSky, fresnel * 0.55);
+        float glint = pow(max(dot(reflect(-uSun, n), view), 0.0), 400.0);
+        col += uGlint * glint * uGlintStrength;
+        // Foam where it meets land: a soft band, broken up and drifting with the water.
+        float band = (1.0 - smoothstep(0.0, sea ? 4.0 : max(0.8, metres * 0.07), toShore)) * (sea ? shoreSide : 1.0);
+        float lace = smoothstep(0.55, 0.8, noise(p * vec2(0.35, 0.6) - vec2(flow * 0.6, uTime * 0.3)));
+        col = mix(col, uFoam, band * (0.2 + 0.4 * lace));
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }
+    `,
+  });
+  waterMaterials.clear(); // one view built at a time: its water's clock
+  waterMaterials.add(material);
+  return material;
+}
+
+function setWaterNight(material: THREE.ShaderMaterial, night: boolean): void {
+  const look = night ? WATER_NIGHT : WATER_DAY;
+  const u = material.uniforms;
+  u.uDeep!.value.setHex(look.deep);
+  u.uShallow!.value.setHex(look.shallow);
+  u.uSky!.value.setHex(look.sky);
+  u.uFoam!.value.setHex(look.foam);
+  u.uGlint!.value.setHex(look.glint);
+  u.uGlintStrength!.value = look.glintStrength;
+}
+
 /** A town's own streets (townKit): paler than the roads between towns, so those still lead. */
 const STREET_DIRT = 0xae855e;
 const STREET_PAVED = 0x77797b;
@@ -232,6 +362,8 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
       controls.target.y += lift;
       camera.position.y += lift;
       built!.sky.position.copy(camera.position);
+      const seconds = performance.now() / 1000;
+      for (const water of waterMaterials) water.uniforms.uTime!.value = seconds;
       built!.cullLabels(camera);
       // The haze by how far out you are: in the distance up close, thin over the whole slab.
       const fog = built!.scene.fog as THREE.Fog;
@@ -345,7 +477,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   })();
   // What's drawn unlit (a flat colour whatever the light), dimmed by hand at night.
   const edgeMaterial = own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
-  const waterMaterial = own(new THREE.MeshBasicMaterial({ color: 0x78aed0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
+  const waterMaterial = own(makeWaterMaterial());
   // The blocks' windows: their own material, lit from inside at night.
   const windowMaterial = own(new THREE.MeshLambertMaterial({ color: 0xffffff }));
   const wetNear = (cx: number, cy: number) => {
@@ -551,7 +683,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const decks = new Map<number, number>();
   const cellKey = (cx: number, cy: number) => Math.round(cy) * W + Math.round(cx);
   /** `piers`: bridge it over water, its piers added to this kit. */
-  function ribbonGeometry(points: Point[], width: number | number[], lift: number, piers?: Kit, clampToMap = false): THREE.BufferGeometry {
+  function ribbonGeometry(points: Point[], width: number | number[], lift: number, piers?: Kit, clampToMap = false, water = false): THREE.BufferGeometry {
     const widthAt = (k: number) => (Array.isArray(width) ? width[Math.min(width.length - 1, k)]! : width);
     const steps: Array<{ x: number; y: number; w: number }> = [];
     for (let k = 1; k < points.length; k += 1) {
@@ -584,8 +716,13 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
     const verts: number[] = [];
+    // For water (waterMaterial): across its width (-1 one bank, 1 the other), metres along it, its
+    // width, and whether each edge is a shore (not the map's cut edge, where the sea is clamped).
+    const across: number[] = [], along: number[] = [], wide: number[] = [], shore: number[] = [];
+    let run = 0;
     for (let i = 0; i < steps.length; i += 1) {
       const p = steps[i]!, q = steps[Math.min(steps.length - 1, i + 1)]!, o = steps[Math.max(0, i - 1)]!;
+      if (i > 0) run += Math.hypot(p.x - steps[i - 1]!.x, p.y - steps[i - 1]!.y) * M;
       const dx = q.x - o.x, dy = q.y - o.y, len = Math.hypot(dx, dy) || 1;
       const nx = (-dy / len) * (p.w / M / 2), ny = (dx / len) * (p.w / M / 2);
       const l = ground(p.x + nx, p.y + ny, lift), r = ground(p.x - nx, p.y - ny, lift);
@@ -600,6 +737,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         r.y = Math.max(r.y, level + lift);
         decks.set(cellKey(p.x, p.y), Math.max(decks.get(cellKey(p.x, p.y)) ?? -Infinity, level + lift));
       }
+      const lx = l.x, lz = l.z, rx = r.x, rz = r.z;
       if (clampToMap) {
         // Water cut at the map's edge, as the land is: the sea runs to the diorama's side, not past it.
         for (const v of [l, r]) {
@@ -609,11 +747,24 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         }
       }
       verts.push(l.x, l.y, l.z, r.x, r.y, r.z);
+      if (water) {
+        const leftShore = l.x === lx && l.z === lz ? 1 : 0, rightShore = r.x === rx && r.z === rz ? 1 : 0;
+        across.push(-1, 1);
+        along.push(run, run);
+        wide.push(p.w, p.w);
+        shore.push(leftShore, rightShore, leftShore, rightShore);
+      }
     }
     const index: number[] = [];
     for (let i = 0; i < steps.length - 1; i += 1) index.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+    if (water) {
+      geo.setAttribute("aAcross", new THREE.Float32BufferAttribute(across, 1));
+      geo.setAttribute("aAlong", new THREE.Float32BufferAttribute(along, 1));
+      geo.setAttribute("aWidth", new THREE.Float32BufferAttribute(wide, 1));
+      geo.setAttribute("aShore", new THREE.Float32BufferAttribute(shore, 2));
+    }
     geo.setIndex(index);
     geo.computeVertexNormals();
     return geo;
@@ -628,7 +779,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const water = waterMaterial;
     for (const river of world.waterLines ?? []) {
       const widths = (river.widths ?? river.points.map(() => river.width)).map((w) => w * M);
-      const mesh = new THREE.Mesh(own(ribbonGeometry(river.points.map(([x, y]) => ({ x, y })), widths, 0.6, undefined, true)), water);
+      const mesh = new THREE.Mesh(own(ribbonGeometry(river.points.map(([x, y]) => ({ x, y })), widths, 0.6, undefined, true, true)), water);
       scene.add(mesh);
     }
   }
@@ -1549,7 +1700,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       hemi.intensity = dark ? 0.6 : 1.45;
       sun.color.setHex(dark ? 0xa8bcff : 0xfff0d4);
       sun.intensity = dark ? 0.5 : 2.5;
-      waterMaterial.color.setHex(dark ? 0x2a4466 : 0x78aed0);
+      setWaterNight(waterMaterial, dark);
       lineMaterial.color.setHex(dark ? 0x77756e : 0xf2efe6);
       edgeMaterial.color.setScalar(dark ? 0.3 : 1);
       windowMaterial.emissive.setHex(dark ? 0xffc46a : 0x000000);
