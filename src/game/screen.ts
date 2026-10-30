@@ -237,7 +237,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     named.push(move);
     return `<button data-named="${named.length - 1}" title="${esc(move.label)}">${esc(move.label.replace(/\s*\([^)]*\)$/, ""))} · ${nairaK(move.price)}</button>`;
   };
-  const toolButton = (tool: string, label: string) => `<button data-tool="${tool}">${esc(label)}</button>`;
+  /** A tool's button; `at`, the places it's about, which the map frames and rings when it's pressed (main.ts pointAt). */
+  const toolButton = (tool: string, label: string, at: string[] = []) => `<button data-tool="${tool}"${at.length > 0 ? ` data-at="${esc(at.join(","))}"` : ""}>${esc(label)}</button>`;
 
   /**
    * Why goods from `from` aren't reaching a town, and the move that answers it (haulage.ts
@@ -247,12 +248,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   function carryWhy(what: string, from: string, townId: string): { why: string; button: string; at: string[] } {
     const to = nameOf(townId);
     const b = haulBreak(world, from, townId);
-    if (b?.kind === "road") return { why: `no road joins ${to} to ${nameOf(from)}`, button: toolButton("road", "Road (R)"), at: [townId] };
-    if (b?.kind === "gap" && b.yardAt) return { why: `hauliers can't get ${what} as far as ${to}; a yard at ${nameOf(b.yardAt)} would carry it on`, button: toolButton("yard", `Yard at ${nameOf(b.yardAt)} (Y)`), at: [b.yardAt, townId] };
-    if (b?.kind === "gap") return { why: `hauliers can't get ${what} as far as ${to}, even from your yards; freight track can`, button: toolButton("track", "Track (K)"), at: [from, townId] };
-    if (!hasYard(world, from)) return { why: `it isn't reaching ${to} from ${nameOf(from)}`, button: toolButton("yard", `Yard at ${nameOf(from)} (Y)`), at: [from] };
-    if (b?.kind === "legs" && b.legs >= 3) return { why: `it reaches ${to} in ${b.legs} legs by road, slowly; freight track is quicker`, button: toolButton("track", "Track (K)"), at: [from, townId] };
-    return { why: `it's on its way to ${to} by road, slower than ${to} grows; freight track is quicker`, button: toolButton("track", "Track (K)"), at: [from, townId] };
+    if (b?.kind === "road") return { why: `no road joins ${to} to ${nameOf(from)}`, button: toolButton("road", "Road (R)", [townId]), at: [townId] };
+    if (b?.kind === "gap" && b.yardAt) return { why: `hauliers can't get ${what} as far as ${to}; a yard at ${nameOf(b.yardAt)} would carry it on`, button: toolButton("yard", `Yard at ${nameOf(b.yardAt)} (Y)`, [b.yardAt, townId]), at: [b.yardAt, townId] };
+    if (b?.kind === "gap") return { why: `hauliers can't get ${what} as far as ${to}, even from your yards; freight track can`, button: toolButton("track", "Track (K)", [from, townId]), at: [from, townId] };
+    if (!hasYard(world, from)) return { why: `it isn't reaching ${to} from ${nameOf(from)}`, button: toolButton("yard", `Yard at ${nameOf(from)} (Y)`, [from]), at: [from] };
+    if (b?.kind === "legs" && b.legs >= 3) return { why: `it reaches ${to} in ${b.legs} legs by road, slowly; freight track is quicker`, button: toolButton("track", "Track (K)", [from, townId]), at: [from, townId] };
+    return { why: `it's on its way to ${to} by road, slower than ${to} grows; freight track is quicker`, button: toolButton("track", "Track (K)", [from, townId]), at: [from, townId] };
   }
   /**
    * Its cement, steel and fuel on their way (haulage.ts goodsOnTheWay): hauled in legs, the
@@ -404,10 +405,23 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
     return items.sort((p, q) => q.weight - p.weight).slice(0, 5);
   }
+  // When each waiting item was first seen, by what it's about (its text to the first colon,
+  // numbers left out: "Steel short, 45k people..." is one item as its numbers move). Map 949's
+  // steel card stood ~120 days and nothing said so. Dropped when it goes; back, it starts again.
+  const waitingSince = new Map<string, number>();
+  const waitingKey = (text: string) => text.split(":")[0]!.replace(/[\d.,₦]+k?/g, "#");
   function waitingHtml(): string {
     const items = waitingOnYou();
+    const today = gameDay(world);
+    const keys = new Set(items.map((item) => waitingKey(item.text)));
+    for (const key of [...waitingSince.keys()]) if (!keys.has(key)) waitingSince.delete(key);
+    for (const key of keys) if (!waitingSince.has(key)) waitingSince.set(key, today);
     if (items.length === 0) return "";
-    return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"><span>${esc(item.text)}</span>${item.button}</div>`).join("")}</div>`;
+    const age = (item: Waiting) => {
+      const days = today - (waitingSince.get(waitingKey(item.text)) ?? today);
+      return days >= 10 ? ` <span class="age">· ${days} days now</span>` : "";
+    };
+    return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"${item.at.length > 0 ? ` data-at="${esc(item.at.join(","))}"` : ""}><span>${esc(item.text)}${age(item)}</span>${item.button}</div>`).join("")}</div>`;
   }
 
   function townProblem(t: Town): Problem {
@@ -595,11 +609,13 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const recent = ds.slice(-30);
     const ten = ds[ds.length - 10] ?? ds[0];
     const n = now();
-    const stat = (k: string, title: string, v: string, value: number, then: number | undefined, values: number[], fmt: (x: number) => string, color = css("--ink-2")) => {
+    const stat = (k: string, title: string, v: string, value: number, then: number | undefined, values: number[], fmt: (x: number) => string, color = css("--ink-2"), overlay?: string) => {
       const d = then === undefined ? 0 : value - then;
       const cls = d > 0 ? "up" : d < 0 ? "down" : "muted";
       const change = then === undefined ? `<div class="d muted">from day 10</div>` : `<div class="d ${cls}">${d >= 0 ? "▲" : "▼"} ${fmt(Math.abs(d))} in 10 days</div>`;
-      return `<div class="stat" title="${title}"><div class="k">${k}</div><div class="v num">${v}</div>${change}${sparkline(values, color)}</div>`;
+      // One that opens its overlay, to show where (No seat: the playtest's 2,590 a day, more than your riders, said nowhere where).
+      const opens = overlay ? ` data-show-overlay="${overlay}" role="button"` : "";
+      return `<div class="stat${overlay ? " opens" : ""}" title="${title}${overlay ? " -- click to see where" : ""}"${opens}><div class="k">${k}</div><div class="v num">${v}</div>${change}${sparkline(values, color)}</div>`;
     };
     // The original towns' people, the score (the review: it wasn't in the strip at all).
     const base = (towns: Array<{ id: string; population: number }>) => towns.reduce((sum, t) => sum + (world.basePopulation.has(t.id) ? t.population : 0), 0);
@@ -609,7 +625,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${stat("People", "The towns you started with: their people now, thousands", `${int(peopleNow)}k`, peopleNow, ten ? base(ten.towns) : undefined, recent.map((d) => base(d.towns)), (x) => `${int(x)}k`, css("--good"))}
       ${stat("Trips made a day", "Trips between towns that happened, by anyone, a day: 5-day average", int(n.tripsMade), n.tripsMade, ten?.tripsMade, recent.map((d) => d.tripsMade), int)}
       ${stat("Your riders a day", "Trips your vehicles carried, a day", int(n.yourRiders), n.yourRiders, ten?.yourRiders, recent.map((d) => d.yourRiders), int, css("--you"))}
-      ${stat("No seat a day", "Stayed home: a road joins their towns, but nobody carried them", int(n.noSeat), n.noSeat, ten?.noSeat, recent.map((d) => d.noSeat), int, css("--bad"))}
+      ${stat("No seat a day", "Stayed home: a road joins their towns, but nobody carried them", int(n.noSeat), n.noSeat, ten?.noSeat, recent.map((d) => d.noSeat), int, css("--bad"), "noseat")}
       ${stat("Net a day", "Income less running costs and upkeep, a day, over the last 5 days", naira(n.netPerDay), n.netPerDay, ten?.netPerDay, recent.map((d) => d.netPerDay), naira)}
       ${stat("Money", "What you hold", nairaK(n.funds), n.funds, ten?.funds, recent.map((d) => d.funds), nairaK)}
       <div class="spacer"></div>

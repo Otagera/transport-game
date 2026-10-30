@@ -195,6 +195,19 @@ views, each reading the engine's own plan (haulage.ts), never a second one:
   ("cement and steel to Ilora, Ipetu, Iseyin (+7)"), else how many it would get there in
   fewer legs; else, as before, what waits here within its reach.
 
+**The cards point at the map (2026-10-30, from the map 949 playtest).** A card's tool button
+carries the places it's about (`data-at`, on the button from `carryWhy` or on its Waiting-on-you
+card); pressed, `pointAt` (main.ts) frames them (zoom up to 3x, never out past the whole map) and
+`DrawState.pointed` rings each for five seconds (render.ts `drawPointedRing`).
+**Names that don't pile up:** `labelledTowns` counts the town picked in the panel (`focusTown`)
+as lit, so it's always named (map 949's Saki, picked from the list, wasn't); a site's name, zoomed
+in, and a ruin's "(closed)" -- zoomed in only, drawn after every living place -- go only where
+they clear the names already placed (`labelBoxes`); a pointed-at site always.
+**Smaller:** the town card's pager reads "12 of 44" (a dot a place outgrew the panel); the strip's
+No seat opens its overlay (`data-show-overlay`); a Waiting-on-you item 10 days old or more says
+how long it has stood (screen.ts `waitingSince`, keyed by its text to the first colon, numbers
+left out, forgotten when it goes).
+
 ## 6. Ambient traffic rendering
 
 `network.ts` draws instanced cars **from** the published `ambientLoads` number (see

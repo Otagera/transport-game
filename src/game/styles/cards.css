@@ -39,10 +39,8 @@
 .trip.cut .bar { background: repeating-linear-gradient(90deg, var(--home) 0 4px, transparent 4px 7px); }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 11px; color: var(--muted); }
 .pager button { font: inherit; border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 999px; padding: 2px 8px; cursor: pointer; flex: none; white-space: nowrap; }
-/* A dot a place, sites too: a grown map's run wraps between the buttons rather than widening the panel. */
-.dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; min-width: 0; }
-.dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--line); }
-.dots i.on { background: var(--you); }
+/* Where you are among the places, "12 of 44": a dot each (sites too) had grown past the panel's width. */
+.pager .count { font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Route cards */
 .route-card { margin: 0 0 8px; padding: 9px 11px; border: 1px solid var(--line); border-radius: calc(var(--radius) * 0.8); background: var(--surface-2); }
 .route-card .top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }

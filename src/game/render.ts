@@ -153,6 +153,8 @@ export interface DrawState {
   problems?: ReadonlySet<string>;
   /** The overlay on the map, one at a time. */
   overlay?: Overlay;
+  /** Places a card's button is about, for a few seconds after it's pressed (main.ts pointAt): a pulsing ring. */
+  pointed?: ReadonlySet<string>;
 }
 
 // --- Frame state ------------------------------------------------------------------
@@ -164,6 +166,11 @@ export interface Focus { segments: Set<string>; routes: Set<string>; towns: Set<
 let focus: Focus | null = null;
 /** The towns whose name fits this frame (labelled, below). */
 let labelled = new Set<string>();
+/** Where this frame's names sit, screen boxes: a ruin's goes only where it clears them. */
+let labelBoxes: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
+const overlaps = (box: { x0: number; y0: number; x1: number; y1: number }) => labelBoxes.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0);
+/** The town you point at, picked on the map, or picked in the panel (focusTown): always named. */
+const isLit = (state: DrawState, id: string) => state.selectedTown === id || state.hoverTown === id || state.focusTown === id;
 
 /** A town's roads and the routes that stop there; or a route and the roads it runs on. */
 function focusOf(world: GameWorld, state: DrawState): Focus | null {
@@ -280,7 +287,6 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   drawOverlay(ctx, world, view, overlay);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
   drawVehicles(ctx, world, view, oneByOne, overlay !== "none");
-  for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   cityId = [...world.towns.values()].filter((t) => !t.industry).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id ?? null;
   farms = world.food ? new Set(farmTowns(world).map((t) => t.id)) : new Set();
   labelled = labelledTowns(world, view, state);
@@ -290,6 +296,8 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     if (town.industry) drawSite(ctx, world, view, town, state, flows);
     else drawTown(ctx, world, view, town, state);
   }
+  // A closed site or emptied town after the living ones' names, and only where it clears them.
+  for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
   drawWardens(ctx, world, view);
   drawStrikeLabels(ctx, world, view);
   drawFords(ctx, world, view);
@@ -760,9 +768,11 @@ let farms = new Set<string>();
  */
 function labelledTowns(world: GameWorld, view: View, state: DrawState): Set<string> {
   const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
+  labelBoxes = placed;
   const out = new Set<string>();
   const towns = [...world.towns.values()].filter((t) => !t.industry);
-  const lit = (t: GameTown) => state.selectedTown === t.id || state.hoverTown === t.id;
+  // Saki, picked from the panel's list, went unnamed: only a map click counted (map 949).
+  const lit = (t: GameTown) => isLit(state, t.id);
   for (const town of towns.sort((p, q) => Number(lit(q)) - Number(lit(p)) || q.population - p.population)) {
     if (tierOfTown(town) === "village" && !lit(town) && markScale * markScale < 2) continue;
     const p = toScreen(view, town.x, town.y);
@@ -779,7 +789,7 @@ function labelledTowns(world: GameWorld, view: View, state: DrawState): Set<stri
 function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, town: GameTown, state: DrawState): void {
   const p = toScreen(view, town.x, town.y);
   const r = townRadius(town, view);
-  const lit = state.selectedTown === town.id || state.hoverTown === town.id;
+  const lit = isLit(state, town.id);
   const tier = tierOfTown(town);
   const close = lit || markScale * markScale >= 2;
   ctx.globalAlpha = focus && !focus.towns.has(town.id) ? 0.3 : 1;
@@ -802,6 +812,7 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   if ((world.metros.get(town.id) ?? 0) > 0) drawMetroMark(ctx, p.x - r - 7, p.y + r - 3, world.metros.get(town.id)!);
   // Waiting on you here: an amber mark on its top-right.
   if (state.problems?.has(town.id)) drawWaitingMark(ctx, p.x + r * 0.8, p.y - r * 0.8);
+  if (state.pointed?.has(town.id)) drawPointedRing(ctx, p.x, p.y, r);
   // Name and size for towns; a village's when zoomed in or pointed at (the region's small places
   // stay quiet), and none where it would sit on a bigger town's (labelledTowns).
   if (labelled.has(town.id)) {
@@ -842,10 +853,23 @@ function drawWaitingMark(ctx: CanvasRenderingContext2D, mx: number, my: number):
   ctx.textAlign = "left";
 }
 
+/** A ring pulsing round a place a card's button is about (DrawState.pointed): "here". */
+function drawPointedRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  const pulse = (Math.sin(performance.now() / 160) + 1) / 2;
+  ctx.save();
+  ctx.globalAlpha = 0.45 + 0.45 * pulse;
+  ctx.strokeStyle = COLORS.warn;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, y, r + (10 + 6 * pulse) * markScale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, site: GameTown, state: DrawState, flows: GoodsFlow[]): void {
   const p = toScreen(view, site.x, site.y);
   const r = townRadius(site, view);
-  const lit = state.selectedTown === site.id || state.hoverTown === site.id;
+  const lit = isLit(state, site.id);
   ctx.globalAlpha = focus && !focus.towns.has(site.id) ? 0.3 : 1;
   // Its tile and glyph (icons.ts): solid working, hollow idle, an amber corner held back.
   const made = steadySite(world, site.id, flows);
@@ -861,11 +885,15 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   }
   if (world.yards.has(site.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
   if (state.problems?.has(site.id)) drawWaitingMark(ctx, p.x + r, p.y - r);
-  // Its name when you point at it, or zoomed in.
-  if (lit || markScale * markScale >= 2) {
+  if (state.pointed?.has(site.id)) drawPointedRing(ctx, p.x, p.y, r);
+  // Its name when you point at it, or zoomed in where it clears the names already there.
+  ctx.font = "600 11px system-ui, sans-serif";
+  const half = ctx.measureText(site.name).width / 2 + 2;
+  const box = { x0: p.x - half, y0: p.y + r + 4, x1: p.x + half, y1: p.y + r + 18 };
+  if (lit || (markScale * markScale >= 2 && !overlaps(box))) {
+    labelBoxes.push(box);
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.font = "600 11px system-ui, sans-serif";
     ctx.lineJoin = "round";
     ctx.strokeStyle = COLORS.surface;
     ctx.lineWidth = 3.5;
@@ -1149,10 +1177,18 @@ function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: GameTown): vo
   ctx.beginPath();
   ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
   ctx.fill();
+  // Its name only zoomed in, and only where it clears the living towns' and other ruins'
+  // (map 949: three "Limestone (closed)" lay over Ikire's name and each other).
+  if (markScale * markScale < 2) return;
+  const text = `${town.name} (${town.industry ? "closed" : "empty"})`;
+  ctx.font = "italic 11px system-ui, sans-serif";
+  const half = ctx.measureText(text).width / 2 + 2;
+  const box = { x0: p.x - half, y0: p.y + 6, x1: p.x + half, y1: p.y + 20 };
+  if (overlaps(box)) return;
+  labelBoxes.push(box);
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.labelMuted;
-  ctx.font = "italic 11px system-ui, sans-serif";
-  ctx.fillText(`${town.name} (${town.industry ? "closed" : "empty"})`, p.x, p.y + 16);
+  ctx.fillText(text, p.x, p.y + 16);
   ctx.textAlign = "left";
 }
 function drawMetroMark(ctx: CanvasRenderingContext2D, x: number, y: number, lines: number): void {

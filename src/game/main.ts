@@ -320,6 +320,24 @@ function applyZoom(): void {
   }
   renderZoomControl();
 }
+/**
+ * A card's button pressed: the map framed on the places it's about, and a ring round each for a
+ * few seconds (render.ts drawPointedRing) -- "a yard at Ilugun would carry it on" left you to
+ * find Ilugun yourself. Zooms in no further than 3x, and never out past the whole map.
+ */
+let pointed: { ids: Set<string>; until: number } | null = null;
+function pointAt(ids: string[]): void {
+  const places = ids.map((id) => world.towns.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
+  if (places.length === 0) return;
+  const xs = places.map((t) => t.x);
+  const ys = places.map((t) => t.y);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const pad = 30;
+  zoom = Math.max(1, Math.min(3, world.width / (x1 - x0 + pad * 2), world.height / (y1 - y0 + pad * 2)));
+  lookAt = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+  applyZoom();
+  pointed = { ids: new Set(places.map((t) => t.id)), until: performance.now() + 5000 };
+}
 /** Zoom by `factor` keeping the map point under (sx, sy) where it is on screen. */
 function zoomAt(sx: number, sy: number, factor: number): void {
   const next = Math.max(1, Math.min(MAX_ZOOM, zoom * factor));
@@ -2227,7 +2245,7 @@ function renderTown(townId: string): void {
       ${rows}
       <div class="pager">
         <button data-select="${prev}">‹ ${townName(prev)}</button>
-        <span class="dots">${pagerTowns.map((id) => `<i class="${id === townId ? "on" : ""}"></i>`).join("")}</span>
+        <span class="count">${index + 1} of ${pagerTowns.length}</span>
         <button data-select="${next}">${townName(next)} ›</button>
       </div>
     </div>`;
@@ -2877,6 +2895,13 @@ panelEl.addEventListener("mouseleave", () => {
   focusRoute = null;
 });
 function onPanelClick(event: MouseEvent): void {
+  // A headline that opens its overlay (screen.ts: No seat a day -> where they are).
+  const shows = (event.target as HTMLElement).closest<HTMLElement>("[data-show-overlay]");
+  if (shows) {
+    overlay = shows.dataset.showOverlay as Overlay;
+    renderOverlays();
+    return;
+  }
   const target = (event.target as HTMLElement).closest<HTMLElement>("button, a, [data-select]") ?? (event.target as HTMLElement);
   // A problem line's move (screen.ts): the named move itself, bought.
   if (target.dataset.named !== undefined) {
@@ -2893,6 +2918,9 @@ function onPanelClick(event: MouseEvent): void {
     tool = target.dataset.tool as Tool;
     selectedTown = null;
     renderToolbar();
+    // ...and the map shown where: the places the button or its card names.
+    const at = target.dataset.at ?? target.closest<HTMLElement>("[data-at]")?.dataset.at;
+    if (at && !in3d) pointAt(at.split(","));
     say(`${target.textContent?.trim()}: click on the map.`);
     return;
   }
@@ -3247,6 +3275,7 @@ function frame(now: number): void {
   if (in3d && view3d) view3d.frame(world, focusFor(world, focusOn.town, focusOn.route), focusOn.route ? null : focusOn.town);
   else draw(ctx, world, view, {
     selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay,
+    pointed: pointed && performance.now() < pointed.until ? pointed.ids : undefined,
     focusTown: focusOn.town,
     focusRoute: focusOn.route,
   });
