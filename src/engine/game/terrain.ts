@@ -1,5 +1,5 @@
 import type { TerrainField } from "../map/types";
-import type { GameMapDef } from "./types";
+import type { GameMapDef, ReliefDef } from "./types";
 
 // The slice's terrain (docs/principles.md §6, step 3): authored, like the
 // rest of its hand-made map, rather than generated -- a river and a ridge
@@ -73,8 +73,126 @@ export function buildGameTerrain(def: GameMapDef): TerrainField {
     }
   }
 
+  if (def.terrain?.relief) addRelief(def, def.terrain.relief, elevation, water);
+
   for (const town of def.towns) {
     if (water[Math.round(town.y) * width + Math.round(town.x)] === 1) throw new Error(`slice map: town ${town.id} is in water`);
   }
   return { width, height, elevation, water, settlementDensity: new Float32Array(width * height) };
+}
+
+// --- The land first (map version 7; the scope of 2026-10-30, A1-A2) --------------------------
+// Beyond the home cluster the land was a plain with hills set on it, and the rivers drawn across
+// it on their own -- so they ran over rises, and the land between them said nothing. Now a relief
+// shaped by the water: lowest along the rivers and the coast, swelling between them into the
+// country that drains to them, by region (rolling, ridged, a plateau behind its escarpment). It
+// is nothing in the home cluster's box (its trunk's prices are as measured), fading in over ten
+// cells past it; it lies flat round every town; and it eases where the old roads and the railway
+// run, so they keep to their valleys. Pure: a seed and a few numbers on the map, the same land
+// whenever the map is drawn, so a run file replays it.
+
+const BASIN = 14; // cells from the water to the full height of the land between rivers
+const HOME_FADE = 24;
+const TOWN_FLAT = 8;
+const ROAD_EASE = 3;
+
+function smooth01(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
+}
+
+/**
+ * Hashed value noise, 0..1, on a lattice of `scale` cells -- each octave `k` on its own turned and
+ * shifted lattice, so stacked octaves don't line up into straight bands (they did, axis-aligned).
+ */
+function valueNoise(seed: number, px: number, py: number, scale: number, k: number): number {
+  const turn = 0.6 + k * 1.13;
+  const c = Math.cos(turn), sn = Math.sin(turn);
+  const x = px * c - py * sn + k * 31.7, y = px * sn + py * c + k * 17.3;
+  const hash = (ix: number, iy: number) => {
+    let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(seed + k * 7919, 2246822519);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const gx = x / scale, gy = y / scale, x0 = Math.floor(gx), y0 = Math.floor(gy);
+  const tx = smooth01(gx - x0), ty = smooth01(gy - y0);
+  return (hash(x0, y0) * (1 - tx) + hash(x0 + 1, y0) * tx) * (1 - ty) + (hash(x0, y0 + 1) * (1 - tx) + hash(x0 + 1, y0 + 1) * tx) * ty;
+}
+
+/** Distance in cells to the nearest marked cell (a two-pass chamfer: 1 straight, 1.4 diagonal). */
+function distanceFrom(marked: Uint8Array, width: number, height: number): Float32Array {
+  const d = new Float32Array(width * height).fill(1e6);
+  for (let i = 0; i < marked.length; i += 1) if (marked[i]) d[i] = 0;
+  const pass = (x: number, y: number, dx: number, dy: number, cost: number) => {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= width || ny >= height) return;
+    const i = y * width + x, j = ny * width + nx;
+    if (d[j]! + cost < d[i]!) d[i] = d[j]! + cost;
+  };
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    pass(x, y, -1, 0, 1); pass(x, y, 0, -1, 1); pass(x, y, -1, -1, 1.4); pass(x, y, 1, -1, 1.4);
+  }
+  for (let y = height - 1; y >= 0; y -= 1) for (let x = width - 1; x >= 0; x -= 1) {
+    pass(x, y, 1, 0, 1); pass(x, y, 0, 1, 1); pass(x, y, 1, 1, 1.4); pass(x, y, -1, 1, 1.4);
+  }
+  return d;
+}
+
+function addRelief(def: GameMapDef, relief: ReliefDef, elevation: Float32Array, water: Uint8Array): void {
+  const { width, height } = def;
+  const fromWater = distanceFrom(water, width, height);
+  // The old roads and the railway, rasterised: the land eases where they run.
+  const roadCells = new Uint8Array(width * height);
+  const at = new Map(def.towns.map((t) => [t.id, t]));
+  for (const road of [...def.roads, ...(def.rails ?? [])]) {
+    const a = at.get(road.a), b = at.get(road.b);
+    if (!a || !b) continue;
+    const line: Array<[number, number]> = [[a.x, a.y], ...(road.via ?? []), [b.x, b.y]];
+    for (let k = 1; k < line.length; k += 1) {
+      const [ax, ay] = line[k - 1]!, [bx, by] = line[k]!;
+      const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) * 2));
+      for (let i = 0; i <= n; i += 1) {
+        const x = Math.round(ax + ((bx - ax) * i) / n), y = Math.round(ay + ((by - ay) * i) / n);
+        if (x >= 0 && y >= 0 && x < width && y < height) roadCells[y * width + x] = 1;
+      }
+    }
+  }
+  const fromRoad = distanceFrom(roadCells, width, height);
+  const box = def.home;
+  const towns = def.towns;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = y * width + x;
+      if (water[i]) continue;
+      // Nothing in the home cluster, fading in past it.
+      let mask = 1;
+      if (box) {
+        const dx = Math.max(box.x - x, 0, x - (box.x + box.width - 1));
+        const dy = Math.max(box.y - y, 0, y - (box.y + box.height - 1));
+        mask = smooth01(Math.hypot(dx, dy) / HOME_FADE);
+      }
+      if (mask === 0) continue;
+      // A town in a gentle dip, not a pit; a road a little eased, not a trench.
+      for (const t of towns) {
+        const d = Math.hypot(t.x - x, t.y - y);
+        if (d < TOWN_FLAT) mask *= 0.35 + 0.65 * smooth01(d / TOWN_FLAT);
+      }
+      mask *= 0.8 + 0.2 * smooth01(fromRoad[i]! / ROAD_EASE);
+      // The land between the rivers: four octaves on a slowly warped ground, ridged in steep country.
+      const wx = x + (valueNoise(relief.seed, x, y, relief.scale * 1.7, 7) - 0.5) * relief.scale * 0.6;
+      const wy = y + (valueNoise(relief.seed, x, y, relief.scale * 1.7, 8) - 0.5) * relief.scale * 0.6;
+      let n = 0.45 * valueNoise(relief.seed, wx, wy, relief.scale, 1) + 0.28 * valueNoise(relief.seed, wx, wy, relief.scale / 2.1, 2) + 0.17 * valueNoise(relief.seed, wx, wy, relief.scale / 4.3, 3) + 0.1 * valueNoise(relief.seed, wx, wy, relief.scale / 9, 4);
+      if (relief.ridged) n = 1 - Math.abs(2 * n - 1);
+      let lift = relief.amplitude * (0.2 + 0.8 * n) * smooth01(fromWater[i]! / BASIN);
+      // A plateau: its top level, its edge an escarpment two or three cells deep.
+      for (const p of relief.plateaus ?? []) {
+        const c = Math.cos(p.turn), s = Math.sin(p.turn);
+        const u = ((x - p.x) * c + (y - p.y) * s) / p.rx, v = (-(x - p.x) * s + (y - p.y) * c) / p.ry;
+        const r = Math.hypot(u, v);
+        const edge = 2.5 / Math.min(p.rx, p.ry);
+        if (r < 1 + edge) lift += p.height * smooth01((1 + edge - r) / edge) * smooth01(fromWater[i]! / 4);
+      }
+      elevation[i] = elevation[i]! + lift * mask;
+    }
+  }
 }

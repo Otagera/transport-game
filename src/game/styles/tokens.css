@@ -190,6 +190,13 @@
   --paint-green-23: #4f8a3a;
   --paint-green-24: #2b8a3e;
   --paint-green-25: #4f7a34;
+  /* The regions' own trees (view3d.ts, the scope's B3): the rainforest's deep canopy, the mangrove's roots, the baobab's bark, granite. */
+  --paint-green-26: #3e6a2e;
+  --paint-green-27: #34592a;
+  --paint-green-28: #56763c;
+  --paint-earth-62: #6b5a48;
+  --paint-grey-27: #9b958b;
+  --paint-grey-28: #847e75;
   --paint-blue-1: #d6e6ee;
   --paint-blue-2: #b8c8ff;
   --paint-blue-3: #a8bcff;

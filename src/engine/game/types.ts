@@ -58,6 +58,20 @@ export interface GameRoadDef {
   via?: Array<[number, number]>;
 }
 
+/**
+ * The land beyond the home cluster (map version 7, terrain.ts): a rolling relief from a seed, lowest
+ * along the rivers and rising between them, `amplitude` elevation units at most; `ridged` makes
+ * crests of it (steeper country); `plateaus` stand up out of it behind an escarpment.
+ */
+export interface ReliefDef {
+  seed: number;
+  amplitude: number;
+  /** Cells across its broadest swells. */
+  scale: number;
+  ridged?: boolean;
+  plateaus?: Array<{ x: number; y: number; rx: number; ry: number; turn: number; height: number }>;
+}
+
 export interface GameRiverDef {
   /** Centre line, map cells. */
   points: Array<[number, number]>;
@@ -86,7 +100,8 @@ export interface GameMapDef {
   roads: GameRoadDef[];
   /** Step 3: authored terrain. Absent means flat dry land. */
   /** `valleys`: the rivers cut through the hills (terrain.ts); absent in maps drawn before it. */
-  terrain?: { rivers?: GameRiverDef[]; hills?: GameHillDef[]; valleys?: boolean };
+  /** `relief`: the land beyond the home cluster shaped first, its rivers in its valleys (terrain.ts; map version 7). */
+  terrain?: { rivers?: GameRiverDef[]; hills?: GameHillDef[]; valleys?: boolean; relief?: ReliefDef };
   /** Step 4: the port city, where supplies come from (goods.ts). Absent means no supplies. */
   port?: string;
   /** Where imports land from the sea (region.ts): the home city on a coast, else the coast cluster's regional town. */

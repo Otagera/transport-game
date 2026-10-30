@@ -1,4 +1,4 @@
-import type { GameHillDef, GameMapDef, GameRiverDef, GameRoadDef, GameTown } from "./types";
+import type { GameHillDef, GameMapDef, GameRiverDef, GameRoadDef, GameTown, ReliefDef } from "./types";
 import type { TerrainField } from "../map/types";
 import { createRng, type Rng } from "../map/random";
 import { UnionFind } from "../map/connectivity";
@@ -105,6 +105,8 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
     if (turn) map = coastToSouth(map);
     // Version 6: the north landlocked -- its sea trade comes up the coast road (border.ts placeCoastRoad).
     if (version >= 6 && !SOUTHERN.has(generatedMapInfo(base, seed).region) && map.home) map = landlocked(map);
+    // Version 7: the land first -- a relief its rivers lie in, and rivers that join as rivers do.
+    if (version >= 7 && map.home) map = landFirst(map, seed);
     map = laidOverLand(map);
   }
   // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
@@ -855,4 +857,112 @@ function landlocked(map: GameMapDef): GameMapDef {
     return r;
   });
   return { ...map, terrain: { ...map.terrain, rivers: kept } };
+}
+
+// --- Map version 7: the land first ---------------------------------------------------------
+// (The scope of 2026-10-30, A1-A2: "rivers aren't shaped by the land; tributaries as wide as the
+// main river and joining at right angles; the land between them says nothing".) Beyond the home
+// cluster, a relief shaped by the water (terrain.ts addRelief): low along the rivers, rising
+// between them, by region -- rolling in the south-west, ridged in the south-east, nearly flat in
+// the delta, a plateau behind its escarpment in the Middle Belt, a low plain in the north. And the
+// rivers as a system: a tributary narrow at its source and widening to its mouth, never as wide as
+// the river it joins, meeting it at a slant going downstream rather than square on. Nothing drawn
+// from the map's stream (the relief from a seed of its own), so towns, roads and sites stay put;
+// a river's change kept only where it stays clear of every town.
+
+const RELIEF: Record<string, Omit<ReliefDef, "seed" | "plateaus">> = {
+  southwest: { amplitude: 1.8, scale: 34 },
+  southeast: { amplitude: 2.1, scale: 30, ridged: true },
+  southSouth: { amplitude: 0.35, scale: 40 },
+  middleBelt: { amplitude: 1.6, scale: 30 },
+  north: { amplitude: 0.9, scale: 40 },
+  northeast: { amplitude: 1, scale: 40 },
+};
+
+function landFirst(map: GameMapDef, seed: number): GameMapDef {
+  const box = map.home!;
+  const rivers = (map.terrain?.rivers ?? []).map((r) => ({ ...r, points: [...r.points], widths: [...(r.widths ?? r.points.map(() => r.width))] }));
+  const reliefSeed = Math.floor(hashed(seed, 7_000_003) * 2 ** 31);
+  const relief: ReliefDef = { seed: reliefSeed, ...(RELIEF[map.region ?? "southwest"] ?? RELIEF.southwest!) };
+  // The Middle Belt's plateau: an ellipse standing clear of every town and of the home box.
+  if (map.region === "middleBelt") {
+    for (let k = 0; k < 40; k += 1) {
+      const p = { x: 30 + hashed(reliefSeed, 10 + k) * (map.width - 60), y: 25 + hashed(reliefSeed, 60 + k) * (map.height - 50), rx: 16 + 8 * hashed(reliefSeed, 110 + k), ry: 10 + 5 * hashed(reliefSeed, 160 + k), turn: hashed(reliefSeed, 210 + k) * Math.PI, height: 2.5 };
+      const inside = (t: { x: number; y: number }, pad: number) => {
+        const c = Math.cos(p.turn), sn = Math.sin(p.turn);
+        const u = ((t.x - p.x) * c + (t.y - p.y) * sn) / (p.rx + pad), v = (-(t.x - p.x) * sn + (t.y - p.y) * c) / (p.ry + pad);
+        return u * u + v * v <= 1;
+      };
+      if (toBox(p, box) < Math.max(p.rx, p.ry) + 12 || map.towns.some((t) => inside(t, 6))) continue;
+      relief.plateaus = [p];
+      break;
+    }
+  }
+
+  // The rivers as a system: which join which, downstream.
+  const sea = rivers.find((r) => Math.max(...r.widths) > 12);
+  const widthNear = (r: (typeof rivers)[number], [x, y]: [number, number]) => {
+    let best = Infinity, at = 0, w = r.width;
+    for (let k = 1; k < r.points.length; k += 1) {
+      const [ax, ay] = r.points[k - 1]!, [bx, by] = r.points[k]!;
+      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
+      const d = Math.hypot(x - (ax + t * dx), y - (ay + t * dy));
+      if (d < best) [best, at, w] = [d, k, r.widths[k - 1]! + (r.widths[k]! - r.widths[k - 1]!) * t];
+    }
+    return { distance: best, segment: at, width: w };
+  };
+  const reshaped = rivers.map((river) => {
+    if (river === sea) return river;
+    // Its mouth: the end that meets another river (not the sea's: an estuary keeps its width).
+    const ends: Array<{ end: number; host: (typeof rivers)[number]; near: ReturnType<typeof widthNear> }> = [];
+    for (const end of [0, river.points.length - 1]) {
+      for (const host of rivers) {
+        if (host === river || host === sea) continue;
+        const near = widthNear(host, river.points[end]!);
+        if (near.distance <= near.width / 2 + 1.5) ends.push({ end, host, near });
+      }
+    }
+    const join = ends[0];
+    if (!join) return river;
+    // A creek that leaves a river for the sea (the delta's), or a lagoon's channel: it runs out, not in.
+    const other = river.points[join.end === 0 ? river.points.length - 1 : 0]!;
+    if (sea) { const s2 = widthNear(sea, other); if (s2.distance <= s2.width / 2 + 2) return river; }
+    // Order it source to mouth.
+    const points = join.end === 0 ? [...river.points].reverse() : [...river.points];
+    let widths = join.end === 0 ? [...river.widths].reverse() : [...river.widths];
+    const n = points.length;
+    // Narrow at its source, widening to its mouth, at most 0.6 of the river it joins; a ford's narrow kept.
+    const cap = Math.max(1.2, join.near.width * 0.6);
+    // Only beyond the home box: the home river's crossings there are the trunk's, as measured.
+    widths = widths.map((w, k) => {
+      if (toBox({ x: points[k]![0], y: points[k]![1] }, box) < 2) return w;
+      const t = k / Math.max(1, n - 1);
+      const tapered = Math.min(cap, w) * (0.5 + 0.5 * t);
+      return w <= 1.25 ? w : Math.round(Math.max(1.2, tapered) * 100) / 100;
+    });
+    // Meeting its host at a slant, downstream: the mouth moved some cells down the host's line,
+    // and the last stretch bent toward it, more the nearer the mouth.
+    const host = join.host;
+    const k = join.near.segment;
+    const [hx, hy] = host.points[Math.min(host.points.length - 1, k)]!;
+    const [px, py] = host.points[Math.max(0, k - 1)]!;
+    const hl = Math.hypot(hx - px, hy - py) || 1;
+    const down: [number, number] = [(hx - px) / hl, (hy - py) / hl];
+    const mouth = points[n - 1]!;
+    const slide = Math.min(6, Math.max(2, join.near.width * 1.5));
+    const target: [number, number] = [mouth[0] + down[0] * slide, mouth[1] + down[1] * slide];
+    const reach = Math.min(n - 1, 8);
+    const bent = points.map((p, i): [number, number] => {
+      const from = n - 1 - reach;
+      if (i < from || toBox({ x: p[0], y: p[1] }, box) < 2) return p;
+      const f = ((i - from) / reach) ** 2;
+      return [Math.round((p[0] + (target[0] - mouth[0]) * f) * 100) / 100, Math.round((p[1] + (target[1] - mouth[1]) * f) * 100) / 100];
+    });
+    const tried = { ...river, points: join.end === 0 ? bent.reverse() : bent, widths: join.end === 0 ? widths.reverse() : widths };
+    const plain = { ...river, points: join.end === 0 ? [...points].reverse() : points, widths: tried.widths };
+    for (const candidate of [tried, plain]) if (map.towns.every((t) => dryOf([candidate], t, WATER_CLEARANCE))) return candidate;
+    return river;
+  });
+  return { ...map, terrain: { ...map.terrain, rivers: reshaped, relief } };
 }

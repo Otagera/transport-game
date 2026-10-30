@@ -36,8 +36,9 @@ import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, s
 const M = 8; // metres a map cell
 // Metres an elevation unit. The map's cells stand for far more than the 8 m they're drawn at,
 // so the hills are drawn low: at 7 m a unit, a 2D map's gentle hill stood up as a spike (your
-// playtest, 2026-10-26: "see another mountain in 3D").
-const HEIGHT = 2.2;
+// playtest, 2026-10-26: "see another mountain in 3D"). 3.2 since the land got its relief (map
+// version 7: broad swells a few units high) -- at 2.2 the region read flat from any height.
+const HEIGHT = 3.2;
 const VEHICLE_SCALE = 1.6; // a little larger than life, to be seen from above
 // Haze as distance does it (aerial perspective), not a flat fog: colour drains first, then the land
 // goes to a warm harmattan haze near and a cool blue far off. Patched into three's fog chunk once;
@@ -218,6 +219,18 @@ const BIOMES: Record<string, { dry: number; green: number; bank: number; high: n
   north: { dry: paintHex("--paint-earth-25"), green: paintHex("--paint-green-2"), bank: paintHex("--paint-green-10"), high: paintHex("--paint-earth-42"), dryness: 0.32, trees: 0.45 },
   northeast: { dry: paintHex("--paint-earth-23"), green: paintHex("--paint-earth-33"), bank: paintHex("--paint-green-10"), high: paintHex("--paint-earth-41"), dryness: 0.38, trees: 0.4 },
 };
+// Each region's own trees (the scope's B3, 2026-10-30: one savanna had stood for every region):
+// what grows in town, on a river's bank, near it, on high ground, and on the open land.
+type Mix = Array<[TreeKind, number]>;
+const MIXES: Record<string, { town: Mix; bank: Mix; near: Mix; high: Mix; open: Mix }> = {
+  southwest: { town: [["palm", 3], ["shade", 2]], bank: [["rainforest", 3], ["shade", 3], ["palm", 3]], near: [["shade", 3], ["palm", 2], ["rainforest", 2], ["bush", 2]], high: [["bush", 4], ["shade", 3], ["boulder", 1]], open: [["shade", 4], ["acacia", 2], ["palm", 2], ["bush", 3]] },
+  southeast: { town: [["palm", 4], ["shade", 2]], bank: [["rainforest", 5], ["palm", 3]], near: [["rainforest", 4], ["palm", 3], ["shade", 2]], high: [["rainforest", 3], ["bush", 3]], open: [["rainforest", 3], ["palm", 3], ["shade", 3], ["bush", 2]] },
+  southSouth: { town: [["palm", 5], ["shade", 1]], bank: [["mangrove", 6], ["palm", 2]], near: [["mangrove", 2], ["rainforest", 3], ["palm", 3]], high: [["rainforest", 3], ["palm", 2]], open: [["rainforest", 3], ["palm", 4], ["shade", 2]] },
+  middleBelt: { town: [["shade", 3], ["palm", 1]], bank: [["shade", 5], ["palm", 2], ["acacia", 2]], near: [["shade", 3], ["acacia", 3], ["bush", 2]], high: [["boulder", 4], ["bush", 3], ["acacia", 1]], open: [["acacia", 4], ["bush", 3], ["shade", 2], ["boulder", 1]] },
+  north: { town: [["shade", 3], ["baobab", 1]], bank: [["shade", 4], ["acacia", 3], ["palm", 1]], near: [["acacia", 4], ["shade", 2], ["baobab", 1]], high: [["boulder", 5], ["bush", 2]], open: [["acacia", 5], ["bush", 3], ["baobab", 2]] },
+  northeast: { town: [["shade", 3], ["baobab", 1]], bank: [["shade", 3], ["acacia", 4]], near: [["acacia", 4], ["bush", 2], ["baobab", 1]], high: [["boulder", 5], ["bush", 2]], open: [["acacia", 4], ["bush", 4], ["baobab", 2]] },
+};
+
 // Busy, jammed and flooded are signal (look.md §2): the same tokens as the 2D map's.
 const ROAD_COLOURS = { paved: paintHex("--paint-grey-21"), dirt: paintHex("--paint-earth-48"), busy: paintHex("--road-busy"), jammed: paintHex("--road-jammed"), retired: paintHex("--paint-earth-26"), flooded: paintHex("--flood") };
 /** A selection: your colour (the 2D map's --you), lit on what it's connected to; the rest toward the ground's pale. */
@@ -572,6 +585,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
     return (hash(x0, y0, k) * (1 - sx) + hash(x0 + 1, y0, k) * sx) * (1 - sy) + (hash(x0, y0 + 1, k) * (1 - sx) + hash(x0 + 1, y0 + 1, k) * sx) * sy;
   };
+  const smooth01 = (t: number) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
   const savanna = (cx: number, cy: number) => {
     const wx = (noise(cx / 9, cy / 9, 1) - 0.5) * 6, wy = (noise(cx / 9, cy / 9, 2) - 0.5) * 6;
     return 0.55 * patch(cx + wx, cy + wy) + 0.3 * noise(cx / 5.5, cy / 5.5, 3) + 0.15 * noise(cx / 2.2, cy / 2.2, 4);
@@ -610,7 +624,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
     const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
-    const high = new THREE.Color(biome.high), c = new THREE.Color(), rgb = { r: 0, g: 0, b: 0 };
+    const high = new THREE.Color(biome.high), c = new THREE.Color(), rgb = { r: 0, g: 0, b: 0 }, rock = new THREE.Color(paintHex("--paint-grey-27")).lerp(new THREE.Color(paintHex("--paint-earth-21")), 0.35);
     const dry = new THREE.Color(biome.dry), green = new THREE.Color(biome.green), bankGreen = new THREE.Color(biome.bank), earth = new THREE.Color(paintHex("--paint-earth-39"));
     for (let py = 0; py < small.height; py += 1) for (let px = 0; px < small.width; px += 1) {
       const cx = (px + 0.5) / BASE, cy = (py + 0.5) / BASE;
@@ -620,6 +634,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       // so the plate isn't one sage.
       c.offsetHSL(0, 0.05 * (1 - dryness), 0.11 * (dryness - 0.5));
       c.lerp(high, Math.min(1, elevationAt(cx, cy) / top) * 0.8);
+      // Bare rock where the ground is steep (the scope's B2): an escarpment's face, an inselberg's
+      // dome, a ridge's crest -- the land's shape read in its colour as well as its shading.
+      const slope = (Math.hypot(elevationAt(cx + 0.5, cy) - elevationAt(cx - 0.5, cy), elevationAt(cx, cy + 0.5) - elevationAt(cx, cy - 0.5)) * HEIGHT) / M;
+      // In outcrops, not a wash: broken by fine noise, so the grey reads as rock showing through.
+      if (slope > 0.12) c.lerp(rock, Math.min(0.7, (slope - 0.12) * 3) * (0.25 + 0.75 * smooth01((noise(cx / 1.6, cy / 1.6, 9) - 0.3) * 2.2)));
       const bank = bankDist[Math.min(H - 1, Math.round(cy)) * W + Math.min(W - 1, Math.round(cx))]!;
       if (bank < 5) c.lerp(bankGreen, 0.7 * (1 - bank / 5));
       const e = earthShare[py * small.width + px]!;
@@ -1538,11 +1557,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const bank = bankDist[cell]!;
       const hill = elevationAt(cx, cy) / top;
       let chance: number, kind: TreeKind;
-      if (what === TOWN) { chance = 0.05; kind = pick([["palm", 3], ["shade", 2]]); }
-      else if (bank < 3) { chance = 0.75; kind = pick([["shade", 5], ["palm", 3], ["acacia", 2]]); }
-      else if (bank < 7) { chance = 0.35; kind = pick([["shade", 3], ["acacia", 3], ["palm", 1], ["bush", 2]]); }
-      else if (hill > 0.3) { chance = 0.3; kind = pick([["bush", 5], ["acacia", 3]]); }
-      else { chance = 0.1 + 0.12 * patch(cx, cy); kind = pick([["acacia", 5], ["bush", 3], ["shade", 2]]); }
+      const mix = MIXES[world.region ?? "southwest"] ?? MIXES.southwest!;
+      if (what === TOWN) { chance = 0.05; kind = pick(mix.town); }
+      else if (bank < 3) { chance = 0.75; kind = pick(mix.bank); }
+      else if (bank < 7) { chance = 0.35; kind = pick(mix.near); }
+      else if (hill > 0.3) { chance = 0.3; kind = pick(mix.high); }
+      else { chance = 0.1 + 0.12 * patch(cx, cy); kind = pick(mix.open); }
       // Away from the banks' gallery forest, trees gather in groves with gaps between (the
       // reference flights' "stand structure"): thicker in a grove's heart, bare between.
       const g = grove(cx, cy);
@@ -1550,11 +1570,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       if (rand() > chance * clump * (what === TOWN ? 1 : biome.trees)) continue;
       // Taller in a grove's heart, young at its edge; now and then one stands above the rest.
       const cohort = what === TOWN ? 1 : 0.65 + Math.max(0, g - 0.35) * 1.1;
-      const size = (0.55 + rand() * 0.45) * cohort * (rand() < 0.03 ? 1.5 : 1);
+      // Boulders big enough to read from the air: granite heaps, not pebbles.
+      const size = (0.55 + rand() * 0.45) * cohort * (rand() < 0.03 ? 1.5 : 1) * (kind === "boulder" ? 2.2 : 1);
       m.compose(ground(cx, cy, -0.1), q.setFromAxisAngle(up, rand() * Math.PI * 2), sc.set(size, size * (0.85 + rand() * 0.3), size));
       trees.push({ kind, cell, at: m.clone() });
     }
-    for (const kind of ["acacia", "shade", "palm", "bush"] as TreeKind[]) {
+    for (const kind of ["acacia", "shade", "palm", "bush", "rainforest", "mangrove", "baobab", "boulder"] as TreeKind[]) {
       const mine = trees.filter((t) => t.kind === kind);
       if (!mine.length) continue;
       const mesh = new THREE.InstancedMesh(own(treeGeometry(kind)), treeMaterial, mine.length);

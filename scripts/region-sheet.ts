@@ -3,7 +3,7 @@
 // roads and track along their corridors, towns by size, sites as squares, the
 // home box outlined. Not part of the shipped app.
 //
-//   bun scripts/region-sheet.ts out.html [seed ...]
+//   bun scripts/region-sheet.ts out.html [seed ...]      (MAP_VERSION=6 to draw an older version)
 //
 // Open the page, or screenshot it (scripts in the scratchpad do).
 import { writeFileSync } from "node:fs";
@@ -14,7 +14,7 @@ const [out = "region-sheet.html", ...rest] = process.argv.slice(2);
 const seeds = rest.length > 0 ? rest.map(Number) : [4882, 3, 11, 17, 42, 101, 256, 777, 1234, 2411, 2418, 9001];
 
 const maps = seeds.map((seed) => {
-  const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
+  const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0, ...(process.env.MAP_VERSION ? { mapVersion: Number(process.env.MAP_VERSION) } : {}) });
   const { terrain, corridors, segments } = w.simulation.map;
   const highest = terrain.elevation.reduce((top, e) => Math.max(top, e), 0) || 1;
   const kind = new Map(segments.map((s) => [s.corridorId, s.type]));

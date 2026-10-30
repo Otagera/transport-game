@@ -262,6 +262,17 @@ toward the sky; (3) a soft `--ink` footprint instanced under every building (`co
 (5) track as a narrow ballast bed, a timber sleeper band and two thin dark rails, against a road's
 one wide surface.
 
+**Fidelity, 2026-10-30** (the scope agreed that day: the stylised diorama, improved, not a new
+style): (B1) the table under the plate takes no cast shadows -- the slab casts none, so a low sun
+had laid the edge towns' shadows through it as grey houses floating below; the ground's dryness
+from the broad patches warped and layered with finer noise, so the savanna is patchy at every
+scale instead of a few soft blobs. (B2) the land's height drawn at 3.2 m a unit (from 2.2: the
+relief of map version 7 read flat), and steep ground painted as granite in outcrops, broken by fine
+noise rather than one grey wash. (B3) each region its own trees (`MIXES`): rainforest giants and
+oil palms in the south, mangroves on the delta's creeks, baobabs and acacia in the north, granite
+boulders on high ground in the Middle Belt and the north -- four new shapes in `shapes3d.ts`
+(`rainforest`, `mangrove`, `baobab`, `boulder`), each one instanced draw like the rest.
+
 ---
 
 ## 9. Enforcement

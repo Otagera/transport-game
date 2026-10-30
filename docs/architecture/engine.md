@@ -1235,6 +1235,27 @@ replays as played. Seed 0 stays the hand-made map, alone.
   from the home city; the north-east's Banki crossing now on its east edge. Six northern maps
   unplayed for 20 days, version 5 -> 6: the same 42 sites working, fuel 24.8% -> 24.6%, trips 573 ->
   574, export pay ₦220 -> ₦248 a day (their seaport was already a haul away).
+- **Version 7: the land first** (`region.ts landFirst`, `terrain.ts addRelief`, `GameMapDef.terrain.relief`;
+  the fidelity scope of 2026-10-30, A1-A2). Beyond the home cluster the land had been a plain with
+  hills set on it and rivers drawn across it on their own. Now a relief from a seed of its own
+  (`ReliefDef`), shaped by the water: lowest along the rivers and the coast, rising over 14 cells
+  to the country between them -- four octaves of value noise, each on its own turned lattice
+  (stacked on one, they lined up into straight bands), on slowly warped ground; by region: rolling
+  in the south-west (1.8 units), ridged in the south-east (2.1), nearly flat in the delta (0.35), a
+  plateau behind a 2.5-cell escarpment in the Middle Belt (an ellipse clear of every town and the
+  home box), a low plain in the north (0.9-1). None in the home box, fading in over 24 cells past
+  it; towns in gentle dips (to 35% within 8 cells), the old roads and railway a little eased (to
+  80% within 3). And the rivers as a system: a tributary narrow at its source, widening to its
+  mouth, at most 0.6 of the river it joins, a ford's narrow kept; its mouth slid a few cells down
+  the host's line and its last stretch bent to meet it at a slant -- beyond the home box only (the
+  home river's crossings there are the trunk's), each change kept only where every town stays
+  clear of the water. A creek that runs out to the sea (the delta's, a lagoon's channel) is left
+  as it is. Towns, roads and sites don't move. Tested (`test/land-first.test.ts`): the home box's
+  ground unchanged, towns and roads as version 6, a tributary narrower than its host, the same
+  seed the same land. Twelve seeds unplayed for 15 days, version 6 -> 7 (`scripts/lab/
+  land-first.lab.ts`): sites 199 -> 203, working 95 -> 95, fuel 34.5% -> 34.9%, trips 592 -> 582 a
+  day; a road between two towns beyond the home box ₦240 -> ₦279 on average (hills ₦0 -> ₦40).
+  `scripts/region-sheet.ts` takes `MAP_VERSION=6` to draw the older version beside it.
 - **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
   region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
   a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought

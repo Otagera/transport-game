@@ -302,7 +302,7 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
 
 // --- Trees: the savanna's, standing on y = 0, about life size ------------------------------
 
-export type TreeKind = "acacia" | "shade" | "palm" | "bush";
+export type TreeKind = "acacia" | "shade" | "palm" | "bush" | "rainforest" | "mangrove" | "baobab" | "boulder";
 /** A tree's shape; each kind one InstancedMesh, scaled and turned per tree. */
 export function treeGeometry(kind: TreeKind): THREE.BufferGeometry {
   const kit = new Kit();
@@ -334,6 +334,42 @@ export function treeGeometry(kind: TreeKind): THREE.BufferGeometry {
     case "bush": {
       kit.add(new THREE.IcosahedronGeometry(1.3, 0), paint("--paint-green-18"), { y: 0.9 });
       kit.add(new THREE.IcosahedronGeometry(1, 0), paint("--paint-green-13"), { x: 1, y: 0.7, z: 0.4 });
+      break;
+    }
+    case "rainforest": {
+      // The south's forest giant: a tall clean trunk, its crown in deep layers above the rest.
+      kit.add(new THREE.CylinderGeometry(0.4, 0.6, 11, 6), bark, { y: 5.5 });
+      kit.add(new THREE.IcosahedronGeometry(3.6, 0), paint("--paint-green-27"), { y: 11.5 });
+      kit.add(new THREE.IcosahedronGeometry(2.8, 0), paint("--paint-green-26"), { x: 2.2, y: 10.2, z: 1 });
+      kit.add(new THREE.IcosahedronGeometry(2.5, 0), paint("--paint-green-26"), { x: -1.8, y: 10.6, z: -1.4 });
+      break;
+    }
+    case "mangrove": {
+      // The delta's: stilt roots arching into the water, a low dense crown.
+      for (let k = 0; k < 6; k += 1) {
+        const a = (k / 6) * Math.PI * 2;
+        kit.add(new THREE.CylinderGeometry(0.08, 0.12, 2.4, 4), paint("--paint-earth-62"), { x: Math.cos(a) * 0.9, y: 1, z: Math.sin(a) * 0.9, rx: Math.sin(a) * 0.5, rz: -Math.cos(a) * 0.5 });
+      }
+      kit.add(new THREE.CylinderGeometry(0.2, 0.25, 1.6, 5), paint("--paint-earth-62"), { y: 2.6 });
+      kit.add(new THREE.IcosahedronGeometry(2.3, 0), paint("--paint-green-28"), { y: 4.2 });
+      kit.add(new THREE.IcosahedronGeometry(1.7, 0), paint("--paint-green-25"), { x: 1.5, y: 3.7, z: 0.5 });
+      break;
+    }
+    case "baobab": {
+      // The north's: a great swollen trunk, stubby branches, a thin crown.
+      kit.add(new THREE.CylinderGeometry(1.1, 1.8, 6, 8), paint("--paint-grey-27"), { y: 3 });
+      for (let k = 0; k < 5; k += 1) {
+        const a = (k / 5) * Math.PI * 2;
+        kit.add(new THREE.CylinderGeometry(0.15, 0.35, 2.6, 4), paint("--paint-grey-27"), { x: Math.cos(a) * 1.2, y: 6.6, z: Math.sin(a) * 1.2, rx: Math.sin(a) * 0.7, rz: -Math.cos(a) * 0.7 });
+        kit.add(new THREE.IcosahedronGeometry(0.9, 0), paint("--paint-green-15"), { x: Math.cos(a) * 2.1, y: 7.8, z: Math.sin(a) * 2.1 });
+      }
+      break;
+    }
+    case "boulder": {
+      // Granite: rounded blocks heaped, as on the plateau and round the inselbergs.
+      kit.add(new THREE.DodecahedronGeometry(1.6, 0), paint("--paint-grey-27"), { y: 0.9 });
+      kit.add(new THREE.DodecahedronGeometry(1.1, 0), paint("--paint-grey-28"), { x: 1.5, y: 0.6, z: 0.6, ry: 0.7 });
+      kit.add(new THREE.DodecahedronGeometry(0.8, 0), paint("--paint-grey-27"), { x: -1.2, y: 0.4, z: 1.1, ry: 1.9 });
       break;
     }
   }
