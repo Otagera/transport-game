@@ -20,19 +20,26 @@
     </div>
     <canvas id="map"></canvas>
     <header id="strip"></header>
-    <aside id="log"></aside>
-    <aside id="panel"></aside>
-    <details id="key" open><summary>Key</summary>
-      Road: width = traffic · <b style="background:var(--road-free)"></b>free <b style="background:var(--road-busy)"></b>busy <b style="background:var(--bad)"></b>jammed · <b style="background:var(--you)"></b>your riders<br />
-      Beside it: <b style="background:var(--informal)"></b>danfos, kekes, okadas <b style="background:var(--goods)"></b>trucks (wider, more)<br />
-      Your vehicles fill as full as their route runs · ring: <b style="background:var(--you)"></b>you <b style="background:var(--informal)"></b>informal <b style="background:var(--home)"></b>stayed home<br />
-      Sites: <i class="fam" style="background:var(--fuel)"></i>fuel <i class="fam" style="background:var(--building)"></i>building <i class="fam" style="background:var(--food)"></i>food and crops <i class="fam" style="background:var(--trade)"></i>trade · solid working, hollow idle, amber corner held back<br />
-      Towns: a dot a village, a heavier rim a regional town, a double ring the city · ⚓ the port<br />
-      ! a problem (its card says the move) · ▲▼ growing · wheel to zoom, drag to pan, 0 to fit
-    </details>
-    <div id="overlays"></div>
-    <div id="overlay-caption" hidden></div>
-    <div id="hint" hidden></div>
+    <!-- The Board layout (docs/architecture/look.md §6): everything that acts on the map in the
+         left column, the panel on the right, the toolbar docked under the plate; nothing over it. -->
+    <aside id="controls-col">
+      <div id="mapctl"></div>
+      <div id="overlays"></div>
+      <div id="overlay-caption" hidden></div>
+      <div id="log"></div>
+      <details id="key"><summary>Key</summary>
+        Road: width = traffic · <b style="background:var(--road-free)"></b>free <b style="background:var(--road-busy)"></b>busy <b style="background:var(--road-jammed)"></b>jammed · <b style="background:var(--you)"></b>your riders<br />
+        Beside it: <b style="background:var(--informal)"></b>danfos, kekes, okadas <b style="background:var(--goods)"></b>trucks (wider, more)<br />
+        Your vehicles fill as full as their route runs · ring: <b style="background:var(--you)"></b>you <b style="background:var(--informal)"></b>informal <b style="background:var(--home)"></b>stayed home<br />
+        Sites: <i class="fam" style="background:var(--fuel)"></i>fuel <i class="fam" style="background:var(--building)"></i>building <i class="fam" style="background:var(--food)"></i>food and crops <i class="fam" style="background:var(--trade)"></i>trade · solid working, hollow idle, amber corner held back<br />
+        Towns: a dot a village, a heavier rim a regional town, a double ring the city · ⚓ the port<br />
+        ! a problem (its card says the move) · ▲▼ growing · wheel to zoom, drag to pan, 0 to fit
+      </details>
+    </aside>
+    <aside id="panel-col">
+      <div id="hint" hidden></div>
+      <div id="panel"></div>
+    </aside>
     <div id="toolbar"></div>
     <div id="toast"></div>
     <section id="revenue" aria-label="Revenue"></section>

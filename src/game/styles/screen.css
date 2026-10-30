@@ -1,5 +1,4 @@
-/* The information lab's screen (info-lab.html, agreed 2026-10-23): strip, log, side panel. */
-/* --- The information lab's screen (info-lab.html, agreed 2026-10-23), ported whole --- */
+/* The screen: strip, log, side panel -- first drawn in the information lab (2026-10-23), laid out now by look.md §6. */
 .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
 .up { color: var(--good); } .down { color: var(--bad); }
@@ -10,11 +9,21 @@
 #strip button:hover, #log button:hover, #panel button:hover, #revenue button:hover { border-color: var(--ink-2); }
 #log button.on, #panel > .tabs button.on, #revenue button.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .tile button { padding: 0 7px; font-size: 13px; }
+/* The strip is ink (look.md §6): the term, three numbers, Revenue. */
 #strip {
   position: fixed; left: 0; right: 0; top: 0; z-index: 5;
-  display: flex; align-items: stretch; gap: 8px; padding: 10px 14px; background: var(--surface);
-  border-bottom: 1px solid var(--line); overflow-x: auto; font-size: 13px;
+  display: flex; align-items: stretch; gap: 8px; padding: 10px 14px; background: var(--ink); color: var(--on-fill);
+  overflow-x: auto; font-size: 13px;
+  --strip-muted: color-mix(in srgb, var(--on-fill) 58%, var(--ink));
+  --strip-rule: color-mix(in srgb, var(--on-fill) 16%, var(--ink));
 }
+#strip .muted, #strip .stat .k { color: var(--strip-muted); }
+#strip .stat { border-right-color: var(--strip-rule); }
+#strip .up { color: color-mix(in srgb, var(--good) 55%, var(--on-fill)); }
+#strip .down { color: color-mix(in srgb, var(--bad) 55%, var(--on-fill)); }
+#strip a { color: inherit; }
+#strip button { background: transparent; color: var(--on-fill); border-color: var(--strip-rule); }
+#strip button:hover { border-color: var(--strip-muted); }
 .stat { min-width: 132px; padding: 2px 12px 2px 0; border-right: 1px solid var(--line); }
 .stat:last-of-type { border-right: 0; }
 .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -33,9 +42,8 @@
 .stat svg { display: block; margin-top: 2px; }
 #strip .spacer { flex: 1; }
 #strip .actions { display: flex; gap: 6px; align-items: center; }
-#log, #panel { position: fixed; top: var(--top); bottom: 0; background: var(--surface); overflow-y: auto; z-index: 5; font-size: 13px; }
-#log { left: 0; width: var(--left); border-right: 1px solid var(--line); padding: 10px 12px; box-sizing: border-box; }
-#panel { right: 0; width: var(--right); border-left: 1px solid var(--line); box-sizing: border-box; }
+#log, #panel { font-size: 13px; }
+#log { border-top: 1px solid var(--line); padding-top: 12px; }
 #tip {
   position: fixed; pointer-events: none; background: var(--ink); color: var(--surface); padding: 6px 8px;
   border-radius: 6px; font-size: 12px; display: none; z-index: 20; max-width: 280px;
@@ -107,3 +115,12 @@ details.more > .panel-body { padding-top: 8px; }
 #strip .stat.opens .k::after { content: " ›"; }
 /* How long a waiting item has stood (screen.ts waitingHtml). */
 .problem .age { color: var(--muted); white-space: nowrap; }
+
+/* The term's pledges in the panel (screen.ts pledgesHtml): whole, never cut; the bar and button under each. */
+.pledges-pane .pledge { display: block; padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; background: var(--surface-2); font-size: 12px; line-height: 1.4; }
+.pledges-pane .pledge .t { display: block; overflow: visible; white-space: normal; text-overflow: clip; }
+.pledges-pane .pledge .row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.pledges-pane .pledge .bar { flex: 1 1 auto; width: auto; background: var(--line); }
+.pledges-pane .pledge button { flex: none; font-size: 12px; padding: 1px 8px; }
+.pledges-pane .pledge button.primary { background: var(--ink); color: var(--on-fill); border-color: var(--ink); }
+.hero.opens { cursor: pointer; }

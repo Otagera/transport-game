@@ -65,6 +65,6 @@
 
   /* The map sits between the log (left) and the panel (right), under the strip (--top, measured). */
   --top: 92px;
-  --left: 240px;
-  --right: 360px;
+  --left: 236px;
+  --right: 352px;
 }

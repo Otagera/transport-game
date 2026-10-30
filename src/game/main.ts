@@ -279,20 +279,9 @@ function resize(): void {
   const cssPx = (name: string) => parseFloat(getComputedStyle(root).getPropertyValue(name)) || 0;
   const left = cssPx("--left");
   const right = cssPx("--right");
-  // Keep the map clear of the strip above and of whatever sits below it --
-  // the toolbar, and the key when it's open -- measured, not guessed: a
-  // fixed inset left the open key over the map's corner (playtest).
-  // (getClientRects, not offsetParent: both are position: fixed, whose offsetParent is always null.)
-  const below = (el: HTMLElement | null) => (el && el.getClientRects().length > 0 ? window.innerHeight - el.getBoundingClientRect().top : 0);
-  // On a window too narrow for the open key beside the toolbar, the key sits above it.
-  const keyEl = document.querySelector<HTMLElement>("#key");
-  if (keyEl) {
-    keyEl.style.bottom = "";
-    if (toolbar && keyEl.getClientRects().length > 0 && keyEl.getBoundingClientRect().right > toolbar.getBoundingClientRect().left - 8) {
-      keyEl.style.bottom = `${below(toolbar) + 8}px`;
-    }
-  }
-  const bottomInset = Math.max(56, below(toolbar)) + 8;
+  // Clear of the strip above and the docked toolbar below (look.md §6: the key and the
+  // controls are in the left column now, never over the plate), measured.
+  const bottomInset = (toolbar?.getBoundingClientRect().height ?? 48) + 8;
   fitted = fitView(world, window.innerWidth, window.innerHeight, 24, stripEl.offsetHeight, bottomInset, left, right);
   applyZoom();
 }
@@ -362,7 +351,8 @@ function renderZoomControl(): void {
   if (!el) {
     el = document.createElement("div");
     el.id = "zoom-control";
-    document.body.appendChild(el);
+    // In the controls column (look.md §6), not over the plate.
+    (document.querySelector("#mapctl") ?? document.body).appendChild(el);
     el.addEventListener("click", (event) => {
       const z = (event.target as HTMLElement).dataset.zoom;
       if (z === "3d") void toggle3d();
@@ -409,13 +399,8 @@ window.addEventListener("mouseup", () => {
   dragging = null;
 });
 
-// The key opens only when there's room beside the toolbar (ten tools); on a
-// narrower window it starts closed, one click away, instead of covering the map.
-const key = document.querySelector<HTMLDetailsElement>("#key");
-if (key) {
-  key.open = window.innerWidth >= 1560;
-  key.addEventListener("toggle", resize); // opening it takes room from the map
-}
+// The key is a chip in the controls column, closed until asked for (look.md §6: a manual, not
+// furniture); it never covers the plate, so opening it takes nothing from the map.
 resize();
 
 // Every action goes through the receipt book: it happens now, and two days
@@ -2935,6 +2920,8 @@ function onPanelClick(event: MouseEvent): void {
   if (shows) {
     overlay = shows.dataset.showOverlay as Overlay;
     renderOverlays();
+    // From the revenue screen: closed, so the overlay can be seen.
+    document.querySelector("#revenue")?.classList.remove("open");
     return;
   }
   const target = (event.target as HTMLElement).closest<HTMLElement>("button, a, [data-select]") ?? (event.target as HTMLElement);
@@ -3199,22 +3186,9 @@ function renderHint(): void {
     hintEl.dataset.id = String(hint.id);
     hintEl.innerHTML = `<span>${hint.text}</span><button data-hint="close" title="Got it">×</button><button data-hint="off" title="No more hints">Hints off</button>`;
   }
+  // Inline at the top of the panel column (look.md §6), not beside its town over the plate.
   hintEl.hidden = false;
-  const town = hint.town ? world.towns.get(hint.town) : undefined;
-  if (town) {
-    // Beside the town it's about: pointing at the map, not at a button.
-    const p = toScreen(view, town.x, town.y);
-    const r = townRadius(town, view);
-    hintEl.classList.add("anchored");
-    hintEl.style.left = `${Math.min(window.innerWidth - 340, p.x + r + 14)}px`;
-    hintEl.style.top = `${Math.max(64, p.y - 18)}px`;
-  } else {
-    hintEl.classList.remove("anchored");
-    hintEl.style.left = "";
-    hintEl.style.top = "";
-  }
 }
-
 hintEl.addEventListener("click", (event) => {
   const action = (event.target as HTMLElement).dataset.hint;
   if (action === "close") dismissHint(hints);

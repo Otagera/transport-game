@@ -31,7 +31,7 @@ import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/gam
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
 
-// The information lab's three layers (info-lab.html, agreed 2026-10-23), on the live game:
+// The information lab's three layers (agreed 2026-10-23; the lab since discarded), on the live game:
 //
 //   - the strip: a few numbers that move, each with its last ten days and a sparkline;
 //   - the log: what happened, kept, filterable, a click shows what it's about;
@@ -593,18 +593,31 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const length = world.tuning.termDays ?? 120;
     const termDay = Math.min(length, Math.floor((world.economy.elapsedSeconds - term.startedAtSeconds) / D) + 1);
     const committed = term.pledges.filter((p) => p.committed).length;
+    const standing = term.replacedAtSeconds !== undefined ? ` · <b class="down">replaced</b>` : (term.failedInRow ?? 0) > 0 ? ` · <span class="down">a failed term behind you</span>` : "";
+    const console = hooks.dev ? `<div class="d">Console: <button data-console="end-term">End the term</button> <button data-console="funds">₦100k</button> <button data-console="rains">Rains now</button></div>` : "";
+    // The pledges themselves are in the panel (look.md §6: the strip cut them at thirty characters).
+    return `<div class="stat term"><div class="k">Term ${term.number}${standing}</div><div class="v num">Day ${termDay} of ${length}</div><div class="d muted">Day ${day}${committed < MAX_COMMITTED ? ` · ${MAX_COMMITTED - committed} to pledge` : ""} · ${mapLine}</div>${console}</div>`;
+  }
+
+  /**
+   * The term's pledges, in the panel under what's waiting (look.md §6: moved out of the strip,
+   * where they were cut at thirty characters -- "the most important sentence on the screen"):
+   * each whole, how far it's got, and its button.
+   */
+  function pledgesHtml(): string {
+    const term = world.term;
+    if (!term || term.pledges.length === 0) return "";
+    const committed = term.pledges.filter((p) => p.committed).length;
     const rows = term.pledges.map((p) => {
       const progress = pledgeProgress(world, p);
       const can = !p.committed && committed < MAX_COMMITTED;
-      return `<div class="pledge${p.committed ? " on" : ""}${p.kept ? " kept" : ""}" title="${esc(pledgeLine(p))}">
+      return `<div class="pledge${p.committed ? " on" : ""}${p.kept ? " kept" : ""}" data-key="pledge-${esc(p.id)}">
         <span class="t">${p.kept ? "✓ " : p.committed ? "★ " : ""}${esc(pledgeLine(p))}</span>
-        <i class="bar"><b style="width:${Math.round(progress * 100)}%"></b></i>
-        ${can ? `<button data-pledge="${esc(p.id)}">Pledge</button>` : `<button data-pick="${world.towns.get(p.townId)?.industry ? "site" : "town"}|${esc(p.townId)}">Show</button>`}
+        <span class="row"><i class="bar"><b style="width:${Math.round(progress * 100)}%"></b></i>
+        ${can ? `<button class="primary" data-pledge="${esc(p.id)}">Pledge</button>` : `<button data-pick="${world.towns.get(p.townId)?.industry ? "site" : "town"}|${esc(p.townId)}">Show</button>`}</span>
       </div>`;
     }).join("");
-    const standing = term.replacedAtSeconds !== undefined ? ` · <b class="down">replaced</b>` : (term.failedInRow ?? 0) > 0 ? ` · <span class="down">a failed term behind you</span>` : "";
-    const console = hooks.dev ? `<div class="d">Console: <button data-console="end-term">End the term</button> <button data-console="funds">₦100k</button> <button data-console="rains">Rains now</button></div>` : "";
-    return `<div class="stat term"><div class="k">Day ${day} · Term ${term.number}, day ${termDay} of ${length}${committed < MAX_COMMITTED ? ` · pledge ${MAX_COMMITTED - committed}` : ""}${standing}</div>${rows || `<div class="d muted">Nothing to pledge this term</div>`}<div class="d muted">${mapLine}</div>${console}</div>`;
+    return `<div class="pane pledges-pane"><h2>Term ${term.number}'s pledges${committed < MAX_COMMITTED ? ` · pledge ${MAX_COMMITTED - committed} more` : ""}</h2>${rows}</div>`;
   }
 
   function renderStrip(mapLine: string): void {
@@ -626,11 +639,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     patchHtml(stripEl, `
       ${termHtml(n.day, mapLine)}
       ${stat("People", "The towns you started with: their people now, thousands", `${int(peopleNow)}k`, peopleNow, ten ? base(ten.towns) : undefined, recent.map((d) => base(d.towns)), (x) => `${int(x)}k`, css("--good"))}
-      ${stat("Trips made a day", "Trips between towns that happened, by anyone, a day: 5-day average", int(n.tripsMade), n.tripsMade, ten?.tripsMade, recent.map((d) => d.tripsMade), int)}
-      ${stat("Your riders a day", "Trips your vehicles carried, a day", int(n.yourRiders), n.yourRiders, ten?.yourRiders, recent.map((d) => d.yourRiders), int, css("--you"))}
-      ${stat("No seat a day", "Stayed home: a road joins their towns, but nobody carried them", int(n.noSeat), n.noSeat, ten?.noSeat, recent.map((d) => d.noSeat), int, css("--bad"), "noseat")}
-      ${stat("Net a day", "Income less running costs and upkeep, a day, over the last 5 days", naira(n.netPerDay), n.netPerDay, ten?.netPerDay, recent.map((d) => d.netPerDay), naira)}
-      ${stat("Money", "What you hold", nairaK(n.funds), n.funds, ten?.funds, recent.map((d) => d.funds), nairaK)}
+      ${stat("Trips made a day", "Trips between towns that happened, by anyone, a day: 5-day average", int(n.tripsMade), n.tripsMade, ten?.tripsMade, recent.map((d) => d.tripsMade), int, css("--muted"))}
+      ${stat("Money", "What you hold", nairaK(n.funds), n.funds, ten?.funds, recent.map((d) => d.funds), nairaK, css("--muted"))}
       <div class="spacer"></div>
       <div class="actions">${world.term?.history.length ? `<button data-verdict="record">Your record ▸</button> ` : ""}<button data-revenue="open">Revenue ▸</button></div>`);
   }
@@ -656,10 +666,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const scroll = panelEl.scrollTop;
     if (selected && !exists(selected)) selected = null;
     if (selected) {
-      patchHtml(panelEl, `${waitingHtml()}<div class="pane"><button class="back" data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`);
+      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}<div class="pane"><button class="back" data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`);
     } else {
       const tabs = `<div class="tabs">${(["routes", "towns", "sites"] as const).map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${t[0]!.toUpperCase()}${t.slice(1)}</button>`).join("")}</div>`;
-      patchHtml(panelEl, `${waitingHtml()}${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`);
+      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`);
     }
     panelEl.scrollTop = scroll;
   }
@@ -1036,6 +1046,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="ranges">${[[0, "All"], [60, "60 days"], [30, "30 days"]].map(([k, label]) => `<button data-range="${k}" class="${range === k ? "on" : ""}">${label}</button>`).join("")}<button data-revenue="close">Back to the map ✕</button></div></div>
       <div class="heroes">
         <div class="hero"><div class="k">Net a day</div><div class="v num ${n.netPerDay < 0 ? "down" : "up"}">${naira(n.netPerDay)}</div></div>
+        <div class="hero"><div class="k">Your riders a day</div><div class="v num">${int(n.yourRiders)}</div></div>
+        <div class="hero opens" data-show-overlay="noseat" role="button" title="Close this to see where on the No seat overlay"><div class="k">No seat a day ›</div><div class="v num">${int(n.noSeat)}</div></div>
         <div class="hero"><div class="k">Income a day</div><div class="v num">${naira(lastOf(income))}</div></div>
         <div class="hero"><div class="k">Costs a day</div><div class="v num">${naira(lastOf(costs))}</div></div>
         <div class="hero"><div class="k">Money</div><div class="v num">${naira(n.funds)}</div></div>
