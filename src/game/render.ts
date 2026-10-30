@@ -11,6 +11,7 @@ import { noSeatPairs, seatMove } from "@engine/game/problems";
 import { polylineLength, segmentPolyline, splitPolyline, type Point } from "@engine/game/roads";
 import { roadCapacity } from "@engine/game/congestion";
 import { flowKey, goodsFlows, type GoodsFlow } from "@engine/game/goods";
+import { legReach, nextStop, relayed } from "@engine/game/haulage";
 import { cargoName } from "@engine/game/fuel";
 import { farmTowns } from "@engine/game/food";
 import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, tierOf, tierRadius, type Badge, type Glyph, type SiteState, type Tier } from "./icons";
@@ -590,14 +591,34 @@ function overlayMarks(world: GameWorld, overlay: Overlay) {
     }
   } else if (overlay === "goods") {
     const flows = goodsFlows(world).map((f) => ({ f, perDay: f.rate * SECONDS_PER_GAME_DAY })).sort((x, y) => y.perDay - x.perDay).slice(0, 25);
-    const max = Math.max(1, ...flows.map((x) => x.perDay));
+    // Cement, steel and fuel go in legs, town to town (haulage.ts): drawn by their legs, the
+    // legs they share added together, so a town they change trucks at shows as the hub it is.
+    const legs = new Map<string, { a: string; b: string; perDay: number; color: string }>();
+    const leg = (a: string, b: string, perDay: number, color: string) => {
+      const key = `${a}|${b}|${color}`;
+      const e = legs.get(key) ?? { a, b, perDay: 0, color };
+      e.perDay += perDay;
+      legs.set(key, e);
+    };
     for (const { f, perDay } of flows) {
       if (!town(f.from) || !town(f.to)) continue;
       const cargo = cargoName(world, f.from, f.kind, f.to);
       const color = cargo === "fuel" || cargo === "crude" ? COLORS.fuel : cargo === "cement" || cargo === "limestone" || cargo === "stone" ? COLORS.building : COLORS.food;
       void flowKey;
-      marks.push({ a: town(f.from)!, b: town(f.to)!, width: 1 + (perDay / max) * 10, color, alpha: 0.7 });
+      if (!relayed(world, f.from, f.kind)) {
+        leg(f.from, f.to, perDay, color);
+        continue;
+      }
+      let at = f.from;
+      for (let hop = 0; hop < 12 && at !== f.to; hop += 1) {
+        const stop = nextStop(world, at, f.to, legReach(world, at, f.kind));
+        if (!stop) break; // a gap: the card names the yard that bridges it
+        leg(at, stop, perDay, color);
+        at = stop;
+      }
     }
+    const max = Math.max(1, ...[...legs.values()].map((x) => x.perDay));
+    for (const l of legs.values()) marks.push({ a: town(l.a)!, b: town(l.b)!, width: 1 + (l.perDay / max) * 10, color: l.color, alpha: 0.7 });
   }
   overlayCache = { at: now, world, overlay, marks };
   return marks;
@@ -647,7 +668,7 @@ export function overlayCaption(world: GameWorld, overlay: Overlay): string {
   if (overlay === "goods") {
     const flows = goodsFlows(world).map((f) => ({ f, perDay: f.rate * SECONDS_PER_GAME_DAY })).sort((x, y) => y.perDay - x.perDay);
     const top = flows[0];
-    return top ? `The biggest goods flows: fuel and crude red, cement and stone purple, food green. The most: ${cargoName(world, top.f.from, top.f.kind, top.f.to)} ${name(top.f.from)} → ${name(top.f.to)}, ${int(top.perDay)} t a day.` : "No goods moving yet.";
+    return top ? `The biggest goods flows: fuel and crude red, cement and stone purple, food green${world.tuning.goodsRelay ? "; cement, steel and fuel by their legs, town to town" : ""}. The most: ${cargoName(world, top.f.from, top.f.kind, top.f.to)} ${name(top.f.from)} → ${name(top.f.to)}, ${int(top.perDay)} t a day.` : "No goods moving yet.";
   }
   return "";
 }

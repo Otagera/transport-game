@@ -56,7 +56,7 @@ import { REGION_HEIGHT, REGION_WIDTH, gameMap, regionInfo } from "@engine/game/r
 import { restoreSteel, steelDemand, steelFlows, steelImports, steelServed } from "@engine/game/steel";
 import { issueBond as issueSteelBond } from "@engine/game/bonds";
 import { flowKey as goodsKey, recordGoodsDelivered, relayArrivals } from "@engine/game/goods";
-import { haulBreak, haulDistance, legReach, nextStop, relayed } from "@engine/game/haulage";
+import { goodsOnTheWay, haulBreak, haulDistance, haulPlans, legReach, nextStop, relayed, yardWouldBring } from "@engine/game/haulage";
 import { buildYard } from "@engine/game/yards";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
@@ -4794,6 +4794,30 @@ describe("goods get there over connected roads (haulage.ts; brief, The gateways,
     const old = game({ goodsRelay: undefined as unknown as boolean });
     expect(relayed(old, old.cement!.worksId, "supplies")).toBe(false);
     expect(haulBreak(old, old.cement!.worksId, farthest(old, old.cement!.worksId).id)).toBeNull();
+  }, 60_000);
+
+  test("the Yard tool's preview names the towns a yard would bring goods to, and changes nothing", () => {
+    const w = game();
+    const works = w.cement!.worksId;
+    const far = farthest(w, works);
+    const b = haulBreak(w, works, far.id)!;
+    if (b.kind !== "gap" || !b.yardAt) return;
+    const plans = haulPlans(w);
+    const yards = [...w.yards];
+    const brings = yardWouldBring(w, b.yardAt);
+    expect(brings.reached.length + brings.quicker).toBeGreaterThan(0);
+    expect([...w.yards]).toEqual(yards);
+    expect(w.haulPlans).toBe(plans);
+  }, 60_000);
+
+  test("a town's card counts its cement waiting between legs as on the way, and where it waits", () => {
+    const w = game();
+    const works = w.cement!.worksId;
+    const [via, to] = [...w.towns.values()].filter((t) => !t.industry).map((t) => t.id);
+    relayArrivals(w, [{ entry: { from: works, to: via!, kind: "supplies", amount: 12, trip: { origin: works, destination: to! } }, amount: 12 }] as never);
+    const way = goodsOnTheWay(w, to!).find((x) => x.origin === works)!;
+    expect(way.tonnes).toBeGreaterThanOrEqual(12);
+    expect(way.waitingAt[0]).toBe(via);
   }, 60_000);
 
   test("on a map without a works, imported steel follows the towns as they grow", () => {

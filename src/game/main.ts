@@ -57,6 +57,7 @@ import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@e
 import { remittanceExpected } from "@engine/game/budget";
 import { carryOver, sweepDue } from "@engine/game/sweep";
 import { checkYard, hasYard, yardGain } from "@engine/game/yards";
+import { yardWouldBring } from "@engine/game/haulage";
 import { checkPark, parkLevyGain, parkReport } from "@engine/game/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/metro";
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
@@ -1170,6 +1171,35 @@ function paveGain(): string {
   return (1 / world.tuning.dirtRoadCapacity).toFixed(1);
 }
 
+// What a yard at a town would bring (haulage.ts yardWouldBring), for the Yard tool's label:
+// the towns its cement, steel or fuel would reach that nothing reaches now. Once a town a day.
+let yardBringsMemo: { key: string; text: string | null } | null = null;
+function yardBrings(townId: string): string | null {
+  const key = `${townId}|${gameDay(world)}|${world.yards.size}|${world.towns.size}`;
+  if (yardBringsMemo?.key === key) return yardBringsMemo.text;
+  const { reached, quicker } = yardWouldBring(world, townId);
+  const byCargo = new Map<string, string[]>();
+  for (const r of reached) {
+    const cargo = cargoName(world, r.origin, "supplies");
+    const towns = byCargo.get(cargo) ?? [];
+    if (!towns.includes(townName(r.to))) towns.push(townName(r.to));
+    byCargo.set(cargo, towns);
+  }
+  // Goods bound for the same towns named together: "cement and steel to Ilora, Ipetu (+7)".
+  const byTowns = new Map<string, string[]>();
+  for (const [cargo, towns] of byCargo) byTowns.set(towns.join(","), [...(byTowns.get(towns.join(",")) ?? []), cargo]);
+  const named = [...byTowns].map(([list, cargos]) => {
+    const towns = list.split(",");
+    const what = cargos.length > 1 ? `${cargos.slice(0, -1).join(", ")} and ${cargos.at(-1)}` : cargos[0];
+    return `${what} to ${towns.slice(0, 3).join(", ")}${towns.length > 3 ? ` (+${towns.length - 3})` : ""}`;
+  });
+  const text = named.length > 0 ? `would bring ${named.join("; ")}${quicker > 0 ? `, and get it to ${quicker} more in fewer legs` : ""}`
+    : quicker > 0 ? `would get cement, steel or fuel to ${quicker} town${quicker === 1 ? "" : "s"} in fewer legs`
+    : null;
+  yardBringsMemo = { key, text };
+  return text;
+}
+
 function ghost(): Ghost | null {
   // A yard is one click on a town or site, not a pair: say what it does over it.
   if (tool === "yard") {
@@ -1179,7 +1209,7 @@ function ghost(): Ghost | null {
     // What it would have to work with (yards.ts yardGain): goods waiting here, within its reach.
     const waiting = yardGain(world, hoverTown);
     const work = waiting >= 5 ? `~${Math.round(waiting)} t/day wait here within its reach · levy ~${naira(waiting * world.tuning.yardLevyPerTonne * (1 - world.tuning.yardToutShare))}/day` : "little waits here for hauliers";
-    const label = `Haulage yard ${naira(world.tuning.yardCost)} · ${work}`;
+    const label = `Haulage yard ${naira(world.tuning.yardCost)} · ${yardBrings(hoverTown) ?? work}`;
     return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Haulage yard ${naira(world.tuning.yardCost)}`) };
   }
   if (tool === "park") {

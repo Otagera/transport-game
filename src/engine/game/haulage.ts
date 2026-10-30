@@ -31,6 +31,8 @@ export interface HaulPlans {
   /** What it was built for: the road graph (rebuilt, never edited, on every road change: rail.ts), the towns and the yards. */
   routing: unknown;
   stamp: string;
+  /** The places it measured distances between. */
+  places: string;
   /** Places goods may wait between legs: the towns, and any site with a yard. */
   relays: string[];
   /** from -> to -> road distance, cells (absent: not connected). */
@@ -41,7 +43,8 @@ export interface HaulPlans {
   next: Map<string, string | null>;
 }
 
-const stampOf = (world: GameWorld) => `${world.towns.size}|${[...world.yards].join(",")}`;
+const placesOf = (world: GameWorld) => [...world.towns.keys()].join(",");
+const stampOf = (world: GameWorld) => `${placesOf(world)}|${[...world.yards].join(",")}`;
 
 /** Road distances from one place to every place, cells (Dijkstra over the built roads, as roadPath measures them). */
 function distancesFrom(world: GameWorld, from: string, places: Set<string>): Map<string, number> {
@@ -72,12 +75,18 @@ function distancesFrom(world: GameWorld, from: string, places: Set<string>): Map
 export function haulPlans(world: GameWorld): HaulPlans {
   const stamp = stampOf(world);
   const routing = world.simulation.routing;
-  if (world.haulPlans && world.haulPlans.routing === routing && world.haulPlans.stamp === stamp) return world.haulPlans;
+  const old = world.haulPlans;
+  if (old && old.routing === routing && old.stamp === stamp) return old;
   const relays = [...world.towns.values()].filter((town) => !town.industry || hasYard(world, town.id)).map((town) => town.id);
-  const places = new Set(world.towns.keys());
-  const dist = new Map<string, Map<string, number>>();
-  for (const id of places) dist.set(id, distancesFrom(world, id, places));
-  world.haulPlans = { routing, stamp, relays, dist, toward: new Map(), next: new Map() };
+  // The roads and places unchanged, only the yards: the distances stand (a yard's preview, yardWouldBring).
+  const placesKey = placesOf(world);
+  let dist = old && old.routing === routing && old.places === placesKey ? old.dist : null;
+  if (!dist) {
+    const places = new Set(world.towns.keys());
+    dist = new Map();
+    for (const id of places) dist.set(id, distancesFrom(world, id, places));
+  }
+  world.haulPlans = { routing, stamp, places: placesKey, relays, dist, toward: new Map(), next: new Map() };
   return world.haulPlans;
 }
 
@@ -211,4 +220,89 @@ export function haulBreak(world: GameWorld, from: string, to: string, kind: Good
     if (!yardAt || haulDistance(world, id, to) < haulDistance(world, yardAt, to)) yardAt = id;
   }
   return { kind: "gap", yardAt };
+}
+
+/**
+ * A town's cement, steel and fuel on their way to it, by where they began (for its card,
+ * screen.ts): tonnes on hauliers' trucks or your trains, held for a truck, or waiting at a
+ * town between legs, and where; and how many legs the quickest way takes (haulBreak).
+ * What sits at the source isn't counted: it hasn't set off.
+ */
+export interface OnTheWay {
+  origin: string;
+  tonnes: number;
+  /** Towns it waits at between legs, most first. */
+  waitingAt: string[];
+  legs: number | null;
+}
+
+export function goodsOnTheWay(world: GameWorld, townId: string): OnTheWay[] {
+  if (!world.tuning.goodsRelay) return [];
+  const by = new Map<string, { tonnes: number; at: Map<string, number> }>();
+  const add = (origin: string, tonnes: number, at?: string) => {
+    if (tonnes <= 0) return;
+    const e = by.get(origin) ?? { tonnes: 0, at: new Map() };
+    e.tonnes += tonnes;
+    if (at) e.at.set(at, (e.at.get(at) ?? 0) + tonnes);
+    by.set(origin, e);
+  };
+  for (const [at, waits] of world.goods.relay ?? []) {
+    for (const [key, amount] of waits) {
+      const [to, , origin] = key.split("|");
+      if (to === townId) add(origin!, amount, at);
+    }
+  }
+  for (const [key, held] of world.truckers) {
+    const [from, to, kind, final, origin] = key.split("|") as [string, string, GoodsKind, string?, string?];
+    if ((final ?? to) === townId && relayed(world, origin ?? from, kind)) add(origin ?? from, held, origin && from !== origin ? from : undefined);
+  }
+  for (const vehicle of world.simulation.vehicles) {
+    if (vehicle.carries !== "goods") continue;
+    for (const entry of vehicle.cargo) {
+      if (entry.kind === "passengers") continue;
+      const origin = entry.trip?.origin ?? entry.from;
+      if ((entry.trip?.destination ?? entry.to) === townId && relayed(world, origin, entry.kind)) add(origin, entry.amount);
+    }
+  }
+  return [...by].map(([origin, e]) => {
+    const b = haulBreak(world, origin, townId);
+    return { origin, tonnes: e.tonnes, waitingAt: [...e.at].sort((p, q) => q[1] - p[1]).map(([id]) => id), legs: b?.kind === "legs" ? b.legs : null };
+  }).sort((p, q) => q.tonnes - p.tonnes);
+}
+
+/**
+ * What a yard here would do for what towns wait on to grow (the Yard tool's preview,
+ * main.ts): the towns its cement, steel or fuel would reach that no chain of legs reaches
+ * now, and how many more would get theirs in fewer legs. Answered with the yard in place for
+ * a moment, the world's own plan put back after: nothing simulated changes.
+ */
+export function yardWouldBring(world: GameWorld, at: string): { reached: { origin: string; to: string }[]; quicker: number } {
+  const out = { reached: [] as { origin: string; to: string }[], quicker: 0 };
+  if (!world.tuning.goodsRelay || world.yards.has(at) || !world.towns.has(at)) return out;
+  const pairs: { origin: string; to: string }[] = [];
+  const seen = new Set<string>();
+  for (const origin of world.towns.keys()) {
+    if (!relayed(world, origin, "supplies")) continue;
+    for (const town of world.towns.values()) {
+      if (town.industry || !world.basePopulation.has(town.id) || seen.has(`${origin}|${town.id}`)) continue;
+      seen.add(`${origin}|${town.id}`);
+      pairs.push({ origin, to: town.id });
+    }
+  }
+  const now = pairs.map((p) => haulBreak(world, p.origin, p.to));
+  const saved = world.haulPlans;
+  world.yards.add(at);
+  try {
+    pairs.forEach((p, k) => {
+      const before = now[k];
+      const after = haulBreak(world, p.origin, p.to);
+      if (after?.kind !== "legs") return;
+      if (before?.kind !== "legs") out.reached.push(p);
+      else if (after.legs < before.legs) out.quicker += 1;
+    });
+  } finally {
+    world.yards.delete(at);
+    world.haulPlans = saved;
+  }
+  return out;
 }

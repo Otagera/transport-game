@@ -182,6 +182,19 @@ simulation cost of computing it. Always calls the engine's own function for what
 displays (`congestionFactor` for stress, `stepCost` for buildability) — never a second
 computation, same discipline as hard rule 3.
 
+**Goods in legs, shown (2026-10-29; brief, The gateways, 4).** Relayed goods were invisible
+between the source and the town -- the map 949 playtest's "they don't get there". Three
+views, each reading the engine's own plan (haulage.ts), never a second one:
+- The Goods overlay (render.ts) draws cement, steel and fuel by their legs (`nextStop` from
+  the source until the town), shared legs added together, so a relay town shows as a hub;
+  everything else as before, source to town.
+- A town's card (screen.ts `onTheWayHtml`, from `goodsOnTheWay`): "On the way: 17 t of cement
+  from Ikire Cement, 3 legs, waiting at Igboho and Ikire".
+- The Yard tool's label (main.ts `yardBrings`, from `yardWouldBring`, memoised a town a day):
+  the towns a yard here would bring cement, steel or fuel to that no chain of legs reaches now
+  ("cement and steel to Ilora, Ipetu, Iseyin (+7)"), else how many it would get there in
+  fewer legs; else, as before, what waits here within its reach.
+
 ## 6. Ambient traffic rendering
 
 `network.ts` draws instanced cars **from** the published `ambientLoads` number (see

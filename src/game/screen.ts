@@ -21,7 +21,7 @@ import { patchHtml } from "./patch";
 import { steadyFuel, steadySite } from "./steady";
 import { cementBreak, cementServed } from "@engine/game/cement";
 import { steelBreak, steelDemand, steelImports, steelServed } from "@engine/game/steel";
-import { haulBreak } from "@engine/game/haulage";
+import { goodsOnTheWay, haulBreak } from "@engine/game/haulage";
 import { railPath } from "@engine/game/rail";
 import { roadCapacity } from "@engine/game/congestion";
 import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
@@ -254,6 +254,19 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (b?.kind === "legs" && b.legs >= 3) return { why: `it reaches ${to} in ${b.legs} legs by road, slowly; freight track is quicker`, button: toolButton("track", "Track (K)"), at: [from, townId] };
     return { why: `it's on its way to ${to} by road, slower than ${to} grows; freight track is quicker`, button: toolButton("track", "Track (K)"), at: [from, townId] };
   }
+  /**
+   * Its cement, steel and fuel on their way (haulage.ts goodsOnTheWay): hauled in legs, the
+   * goods were invisible between the source and the town -- "they don't get there" (map 949).
+   */
+  function onTheWayHtml(townId: string): string {
+    const parts = goodsOnTheWay(world, townId).filter((x) => x.tonnes >= 1).map((x) => {
+      const legs = x.legs && x.legs > 1 ? `, ${x.legs} legs` : "";
+      const at = x.waitingAt.length > 0 ? `, waiting at ${x.waitingAt.slice(0, 2).map(nameOf).join(" and ")}` : "";
+      return `${int(x.tonnes)} t of ${esc(cargoName(world, x.origin, "supplies"))} from ${esc(nameOf(x.origin))}${legs}${at}`;
+    });
+    return parts.length > 0 ? `<p class="onway"><b>On the way:</b> ${parts.join(" · ")}</p>` : "";
+  }
+
   const mostHeld = (towns: Town[], by: (t: Town) => number) => [...towns].sort((p, q) => by(q) - by(p))[0]!;
 
   /** The port lands too little steel for what the towns want (steel.ts steelImports): its next rung, if it has one. */
@@ -696,6 +709,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="bar3"><i style="width:${pct(t.share.you)};background:var(--you)"></i><i style="width:${pct(t.share.informal)};background:var(--informal)"></i><i style="width:${pct(t.share.lost)};background:var(--home)"></i></div>
         <div class="chart"><div class="t"><span>People, thousands</span><span>${t.target ? `heading for ${int(t.target)}k` : ""}</span></div>${chartSvg([{ name: "People (k)", color: css("--ink-2"), values: pop }], { height: 90 })}</div>
         ${t.fuel !== null || t.cement !== null ? `<div class="tiles">${t.fuel !== null ? tile("Fuel supplied", pct(t.fuel)) : ""}${t.cement !== null ? tile("Cement supplied", pct(t.cement), t.cementHeld > 1 ? `${int(t.cementHeld)}k fewer people for it` : "") : ""}${t.steel !== null ? tile("Steel supplied", pct(t.steel), t.steelHeld > 1 ? `${int(t.steelHeld)}k fewer people for it` : "past +80% of its start") : ""}</div>` : ""}
+        ${onTheWayHtml(t.id)}
         <h2>Your routes here · ${here.length}</h2>
         <table><tbody>${here.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
         ${fold("town", "More: its trips, parks, metro, strikes", hooks.townMore(t.id))}`;

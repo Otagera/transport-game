@@ -118,3 +118,5 @@
 .chain.bad { border-color: var(--bad); }
 .chain.warn { border-color: var(--informal); }
 .chain.good { border-color: var(--good); }
+/* A town's cement, steel and fuel between legs (screen.ts onTheWayHtml). */
+.onway { font-size: 12px; color: var(--ink-2); margin: 0 0 10px; line-height: 1.45; }

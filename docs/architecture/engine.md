@@ -932,6 +932,10 @@ terminal, both with yards, and getting nothing, ~600 t of cement waiting. Now:
   or more (track); never a yard that's built. Steel on a map without a works: the port's
   next rung when it lands under 90% of the want (`steelPortShort`).
 - Each leg is its own fare (yours on a train, the hauliers' on a truck) and its own levy.
+- **For the screen:** `goodsOnTheWay(town)` (tonnes on trucks and trains, held, and waiting
+  between legs, by source, with where and how many legs) and `yardWouldBring(at)` (the plan
+  with a yard added for a moment, `world.haulPlans` put back; distances are reused when only
+  the yards changed, so a hover costs a few hundred `haulBreak`s, no Dijkstra).
 
 **Served over ten days** (2026-10-29, `servedTauDays`; goods.ts `servedRate`). Every goods
 outcome rolls over `outcomeTauSeconds` (a day), and `cementServed` / `steelServed` cap the share
