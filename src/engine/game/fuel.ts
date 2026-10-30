@@ -11,6 +11,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { staffFactor } from "./workers";
 import { siteScale } from "./expand";
+import { assemblyActive, assemblyNeeds } from "./assembly";
 
 // The fuel chain (docs/brief.md, Revision 3, step 1): goods that feel real,
 // in chains. One site's output is another's input, and a site makes nothing
@@ -157,7 +158,10 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
   const byRoad = (from: string, to: string) => roadPath(world, from, to)?.distance ?? Infinity;
   const second = newRefinery(world);
   const borderSite = borderFuelSite(world);
-  const towns = burners(world).map((town) => ({ town, need: fuelDemand(world, town.id), fromRefinery: 0, fromDepot: 0, fromNew: 0, fromBorder: 0, dr: byRoad(refinery.id, town.id), dd: byRoad(depot.id, town.id), dn: second ? byRoad(second.id, town.id) : Infinity, db: borderSite ? byRoad(borderSite, town.id) : Infinity }));
+  // The assembly plant burns fuel too (assembly.ts): a taker beside the towns.
+  const plant = world.assembly && assemblyActive(world) ? world.towns.get(world.assembly.siteId) : undefined;
+  const takers = plant ? [...burners(world), plant] : burners(world);
+  const towns = takers.map((town) => ({ town, need: town === plant ? assemblyNeeds(world).fuel : fuelDemand(world, town.id), fromRefinery: 0, fromDepot: 0, fromNew: 0, fromBorder: 0, dr: byRoad(refinery.id, town.id), dd: byRoad(depot.id, town.id), dn: second ? byRoad(second.id, town.id) : Infinity, db: borderSite ? byRoad(borderSite, town.id) : Infinity }));
   let refined = refineryOutput(world);
   let made = newRefineryOutput(world);
   // Each site makes what its workers let it (workers.ts).

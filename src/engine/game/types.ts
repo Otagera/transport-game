@@ -12,6 +12,7 @@ import type { DayLedger } from "./ledger";
 import type { TripPlans } from "./transfers";
 import type { HaulPlans } from "./haulage";
 import type { StationInfo } from "./stations";
+import type { AssemblyState } from "./assembly";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
@@ -49,7 +50,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly";
 
 export interface GameRoadDef {
   a: string;
@@ -298,6 +299,21 @@ export interface GameTuning {
    * `stationTownRiders` a day change trains grows a town. Absent in older runs: the line as it was.
    */
   railStations?: boolean;
+  /**
+   * The assembly plant (assembly.ts; brief, Chains: convergent): steel and fuel in -- each
+   * `assemblySteelPerDay` / `assemblyFuelPerDay` at full output -- buses and minibuses out, cheaper to
+   * you while it runs: `assemblyDiscountPerGeneration` a generation, one per `assemblyGenerationDays`
+   * of full output up to `assemblyMaxGenerations`, rolled over `assemblyDiscountTauDays`. `jobsAssembly`
+   * thousand workers. Absent in older runs: no plant.
+   */
+  assemblyPlant?: boolean;
+  assemblySteelPerDay?: number;
+  assemblyFuelPerDay?: number;
+  assemblyDiscountPerGeneration?: number;
+  assemblyGenerationDays?: number;
+  assemblyMaxGenerations?: number;
+  assemblyDiscountTauDays?: number;
+  jobsAssembly?: number;
   /**
    * A road or track you build is pulled taut before it's smoothed (pathing/smoothing.ts pullTaut): a
    * straight runs straight instead of A*'s dog-leg rounded into a lazy curve. The line drawn -- and
@@ -896,6 +912,8 @@ export interface GameWorld {
   transferRateEMA: Map<string, number>;
   /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */
   plans: TripPlans | null;
+  /** The assembly plant (assembly.ts): absent without one. */
+  assembly?: AssemblyState;
   /** The old line's stations (stations.ts), by the place each is: absent without them. */
   stations?: Map<string, StationInfo>;
   /** How hauliers relay goods town to town (haulage.ts). Null = not built yet; rebuilt when the roads, towns or yards change. */

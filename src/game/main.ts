@@ -58,6 +58,8 @@ import { remittanceExpected } from "@engine/game/budget";
 import { carryOver, sweepDue } from "@engine/game/sweep";
 import { checkYard, hasYard, yardGain } from "@engine/game/yards";
 import { yardWouldBring } from "@engine/game/haulage";
+import { assemblyGeneration, assemblyShare, vehiclePrice } from "@engine/game/assembly";
+import { siteProduction } from "@engine/game/production";
 import { stationOf, stationOpen } from "@engine/game/stations";
 import { checkPark, parkLevyGain, parkReport } from "@engine/game/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/metro";
@@ -1017,12 +1019,12 @@ canvas.addEventListener("click", (event) => {
     const count = (world.routes.find((r) => r.id === routeId)?.vehicleIds.length ?? 0) + 1;
     const result = act({ label: addLabel("minibus", count, from, town), towns, routeId }, { kind: "minibus", a: from, b: town });
     if (result.ok) say(`Minibus added: ${pair(from, town)}.${later}`);
-    else say(`Can't add minibus (${naira(world.tuning.minibusPurchaseCost)}): ${result.reason}`, true);
+    else say(`Can't add minibus (${naira(vehiclePrice(world, "minibus"))}): ${result.reason}`, true);
   } else {
     const count = (findRoute(world, from, town)?.vehicleIds.length ?? 0) + 1;
     const result = act({ label: addLabel("bus", count, from, town), towns, routeId: routeKey(from, town) }, { kind: "bus", a: from, b: town });
     if (result.ok) say(`Bus added: ${pair(from, town)}.${later}`);
-    else say(`Can't add bus (${naira(world.tuning.busPurchaseCost)}): ${result.reason}`, true);
+    else say(`Can't add bus (${naira(vehiclePrice(world, "bus"))}): ${result.reason}`, true);
   }
   // Shift keeps the first town selected: fanning roads or routes out of
   // one hub is the common case.
@@ -1356,7 +1358,7 @@ function ghost(): Ghost | null {
   const brt = tool === "brt";
   const vehicle = brt ? "BRT bus (80 seats, lane only)" : mini ? "Minibus" : "Bus";
   const check = brt ? checkBrt(world, selectedTown, to) : mini ? checkMinibus(world, selectedTown, to) : checkBus(world, selectedTown, to);
-  const price = naira(brt ? world.tuning.brtPurchaseCost : mini ? world.tuning.minibusPurchaseCost : world.tuning.busPurchaseCost);
+  const price = naira(vehiclePrice(world, brt ? "brt" : mini ? "minibus" : "bus"));
   // Every trip along its road, not just the two towns clicked: a bus from
   // Ilase to Ikole carries Ilase-Kuto and Kuto-Ikole riders too.
   const wanted = demandAlong(world, selectedTown, to) * SECONDS_PER_GAME_DAY;
@@ -1633,6 +1635,28 @@ function renderStation(townId: string): void {
     </div>`;
 }
 
+// The assembly plant (assembly.ts): two inputs, the lower decides; what it does for you.
+function renderAssembly(townId: string): void {
+  const site = world.towns.get(townId)!;
+  const p = siteProduction(world, townId);
+  const [steel, fuel] = p?.inputs ?? [];
+  const share = (i?: { arriving: number; needed: number }) => (i && i.needed > 0 ? Math.min(1, i.arriving / i.needed) : 1);
+  const perDay = (x: number) => Math.round(x * SECONDS_PER_GAME_DAY);
+  const short = share(steel) <= share(fuel) ? { name: "steel", from: "the port's steel terminal, or the works where the map has one" } : { name: "fuel", from: "the tank farm or a refinery" };
+  const running = assemblyShare(world).share;
+  const why = p?.limit === "input"
+    ? `Short of ${short.name}: it runs at ${pct(running)}, the share of its scarcer input. Its ${short.name} comes from ${short.from}.`
+    : p?.limit === "workers" ? `Short of workers: its shift isn't getting there.` : `Running at ${pct(running)}.`;
+  townEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">Assembly plant · generation ${assemblyGeneration(world) + 1}</div>
+      <div class="title">${site.name}</div>
+      <p class="townshare">Steel ${perDay(steel?.arriving ?? 0)} of ${perDay(steel?.needed ?? 0)} t a day · fuel ${perDay(fuel?.arriving ?? 0)} of ${perDay(fuel?.needed ?? 0)} t a day. It needs both: one short and it runs at that one's share.</p>
+      <p class="townshare">${why}</p>
+      <p class="townshare">While it runs, your buses and minibuses are assembled here: ${pct(world.assembly?.discount ?? 0)} off now (a bus ${naira(vehiclePrice(world, "bus"))}, a minibus ${naira(vehiclePrice(world, "minibus"))}), and more for each generation of the line, one every ${world.tuning.assemblyGenerationDays ?? 30} days at full output. Starved, the discount fades.</p>
+    </div>`;
+}
+
 // An industrial site's card (brief, Revision 2): what it is and for how
 // long, where its stone goes and how much of it arrives, and the one
 // problem with it -- no road, or nothing moved and the day it closes.
@@ -1645,6 +1669,7 @@ function renderIndustry(townId: string): void {
   if (world.towns.get(townId)?.industry === "border") return renderBorder(townId);
   if (world.towns.get(townId)?.industry === "gateway") return renderCoastRoad(townId);
   if (world.towns.get(townId)?.industry === "station") return renderStation(townId);
+  if (world.towns.get(townId)?.industry === "assembly") return renderAssembly(townId);
   const limestone = cementActive(world);
   const cargo = limestone ? "limestone" : "stone";
   const site = world.towns.get(townId)!;
@@ -3159,7 +3184,7 @@ function onPanelClick(event: MouseEvent): void {
     const vehicle = train ? "train" : mini ? "minibus" : brt ? "BRT bus" : "bus";
     const spec = { label: addLabel(vehicle, route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
     const result = act(spec, { kind: train ? "train" : mini ? "minibus" : brt ? "brt" : "bus", a: route.a, b: route.b });
-    const price = train ? world.tuning.trainPurchaseCost : mini ? world.tuning.minibusPurchaseCost : brt ? world.tuning.brtPurchaseCost : world.tuning.busPurchaseCost;
+    const price = vehiclePrice(world, train ? "train" : mini ? "minibus" : brt ? "brt" : "bus");
     if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {
     sell(removeId, isFreightRoute(removeId) ? "freight train" : "lorry");

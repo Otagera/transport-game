@@ -32,7 +32,6 @@ import { paveMoves } from "@engine/game/moves";
 import { startGame } from "@engine/game/start";
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/game/industries";
 import { bondAmount, repayBonds } from "@engine/game/bonds";
-import { siteProduction } from "@engine/game/production";
 import { expandCost } from "@engine/game/expand";
 import { expectedShare } from "@engine/game/growth";
 import { sweepDue, updateSweep } from "@engine/game/sweep";
@@ -63,6 +62,8 @@ import { correspondentName, handoverNote, notATutorial, predecessors, termLetter
 import { thenAndNowSvg } from "../src/game/thenandnow";
 import { MITER_LIMIT, congestionStop, junctionPlates, offsetPolyline, overloaded } from "../src/game/corridor";
 import { PRIORITY, Placer, drawsAt, tierOf } from "../src/game/density";
+import { assemblyGeneration, assemblyNeeds, assemblyShare, updateAssembly, vehiclePrice } from "@engine/game/assembly";
+import { siteProduction } from "@engine/game/production";
 import { checkSignalBudget } from "../scripts/signal-budget";
 import { segmentRung } from "@engine/game/roads";
 import type { Segment } from "@engine/map/types";
@@ -5239,4 +5240,68 @@ describe("map density (src/game/density.ts; look.md, Map density)", () => {
     const strayRender = render + "\nfunction drawStray() { ctx.fillStyle = COLORS.player; drawSiteIcon(); }\n";
     expect(checkSignalBudget(strayRender, icons, stray).failures.join(" ")).toContain("--trade");
   });
+});
+
+describe("the assembly plant (assembly.ts; brief, Chains: convergent)", () => {
+  const game = (seed = 1, tuning: Partial<typeof DEFAULT_GAME_TUNING> = {}) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, ...tuning });
+  /** Steel and fuel arriving at the plant, as shares of what full output takes. */
+  const feed = (w: GameWorld, steel: number, fuel: number) => {
+    const plant = w.assembly!.siteId;
+    const need = assemblyNeeds(w);
+    w.goods.outcomes.set(goodsKey({ from: w.steel!.terminalId!, to: plant, kind: "supplies" }), { delivered: 0, spoiled: 0, arrived: need.steel * steel });
+    w.goods.outcomes.set(goodsKey({ from: w.fuel!.depotId, to: plant, kind: "supplies" }), { delivered: 0, spoiled: 0, arrived: need.fuel * fuel });
+    for (const from of [w.steel!.worksId, w.fuel!.refineryId]) if (from) w.goods.outcomes.delete(goodsKey({ from, to: plant, kind: "supplies" }));
+  };
+
+  test("short of one input it runs at that input's share, not the mean, and the reading names the short one", () => {
+    const w = game();
+    feed(w, 0.5, 1);
+    const s = assemblyShare(w);
+    expect(s.steel).toBeCloseTo(0.5, 6);
+    expect(s.fuel).toBeCloseTo(1, 6);
+    expect(s.share).toBeCloseTo(0.5 * staffFactor(w, w.assembly!.siteId), 6);
+    const p = siteProduction(w, w.assembly!.siteId)!;
+    expect(p.limit).toBe("input");
+    expect(p.binding).toBe("steel");
+  }, 60_000);
+
+  test("short of both, the reading names the lower", () => {
+    const w = game();
+    feed(w, 0.6, 0.3);
+    expect(siteProduction(w, w.assembly!.siteId)!.binding).toBe("fuel");
+    feed(w, 0.2, 0.7);
+    expect(siteProduction(w, w.assembly!.siteId)!.binding).toBe("steel");
+  }, 60_000);
+
+  test("its steel comes two ways, the port's and the works', so with the works idle the port's still feeds it", () => {
+    const w = game(4); // a South-South map: a works and the terminal
+    const plant = w.assembly!.siteId;
+    const fromPort = () => steelFlows(w).filter((f) => f.from === w.steel!.terminalId && f.to === plant).reduce((s, f) => s + f.rate, 0);
+    expect(w.steel!.working).toBe(false); // the works idle, as every game starts
+    expect(fromPort()).toBeGreaterThan(0);
+  }, 60_000);
+
+  test("the discount deepens with each generation while it runs, and fades when it's starved", () => {
+    const w = game();
+    const D = SECONDS_PER_GAME_DAY;
+    const list = w.tuning.busPurchaseCost;
+    feed(w, 1, 1);
+    const per = w.tuning.assemblyDiscountPerGeneration!;
+    let last = 0;
+    for (let day = 0; day < 120; day += 1) updateAssembly(w, D);
+    expect(assemblyGeneration(w)).toBeGreaterThanOrEqual(2);
+    expect(w.assembly!.discount).toBeGreaterThan(per * 2 * staffFactor(w, w.assembly!.siteId) * 0.9);
+    expect(vehiclePrice(w, "bus")).toBeLessThan(list);
+    last = w.assembly!.discount;
+    feed(w, 0, 1);
+    for (let day = 0; day < 30; day += 1) updateAssembly(w, D);
+    expect(w.assembly!.discount).toBeLessThan(last * 0.05);
+    expect(vehiclePrice(w, "train")).toBe(w.tuning.trainPurchaseCost); // buses and minibuses only
+  }, 60_000);
+
+  test("a run file without assemblyPlant has no plant, and pays list prices", () => {
+    const old = game(1, { assemblyPlant: undefined as unknown as boolean });
+    expect(old.assembly).toBeUndefined();
+    expect(vehiclePrice(old, "bus")).toBe(old.tuning.busPurchaseCost);
+  }, 60_000);
 });

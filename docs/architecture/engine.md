@@ -1262,6 +1262,25 @@ replays as played. Seed 0 stays the hand-made map, alone.
   it to the end in one go, the page a slice at a time (~40 ms, then a frame) under a loading
   card in `index.html`. The same ticks in the same order: the same world (tested).
 
+### The assembly plant (2026-10-30; brief, Chains: convergent)
+
+`assembly.ts`, behind `assemblyPlant` (absent in older runs: no plant). The first site with two
+inputs. Placed at the start after the other sites, before the stations: `ringSpot` 6-10 cells from the
+home cluster's second town, on an inherited road to it, kind `assembly`, `jobsAssembly` workers.
+- **Inputs:** it's a taker in `steelFlows` (beside the builders, `assemblySteelPerDay`) and in
+  `fuelFlows` (beside the burners, `assemblyFuelPerDay`), so each source splits over it by want: the
+  port's terminal and, on a map with one, the works -- substitution with no new mechanism. What
+  arrives is read over the served roll (`servedRate`), so a truck every few days reads as supply.
+- **Output** (`assemblyShare`): the lower input's share times its shift. `production.ts` gives it two
+  `inputs`, and every site's reading now names the `binding` one when the limit is an input.
+- **The discount** (`updateAssembly`, every tick): `fullDays` accrue at the running share; a
+  generation each `assemblyGenerationDays` (up to `assemblyMaxGenerations`); the discount rolls over
+  `assemblyDiscountTauDays` toward `assemblyDiscountPerGeneration × (1 + generation) × share`.
+  `vehiclePrice` is the one place a bus or minibus is priced -- buying (world.ts), the move lists
+  (moves.ts, problems.ts) and every label on screen read it.
+- On a new game it starts steel-starved (1-11% by day 40 on five maps): the terminal is by the port,
+  50-97 cells away, and the hauliers' legs are slow; bringing it steel is the first decision.
+
 ### Stations on the old line (2026-10-30; brief, Revision 5, Stations on the old line)
 
 `stations.ts`, behind `railStations` (absent in older runs: the line as it was, one piece).

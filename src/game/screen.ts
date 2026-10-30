@@ -30,6 +30,8 @@ import { roadCapacity } from "@engine/game/congestion";
 import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
+import { assemblyGeneration } from "@engine/game/assembly";
+import { siteProduction } from "@engine/game/production";
 
 // The information lab's three layers (agreed 2026-10-23; the lab since discarded), on the live game:
 //
@@ -786,7 +788,20 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         ${problemHtml(siteProblem(s))}
         ${seeThrough(sel.id, out, inn)}
         <div class="tiles">
-          ${t.industry === "station"
+          ${t.industry === "assembly"
+            // The assembly plant (assembly.ts): two inputs, the short one marked; what it does for you.
+            ? (() => {
+                const p = siteProduction(world, t.id);
+                const [steel, fuel] = p?.inputs ?? [];
+                const share = (i?: { arriving: number; needed: number }) => (i && i.needed > 0 ? Math.min(1, i.arriving / i.needed) : 1);
+                const short = share(steel) <= share(fuel) ? "steel" : "fuel";
+                const mark = (name: string) => (p && p.limit === "input" && short === name ? " · short" : "");
+                return `${tile("Steel in", `${int((steel?.arriving ?? 0) * D)} t`, `of ${int((steel?.needed ?? 0) * D)} t a day${mark("steel")}`)}
+                  ${tile("Fuel in", `${int((fuel?.arriving ?? 0) * D)} t`, `of ${int((fuel?.needed ?? 0) * D)} t a day${mark("fuel")}`)}
+                  ${tile("Buses and minibuses", `${pct(world.assembly?.discount ?? 0)} off`, "while it runs")}
+                  ${tile("Its line", `generation ${assemblyGeneration(world) + 1}`, `${int(world.assembly?.fullDays ?? 0)} days at full output`)}`;
+              })()
+            : t.industry === "station"
             // A station on the old line (stations.ts): open or not, what it was built for, who changes trains here.
             ? (() => {
                 const info = stationOf(world, t.id);

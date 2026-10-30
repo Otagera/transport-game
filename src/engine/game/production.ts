@@ -8,6 +8,7 @@ import { mineOutput, oreArriving, steelCapacity, steelImports, steelOutput } fro
 import { flourCapacity, flourOutput, millCapacity, millOutput, stapleArriving, wheatArriving } from "./food";
 import { siteJobs, staffFactor, staffing } from "./workers";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
+import { assemblyArriving, assemblyNeeds, assemblyShare } from "./assembly";
 
 // What a site makes and what holds it back (playtest, map 2411: "we need
 // indications for the factories in terms of production"). One reading for
@@ -38,6 +39,8 @@ export interface SiteProduction {
   shipped: number;
   /** What's holding it back, the lowest of its input and workers (capacity: nothing is). */
   limit: SiteLimit;
+  /** With `limit` "input": which one -- the input arriving the least of what it needs (two inputs: the assembly plant). */
+  binding?: string;
 }
 
 /** `flows`: goodsFlows(world), when the caller already has them (the map reads every site each frame). */
@@ -141,6 +144,16 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
       capacity = world.steel ? t.steelImportShare * world.steel.baseDemand * portScale(world) : 0;
       made = steelImports(world);
       break;
+    // The assembly plant (assembly.ts): two inputs, and it runs at the lower one's share.
+    case "assembly": {
+      const need = assemblyNeeds(world);
+      const got = assemblyArriving(world);
+      product = "buses and minibuses";
+      capacity = need.steel;
+      made = need.steel * assemblyShare(world).share;
+      inputs = [{ name: "steel", arriving: got.steel, needed: need.steel }, { name: "fuel", arriving: got.fuel, needed: need.fuel }];
+      break;
+    }
     case "oilfield":
     case "terminal":
       product = "crude";
@@ -168,5 +181,6 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
   const inputShare = inputs.length > 0 ? Math.min(...inputs.map((input) => (input.needed > 0 ? input.arriving / input.needed : 1))) : 1;
   const staffShare = staff === null ? 1 : staffFactor(world, siteId);
   const limit: SiteLimit = idle ? "idle" : Math.min(inputShare, staffShare) >= 0.95 ? "capacity" : inputShare <= staffShare ? "input" : "workers";
-  return { product, made, capacity, inputs, staffing: staff, shipped, limit };
+  const binding = limit === "input" ? [...inputs].sort((a, b) => (a.needed > 0 ? a.arriving / a.needed : 1) - (b.needed > 0 ? b.arriving / b.needed : 1))[0]?.name : undefined;
+  return { product, made, capacity, inputs, staffing: staff, shipped, limit, ...(binding ? { binding } : {}) };
 }

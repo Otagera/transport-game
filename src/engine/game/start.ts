@@ -1,6 +1,7 @@
 import { startUnions } from "./union";
 import { placeBorder, placeCoastRoad } from "./border";
 import { placeStations } from "./stations";
+import { placeAssemblyPlant } from "./assembly";
 import { startFloods } from "./floods";
 import { placeCrossings, placeRidgeField } from "./crossings";
 import { placeClusterOffers } from "./clusters";
@@ -71,6 +72,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeBorder(world);
   // And, on a landlocked map, the coast road its sea trade comes by (border.ts).
   placeCoastRoad(world);
+  // And the assembly plant (assembly.ts), beside the home cluster's second town.
+  placeAssemblyPlant(world);
   // And the old line's stations (stations.ts): after every other site, so they sit where they did.
   placeStations(world);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);

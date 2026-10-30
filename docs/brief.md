@@ -827,6 +827,29 @@ Later, not in the first cut: the port's handling as a rung, coastal shipping and
 4. **Coal** and power (the interlock).
 5. **General cargo**, with the trade gateways.
 
+### Chains: convergent (agreed 2026-10-30)
+
+Your ask: *"we have steel, then it produces factories then that make things that lead to other things
+and you need combinations for different things."* **The value is convergence, not depth:** one site fed
+by several routes, so one flood, one strike, one worn road idles a place rather than a product. A
+fourth tier adds two nodes and a route and the decision stays "connect it"; a second input changes
+where you build. `production.ts` already took the lowest of a site's inputs; every site had one.
+
+1. **The assembly plant** (built 2026-10-30, `assembly.ts`; parked in Revision 5): steel **and** fuel
+   in, locally assembled buses and minibuses out -- and you're its customer, the one chain that closes
+   on itself. It runs at the share of its scarcer input; while it runs your buses and minibuses are
+   cheaper (8%, and 8% more each generation of its line, one per 30 days at full output, three at
+   most), and starved, the discount fades. Its steel comes two ways and they're one input: imported
+   through the port's terminal and from the works where the map has one, split by want -- keep the port
+   route warm and a strike on your rail line is survivable. Placed beside the home cluster's second
+   town; behind `assemblyPlant`. Two inputs, not three, until two has been played.
+2. **The recipe card and the chain strip** (next, after your playtest): a site's card says which input
+   is short and where it's stuck (`SiteProduction.binding`, built), and the chain as one line of boxes,
+   forking where two inputs meet.
+3. **Room for them** (last): spread within the 250 x 160 frame before enlarging it -- the southern half
+   of map 3218 sat empty -- measured on five seeds (trips, net, people, goods share, towns served, C14,
+   tick and warm-up cost); a bigger frame only if that need survives the tick.
+
 ### Checks for the chains
 
 | # | Check | Passes when |
@@ -1250,6 +1273,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-30 | Convergent chains: a second input rather than a third tier -- the value is one factory fed by several routes, so a single failure idles a place, not a product. First the assembly plant (steel plus fuel into buses and minibuses you buy, cheaper as its line matures; the port's imported steel a substitute for the works'); then a recipe card naming the short input and where it's stuck, and a chain strip that forks; then room, by spreading within the frame before enlarging it, measured | Agreed 2026-10-30 |
 | 2026-10-30 | Shallot (assessed, not adopted): a WebGPU engine in TypeScript and Bun, written for agents. Not adopted: its UI story is a DOM overlay, so it doesn't touch the chrome; it documents no 2D pipeline, and the 2D map is the primary view; and none of the week's measured defects -- the mitre offset, junction plates, casing order, the corridor's over-subscribed channels, the 3D's unapplied findings -- is an engine problem. Taken from it: `.lab.ts` against `.test.ts`, the single pointer-events overlay container over the plate, derive-from-elapsed as a determinism guard (a test across frame budgets), and a `gym/` giving the brief's checks machine-readable verdicts (C14 first). A declared tick order is parked behind a trigger: the next ordering bug that costs more than a day, or a new system nobody can place. Watched as a possible host for the engine extraction (principles §2), not as a rewrite | Agreed 2026-10-30 |
 | 2026-10-30 | The look: `architecture/look.md` is the visual contract, settled by rendering three palettes and three layouts on the real game at seed 0 day 41. Ink-and-cream chrome with no hue of its own, yellow reserved for the informal sector, water as the dark value anchor; the Board layout, where the map's controls live in the left column and nothing overlaps the plate; three stats, the key as a chip, pledges moved into the panel. Enforced by four checks in `verify`. The 3D view adopts the same tokens and then applies principles §Visual direction, which it was built without. Corrected on adoption: the one token source is `tokens.css` (no `style/tokens.ts`); `verify` and `scripts/shots.ts` are to add | Agreed 2026-10-30 |
 | 2026-10-30 | The correspondent: Revision 5's voice question settled -- one correspondent, the Permanent Secretary of the Ministry of Transportation, who writes the day-1 handover and every term's letter, his stance shifting on your record; he never names a control (C32) and every clause is read from the seed's state. Step 4 rebuilt around him. Open question 6 answered by the handover note and the state-triggered hints already built: no tutorial. Amended in review: C32 tests the grammar of instructions, not a word list; letters at most three clauses, none repeated unchanged; nothing saved. The handover's railway clause reads the old line's stations | Agreed 2026-10-30 |

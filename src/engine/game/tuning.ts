@@ -191,6 +191,17 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // Stations on the old line (stations.ts): every ~30 cells, at a town within 4, out of a town
   // within 20 ("Ede Road"), else where the town has gone; 40 riders a day changing grows a town.
   railStations: true,
+  // The assembly plant (assembly.ts): 20 t of steel and 8 t of fuel a day at full output; 8% off a
+  // bus or minibus while it runs, 8% more a generation (one per 30 days of full output, three at
+  // most: 32%), rolled over 5 days; 3 thousand workers. First guesses, to play.
+  assemblyPlant: true,
+  assemblySteelPerDay: 20,
+  assemblyFuelPerDay: 8,
+  assemblyDiscountPerGeneration: 0.08,
+  assemblyGenerationDays: 30,
+  assemblyMaxGenerations: 3,
+  assemblyDiscountTauDays: 5,
+  jobsAssembly: 3,
   // A road you build runs straight where the ground lets it (pathing/smoothing.ts pullTaut).
   tautRoads: true,
   stationSpacingCells: 30,

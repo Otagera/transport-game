@@ -10,6 +10,7 @@ import { canAfford, SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { staffFactor } from "./workers";
 import { siteScale } from "./expand";
+import { assemblyActive, assemblyNeeds } from "./assembly";
 
 // The steel chain (docs/brief.md, More industries, more chains: steel first).
 // Cement lets a town build its first growth past its start; steel its last:
@@ -121,6 +122,9 @@ export function steelFlows(world: GameWorld): GoodsFlow[] {
   const flows: GoodsFlow[] = [];
   if (steel.mineId && steel.worksId && steel.working) flows.push({ from: steel.mineId, to: steel.worksId, kind: "supplies", rate: mineOutput(world) });
   const towns = builders(world).map((town) => ({ town, left: steelDemand(world, town.id) }));
+  // The assembly plant takes steel too (assembly.ts), from the port's and the works' as a town does.
+  const plant = world.assembly && assemblyActive(world) ? world.towns.get(world.assembly.siteId) : undefined;
+  if (plant) towns.push({ town: plant, left: assemblyNeeds(world).steel });
   const fill = (from: string, supply: number, reachedOnly: boolean) => {
     const takers = towns.filter((x) => x.left > 0 && (!reachedOnly || roadPath(world, from, x.town.id)));
     const wanted = takers.reduce((sum, x) => sum + x.left, 0);

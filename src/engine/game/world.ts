@@ -27,6 +27,7 @@ import { paveStepCost } from "../pathing/cost";
 import { openLane } from "./pushback";
 import { createSitesState } from "./workers";
 import { createSweepState } from "./sweep";
+import { vehiclePrice } from "./assembly";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -458,8 +459,8 @@ function roadVehicleSpec(world: GameWorld, kind: RoadVehicleKind) {
   const t = world.tuning;
   if (kind === "brt") return { capacity: t.brtCapacity, speed: t.brtSpeed, price: t.brtPurchaseCost, perSecond: t.brtOperatingCostPerSecond, roadSpace: t.brtRoadSpace, defId: BRT_DEF_ID };
   return kind === "minibus"
-    ? { capacity: t.minibusCapacity, speed: t.minibusSpeed, price: t.minibusPurchaseCost, perSecond: t.minibusOperatingCostPerSecond, roadSpace: t.minibusRoadSpace, defId: MINIBUS_DEF_ID }
-    : { capacity: t.busCapacity, speed: t.busSpeed, price: t.busPurchaseCost, perSecond: t.busOperatingCostPerSecond, roadSpace: t.busRoadSpace, defId: BUS_DEF_ID };
+    ? { capacity: t.minibusCapacity, speed: t.minibusSpeed, price: vehiclePrice(world, "minibus"), perSecond: t.minibusOperatingCostPerSecond, roadSpace: t.minibusRoadSpace, defId: MINIBUS_DEF_ID }
+    : { capacity: t.busCapacity, speed: t.busSpeed, price: vehiclePrice(world, "bus"), perSecond: t.busOperatingCostPerSecond, roadSpace: t.busRoadSpace, defId: BUS_DEF_ID };
 }
 
 export function checkBus(world: GameWorld, a: string, b: string, kind: RoadVehicleKind = "bus"): ActionResult {
