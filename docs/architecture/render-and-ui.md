@@ -239,6 +239,17 @@ term's pledges in the panel (screen.ts `pledgesHtml`), "your riders" and "no sea
 `<kbd>` (`toolButton` lets them through its escaping); font sizes as `--fs-*`, spacing as `--sp-*`,
 radii as `--radius`/`--radius-control`.
 
+**The chain strip and the recipe card (2026-10-30; brief, Chains: convergent).** On a site's panel,
+above its problem line. The strip (screen.ts `chainStripHtml`, from production.ts `siteChain`): each
+input as a box with where it comes from and its share, two inputs stacked as a fork into the site's
+box, then what it makes and where that goes (the assembly plant's: your buses, at today's
+discount); exactly one box marked broken -- the binding input, else an output mostly not getting away.
+The recipe card (`recipeHtml`): a row and bar per input, arriving against what full output takes, the
+binding one marked (`SiteProduction.binding`); for it, where it's stuck, source by source -- tonnes
+waiting at the source's yard, on the way and where (`goodsOnTheWay`), or the gap no haulier crosses
+(`haulBreak`); then what it makes against capacity, and how much gets away. The map says where, the
+card says why.
+
 ## 6. Ambient traffic rendering
 
 `network.ts` draws instanced cars **from** the published `ambientLoads` number (see

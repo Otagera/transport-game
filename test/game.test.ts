@@ -63,7 +63,7 @@ import { thenAndNowSvg } from "../src/game/thenandnow";
 import { MITER_LIMIT, congestionStop, junctionPlates, offsetPolyline, overloaded } from "../src/game/corridor";
 import { PRIORITY, Placer, drawsAt, tierOf } from "../src/game/density";
 import { assemblyGeneration, assemblyNeeds, assemblyShare, updateAssembly, vehiclePrice } from "@engine/game/assembly";
-import { siteProduction } from "@engine/game/production";
+import { siteChain, siteProduction } from "@engine/game/production";
 import { checkSignalBudget } from "../scripts/signal-budget";
 import { segmentRung } from "@engine/game/roads";
 import type { Segment } from "@engine/map/types";
@@ -5304,4 +5304,41 @@ describe("the assembly plant (assembly.ts; brief, Chains: convergent)", () => {
     expect(old.assembly).toBeUndefined();
     expect(vehiclePrice(old, "bus")).toBe(old.tuning.busPurchaseCost);
   }, 60_000);
+});
+
+describe("the chain strip (production.ts siteChain; brief, Chains: convergent)", () => {
+  const game = (seed = 1) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0 });
+  const broken = (c: NonNullable<ReturnType<typeof siteChain>>) => [...c.inputs, c.output].filter((l) => l.broken);
+
+  test("the plant's fork marks its short arm, and only that", () => {
+    const w = game();
+    const plant = w.assembly!.siteId;
+    const need = assemblyNeeds(w);
+    for (const [from, share, n] of [[w.steel!.terminalId!, 0.3, need.steel], [w.fuel!.depotId, 1, need.fuel]] as const) w.goods.outcomes.set(goodsKey({ from, to: plant, kind: "supplies" }), { delivered: 0, spoiled: 0, arrived: n * share });
+    const c = siteChain(w, plant)!;
+    expect(c.inputs.map((i) => i.name)).toEqual(["steel", "fuel"]);
+    expect(broken(c).map((l) => l.name)).toEqual(["steel"]);
+    expect(c.inputs.find((i) => i.name === "steel")!.places).toContain(w.steel!.terminalId!);
+  }, 60_000);
+
+  test("a linear chain short of its one input marks exactly that link", () => {
+    for (const seed of [1, 4, 77, 949, 2418]) {
+      const w = game(seed);
+      if (!w.cement?.working) continue;
+      for (const key of [...w.goods.outcomes.keys()]) if (key.split(":")[1] === w.cement.worksId) w.goods.outcomes.set(key, { delivered: 0, spoiled: 0, trucked: 0, arrived: 0 });
+      const c = siteChain(w, w.cement.worksId)!;
+      expect(broken(c).map((l) => l.name)).toEqual(["limestone"]);
+      return;
+    }
+    throw new Error("no seed with a working cement works");
+  }, 120_000);
+
+  test("no site's chain ever marks more than one link", () => {
+    const w = game(3218);
+    for (let i = 0; i < 20 * SECONDS_PER_GAME_DAY * 30; i += 1) gameTick(w, SIM_DT);
+    for (const site of [...w.towns.values()].filter((t) => t.industry)) {
+      const c = siteChain(w, site.id);
+      if (c) expect(broken(c).length).toBeLessThanOrEqual(1);
+    }
+  }, 300_000);
 });

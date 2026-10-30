@@ -31,7 +31,7 @@ import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/gam
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
 import { assemblyGeneration } from "@engine/game/assembly";
-import { siteProduction } from "@engine/game/production";
+import { siteChain, siteProduction } from "@engine/game/production";
 
 // The information lab's three layers (agreed 2026-10-23; the lab since discarded), on the live game:
 //
@@ -724,6 +724,62 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       </tbody></table>` : `<p class="muted">No sites working.</p>`}`;
   }
 
+  /**
+   * The chain strip (brief, Chains: convergent): the whole chain as one line of boxes -- each input from
+   * where it comes, the site, what it makes and where that goes -- two inputs forking into one box, and
+   * the one broken link marked (production.ts siteChain). "The ore is arriving, the steel isn't moving"
+   * without opening three sites.
+   */
+  function chainStripHtml(siteId: string): string {
+    const c = siteChain(world, siteId);
+    if (!c || (c.inputs.length === 0 && c.output.places.length === 0)) return "";
+    const state = (link: { share: number; broken: boolean }) => (link.broken ? "broken" : link.share < 0.8 ? "short" : "ok");
+    const from = (places: string[]) => (places.length === 0 ? "nowhere yet" : places.length <= 2 ? places.map(nameOf).join(", ") : `${nameOf(places[0]!)} +${places.length - 1}`);
+    const ins = c.inputs.map((i) => `<span class="cbox ${state(i)}">${esc(i.name)}<small>${esc(from(i.places))} · ${pct(i.share)}</small></span>`).join("");
+    const to = c.output.places.length === 0 ? "" : c.output.places.length === 1 ? nameOf(c.output.places[0]!) : `${c.output.places.length} places`;
+    // The assembly plant's product is yours: the chain ends in what it takes off a bus.
+    const yours = world.towns.get(siteId)?.industry === "assembly" ? `<span class="arrow">→</span><span class="cbox ${c.inputs.some((i) => i.broken) ? "short" : "ok"}">your buses<small>${pct(world.assembly?.discount ?? 0)} off</small></span>` : "";
+    return `<div class="chainstrip">${ins ? `<span class="ins${c.inputs.length > 1 ? " fork" : ""}">${ins}</span><span class="arrow">→</span>` : ""}<span class="cbox site">${esc(nameOf(siteId))}</span>${c.output.places.length ? `<span class="arrow">→</span><span class="cbox ${state(c.output)}">${esc(c.output.name)}<small>${esc(to)} · ${pct(c.output.share)} away</small></span>` : yours}</div>`;
+  }
+
+  /**
+   * The recipe card (brief, Chains: convergent): why is this idle? Each input arriving against what full
+   * output takes, the short one marked and, for it, where it's stuck -- waiting at its source, on the
+   * way and where, or the gap no haulier crosses; what it makes against what it could; how much of
+   * that gets away. The map says where, the card says why.
+   */
+  function recipeHtml(siteId: string): string {
+    const p = siteProduction(world, siteId);
+    if (!p || p.inputs.length === 0) return "";
+    const chain = siteChain(world, siteId);
+    const rows = p.inputs.map((i) => {
+      const share = i.needed > 0 ? Math.min(1, i.arriving / i.needed) : 1;
+      const binding = p.limit === "input" && p.binding === i.name;
+      return `<div class="rrow${binding ? " binding" : ""}"><span class="n">${esc(i.name)}${binding ? " · short" : ""}</span><span class="v num">${int(i.arriving * D)} of ${int(i.needed * D)} t</span><i class="rbar"><b style="width:${pct(share)}"></b></i></div>`;
+    }).join("");
+    // Where the short one is stuck, source by source.
+    const stuck = (() => {
+      const link = chain?.inputs.find((i) => i.broken);
+      if (!link) return "";
+      if (link.places.length === 0) return `Nothing sends it ${esc(link.name)} yet.`;
+      const way = goodsOnTheWay(world, siteId);
+      return link.places.map((src) => {
+        const waiting = [...(world.goods.yards.get(src) ?? [])].filter(([k]) => k.startsWith(`${siteId}|`)).reduce((sum, [, a]) => sum + a, 0);
+        const moving = way.find((x) => x.origin === src);
+        const b = haulBreak(world, src, siteId);
+        const parts = [
+          waiting >= 1 ? `${int(waiting)} t waiting at ${esc(nameOf(src))}` : "",
+          moving && moving.tonnes >= 1 ? `${int(moving.tonnes)} t on the way${moving.waitingAt.length ? `, waiting at ${moving.waitingAt.slice(0, 2).map((id) => esc(nameOf(id))).join(" and ")}` : ""}` : "",
+          b?.kind === "road" ? `no road joins it to ${esc(nameOf(src))}` : b?.kind === "gap" ? (b.yardAt ? `hauliers can't get it past ${esc(nameOf(b.yardAt))}: a yard there would carry it on` : "hauliers can't get it here, even from your yards: freight track can") : b?.kind === "legs" && b.legs >= 3 ? `${b.legs} legs by road, slowly` : "",
+        ].filter(Boolean);
+        return parts.length ? `From ${esc(nameOf(src))}: ${parts.join("; ")}.` : "";
+      }).filter(Boolean).join(" ") || `Its ${esc(link.name)} is slow coming: more hauliers from a yard at the source, or a freight line.`;
+    })();
+    return `<div class="recipe"><h2>Its recipe</h2>${rows}
+      ${stuck ? `<p class="stuck">${stuck}</p>` : ""}
+      <div class="rfoot muted">Makes ${int(p.made * D)} of ${int(p.capacity * D)} t a day${p.limit === "workers" ? " · short of workers" : ""} · ${pct(p.shipped)} of it gets away</div></div>`;
+  }
+
   function detailHtml(sel: NonNullable<Selection>): string {
     if (sel.kind === "town" && world.towns.get(sel.id)?.industry) sel = { kind: "site", id: sel.id };
     if (sel.kind === "town") {
@@ -785,6 +841,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       }).join("");
       return `<div class="kicker">Site · ${esc(t.industry ?? "")}</div>
         <div class="head"><div class="title">${esc(t.name)}</div></div>
+        ${chainStripHtml(sel.id)}
+        ${recipeHtml(sel.id)}
         ${problemHtml(siteProblem(s))}
         ${seeThrough(sel.id, out, inn)}
         <div class="tiles">

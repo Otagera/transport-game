@@ -843,9 +843,9 @@ where you build. `production.ts` already took the lowest of a site's inputs; eve
    through the port's terminal and from the works where the map has one, split by want -- keep the port
    route warm and a strike on your rail line is survivable. Placed beside the home cluster's second
    town; behind `assemblyPlant`. Two inputs, not three, until two has been played.
-2. **The recipe card and the chain strip** (next, after your playtest): a site's card says which input
-   is short and where it's stuck (`SiteProduction.binding`, built), and the chain as one line of boxes,
-   forking where two inputs meet.
+2. **The recipe card and the chain strip** (built 2026-10-30, render-and-ui.md §7): a site's card says
+   which input is short and where it's stuck, and the chain as one line of boxes, forking where two
+   inputs meet, the one broken link marked.
 3. **Room for them** (last): spread within the 250 x 160 frame before enlarging it -- the southern half
    of map 3218 sat empty -- measured on five seeds (trips, net, people, goods share, towns served, C14,
    tick and warm-up cost); a bigger frame only if that need survives the tick.
