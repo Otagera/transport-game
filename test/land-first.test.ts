@@ -61,4 +61,37 @@ describe("map version 7: the land first", () => {
     }
     expect(joins).toBeGreaterThan(0);
   }, 120_000);
+
+  test("a tributary's mouth is in its river's water, not on the bank beside it (your look: one stopped short with sand between)", () => {
+    const seg = (p: [number, number], a: [number, number], b: [number, number]) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2));
+      return { d: Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)), t };
+    };
+    let mouths = 0;
+    for (const seed of SEEDS) {
+      const map = gameMap(GAME_MAP, seed, tuning(7));
+      const rivers = map.terrain!.rivers!;
+      const sea = rivers.find((r) => Math.max(...(r.widths ?? [r.width])) > 12);
+      for (const river of rivers) {
+        if (river === sea) continue;
+        for (const end of [0, river.points.length - 1]) {
+          const p = river.points[end]!;
+          for (const host of rivers) {
+            if (host === river || host === sea) continue;
+            const hw = host.widths ?? host.points.map(() => host.width);
+            let best = { d: Infinity, w: 0 };
+            for (let k = 1; k < host.points.length; k += 1) {
+              const { d, t } = seg(p, host.points[k - 1]!, host.points[k]!);
+              if (d < best.d) best = { d, w: hw[k - 1]! + (hw[k]! - hw[k - 1]!) * t };
+            }
+            if (best.d > best.w / 2 + 1.5) continue; // not this river's mouth
+            mouths += 1;
+            expect(best.d).toBeLessThanOrEqual(best.w / 2 + 0.05);
+          }
+        }
+      }
+    }
+    expect(mouths).toBeGreaterThan(0);
+  }, 120_000);
 });

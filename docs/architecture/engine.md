@@ -1250,7 +1250,13 @@ replays as played. Seed 0 stays the hand-made map, alone.
   the host's line and its last stretch bent to meet it at a slant -- beyond the home box only (the
   home river's crossings there are the trunk's), each change kept only where every town stays
   clear of the water. A creek that runs out to the sea (the delta's, a lagoon's channel) is left
-  as it is. Towns, roads and sites don't move. Tested (`test/land-first.test.ts`): the home box's
+  as it is. After your look the same day ("rivers are not good yet"): a tributary's mouth goes onto
+  its host's own line (slid along the bank, one had stopped short with sand between); a tributary
+  rises as a thin stream (0.7 cells, widening over its first ten) in a swell of headwater hills
+  (`ReliefDef.heads`, 1.6 units over 13 cells); a river clear of the home box has its sharp bends
+  eased (two more passes of corner-cutting, back to the drawn line within reach of a town); the
+  plateau 4 units high. The rivers' changes are tested as version 2 tested its smoothing: no water
+  within a cell of a town. Towns, roads and sites don't move. Tested (`test/land-first.test.ts`): the home box's
   ground unchanged, towns and roads as version 6, a tributary narrower than its host, the same
   seed the same land. Twelve seeds unplayed for 15 days, version 6 -> 7 (`scripts/lab/
   land-first.lab.ts`): sites 199 -> 203, working 95 -> 95, fuel 34.5% -> 34.9%, trips 592 -> 582 a

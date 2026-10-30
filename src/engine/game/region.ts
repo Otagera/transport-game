@@ -881,13 +881,32 @@ const RELIEF: Record<string, Omit<ReliefDef, "seed" | "plateaus">> = {
 
 function landFirst(map: GameMapDef, seed: number): GameMapDef {
   const box = map.home!;
-  const rivers = (map.terrain?.rivers ?? []).map((r) => ({ ...r, points: [...r.points], widths: [...(r.widths ?? r.points.map(() => r.width))] }));
+  const rivers = (map.terrain?.rivers ?? []).map((r) => {
+    const widths = r.widths ?? r.points.map(() => r.width);
+    const own = { ...r, points: [...r.points], widths: [...widths] };
+    // A river that never comes near the home box has its sharp bends eased (a V where it met a
+    // tributary read as a kink, not a river): two more passes of corner-cutting, kept only where
+    // every town stays clear of it. The sea's coast is left as drawn.
+    if (Math.max(...widths) > 12 || r.points.some(([x, y]) => toBox({ x, y }, map.home!) < 3)) return own;
+    const eased = chaikin(r.points, widths, 2);
+    // Eased everywhere but near a town: there each point goes back to the drawn line's nearest
+    // (the corner-cutting draws a bend's line inward, toward a town on its inside).
+    const nearest = ([x, y]: [number, number]) => r.points.reduce((best, p) => (Math.hypot(p[0] - x, p[1] - y) < Math.hypot(best[0] - x, best[1] - y) ? p : best));
+    const points = eased.points.map((p, i): [number, number] => {
+      const close = map.towns.some((t) => Math.hypot(t.x - p[0], t.y - p[1]) < eased.widths[i]! / 2 + WATER_CLEARANCE + 3);
+      const q = close ? nearest(p) : p;
+      return [Math.round(q[0] * 100) / 100, Math.round(q[1] * 100) / 100];
+    });
+    const candidate = { ...r, points, widths: eased.widths.map((w) => Math.round(w * 100) / 100) };
+    // The same test version 2 smoothed the water by: no water within a cell of a town.
+    return map.towns.every((t) => dryOf([candidate], t, 1)) ? candidate : own;
+  });
   const reliefSeed = Math.floor(hashed(seed, 7_000_003) * 2 ** 31);
   const relief: ReliefDef = { seed: reliefSeed, ...(RELIEF[map.region ?? "southwest"] ?? RELIEF.southwest!) };
   // The Middle Belt's plateau: an ellipse standing clear of every town and of the home box.
   if (map.region === "middleBelt") {
     for (let k = 0; k < 40; k += 1) {
-      const p = { x: 30 + hashed(reliefSeed, 10 + k) * (map.width - 60), y: 25 + hashed(reliefSeed, 60 + k) * (map.height - 50), rx: 16 + 8 * hashed(reliefSeed, 110 + k), ry: 10 + 5 * hashed(reliefSeed, 160 + k), turn: hashed(reliefSeed, 210 + k) * Math.PI, height: 2.5 };
+      const p = { x: 30 + hashed(reliefSeed, 10 + k) * (map.width - 60), y: 25 + hashed(reliefSeed, 60 + k) * (map.height - 50), rx: 16 + 8 * hashed(reliefSeed, 110 + k), ry: 10 + 5 * hashed(reliefSeed, 160 + k), turn: hashed(reliefSeed, 210 + k) * Math.PI, height: 4 };
       const inside = (t: { x: number; y: number }, pad: number) => {
         const c = Math.cos(p.turn), sn = Math.sin(p.turn);
         const u = ((t.x - p.x) * c + (t.y - p.y) * sn) / (p.rx + pad), v = (-(t.x - p.x) * sn + (t.y - p.y) * c) / (p.ry + pad);
@@ -902,15 +921,31 @@ function landFirst(map: GameMapDef, seed: number): GameMapDef {
   // The rivers as a system: which join which, downstream.
   const sea = rivers.find((r) => Math.max(...r.widths) > 12);
   const widthNear = (r: (typeof rivers)[number], [x, y]: [number, number]) => {
-    let best = Infinity, at = 0, w = r.width;
+    let best = Infinity, at = 0, w = r.width, along = 0;
     for (let k = 1; k < r.points.length; k += 1) {
       const [ax, ay] = r.points[k - 1]!, [bx, by] = r.points[k]!;
       const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1;
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
       const d = Math.hypot(x - (ax + t * dx), y - (ay + t * dy));
-      if (d < best) [best, at, w] = [d, k, r.widths[k - 1]! + (r.widths[k]! - r.widths[k - 1]!) * t];
+      if (d < best) [best, at, w, along] = [d, k, r.widths[k - 1]! + (r.widths[k]! - r.widths[k - 1]!) * t, t];
     }
-    return { distance: best, segment: at, width: w };
+    return { distance: best, segment: at, width: w, t: along };
+  };
+  const heads: Array<{ x: number; y: number }> = [];
+  /** The point `along` cells down a river's line from the start of segment `k`, and its direction there. */
+  const down = (r: (typeof rivers)[number], k: number, t: number, along: number): { at: [number, number]; dir: [number, number] } => {
+    let seg = Math.max(1, k), [ax, ay] = r.points[seg - 1]!, [bx, by] = r.points[seg]!;
+    let left = along + t * Math.hypot(bx - ax, by - ay);
+    for (;;) {
+      [ax, ay] = r.points[seg - 1]!; [bx, by] = r.points[seg]!;
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      if (left <= len || seg === r.points.length - 1) {
+        const f = Math.min(1, left / len);
+        return { at: [ax + (bx - ax) * f, ay + (by - ay) * f], dir: [(bx - ax) / len, (by - ay) / len] };
+      }
+      left -= len;
+      seg += 1;
+    }
   };
   const reshaped = rivers.map((river) => {
     if (river === sea) return river;
@@ -935,23 +970,26 @@ function landFirst(map: GameMapDef, seed: number): GameMapDef {
     // Narrow at its source, widening to its mouth, at most 0.6 of the river it joins; a ford's narrow kept.
     const cap = Math.max(1.2, join.near.width * 0.6);
     // Only beyond the home box: the home river's crossings there are the trunk's, as measured.
+    // And it rises as a stream: its first cells thin (0.7) widening to its own width.
+    const lengths = [0];
+    for (let k = 1; k < n; k += 1) lengths.push(lengths[k - 1]! + Math.hypot(points[k]![0] - points[k - 1]![0], points[k]![1] - points[k - 1]![1]));
     widths = widths.map((w, k) => {
       if (toBox({ x: points[k]![0], y: points[k]![1] }, box) < 2) return w;
       const t = k / Math.max(1, n - 1);
       const tapered = Math.min(cap, w) * (0.5 + 0.5 * t);
-      return w <= 1.25 ? w : Math.round(Math.max(1.2, tapered) * 100) / 100;
+      const body = w <= 1.25 ? w : Math.max(1.2, tapered);
+      const spring = Math.min(1, lengths[k]! / 10);
+      return Math.round((0.7 + (body - 0.7) * spring) * 100) / 100;
     });
+    const source = points[0]!;
+    if (toBox({ x: source[0], y: source[1] }, box) > 6) heads.push({ x: source[0], y: source[1] });
     // Meeting its host at a slant, downstream: the mouth moved some cells down the host's line,
     // and the last stretch bent toward it, more the nearer the mouth.
-    const host = join.host;
-    const k = join.near.segment;
-    const [hx, hy] = host.points[Math.min(host.points.length - 1, k)]!;
-    const [px, py] = host.points[Math.max(0, k - 1)]!;
-    const hl = Math.hypot(hx - px, hy - py) || 1;
-    const down: [number, number] = [(hx - px) / hl, (hy - py) / hl];
+    // The mouth on the host's own line (not its bank: slid along the bank, it stopped short of the
+    // water with sand between -- your look, 2026-10-30), a few cells downstream of where it met.
     const mouth = points[n - 1]!;
     const slide = Math.min(6, Math.max(2, join.near.width * 1.5));
-    const target: [number, number] = [mouth[0] + down[0] * slide, mouth[1] + down[1] * slide];
+    const target = down(join.host, join.near.segment, join.near.t, slide).at;
     const reach = Math.min(n - 1, 8);
     const bent = points.map((p, i): [number, number] => {
       const from = n - 1 - reach;
@@ -961,8 +999,9 @@ function landFirst(map: GameMapDef, seed: number): GameMapDef {
     });
     const tried = { ...river, points: join.end === 0 ? bent.reverse() : bent, widths: join.end === 0 ? widths.reverse() : widths };
     const plain = { ...river, points: join.end === 0 ? [...points].reverse() : points, widths: tried.widths };
-    for (const candidate of [tried, plain]) if (map.towns.every((t) => dryOf([candidate], t, WATER_CLEARANCE))) return candidate;
+    for (const candidate of [tried, plain]) if (map.towns.every((t) => dryOf([candidate], t, 1))) return candidate;
     return river;
   });
+  if (heads.length) relief.heads = heads;
   return { ...map, terrain: { ...map.terrain, rivers: reshaped, relief } };
 }

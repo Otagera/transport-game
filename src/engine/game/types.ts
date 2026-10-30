@@ -70,6 +70,8 @@ export interface ReliefDef {
   scale: number;
   ridged?: boolean;
   plateaus?: Array<{ x: number; y: number; rx: number; ry: number; turn: number; height: number }>;
+  /** Where tributaries rise: a swell of headwater hills round each spring. */
+  heads?: Array<{ x: number; y: number }>;
 }
 
 export interface GameRiverDef {

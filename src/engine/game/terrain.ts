@@ -95,6 +95,8 @@ const BASIN = 14; // cells from the water to the full height of the land between
 const HOME_FADE = 24;
 const TOWN_FLAT = 8;
 const ROAD_EASE = 3;
+const HEAD_REACH = 13;
+const HEAD_HEIGHT = 1.6;
 
 function smooth01(t: number): number {
   const c = Math.max(0, Math.min(1, t));
@@ -191,6 +193,11 @@ function addRelief(def: GameMapDef, relief: ReliefDef, elevation: Float32Array, 
         const r = Math.hypot(u, v);
         const edge = 2.5 / Math.min(p.rx, p.ry);
         if (r < 1 + edge) lift += p.height * smooth01((1 + edge - r) / edge) * smooth01(fromWater[i]! / 4);
+      }
+      // Headwaters: a river rises in hills, not out of the plain (your look, 2026-10-30: "the flow is weird").
+      for (const h of relief.heads ?? []) {
+        const d = Math.hypot(x - h.x, y - h.y);
+        if (d < HEAD_REACH) lift += HEAD_HEIGHT * smooth01(1 - d / HEAD_REACH) * smooth01(fromWater[i]! / 3);
       }
       elevation[i] = elevation[i]! + lift * mask;
     }
