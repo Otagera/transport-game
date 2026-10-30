@@ -95,6 +95,12 @@ This was never answered on the first attempt and it is why scope kept expanding.
 "something others play." Concretely, this means:
 
 - No onboarding, and no stopping point to design toward: a save you keep returning to.
+  *Amended 2026-10-30:* a **handover note** is in -- one screen on day 1, generated from the
+  seed, stating what the state inherited and what you answer to -- and the few state-triggered
+  hints already built stay. Permitted because they describe the situation, not the controls:
+  the standing test is that no sentence of the note could be moved into a tooltip. The same
+  voice writes the term letters (brief, Revision 5, step 4 rebuilt). Still no tutorial and no
+  guided first moves.
 - **Goals come from the world's own problems, never from a script** (amended 2026-10-24,
   after a designer's review of the 482-day region playtest; was "no authored goal"). A
   pledge is made from what the simulation already names -- "Lokoja short of cement,

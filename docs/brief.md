@@ -1046,6 +1046,76 @@ Everything else folds into one of these or goes:
     income). Keeping both pledges sets term 2 at ₦50k plus growth: about one restore. Either
     the term-1 grant or the restore prices change, or "one big project" means from term 2.
 
+### Stations on the old line (agreed 2026-10-30)
+
+Your answers: stations are inherited only ("inherited"); a station's distance from its town counts (your call left to me: it does); towns grow at stations ("yes"). Why now: the correspondent's handover (below) has the old railway's provenance to state -- "four of its eleven stations serve towns that are no longer there" -- and today the line has none. Built so it's true by construction, and so each station is a decision, not a label.
+
+1. **The old line comes with its stations,** placed when the world is made, along the line every 25-35 cells -- where the export needed them, not where people live. Each is one of three, by what stands near it today:
+   - **at its town:** a town within a few cells of the line is a stop on it, as a halt makes one (rail.ts);
+   - **out of its town:** further off, a station of its own on the line, named for the town it served ("Ede Road", the real pattern), with an old dirt road to it;
+   - **where the town has gone:** nothing near, a station at a ruin (`world.ruins`) of the town it was built for, no road to it.
+2. **Restoring the line reopens its stations, and where they stand is yours to answer.** The line is restored a stretch at a time, station to station, or any run of it at once. A station out of its town carries the people who reach it: a feeder to it (riders change at it, transfers.ts), or a halt nearer the town (rail.ts, already built) -- restore the wrong line or build the right one, fought over every station. Distance counts because getting there is a ride, not because a number says so.
+3. **A station can grow a town.** Where trains stop at a station of its own and riders change there, it becomes a town of that name, as a roadside town appears where traffic stops (settlement.ts), capped the same way; it fades back to a station, never off the line, if the riders go.
+4. **A station with a yard is a railhead:** freight trains drop goods at the stop nearest where they're going and hauliers take them on (haulage.ts, built 2026-10-29).
+
+Behind a tuning key (absent in older runs: the line as it was, no stations). **Not in this:** stations you build anywhere (the Track tool and halts cover building); station rungs (halt -> station -> interchange, a boarding cap) -- another system to hold, until a playtest shows a crowded station mattering; a stop costing a train time -- only a decision once a train can skip stations (express and stopping services), which waits.
+
+### Step 4, rebuilt: the correspondent, and the record as a story (agreed 2026-10-30)
+
+Revision 5's step 4 -- "Then and now, and the end-of-term report" -- the only step in its order never built, skipped as presentation. It isn't: it's where the game tells the story the other steps generate. C27 ("a story to tell") can't pass without it. It also settles **Revision 5's voice question** (2026-10-29).
+
+**Why a correspondent.** The premise is written and the player never hears it: a colonial railway built for export, not for people, half-derelict across the map. The brownfield is the one piece of authored fiction the pillars permit, because it describes what was done before you arrived and can never tell you what to do. It has had no voice.
+
+**The correspondent is the Permanent Secretary of the state's Ministry of Transportation.** The authority you run reports to him. He was there before you and will be after you're replaced; he's the institution's memory, so the natural narrator of a record that spans terms. Not a mentor and not a boss with objectives: the *state* offers pledges (`term.ts`); he reports on them, and never asks for anything the simulation didn't already name.
+
+Two rules, both absolute:
+
+> **He never names a control, a key, a button, a screen, a tool or a price.** If a sentence of his would survive being moved into a tooltip, it's a tutorial and it's cut.
+
+> **Every clause he writes is read from this seed's state.** A sentence with no state behind it will be false on some seed, and a false sentence from the only narrating voice costs more than silence. *Two named exceptions, constant across seeds and written as such:* the mandate paragraph (said in plain words, true to the tuning while it holds) and "Nobody has built anything new here in eleven years" -- the licence for the premise.
+
+**He is not the hint system** (amended from the proposal, which had "no hints"). The state-triggered hints already built (main.ts `renderHint`, dismissable, "Hints off") stay as they are: the last two playtests were about the mechanics' legibility -- what a yard does, why cement doesn't arrive -- which by his first rule he can't help with. Open question 6 is answered by both: a handover note, a few state-triggered hints, no tutorial.
+
+#### The handover note (day 1)
+
+One screen on the first day of term 1, before the first pledge card, pausing the game as the second refinery's toast does; skippable, kept in the record to re-read. **Three short paragraphs, about 150 words** -- the longest text in the game and the only one its size.
+
+1. **What you've inherited**, read from the map, each thing given its *provenance* -- the reason it was built, always the wrong one for today: the old railway (where it runs, what it carried -- the crop by the map's region: groundnuts and cotton north, cocoa south-west, palm oil south-south -- and, which of its stations stand where people no longer are (Stations on the old line, above)); the old highways and which clusters they join and miss; the named fords (`floods.ts`) and whether one is on the trunk; the parks and their chairmen (`union.ts`).
+2. **What's wrong today**, two or three facts from `problems.ts`, worst first, stated as condition, never instruction. Day 1 has less to say than later (scarcity builds with success, principles.md §3: no town short of fuel or cement on day 1), so in order: an idle works or refinery and the town it holds back; the largest unserved pair and its journey by danfo; the longest journey between clusters.
+3. **Your role**: the term, the grant, the pledges, the assessment, the replacement, in plain words, no figures from the tuning table. Ends "I have written {n} of these" -- the predecessor count, from the seed.
+
+#### The end-of-term report, in his voice
+
+His letter becomes the term's full screen, ahead of the revenue screen; `termVerdictText` stays as the one-line form for the log. **At most three clauses, ranked by how much each changed** (people a pledge's place gained, a pledge's stakes, a strike, a flood ridden out or not), any clause with nothing behind it omitted; **no clause shape two terms running unless what it reports has changed** ("Chairman Adeyemi has not forgotten the Ilase lane" once, not every term). The grant and the mandate are set below the letter, in figures, not in his voice.
+
+| Clause | Reads from |
+| --- | --- |
+| a pledge kept, and the place it changed | `term.ts` `TermRecord.kept`, the pledge's subject, its town's people then and now |
+| the consequence of keeping it -- **the arc** | `growth.ts` `roadFull` and `private.ts` on the corridors the pledge touched: "the quarry road is now the busiest stretch in the region; it won't hold another term like that". Weighted to appear from term 3 |
+| a pledge missed | `TermRecord.missed`, and that problem's state now |
+| the union | `union.ts`: the chairman's stance and his last demand's outcome |
+| a shock | `floods.ts`: "the rains took the {ford} road for twenty days; you had raised the bridge" |
+| the region | day 1's network against today's (inherited roads are known by id): "{n} km of paved road here that you built" |
+
+**His stance**, on the chairman's pattern (`union.ts`): *correct* at the start (flat, civil-service); *behind you* after two terms kept with towns growing (shorter sentences, "we"); *doubtful* after a failed term ("the state has noticed"); *finished with you* after two failed in a row -- the replacement letter, the only one about your career. He never pleads, advises or threatens in his own name. The stance shows in sentence length and what he chooses to mention, never in the facts.
+
+**Then and now** beside the letter, unchanged from Revision 5: day 1's network drawn faint under today's, the letter's places pinned. Last of the four to build.
+
+**Cost: nothing simulated, nothing saved.** Run files replay from the seed: his name (by seed, from a pool for the map's region, as `generate.ts` names towns), the predecessor count (by seed) and his stance (from the term records) are all derived; "handover seen" is a browser preference. The letter composer lives in `src/game/`; `TermRecord` gains what a clause needs and doesn't carry (which corridors a pledge touched). No new system for the player to hold.
+
+**Checks**
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C32 | **Not a tutorial** | No sentence he can emit has the grammar of an instruction: a key in brackets, "press", "click", "button", "screen", "tool", a ₦ price, an imperative addressed to you. An assertion over every template, written first -- not a word list: the tools are named for things in the world (road, track, yard, bus, park), and "you have the roads, the track and the buses" is a true sentence, not a tooltip |
+| C33 | **Every clause is earned** | Ten seeds through term 3: no clause fires with nothing behind it; no letter is empty |
+| C34 | **The handover reads true on any seed** | Ten seeds: the day-1 note names the line's real ends and cargo, the real fords and a real day-1 problem; no sentence false on any |
+| C27 | **A story to tell** (existing) | After a session your record names three things you did that changed a place. The letters are the record |
+
+**Not in this:** no second voice beside the chairman's; no letters mid-term (a correspondent who speaks when you build is a tutorial on a timer); no eras -- the arc is your own growth choking your corridors; no ending -- replacement ends a career, not the save, and the next appointee inherits your network. He writes the next of these.
+
+**Order:** C32 as a test; the term letter (everything it reads exists); the handover (each clause checked against what `region.ts` draws, its railway clause from the stations); then and now.
+
 ### Ideas parked (yours, 2026-10-24), with where they'd fit
 
 - **Private traffic** ("we did not account for other humans driving on our roads"). Next after the mandate. The original 3D game's Module 12 (`661492b`) is the design to reuse:
@@ -1180,6 +1250,8 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 
 | Date | Decision | Status |
 | --- | --- | --- |
+| 2026-10-30 | The correspondent: Revision 5's voice question settled -- one correspondent, the Permanent Secretary of the Ministry of Transportation, who writes the day-1 handover and every term's letter, his stance shifting on your record; he never names a control (C32) and every clause is read from the seed's state. Step 4 rebuilt around him. Open question 6 answered by the handover note and the state-triggered hints already built: no tutorial. Amended in review: C32 tests the grammar of instructions, not a word list; letters at most three clauses, none repeated unchanged; nothing saved. The handover's railway clause reads the old line's stations | Agreed 2026-10-30 |
+| 2026-10-30 | Stations on the old line: inherited only, placed with the line (at a town, out of it with an old road, or at the ruin of a town that's gone); restored stretch by stretch; reached by a feeder or a halt (distance counts as a ride); a station where riders change can grow a town. Not in: stations you build, station rungs, a stop costing a train time | Agreed 2026-10-30 |
 | 2026-10-25 | The look, after trying it: baked sprites (pictures) dropped ("I don't like it"); a live 3D dummy (lab3d.html: seed 2418 in three.js, Quaternius's CC0 models, real relief, rivers and roads, vehicles driving) was "encouraging". Interleaved with the core game: the union next, and alongside it a watch-only 3D view of your real games (the live simulation drawn in 3D; building stays on the 2D map), then interaction in 3D, then 3D as the default once it does everything. Assets procedural, in the same low-poly style: the models varied per town (paint, roofs, heights), Nigerian buildings generated in code (zinc-roofed bungalows and compound walls, shophouses, concrete blocks with roof tanks, mosque, church, market stalls, a motor park), and the missing vehicles (keke, okada with rider, lorry, tanker, danfo with roof rack). Reverses "a flat map; 3D waits" in stages | Agreed 2026-10-25 |
 | 2026-10-24 | Revision 5 agreed: terms of 120 days; replaced after two failed terms in a row. The cuts table (fewer systems to hold) awaits your marks, item by item | Agreed 2026-10-24 |
 | 2026-10-24 | After a designer's review of the region playtest (482 days, map 2418): "a very good simulation with no game around it yet" -- no stakes, pressure, arc or counterpart. Your answers: the builder's story ("the story they want to tell"); a save you keep returning to (Transport Fever, Subway Builder), not one session; sacking possible as the city's transport manager; the union works with you for its workers' welfare, or is against you. Principles §2 amended: goals from the world's own problems, never scripted (was "no authored goal") | Agreed 2026-10-24; what to build from it not yet decided |
