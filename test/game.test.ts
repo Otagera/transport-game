@@ -60,6 +60,7 @@ import { goodsOnTheWay, haulBreak, haulDistance, haulPlans, legReach, nextStop, 
 import { buildYard } from "@engine/game/yards";
 import { backToStation, foundStationTowns, stationOpen } from "@engine/game/stations";
 import { correspondentName, handoverNote, notATutorial, predecessors, termLetter } from "../src/game/correspondent";
+import { thenAndNowSvg } from "../src/game/thenandnow";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
@@ -4996,5 +4997,21 @@ describe("the correspondent's stance, letter by letter", () => {
     w.term!.history = [good, bad];
     expect(termLetter(w, good).paragraphs[0]).not.toContain("The state has noticed");
     expect(termLetter(w, bad).paragraphs[0]).toContain("The state has noticed");
+  }, 60_000);
+});
+
+describe("then and now (src/game/thenandnow.ts; brief, Revision 5, step 4 rebuilt)", () => {
+  test("day 1 faint under today: every inherited road as found, what you built over it, each town's day-1 ring, the letter's places pinned", () => {
+    const w = startGame(gameMap(GAME_MAP, 4, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, startingFunds: 1e7 });
+    const towns = [...w.towns.values()].filter((t) => !t.industry);
+    const before = thenAndNowSvg(w, []);
+    const inherited = w.simulation.map.segments.filter((s) => s.type === "road" && s.provenance === "inherited" && s.retiredAt === undefined).length;
+    expect((before.match(/class="tn-then"/g) ?? []).length).toBe(inherited);
+    expect((before.match(/class="tn-built"|class="tn-paved"/g) ?? []).length).toBe(0);
+    expect(applyAction(w, { kind: "road", a: towns[0]!.id, b: towns[5]!.id, alignment: "cheapest" }).ok).toBe(true);
+    const after = thenAndNowSvg(w, [towns[0]!.id]);
+    expect((after.match(/class="tn-built"/g) ?? []).length).toBeGreaterThan(0);
+    expect((after.match(/class="tn-was/g) ?? []).length).toBe(towns.filter((t) => w.startPopulation.has(t.id)).length);
+    expect(after).toContain(`>${towns[0]!.name}</text>`);
   }, 60_000);
 });

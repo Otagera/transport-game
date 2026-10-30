@@ -60,3 +60,28 @@
 .letter p { margin: 0 0 10px; }
 .letter .sig { margin: 14px 0 0; font-style: italic; }
 .letter .sig span { display: block; font-style: normal; font-family: var(--label-font); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+
+/* Then and now, beside the letter (thenandnow.ts): day 1 faint under today. */
+.letterwith { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.letterwith .letter { flex: 1 1 340px; margin-top: 6px; }
+.thenandnow { margin: 6px 0 18px; flex: 0 0 auto; }
+.thenandnow svg { display: block; max-width: 100%; height: auto; }
+.thenandnow .tn-land { fill: var(--map-land, var(--surface)); stroke: var(--line); }
+.thenandnow .tn-water { fill: none; stroke: var(--map-water); stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
+.thenandnow .tn-then { fill: none; stroke: var(--muted); stroke-width: 1; opacity: 0.45; stroke-dasharray: 2 2; }
+.thenandnow .tn-then-rail { fill: none; stroke: var(--muted); stroke-width: 1; opacity: 0.45; stroke-dasharray: 1 3; }
+.thenandnow .tn-built { fill: none; stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; }
+.thenandnow .tn-paved { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; }
+.thenandnow .tn-rail { fill: none; stroke: var(--you); stroke-width: 2.2; stroke-dasharray: 5 2; }
+.thenandnow .tn-was { fill: none; stroke: var(--surface); stroke-width: 1.2; }
+.thenandnow .tn-was.tn-shrank { stroke: var(--bad); stroke-dasharray: 1.5 1.5; }
+.thenandnow .tn-town { fill: var(--ink-2); opacity: 0.85; }
+.thenandnow .tn-town.tn-new { fill: var(--good); }
+.thenandnow .tn-pin circle { fill: none; stroke: var(--warn); stroke-width: 2; }
+.thenandnow .tn-pin text { font: 600 11px system-ui, sans-serif; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.thenandnow figcaption { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.thenandnow .tn-key { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--ink-2); vertical-align: middle; margin: 0 4px 0 8px; }
+.thenandnow .tn-key:first-child { margin-left: 0; }
+.thenandnow .tn-key.then { border-top: 1px dashed var(--muted); }
+.thenandnow .tn-key.paved { border-top-width: 3px; border-color: var(--ink); }
+.thenandnow .tn-key.rail { border-top: 2px dashed var(--you); }

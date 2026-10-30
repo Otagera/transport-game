@@ -224,6 +224,11 @@ the grammar of an instruction (a key in brackets, the controls' names, a price, 
 asserted over every template on five seeds and every stance. The verdict screen's `handover`
 mode opens on day 1 before the pledges, once a map (`localStorage`, `game:handover:{seed}`), and
 from "Your record" any time; a term's letter heads its verdict (`.letter`, `--letter-font`).
+**Then and now** (`src/game/thenandnow.ts`), beside a term's letter: an SVG of the region -- the
+rivers; the inherited roads and old line as found (`provenance === "inherited"`, kept by every split),
+faint; what you built and paved, and track running, over them; each town's dot now with its day-1
+ring (`world.startPopulation`) on top, red and dashed where it shrank; the letter's towns
+(`TermRecord.towns`) pinned, labelled on the side with room. Read off today's map, nothing stored.
 
 ## 6. Ambient traffic rendering
 

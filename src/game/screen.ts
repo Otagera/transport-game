@@ -24,6 +24,7 @@ import { steelBreak, steelDemand, steelImports, steelServed } from "@engine/game
 import { goodsOnTheWay, haulBreak } from "@engine/game/haulage";
 import { stationOf, stationOpen } from "@engine/game/stations";
 import { handoverNote, termLetter, type Letter } from "./correspondent";
+import { thenAndNowSvg } from "./thenandnow";
 import { railPath } from "@engine/game/rail";
 import { roadCapacity } from "@engine/game/congestion";
 import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
@@ -980,7 +981,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       : `The state's verdict on term ${last.number}.`;
     verdictEl.innerHTML = `<div class="top"><div class="title">${mode === "replaced" ? "The state has replaced you" : `Term ${last.number}: the verdict`}</div>
       <button class="primary" data-verdict="close">${mode === "replaced" ? "Keep playing ▸" : `Begin term ${term.number} ▸`}</button></div>
-      ${letterHtml(termLetter(world, last))}
+      <div class="letterwith">${letterHtml(termLetter(world, last))}${thenAndNowSvg(world, (last.towns ?? []).map((t) => t.id))}</div>
       <p class="lede muted">${esc(lede)}</p>
       <div class="heroes">
         <div class="hero"><div class="k">Pledges kept</div><div class="v num">${last.kept.length} of ${last.kept.length + last.missed.length}</div></div>
