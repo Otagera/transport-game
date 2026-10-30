@@ -1314,6 +1314,16 @@ replays as played. Seed 0 stays the hand-made map, alone.
   river no longer ends in a 14-cell mouth for a sea that's gone (version 6), and its sharp bends
   are eased like the rest; the Middle Belt's plateau stands clear of the water. The names change nothing
   in play (twelve seeds, 15 days unplayed: the same as version 8).
+- **Version 10: the home cluster's land** (`region.ts withHomeLand`, `ReliefDef.home`; the fidelity
+  scope, step 4: "the flat box round your start"). Versions 8-9 left the home box as the seed drew
+  it, so the land faded in past it and the box read as a flat patch. Now the box gets the region's
+  relief at a share, its old roads kept level inside it (to 15% within 5 cells), tried from most land
+  to least (0.85, 0.65, 0.45, 0.3, 0.15) until a road along each leg of the trunk, planned as you'd
+  plan one, costs at most 8% more to lay than on the flat box: the ladder's prices, measured on the
+  trunk, hold. All twelve seeds take 0.85; drawing a map costs ~0.2 s more. Twelve seeds, 15 days
+  unplayed, version 9 -> 10: sites 196 -> 199, working 99 -> 99, fuel 33.6% -> 34.8%, trips 737 ->
+  733; **a road between two home towns ₦272 -> ₦315** (hills ₦1 -> ₦42), beyond the box unchanged
+  (₦296) -- the early game's roads dearer by a sixth where the land rises. Tested.
 - **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
   region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
   a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought
