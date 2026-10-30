@@ -4,6 +4,7 @@ import { createRng, type Rng } from "../map/random";
 import { UnionFind } from "../map/connectivity";
 import { planCorridor } from "../pathing/plan";
 import { buildGameTerrain } from "./terrain";
+import { withFictionalNames } from "./names";
 import {
   EDGE_MARGIN,
   MIN_SPACING,
@@ -108,6 +109,8 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
     // Version 7: the land first -- a relief its rivers lie in, and rivers that join as rivers do.
     if (version >= 7 && map.home) map = landFirst(map, seed);
     map = laidOverLand(map);
+    // Version 8: fictional names, true to the region (names.ts) -- never real towns in places they aren't.
+    if (version >= 8) map = withFictionalNames(map, seed);
   }
   // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
   return tuning.riverValleys ? { ...map, terrain: { ...map.terrain, valleys: true } } : map;
@@ -887,7 +890,7 @@ function landFirst(map: GameMapDef, seed: number): GameMapDef {
     // A river that never comes near the home box has its sharp bends eased (a V where it met a
     // tributary read as a kink, not a river): two more passes of corner-cutting, kept only where
     // every town stays clear of it. The sea's coast is left as drawn.
-    if (Math.max(...widths) > 12 || r.points.some(([x, y]) => toBox({ x, y }, map.home!) < 3)) return own;
+    if ([...widths].sort((a, b) => a - b)[Math.floor(widths.length / 2)]! > 12 || r.points.some(([x, y]) => toBox({ x, y }, map.home!) < 3)) return own;
     const eased = chaikin(r.points, widths, 2);
     // Eased everywhere but near a town: there each point goes back to the drawn line's nearest
     // (the corner-cutting draws a bend's line inward, toward a town on its inside).
@@ -912,14 +915,18 @@ function landFirst(map: GameMapDef, seed: number): GameMapDef {
         const u = ((t.x - p.x) * c + (t.y - p.y) * sn) / (p.rx + pad), v = (-(t.x - p.x) * sn + (t.y - p.y) * c) / (p.ry + pad);
         return u * u + v * v <= 1;
       };
-      if (toBox(p, box) < Math.max(p.rx, p.ry) + 12 || map.towns.some((t) => inside(t, 6))) continue;
+      // Clear of the towns and of the water: a river through it cut it in two (seed 2418).
+      const wet = rivers.some((r) => r.points.some(([x, y]) => inside({ x, y }, 3 + Math.max(...r.widths) / 2)));
+      if (toBox(p, box) < Math.max(p.rx, p.ry) + 12 || map.towns.some((t) => inside(t, 6)) || wet) continue;
       relief.plateaus = [p];
       break;
     }
   }
 
   // The rivers as a system: which join which, downstream.
-  const sea = rivers.find((r) => Math.max(...r.widths) > 12);
+  // The sea: wide along its length (its typical width), not a river with one wide mouth.
+  const typical = (ws: number[]) => [...ws].sort((a, b) => a - b)[Math.floor(ws.length / 2)]!;
+  const sea = rivers.find((r) => typical(r.widths) > 12);
   const widthNear = (r: (typeof rivers)[number], [x, y]: [number, number]) => {
     let best = Infinity, at = 0, w = r.width, along = 0;
     for (let k = 1; k < r.points.length; k += 1) {
@@ -947,6 +954,9 @@ function landFirst(map: GameMapDef, seed: number): GameMapDef {
       seg += 1;
     }
   };
+  // No sea, no estuary: a landlocked map's rivers (version 6) had kept the mouth widened for a sea
+  // that's gone -- a 14-cell blob at the map's edge. Without a sea a river keeps a river's width.
+  if (!sea) for (const r of rivers) r.widths = r.widths.map((w) => Math.min(w, 5.5));
   const reshaped = rivers.map((river) => {
     if (river === sea) return river;
     // Its mouth: the end that meets another river (not the sea's: an estuary keeps its width).
@@ -955,7 +965,9 @@ function landFirst(map: GameMapDef, seed: number): GameMapDef {
       for (const host of rivers) {
         if (host === river || host === sea) continue;
         const near = widthNear(host, river.points[end]!);
-        if (near.distance <= near.width / 2 + 1.5) ends.push({ end, host, near });
+        // Within 4 cells, not touching: version 2's meanders swung some hosts off their tributaries'
+        // mouths, leaving a gap of land (your look: "the flow is weird"). The mouth goes in below.
+        if (near.distance <= near.width / 2 + 4) ends.push({ end, host, near });
       }
     }
     const join = ends[0];

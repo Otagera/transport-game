@@ -3166,7 +3166,8 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
 
   test("the chains are the home cluster's: every site in its box, the port the home city's (map 4882's oilfield sat in the region's far corner)", () => {
     for (const seed of [3, 11, 4882]) {
-      const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
+      // Version 7: regionInfo draws the region with its real names; version 8 renames them (names.ts).
+      const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 0 });
       const box = w.home!;
       const info = regionInfo(GAME_MAP, seed);
       expect(w.port).toBe(info.home.map.port!); // inland, a dry port
@@ -3204,7 +3205,8 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
   }, 60_000);
 
   test("a region plays: started as a new game is, a bus in the home cluster carries riders", () => {
-    const w = startRun(GAME_MAP, 3, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 0 });
+    // Version 7: regionInfo's trunk is named as the region draws it; version 8 renames the towns (names.ts).
+    const w = startRun(GAME_MAP, 3, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 0 });
     expect(w.width).toBe(REGION_WIDTH);
     expect(w.home).toBeDefined();
     const info = regionInfo(GAME_MAP, 3);
@@ -4547,7 +4549,8 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
 
   test("your buses go round a flooded ford by a dry road you built, and back when the water falls", () => {
     // Seed 7585: the Ikire ford on the Ikire-Itori road; a high-bridged road Ikire-Ipetu is the other way across.
-    const w = startRun(GAME_MAP, 7585, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, floodFordsPerSeason: 1, floodDays: 8 });
+    // Version 7: the towns by the names it drew (version 8 makes up its own, names.ts).
+    const w = startRun(GAME_MAP, 7585, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, floodFordsPerSeason: 1, floodDays: 8 });
     const id = (name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
     const [ikire, itori, ipetu] = [id("Ikire"), id("Itori"), id("Ipetu")];
     expect(applyAction(w, { kind: "road", a: ikire, b: ipetu, alignment: "cheapest", high: true }).ok).toBe(true);
@@ -4585,7 +4588,7 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
 });
 
 describe("named crossings, straight or round, the ridge's limestone (crossings.ts; brief, Revision 5, step 6)", () => {
-  const start = (seed: number, overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...overrides });
+  const start = (seed: number, overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...overrides });
   const named = (w: GameWorld, name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
 
   test("each river's crossings are named, bank to bank within a bridge's span, clear of the fords", () => {
@@ -4649,7 +4652,7 @@ describe("named crossings, straight or round, the ridge's limestone (crossings.t
 
 describe("a new road over water: a causeway that floods, or a high bridge (floods.ts; brief, Revision 5, step 6)", () => {
   const quick = { floodFirstDayMin: 4, floodFirstDayMax: 5, floodWarnDays: 2, floodDays: 3, floodEveryDays: 10 };
-  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 8510, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, ...overrides });
+  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 8510, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, ...overrides });
   const named = (w: GameWorld, name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
   const until = (w: GameWorld, kind: GameEvent["kind"], days = 20) => {
     for (let i = 0; i < days * SECONDS_PER_GAME_DAY * 30; i += 1) {

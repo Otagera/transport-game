@@ -1262,6 +1262,22 @@ replays as played. Seed 0 stays the hand-made map, alone.
   land-first.lab.ts`): sites 199 -> 203, working 95 -> 95, fuel 34.5% -> 34.9%, trips 592 -> 582 a
   day; a road between two towns beyond the home box ₦240 -> ₦279 on average (hills ₦0 -> ₦40).
   `scripts/region-sheet.ts` takes `MAP_VERSION=6` to draw the older version beside it.
+- **Version 8: fictional names, true to the region** (`names.ts withFictionalNames`; the fidelity
+  scope, A5; your word, 2026-10-30: "fictional but taking into account how Nigeria is" -- real names
+  "will confuse people when they see real names but not like-for-like geography"). Every map had
+  named its towns from a list of its region's real towns, and put Lokoja and Numan where they
+  aren't. Now each town's name is made from its region's sounds: Yoruba in the south-west (Oke-,
+  Ile-, Iju-; open syllables), Igbo in the south-east (Umu-, Nk-, Obi-; gw, kw, nw), Ijaw's -ama and
+  -biri, Ibibio's Ikot and Urhobo's gh and rh in the south-south, Tiv and Nupe's gb, kp, ts in the
+  Middle Belt, Hausa's Kafin, Tudun, Birnin in the north, Kanuri and Fulfulde's Ng-, -ram, Mayo in
+  the north-east. From the seed (biggest town first), never a name from the old lists or the
+  country's best-known towns, never two alike; every road, rail, port and cluster renamed with its
+  towns. Nothing else changes. The border crossings and the coast road keep their names for now.
+  Tested (`test/names.test.ts`). Also in version 8, on the rivers (your look): a tributary's mouth
+  that version 2's meanders had left up to 4 cells from its host now joins it; a landlocked map's
+  river no longer ends in a 14-cell mouth for a sea that's gone (version 6), and its sharp bends
+  are eased like the rest; the Middle Belt's plateau stands clear of the water. Twelve seeds, 15 days
+  unplayed, version 6 -> 8: the same as 6 -> 7 (sites 203, working 95, fuel 34.9%, trips 582).
 - **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
   region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
   a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought
