@@ -34,6 +34,15 @@ standing script: `architecture-boundaries.test.ts`). In `scripts/lab/` today: `c
 the 2-day forecast predict a month). The standing instruments stay in `scripts/` (bots, the
 strategist, run, play, probes, the lever audit, the region sheet, shots, the verify checks).
 
+## The gym
+
+`gym/` holds the brief's checks as scenarios with verdicts a machine reads (the Shallot
+assessment, 2026-10-30): each `*.gym.ts` names its check, seeds, horizon and the assertion that
+passes it; `bun run gym [check]` plays them -- the strategist with `GYM=1`, one JSON line a map --
+and prints a table, exiting non-zero on a failure. Minutes, not seconds: on demand, never in
+`verify`. First in: C14, days 60-150 as the brief has it and 150-300 where status.md had it
+failing. A check is added one at a time, as it earns a scenario.
+
 ## Hard rules (enforced, not just convention)
 
 1. **`engine/` never imports a page or the DOM.** `test/architecture-boundaries.test.ts`

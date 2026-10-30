@@ -445,6 +445,8 @@ for (const seed of SEEDS) {
     rungs.set(r, (rungs.get(r) ?? 0) + 1);
   }
   console.log(`  C11 (amended) the chains' share of the original towns' growth by day 150: ${c11Share ? `${Math.round(c11Share.share * 100)}% (${Math.round(c11Share.unlocked)}k of ${Math.round(c11Share.grown)}k grown; wanted >= 20%)` : "n/a (run to day 150)"}`);
+  // For the gym (gym/run.ts): the measures as one line a machine reads.
+  if (process.env.GYM) console.log(`GYM ${JSON.stringify({ seed, days: DAYS, c14: { early: q1, late: q2 }, c11: { chains: c11Share?.share ?? null, goods80to100: share(80, 100) }, c2: { waited } })}`);
   c11Share = null;
   console.log(`  C11 goods share of income, days 80-100: ${Math.round(share(80, 100) * 100)}% (wanted 20-40%)`);
   console.log(`  C14 longest stretch with nothing built (lorries, selling, upkeep aside), days 60-150: ${q1.length} days from day ${q1.start} (wanted < 15); after 150: ${q2.length} from day ${q2.start}`);

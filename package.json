@@ -20,7 +20,8 @@
     "verify:bundle": "node scripts/verify-prod-bundle.mjs",
     "verify:look": "bun scripts/verify-look.ts",
     "verify": "bun run typecheck && bun test && bun run build && bun run verify:bundle && bun run verify:look",
-    "shots": "bun scripts/shots.ts"
+    "shots": "bun scripts/shots.ts",
+    "gym": "bun gym/run.ts"
   },
   "type": "module"
 }
