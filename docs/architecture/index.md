@@ -10,6 +10,8 @@ whichever deep-dive covers the area you're touching:
   and cards. §1-6 describe the retired 3D game.
 - [dev-studio.md](dev-studio.md) §4-5 — the design lab and the information lab (dev-only
   pages). §1-3 describe the retired 3D game's studio.
+- [look.md](look.md) — **the visual contract** (2026-10-30): palette (chrome and signal), type, spacing,
+  the four control roles, the Board layout, motion, the 3D view's order, and the checks that hold it.
 - [content.md](content.md) — retired with the 3D game (its Zod content schemas).
 
 **2026-10-23, the carry-over:** the slice became the game. The original 3D game -- its
