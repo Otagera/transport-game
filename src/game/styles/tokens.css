@@ -42,6 +42,16 @@
   --food: #1e7a4f;
   --trade: #1c6ca8;
 
+  /* Your routes' swatches in the lists (render.ts routeColor): a hue each, from the signal layer */
+  --route-1: #1c6ca8;
+  --route-2: #1e7a4f;
+  --route-3: #6b4fa8;
+  --route-4: #dd6b20;
+  --route-5: #2f8fc9;
+  --route-6: #5f3dc4;
+  --route-7: #b8335e;
+  --route-8: #4f8a2b;
+
   /* Series: the revenue screen's charts, the goods overlay's chains (fuel --s5, building --s4, food --s3) */
   --s1: #1c6ca8;
   --s2: #dd6b20;

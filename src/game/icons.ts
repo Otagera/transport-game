@@ -77,7 +77,7 @@ export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }
 export type SiteState = "working" | "idle" | "short";
 
 /** A site: a rounded tile `size` across, centred on (x, y), its glyph in it. */
-export function drawSite(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, glyph: Glyph, state: SiteState, surface = "#ffffff"): void {
+export function drawSite(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, glyph: Glyph, state: SiteState, surface = tokenColor("--on-fill")): void {
   const color = FAMILY_COLOR[GLYPHS[glyph].family];
   const s = size;
   ctx.save();
@@ -95,14 +95,14 @@ export function drawSite(ctx: CanvasRenderingContext2D, x: number, y: number, si
     ctx.stroke();
     ctx.setLineDash([]);
   }
-  const ink = state === "idle" ? color : "#ffffff";
+  const ink = state === "idle" ? color : tokenColor("--on-fill");
   ctx.translate(x, y);
   ctx.scale(s / 24, s / 24); // glyphs are drawn on a 24-unit tile, centred
   drawGlyph(ctx, glyph, ink);
   ctx.restore();
   if (state === "short") {
     ctx.save();
-    ctx.fillStyle = "#c77700";
+    ctx.fillStyle = tokenColor("--warn");
     ctx.beginPath();
     ctx.arc(x + s / 2, y - s / 2, Math.max(3, s * 0.2), 0, Math.PI * 2);
     ctx.fill();
@@ -158,7 +158,7 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
       rock([[2, 8], [1, 2], [4, -1], [8.5, 1], [9, 8]]);
       rock([[-4, -2], [-3, -7], [1, -9], [4, -6], [3, -2], [0, 0]]);
       // The facets: a line of the tile's colour across each stone, so they read as broken rock, not blobs.
-      ctx.strokeStyle = ink === "#ffffff" ? FAMILY_COLOR.building : "#ffffff";
+      ctx.strokeStyle = ink === tokenColor("--on-fill") ? FAMILY_COLOR.building : tokenColor("--on-fill");
       ctx.lineWidth = 1.1;
       for (const [x1, y1, x2, y2] of [[-8, 3, -3, 5], [2, 3, 7, 5], [-3, -6, 2, -4]] as const) path(() => { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }, false);
       break;
@@ -181,7 +181,7 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
         path(() => { ctx.moveTo(0, 4); ctx.lineTo(0, 9); }, false);
       } else { // a pod
         path(() => ctx.ellipse(0, 0, 4.8, 8, 0.5, 0, Math.PI * 2));
-        ctx.strokeStyle = ink === "#ffffff" ? FAMILY_COLOR.food : "#ffffff";
+        ctx.strokeStyle = ink === tokenColor("--on-fill") ? FAMILY_COLOR.food : tokenColor("--on-fill");
         ctx.lineWidth = 1.2;
         path(() => { ctx.moveTo(-3.5, -5); ctx.quadraticCurveTo(0, 0, 3.5, 5); }, false);
       }
@@ -237,7 +237,7 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
       ctx.fillRect(-6, -8, 12, 2.6);
       ctx.fillRect(-6, 5.4, 12, 2.6);
       ctx.fillRect(-4, -5.4, 8, 10.8);
-      ctx.strokeStyle = ink === "#ffffff" ? FAMILY_COLOR.trade : "#ffffff";
+      ctx.strokeStyle = ink === tokenColor("--on-fill") ? FAMILY_COLOR.trade : tokenColor("--on-fill");
       ctx.lineWidth = 1;
       for (const yy of [-3, 0, 3]) path(() => { ctx.moveTo(-4, yy); ctx.lineTo(4, yy + 1.5); }, false);
       break;
@@ -258,7 +258,7 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
       break;
     case "warehouse": // a container
       ctx.fillRect(-8, -5, 16, 10);
-      ctx.strokeStyle = ink === "#ffffff" ? FAMILY_COLOR.trade : "#ffffff";
+      ctx.strokeStyle = ink === tokenColor("--on-fill") ? FAMILY_COLOR.trade : tokenColor("--on-fill");
       ctx.lineWidth = 1.2;
       for (const xx of [-4, 0, 4]) path(() => { ctx.moveTo(xx, -3.5); ctx.lineTo(xx, 3.5); }, false);
       break;
@@ -367,8 +367,8 @@ export type Badge = "port" | "border" | "farm";
 export const BADGE_NAME: Record<Badge, string> = { port: "Seaport", border: "Border crossing", farm: "Farm town" };
 
 /** A small round badge at (x, y), `size` across. */
-export function drawBadge(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, badge: Badge, surface = "#ffffff"): void {
-  const color = badge === "farm" ? FAMILY_COLOR.food : badge === "port" ? FAMILY_COLOR.trade : "#4a5563";
+export function drawBadge(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, badge: Badge, surface = tokenColor("--on-fill")): void {
+  const color = badge === "farm" ? FAMILY_COLOR.food : badge === "port" ? FAMILY_COLOR.trade : tokenColor("--ink-2");
   ctx.save();
   ctx.beginPath();
   ctx.arc(x, y, size / 2, 0, Math.PI * 2);
@@ -379,8 +379,8 @@ export function drawBadge(ctx: CanvasRenderingContext2D, x: number, y: number, s
   ctx.stroke();
   ctx.translate(x, y);
   ctx.scale(size / 24, size / 24);
-  ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "#ffffff";
+  ctx.fillStyle = tokenColor("--on-fill");
+  ctx.strokeStyle = tokenColor("--on-fill");
   ctx.lineWidth = 2.4;
   ctx.lineCap = "round";
   if (badge === "port") { // an anchor

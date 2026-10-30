@@ -667,7 +667,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const scroll = panelEl.scrollTop;
     if (selected && !exists(selected)) selected = null;
     if (selected) {
-      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}<div class="pane"><button class="back" data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`);
+      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}<div class="pane"><button data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`);
     } else {
       const tabs = `<div class="tabs">${(["routes", "towns", "sites"] as const).map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${t[0]!.toUpperCase()}${t.slice(1)}</button>`).join("")}</div>`;
       patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`);
@@ -998,7 +998,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="hero"><div class="k">Pledges kept</div><div class="v num">${last.kept.length} of ${last.kept.length + last.missed.length}</div></div>
         <div class="hero"><div class="k">The towns</div><div class="v num">${signed(grown(last))}</div><div class="k">${int(last.peopleFrom)}k → ${int(last.peopleTo)}k</div></div>
         <div class="hero"><div class="k">Grant for term ${term.number}</div><div class="v num">${last.grant !== undefined ? nairaK(last.grant) : "—"}</div></div>
-        <div class="hero"><div class="k">Standing</div><div class="v" style="font-size:16px">${esc(standing)}</div></div>
+        <div class="hero"><div class="k">Standing</div><div class="v" style="font-size:var(--fs-body)">${esc(standing)}</div></div>
       </div>
       <h2>Your pledges</h2>${pledges ? `<ul class="pledges">${pledges}</ul>` : `<p class="muted">You made none this term.</p>`}
       <h2>Term ${term.number}'s pledges on offer: pledge up to ${MAX_COMMITTED}</h2>${pledgeChoices()}${grantLine()}

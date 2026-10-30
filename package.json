@@ -17,7 +17,9 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "preview": "vite preview",
-    "verify:bundle": "node scripts/verify-prod-bundle.mjs"
+    "verify:bundle": "node scripts/verify-prod-bundle.mjs",
+    "verify:look": "bun scripts/verify-look.ts",
+    "verify": "bun run typecheck && bun test && bun run build && bun run verify:bundle && bun run verify:look"
   },
   "type": "module"
 }

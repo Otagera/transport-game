@@ -63,7 +63,7 @@ Two layers, kept apart. **A restyle may change chrome freely and may never chang
 | site families | `#C0392B` fuel · `#6B4FA8` building · `#1E7A4F` food · `#1C6CA8` trade | the four chains (today hard-coded in `icons.ts` `FAMILY_COLOR`: to become tokens) |
 | `--map-ground` / `--map-water` / `--map-hill` | `#F2EDE1` / `#2C4A57` / `#9A8E72` | terrain |
 
-Route line colours (`labels.ts`) keep their own slots and are drawn from the signal layer.
+Route line colours (`labels.ts`) keep their own slots and are drawn from the signal layer; the lists' route swatches are `--route-1` to `--route-8`.
 
 ---
 
@@ -187,8 +187,10 @@ The same palette, the same world. `shapes3d.ts` reads the tokens above rather th
 
 ## 9. Enforcement
 
-In `bun run verify` (to add: typecheck, test, build, verify:bundle, and these), so the
-direction holds without anyone remembering it.
+In `bun run verify` (typecheck, test, build, verify:bundle, then these: `scripts/verify-look.ts`,
+`bun run verify:look` alone), so the direction holds without anyone remembering it. Until the 3D
+view's tokens land (§8, the look's step 5), `shapes3d.ts` and `view3d.ts` are listed as pending
+rather than failing; the list must be empty when that step lands.
 
 | Check | Fails when |
 | --- | --- |

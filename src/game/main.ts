@@ -149,7 +149,7 @@ const world = await (async () => {
   const bar = loading.querySelector<HTMLElement>(".bar i")!;
   // A vehicle rides the bar, in the map's look (its pills): your bus, a danfo, or your train on track.
   const ride = (["bus", "danfo", "train"] as const)[Math.floor(Math.random() * 3)]!;
-  const pill = (x: number, w: number, fill: string) => `<rect x="${x}" y="2" width="${w}" height="12" rx="5" style="fill:${fill}" stroke="#fff" stroke-width="1.5"/>${Array.from({ length: Math.floor((w - 8) / 6) }, (_, k) => `<rect x="${x + 4 + k * 6}" y="5" width="4" height="3.5" rx="1" fill="#fff" opacity="0.85"/>`).join("")}`;
+  const pill = (x: number, w: number, fill: string) => `<rect x="${x}" y="2" width="${w}" height="12" rx="5" style="fill:${fill};stroke:var(--on-fill)" stroke-width="1.5"/>${Array.from({ length: Math.floor((w - 8) / 6) }, (_, k) => `<rect x="${x + 4 + k * 6}" y="5" width="4" height="3.5" rx="1" style="fill:var(--on-fill)" opacity="0.85"/>`).join("")}`;
   const vehicle = ride === "train"
     ? `<svg width="111" height="24" viewBox="0 0 74 16">${pill(1, 34, "var(--you)")}${pill(38, 34, "var(--you)")}</svg>`
     : `<svg width="54" height="24" viewBox="0 0 36 16">${pill(1, ride === "bus" ? 34 : 26, ride === "bus" ? "var(--you)" : "var(--informal)")}</svg>`;

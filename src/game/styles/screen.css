@@ -90,7 +90,7 @@ tr.row:hover td { background: var(--surface-2); }
 @keyframes smoke { 0% { opacity: 0.7; transform: translateY(0) scale(0.6); } 100% { opacity: 0; transform: translateY(-14px) scale(1.4); } }
 .waiting { padding-bottom: var(--sp-1); margin-bottom: var(--sp-2); border-bottom: 1px solid var(--line); }
 .waiting .problem { margin: var(--sp-2) 0; }
-.back { margin-bottom: var(--sp-2); }
+[data-back] { margin-bottom: var(--sp-2); }
 .bar3 { display: flex; height: 8px; border-radius: var(--radius-control); overflow: hidden; gap: 0; background: var(--surface); }
 .bar3 i { display: block; height: 100%; }
 .chart { margin: var(--sp-2) 0 var(--sp-3); }

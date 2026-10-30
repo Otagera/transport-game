@@ -76,8 +76,22 @@ export const COLORS = {
   food: token("--s3"),
 };
 
+/** The type steps (tokens.css --fs-*, look.md §3), for the map's own text; `tiny`, a badge's letter, scaled from the caption. */
+const FS = {
+  headline: token("--fs-headline"),
+  body: token("--fs-body"),
+  dense: token("--fs-dense"),
+  caption: token("--fs-caption"),
+  tiny: `${Math.round(parseFloat(token("--fs-caption")) * 0.64)}px`,
+};
+/** A colour token at an opacity, for the canvas (which can't mix a CSS variable). */
+function withAlpha(hex: string, alpha: number): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 /** The page's route swatches: every route is your blue on the map now; the list keeps a hue each to tell them apart. */
-const ROUTE_COLORS = ["#2a78d6", "#1baf7a", "#6250d6", "#eb6834", "#1c7ed6", "#5f3dc4", "#c2255c", "#2b8a3e"];
+const ROUTE_COLORS = Array.from({ length: 8 }, (_, k) => token(`--route-${k + 1}`));
 export function routeColor(index: number): string {
   return ROUTE_COLORS[index % ROUTE_COLORS.length]!;
 }
@@ -823,13 +837,13 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
     ctx.lineJoin = "round";
     ctx.strokeStyle = COLORS.surface;
     ctx.lineWidth = 3.5;
-    ctx.font = tier === "city" || tier === "regional" ? "700 13px system-ui, sans-serif" : "600 12px system-ui, sans-serif";
+    ctx.font = tier === "city" || tier === "regional" ? `700 ${FS.body} system-ui, sans-serif` : `600 ${FS.dense} system-ui, sans-serif`;
     ctx.strokeText(town.name, p.x, p.y + r + 7);
     ctx.fillStyle = COLORS.ink;
     ctx.fillText(town.name, p.x, p.y + r + 7);
     const trend = growthTrend(world, town.id);
     const arrow = trend === "growing" ? "▲" : trend === "shrinking" ? "▼" : "";
-    ctx.font = "11px system-ui, sans-serif";
+    ctx.font = `${FS.caption} system-ui, sans-serif`;
     ctx.strokeText(`${Math.round(town.population)}k ${arrow}`, p.x, p.y + r + 21);
     ctx.fillStyle = trend === "growing" ? COLORS.grow : trend === "shrinking" ? COLORS.jammed : COLORS.muted;
     ctx.fillText(`${Math.round(town.population)}k ${arrow}`, p.x, p.y + r + 21);
@@ -887,7 +901,7 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   if (state.problems?.has(site.id)) drawWaitingMark(ctx, p.x + r, p.y - r);
   if (state.pointed?.has(site.id)) drawPointedRing(ctx, p.x, p.y, r);
   // Its name when you point at it, or zoomed in where it clears the names already there.
-  ctx.font = "600 11px system-ui, sans-serif";
+  ctx.font = `600 ${FS.caption} system-ui, sans-serif`;
   const half = ctx.measureText(site.name).width / 2 + 2;
   const box = { x0: p.x - half, y0: p.y + r + 4, x1: p.x + half, y1: p.y + r + 18 };
   if (lit || (markScale * markScale >= 2 && !overlaps(box))) {
@@ -925,7 +939,7 @@ function drawWardens(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = COLORS.onFill;
-    ctx.font = "700 9px ui-monospace, monospace";
+    ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("W", mid.x - 16, mid.y + 0.5);
@@ -940,7 +954,7 @@ function drawTakenLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: 
     const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
     const taken = corridor.change === "taken";
     const text = taken ? "TAKEN" : "LOST";
-    ctx.font = "700 11px ui-monospace, monospace";
+    ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const width = ctx.measureText(text).width + 10;
@@ -957,7 +971,7 @@ function drawTakenLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: 
 function drawRoadNames(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
   if (!world.labels) return;
   ctx.save();
-  ctx.font = "italic 600 12px system-ui, sans-serif";
+  ctx.font = `italic 600 ${FS.dense} system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (const [key, label] of Object.entries(world.labels)) {
@@ -974,7 +988,7 @@ function drawRoadNames(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vi
     ctx.translate(at.x, at.y);
     ctx.rotate(angle);
     ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.strokeStyle = COLORS.surface;
     ctx.strokeText(label.name, 0, -9);
     ctx.fillStyle = COLORS.ink;
     ctx.fillText(label.name, 0, -9);
@@ -994,7 +1008,7 @@ function drawFords(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = "italic 10px system-ui, sans-serif";
+    ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
     ctx.strokeStyle = COLORS.labelMuted;
     ctx.lineWidth = 1.5;
     for (const c of world.crossings) {
@@ -1013,7 +1027,7 @@ function drawFords(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
   const floods = world.floods;
   if (!floods) return;
   ctx.save();
-  ctx.font = "700 11px ui-monospace, monospace";
+  ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (const ford of floods.fords) {
@@ -1027,10 +1041,10 @@ function drawFords(ctx: CanvasRenderingContext2D, world: GameWorld, view: View):
       // Quiet otherwise: a town's crossing named zoomed in, a site's short road's not at all.
       const site = world.towns.get(ford.a)?.industry || world.towns.get(ford.b)?.industry;
       if (site || markScale * markScale < 4) continue;
-      ctx.font = "italic 10px system-ui, sans-serif";
+      ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
       ctx.fillStyle = COLORS.labelMuted;
       ctx.fillText(ford.bridged ? ford.name.replace(/(ford|causeway)$/, "bridge") : ford.name, p.x, p.y + 12 * markScale);
-      ctx.font = "700 11px ui-monospace, monospace";
+      ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
       continue;
     }
     if (under || coming) {
@@ -1060,14 +1074,14 @@ function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view:
       lane.strikeUntil > now ? { text: "STRIKE", fill: COLORS.strike, ink: COLORS.onFill }
       : lane.strikeAt > now ? { text: `STRIKE DAY ${gameDay(world, lane.strikeAt)}`, fill: COLORS.slow, ink: COLORS.onFill }
       : last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY
-        ? { text: `struck day ${gameDay(world, last.startedAt)}${last.cost === null ? "" : last.cost < 1 ? " · no loss" : ` · ₦${Math.round(last.cost).toLocaleString()}`}`, fill: "rgba(201, 42, 42, 0.14)", ink: COLORS.strike }
+        ? { text: `struck day ${gameDay(world, last.startedAt)}${last.cost === null ? "" : last.cost < 1 ? " · no loss" : ` · ₦${Math.round(last.cost).toLocaleString()}`}`, fill: withAlpha(COLORS.jammed, 0.14), ink: COLORS.strike }
         : null;
     if (!tag) continue;
     const line = (roadChain(world, lane.a, lane.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
     if (line.length === 0) continue;
     const [, rest] = splitPolyline(line, polylineLength(line) / 2);
     const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
-    ctx.font = "700 11px ui-monospace, monospace";
+    ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const width = ctx.measureText(tag.text).width + 10;
@@ -1120,9 +1134,9 @@ function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, 
     // Laid out from the left edge: say so, whatever drew before (a centred tag once shifted the text off its box).
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.font = "12px system-ui, sans-serif";
+    ctx.font = `${FS.dense} system-ui, sans-serif`;
     const subWidth = forecast ? ctx.measureText(forecast.text).width : 0;
-    ctx.font = "600 13px system-ui, sans-serif";
+    ctx.font = `600 ${FS.body} system-ui, sans-serif`;
     // Wrapped at its " · " breaks to a readable width: a road's quote had grown past the map's
     // width (price, why, the crossing, the other way, riders), and ran off both edges.
     const lines: string[] = [];
@@ -1140,7 +1154,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, 
     const left = wide ? 240 : 0;
     const x = ghost.to.x + 12 + w > right - 8 ? Math.max(left + 8, ghost.to.x - 12 - w) : ghost.to.x + 12;
     const y = Math.max(8, ghost.to.y - 4 - h);
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.fillStyle = COLORS.surface;
     ctx.strokeStyle = ghost.ok ? COLORS.ghostOk : COLORS.ghostBad;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -1150,7 +1164,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, to: { x: number; y: number }, 
     ctx.fillStyle = ghost.ok ? COLORS.label : COLORS.ghostBad;
     lines.forEach((line, i) => ctx.fillText(line, x + 6, y + 15 + i * 17));
     if (forecast) {
-      ctx.font = forecast.tone === "pending" ? "italic 12px system-ui, sans-serif" : "600 12px system-ui, sans-serif";
+      ctx.font = forecast.tone === "pending" ? `italic ${FS.dense} system-ui, sans-serif` : `600 ${FS.dense} system-ui, sans-serif`;
       ctx.fillStyle = forecast.tone === "good" ? COLORS.forecastGood : forecast.tone === "bad" ? COLORS.ghostBad : COLORS.labelMuted;
       ctx.fillText(forecast.text, x + 6, y + 15 + lines.length * 17);
     }
@@ -1181,7 +1195,7 @@ function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: GameTown): vo
   // (map 949: three "Limestone (closed)" lay over Ikire's name and each other).
   if (markScale * markScale < 2) return;
   const text = `${town.name} (${town.industry ? "closed" : "empty"})`;
-  ctx.font = "italic 11px system-ui, sans-serif";
+  ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
   const half = ctx.measureText(text).width / 2 + 2;
   const box = { x0: p.x - half, y0: p.y + 6, x1: p.x + half, y1: p.y + 20 };
   if (overlaps(box)) return;
@@ -1197,7 +1211,7 @@ function drawMetroMark(ctx: CanvasRenderingContext2D, x: number, y: number, line
   ctx.arc(x + 5, y + 5, 5.5, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = COLORS.onFill;
-  ctx.font = "700 7px ui-monospace, monospace";
+  ctx.font = `700 ${FS.tiny} ui-monospace, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("M", x + 5, y + 5.5);
@@ -1213,7 +1227,7 @@ function drawParkMark(ctx: CanvasRenderingContext2D, x: number, y: number): void
   ctx.fillRect(x, y, 9, 9);
   ctx.strokeRect(x + 0.5, y + 0.5, 8, 8);
   ctx.fillStyle = COLORS.kept;
-  ctx.font = "700 7px ui-monospace, monospace";
+  ctx.font = `700 ${FS.tiny} ui-monospace, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("P", x + 4.5, y + 5);

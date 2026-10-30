@@ -17,7 +17,7 @@ body.in3d #overlays, body.in3d #overlay-caption, body.in3d #hint, body.in3d #key
 /* What the overlay shows, in a line under its buttons (outside review, 2026-10-26). */
 #overlay-caption { font-size: var(--fs-dense); line-height: 1.4; color: var(--ink-2); margin-top: calc(var(--sp-1) * -1); }
 #overlay-caption[hidden] { display: none; }
-.label3d { pointer-events: auto; cursor: pointer; font: 600 var(--fs-dense) system-ui, sans-serif; color: var(--ink); background: rgba(255,255,255,0.82); padding: 0 var(--sp-2); border-radius: var(--radius-control); white-space: nowrap; }
+.label3d { pointer-events: auto; cursor: pointer; font: 600 var(--fs-dense) system-ui, sans-serif; color: var(--ink); background: color-mix(in srgb, var(--surface) 85%, transparent); padding: 0 var(--sp-2); border-radius: var(--radius-control); white-space: nowrap; }
 .label3d.city { font-size: var(--fs-body); }
 .label3d.village { font-weight: 500; font-size: var(--fs-caption); opacity: 0.85; }
 .label3d.site { font-weight: 500; font-size: var(--fs-caption); color: var(--goods-ink); }
