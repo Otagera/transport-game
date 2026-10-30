@@ -57,11 +57,28 @@
   --road-busy: #dd6b20;
   --road-jammed: #c0392b;
 
+  /* Type: five steps and no others (look.md §3); a letter keeps --letter-font */
+  --fs-headline: 19px;
+  --fs-body: 13px;
+  --fs-dense: 12px;
+  --fs-caption: 11px;
+  --fs-label: 11px;
+
+  /* Spacing: a 4px unit (look.md §4) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
   /* Type and shape */
   --label-font: ui-monospace, SFMono-Regular, Menlo, monospace;
   --letter-font: Georgia, "Times New Roman", serif; /* the correspondent's letters */
-  --label-tracking: 0.12em;
-  --radius: 16px;
+  --label-tracking: 0.07em;
+  --radius: 8px; /* panels and cards */
+  --radius-control: 6px; /* buttons, chips */
 
   /* The map sits between the log (left) and the panel (right), under the strip (--top, measured). */
   --top: 92px;

@@ -1,0 +1,17 @@
+/*
+ * Controls: four roles, one style each (docs/architecture/look.md §5). Nothing else is a button.
+ *   quiet   -- every button by default: surface, a line border
+ *   primary -- the one committing action on a card: filled ink, cream text (class "primary")
+ *   toggle  -- one of a set, quiet, filled ink when on (class "on", or "active" in the toolbar)
+ *   tool    -- the toolbar's: quiet, its key in a kbd (class "tool")
+ * A key hint is always a <kbd>, never "(R)" in the label. Places style only size and spacing.
+ */
+button {
+  font: var(--fs-body)/1.4 system-ui, sans-serif; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-control); padding: var(--sp-1) var(--sp-2); cursor: pointer;
+}
+button:hover:not([disabled]) { border-color: var(--ink-2); }
+button[disabled] { opacity: 0.45; cursor: default; }
+button.primary, button.on, button.active { background: var(--ink); color: var(--on-fill); border-color: var(--ink); }
+button.primary:hover:not([disabled]), button.on:hover, button.active:hover { border-color: var(--ink); }
+kbd { font: var(--fs-caption) var(--label-font); opacity: 0.6; margin-left: var(--sp-1); }

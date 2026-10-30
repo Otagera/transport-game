@@ -955,7 +955,7 @@ canvas.addEventListener("click", (event) => {
     if (result.ok) {
       // A BRT fills only where enough travel along it (laneMinTripsPerDay): two OpenCode players ran them 5-10% full.
       const wanted = demandAlong(world, from, town) * SECONDS_PER_GAME_DAY;
-      const brt = wanted >= world.tuning.laneMinTripsPerDay ? "BRT buses (X) can run in it" : `BRT buses (X) can run in it, but only ${Math.round(wanted)} riders a day want trips along it -- too few to fill an 80-seat bus`;
+      const brt = wanted >= world.tuning.laneMinTripsPerDay ? "BRT buses <kbd>X</kbd> can run in it" : `BRT buses <kbd>X</kbd> can run in it, but only ${Math.round(wanted)} riders a day want trips along it -- too few to fill an 80-seat bus`;
       say(`Bus lane on ${townName(from)} – ${townName(town)} for ${naira(cost)}: your vehicles skip the traffic, and ${brt}. No wardens yet (Road tool on it to enforce). The danfo union will answer the lane within days.${later}`, false, 8);
       renderToolbar();
     }
@@ -1384,7 +1384,7 @@ function renderToolbar(): void {
   const button = (label: string, key: string, active: boolean, onClick: () => void) => {
     const el = document.createElement("button");
     el.innerHTML = `${label} <kbd>${key}</kbd>`;
-    el.className = active ? "active" : "";
+    el.className = active ? "tool active" : "tool"; // the tool role (look.md §5)
     el.onclick = onClick;
     return el;
   };
@@ -1610,11 +1610,11 @@ function renderStation(townId: string): void {
     ? `Built for ${served?.name ?? "a town"}, which has gone: nobody lives here now, and no road comes.`
     : `Built for ${served?.name ?? "a town"}, ${away} cells off: the line passes no nearer. An old dirt road joins them.`;
   const state = !open
-    ? "The line here is out of service. Restore it (Track, K, along the old line) and trains stop here."
+    ? "The line here is out of service. Restore it along the old line (Track <kbd>K</kbd>) and trains stop here."
     : `Trains stop here. ${riders} a day change trains here.`;
   const how = info?.kind === "gone"
     ? "A road to it, and a feeder, would bring people to the line."
-    : `A feeder from ${served?.name ?? "the town"}, or a halt nearer it (Track, K, over the town), brings its people to the line.`;
+    : `A feeder from ${served?.name ?? "the town"}, or a halt nearer it (Track <kbd>K</kbd> over the town) brings its people to the line.`;
   const grows = t.stationTownRiders ? ` Where ${t.stationTownRiders} a day change trains, a town grows here${info?.kind === "gone" ? `: ${served?.name ?? "it"} again` : ""}.` : "";
   townEl.innerHTML = `
     <div class="town-card">
@@ -1751,7 +1751,7 @@ function seaportText(): string {
   const ends = [world.port, link.seaport].sort().join();
   const oldLine = world.simulation.map.segments.some((s) => s.type === "rail" && [s.fromNodeId, s.toNodeId].sort().join() === ends);
   const there = sea.industry === "gateway" ? `the ${townName(link.seaport)}` : townName(link.seaport);
-  const rail = oldLine ? `restore the old railway to ${there} (K)` : `lay track to ${there} (K)`;
+  const rail = oldLine ? `restore the old railway to ${there} <kbd>K</kbd>` : `lay track to ${there} <kbd>K</kbd>`;
   const how = link.by === "rail" ? "by the railway" : link.by === "none" ? "-- no road joins them" : link.paved >= 0.99 ? "up a road paved all the way" : `up the old highway${link.paved > 0.01 ? `, ${pct(link.paved)} of it paved` : ""}`;
   const more = link.by === "rail" ? "" : link.paved < 0.99 && link.by === "road" ? ` Pave it for up to ${pct(t.importsOverPaved ?? 0.9)}, or ${rail} for all of it.` : ` To get all of it, ${rail}.`;
   const where = sea.industry === "gateway" ? `come up from the coast by the ${townName(link.seaport)}, ${away} cells off` : `land at ${townName(link.seaport)}, the seaport, ${away} cells off`;
@@ -2295,7 +2295,7 @@ function problemText(townId: string): string {
   }
   if (full) {
     const name = townName(townId);
-    const next = full.next === "paved" ? "Pave its road (R)" : full.next === "lane" ? "A bus lane on its road (R)" : "Rail (K: restore the old line or lay track, then T for trains)";
+    const next = full.next === "paved" ? "Pave its road <kbd>R</kbd>" : full.next === "lane" ? "A bus lane on its road <kbd>R</kbd>" : "Rail (K: restore the old line or lay track, then T for trains)";
     return `<p class="callout hook"><span class="k">The problem here</span>${name} can't grow: its road is full. ${next} to grow further.${saveButton(full)}</p>`;
   }
   // Grown as far as its cement lets it (cement.ts): the road isn't what's stopping it.
@@ -2943,7 +2943,7 @@ function onPanelClick(event: MouseEvent): void {
     // ...and the map shown where: the places the button or its card names.
     const at = target.dataset.at ?? target.closest<HTMLElement>("[data-at]")?.dataset.at;
     if (at && !in3d) pointAt(at.split(","));
-    say(`${target.textContent?.trim()}: click on the map.`);
+    say(`${[...target.childNodes].filter((n) => n.nodeName !== "KBD").map((n) => n.textContent).join("").trim()}: click on the map.`); // its label without the key's <kbd>
     return;
   }
   // The named project: name it from a town's road-full line, or drop it.

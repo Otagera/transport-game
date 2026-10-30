@@ -854,15 +854,13 @@ function drawWaitingMark(ctx: CanvasRenderingContext2D, mx: number, my: number):
   ctx.textAlign = "left";
 }
 
-/** A ring pulsing round a place a card's button is about (DrawState.pointed): "here". */
+/** A ring round a place a card's button is about (DrawState.pointed): "here" -- steady, for the plate never animates (look.md §7). */
 function drawPointedRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  const pulse = (Math.sin(performance.now() / 160) + 1) / 2;
   ctx.save();
-  ctx.globalAlpha = 0.45 + 0.45 * pulse;
   ctx.strokeStyle = COLORS.warn;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(x, y, r + (10 + 6 * pulse) * markScale, 0, Math.PI * 2);
+  ctx.arc(x, y, r + 12 * markScale, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
 }

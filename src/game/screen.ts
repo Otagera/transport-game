@@ -241,7 +241,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `<button data-named="${named.length - 1}" title="${esc(move.label)}">${esc(move.label.replace(/\s*\([^)]*\)$/, ""))} · ${nairaK(move.price)}</button>`;
   };
   /** A tool's button; `at`, the places it's about, which the map frames and rings when it's pressed (main.ts pointAt). */
-  const toolButton = (tool: string, label: string, at: string[] = []) => `<button data-tool="${tool}"${at.length > 0 ? ` data-at="${esc(at.join(","))}"` : ""}>${esc(label)}</button>`;
+  // Its key in a <kbd> (look.md §5), the rest of the label escaped.
+  const toolButton = (tool: string, label: string, at: string[] = []) => `<button data-tool="${tool}"${at.length > 0 ? ` data-at="${esc(at.join(","))}"` : ""}>${esc(label).replace(/&lt;kbd&gt;(.*?)&lt;\/kbd&gt;/g, "<kbd>$1</kbd>")}</button>`;
 
   /**
    * Why goods from `from` aren't reaching a town, and the move that answers it (haulage.ts
@@ -251,12 +252,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   function carryWhy(what: string, from: string, townId: string): { why: string; button: string; at: string[] } {
     const to = nameOf(townId);
     const b = haulBreak(world, from, townId);
-    if (b?.kind === "road") return { why: `no road joins ${to} to ${nameOf(from)}`, button: toolButton("road", "Road (R)", [townId]), at: [townId] };
-    if (b?.kind === "gap" && b.yardAt) return { why: `hauliers can't get ${what} as far as ${to}; a yard at ${nameOf(b.yardAt)} would carry it on`, button: toolButton("yard", `Yard at ${nameOf(b.yardAt)} (Y)`, [b.yardAt, townId]), at: [b.yardAt, townId] };
-    if (b?.kind === "gap") return { why: `hauliers can't get ${what} as far as ${to}, even from your yards; freight track can`, button: toolButton("track", "Track (K)", [from, townId]), at: [from, townId] };
-    if (!hasYard(world, from)) return { why: `it isn't reaching ${to} from ${nameOf(from)}`, button: toolButton("yard", `Yard at ${nameOf(from)} (Y)`, [from]), at: [from] };
-    if (b?.kind === "legs" && b.legs >= 3) return { why: `it reaches ${to} in ${b.legs} legs by road, slowly; freight track is quicker`, button: toolButton("track", "Track (K)", [from, townId]), at: [from, townId] };
-    return { why: `it's on its way to ${to} by road, slower than ${to} grows; freight track is quicker`, button: toolButton("track", "Track (K)", [from, townId]), at: [from, townId] };
+    if (b?.kind === "road") return { why: `no road joins ${to} to ${nameOf(from)}`, button: toolButton("road", "Road <kbd>R</kbd>", [townId]), at: [townId] };
+    if (b?.kind === "gap" && b.yardAt) return { why: `hauliers can't get ${what} as far as ${to}; a yard at ${nameOf(b.yardAt)} would carry it on`, button: toolButton("yard", `Yard at ${nameOf(b.yardAt)} <kbd>Y</kbd>`, [b.yardAt, townId]), at: [b.yardAt, townId] };
+    if (b?.kind === "gap") return { why: `hauliers can't get ${what} as far as ${to}, even from your yards; freight track can`, button: toolButton("track", "Track <kbd>K</kbd>", [from, townId]), at: [from, townId] };
+    if (!hasYard(world, from)) return { why: `it isn't reaching ${to} from ${nameOf(from)}`, button: toolButton("yard", `Yard at ${nameOf(from)} <kbd>Y</kbd>`, [from]), at: [from] };
+    if (b?.kind === "legs" && b.legs >= 3) return { why: `it reaches ${to} in ${b.legs} legs by road, slowly; freight track is quicker`, button: toolButton("track", "Track <kbd>K</kbd>", [from, townId]), at: [from, townId] };
+    return { why: `it's on its way to ${to} by road, slower than ${to} grows; freight track is quicker`, button: toolButton("track", "Track <kbd>K</kbd>", [from, townId]), at: [from, townId] };
   }
   /**
    * Its cement, steel and fuel on their way (haulage.ts goodsOnTheWay): hauled in legs, the
@@ -313,7 +314,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const b = cementBreak(world);
       const who = `${int(cement.people)}k people held back in ${plural(cement.towns.length, "town")}`;
       if (b?.kind === "idle") items.push({ text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
-      else if (b?.kind === "quarry") items.push({ text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} (Y)`), at: [b.quarryId], weight: cement.people });
+      else if (b?.kind === "quarry") items.push({ text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`), at: [b.quarryId], weight: cement.people });
       else if (b?.kind === "carry") {
         const c = carryWhy("cement", world.cement.worksId, mostHeld(cement.towns, (t) => t.cementHeld).id);
         items.push({ text: `Cement short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: cement.people });
@@ -325,7 +326,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const who = `${int(steel.people)}k people held back in ${plural(steel.towns.length, "town")}`;
       const works = world.steel.worksId ?? world.steel.terminalId;
       if (b?.kind === "idle") items.push({ text: `The steel works is idle: ${who}`, button: restoreButton("steel"), at: works ? [works] : [], weight: steel.people });
-      else if (b?.kind === "ore") items.push({ text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} (Y)`), at: [b.mineId], weight: steel.people });
+      else if (b?.kind === "ore") items.push({ text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} <kbd>Y</kbd>`), at: [b.mineId], weight: steel.people });
       else if (b?.kind === "carry") {
         const port = steelPortShort();
         const c = carryWhy("steel", b.from, mostHeld(steel.towns, (t) => t.steelHeld).id);
@@ -345,8 +346,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         const refinery = site(world.fuel.refineryId);
         const source = world.fuel.sourceId;
         if (refinery.capacity > 0 && refinery.made < 0.6 * refinery.capacity && refinery.limit === "input" && !world.yards.has(source)) {
-          items.push({ text: `${where}: the refinery gets no crude from ${nameOf(source)}`, button: toolButton("yard", `Yard at ${nameOf(source)} (Y)`), at: [source], weight });
-        } else items.push({ text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm (Y)"), at: [world.fuel.depotId], weight });
+          items.push({ text: `${where}: the refinery gets no crude from ${nameOf(source)}`, button: toolButton("yard", `Yard at ${nameOf(source)} <kbd>Y</kbd>`), at: [source], weight });
+        } else items.push({ text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>"), at: [world.fuel.depotId], weight });
       }
     }
     // In debt, or losing money: what's draining it, by name (a game ran to −₦71k with 17 roads'
@@ -362,7 +363,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ].filter(Boolean);
       const where = world.economy.funds < 0 ? `In debt: ${nairaK(world.economy.funds)}` : "Losing money";
       const flow = net < 0 ? `, ${naira(-net)} a day more out than in` : "";
-      const buttons = (losing.length ? `<button data-tab="routes" title="Your routes, the worst first">Losing routes</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep (F)") : "");
+      const buttons = (losing.length ? `<button data-tab="routes" title="Your routes, the worst first">Losing routes</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep <kbd>F</kbd>") : "");
       items.push({ text: `${where}${flow}${drains.length ? `. A day: ${drains.join(" · ")}` : ""}`, button: buttons, at: [], weight: world.economy.funds < 0 ? 1e8 : 1e6 });
     }
     // Pledges left to make this term: the strip alone was missed (a game ran 115 days with none).
@@ -431,13 +432,13 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (t.industry) return null;
     if (t.roadFull && !t.roadFull.thin) {
       const next = t.roadFull.next;
-      return { text: "Can't grow: its road is full", button: next === "rail" ? toolButton("track", "Track (K)") : toolButton("road", next === "paved" ? "Pave its road (R)" : "A bus lane (R)") };
+      return { text: "Can't grow: its road is full", button: next === "rail" ? toolButton("track", "Track <kbd>K</kbd>") : toolButton("road", next === "paved" ? "Pave its road <kbd>R</kbd>" : "A bus lane <kbd>R</kbd>") };
     }
     // Cement past its first 40%: a problem only when it costs the town 5% of its size or more.
     if (t.cementHeld >= Math.max(5, 0.05 * t.population)) {
       const b = cementBreak(world);
       const button = b?.kind === "no-quarry" ? `<span class="muted">Next quarry ~day ${b.nextDay}</span>`
-        : b?.kind === "quarry" ? toolButton("yard", `Yard at ${nameOf(b.quarryId)} (Y)`)
+        : b?.kind === "quarry" ? toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`)
         : b?.kind === "idle" ? restoreButton("works")
         : carryWhy("cement", world.cement!.worksId, t.id).button;
       return { text: `Short of cement (${pct(t.cement ?? 0)} of what it needs): ${int(t.cementHeld)}k fewer people than your service would grow it to`, button };
@@ -446,21 +447,21 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (t.steelHeld >= Math.max(5, 0.05 * t.population)) {
       const b = steelBreak(world);
       const button = b?.kind === "idle" ? `<button data-restore-steel="1">Restore the steel works · ${nairaK(world.tuning.steelRestoreCost)}</button>`
-        : b?.kind === "ore" ? toolButton("yard", `Yard at ${nameOf(b.mineId)} (Y)`)
+        : b?.kind === "ore" ? toolButton("yard", `Yard at ${nameOf(b.mineId)} <kbd>Y</kbd>`)
         : b?.kind === "carry" ? (steelPortShort()?.button ?? carryWhy("steel", b.from, t.id).button)
         : "";
       return { text: `Short of steel (${pct(t.steel ?? 0)} of what it needs): ${int(t.steelHeld)}k fewer people than your service would grow it to`, button };
     }
     // Short by the network and within a source's reach: else a yard at the tank farm does nothing
     // for it (Ota, with no road at all, was sent there).
-    if (t.fuel !== null && t.fuel < 0.6 && (fuelPlanned(world, t.id) ?? 1) < 0.6 && fuelReachable(world, t.id)) return { text: `Fuel short: ${pct(t.fuel)} supplied`, button: toolButton("yard", "Yard at the tank farm (Y)") };
+    if (t.fuel !== null && t.fuel < 0.6 && (fuelPlanned(world, t.id) ?? 1) < 0.6 && fuelReachable(world, t.id)) return { text: `Fuel short: ${pct(t.fuel)} supplied`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>") };
     const shrink = shrinkCause(world, t.id);
     if (shrink) return { text: `Shrinking: ${shrink.why}`, button: moveButton(shrink.move ?? undefined, "") };
     const worn = wornRoadAt(world, t.id);
     if (worn) return { text: `Its road ${nameOf(worn.a)}–${nameOf(worn.b)} is worn: ${pct(worn.speed)} speed, ${naira(worn.roughPerDay)}/day more for your vehicles`, button: moveButton(worn.move, "") };
     const seat = townNoSeat(world, t.id);
-    if (seat) return { text: `${int(seat.perDay)} a day find no seat, most toward ${nameOf(seat.worst.a === t.id ? seat.worst.b : seat.worst.a)}`, button: moveButton(seat.move, toolButton("bus", "Bus (B)")) };
-    if (t.expected > 0 && t.share.you < t.expected) return { text: `Expects you to carry ${pct(t.expected)}; you carry ${pct(t.share.you)}`, button: toolButton("bus", "More buses (B)") };
+    if (seat) return { text: `${int(seat.perDay)} a day find no seat, most toward ${nameOf(seat.worst.a === t.id ? seat.worst.b : seat.worst.a)}`, button: moveButton(seat.move, toolButton("bus", "Bus <kbd>B</kbd>")) };
+    if (t.expected > 0 && t.share.you < t.expected) return { text: `Expects you to carry ${pct(t.expected)}; you carry ${pct(t.share.you)}`, button: toolButton("bus", "More buses <kbd>B</kbd>") };
     return null;
   }
   function routeProblem(r: Route): Problem {
@@ -470,8 +471,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "full": return { text: "Full: riders are left waiting", button: add };
       case "overcapacity": return { text: "More vehicles than riders", button: sell };
       case "thin": return { text: "Too few riders to pay its way", button: sell };
-      case "jammed": return { text: "Stuck in traffic", button: toolButton("road", "Pave or a lane (R)") };
-      case "worn": return { text: "Its road is worn: it costs more to run", button: toolButton("fix", "Keep the road up (F)") };
+      case "jammed": return { text: "Stuck in traffic", button: toolButton("road", "Pave or a lane <kbd>R</kbd>") };
+      case "worn": return { text: "Its road is worn: it costs more to run", button: toolButton("fix", "Keep the road up <kbd>F</kbd>") };
       case "waiting": return r.netPerDay < 0 ? { text: "Riders give up waiting, and it loses money", button: sell } : { text: "Riders give up waiting", button: add };
       default: return r.netPerDay < 0 ? { text: "Loses money", button: sell } : null;
     }
@@ -481,7 +482,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       return { text: "Idle: built, never run. Restore it and its mine starts digging", button: `<button data-restore-steel="1">Restore it · ${nairaK(world.tuning.steelRestoreCost)}</button>` };
     }
     if (!(s.capacity > 0 && s.made < 0.6 * s.capacity)) return null;
-    const button = s.limit === "workers" ? toolButton("bus", "A bus for its workers (B)") : s.limit === "input" ? toolButton("yard", "A yard where it comes from (Y)") : `<span class="muted">See More</span>`;
+    const button = s.limit === "workers" ? toolButton("bus", "A bus for its workers <kbd>B</kbd>") : s.limit === "input" ? toolButton("yard", "A yard where it comes from <kbd>Y</kbd>") : `<span class="muted">See More</span>`;
     return { text: `Makes ${pct(s.made / s.capacity)} of what it could: held back by its ${s.limit}`, button };
   }
   const problemHtml = (problem: Problem) => problem
@@ -687,7 +688,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `${hooks.moneyNote()}<h2>Your routes · ${all.length}${all.length ? `, ${losing} losing money` : ""}</h2>
       ${all.length ? `<table><thead><tr>${th("routes", "name", "Route")}${th("routes", "vehicles", "Veh.")}${th("routes", "riders", "Riders/day")}${th("routes", "load", "Full")}${th("routes", "net", "Net/day")}</tr></thead><tbody>
       ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${r.vehicles}</td><td>${int(r.ridersPerDay)}</td><td>${pct(r.loadFactor)}</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("")}
-      </tbody></table>` : `<p class="muted">No routes yet. Pick the bus tool (B), click a town, then another.</p>`}
+      </tbody></table>` : `<p class="muted">No routes yet. Pick the bus tool <kbd>B</kbd>, click a town, then another.</p>`}
       ${lines.length ? `<h2>Freight lines and lorries</h2><table><tbody>${lines.map((g) => `<tr><td><span class="swatch" style="background:var(--goods)"></span>${esc(routeName(g))}</td><td>${g.lorries}</td><td class="${g.netPerDay < 0 ? "down" : ""}">${naira(g.netPerDay)}</td></tr>`).join("")}</tbody></table>` : ""}
       ${fold("routes-more", "More: lorries, corridors, your share", hooks.routesMore())}`;
   }
@@ -828,8 +829,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const yours = routes().filter((r) => r.stops.some((x, i) => i > 0 && ((r.stops[i - 1] === a && x === b) || (r.stops[i - 1] === b && x === a)))).reduce((sum, r) => sum + r.ridersPerDay, 0);
     const corridor = corridorSummaries(world).find((c) => (c.a === a && c.b === b) || (c.a === b && c.b === a));
     const problem: Problem = speed < 0.7
-      ? { text: `Jammed: traffic at ${pct(speed)} of free speed`, button: toolButton("road", s.surface === "dirt" ? "Pave it (R)" : "A bus lane (R)") }
-      : condition < 0.5 ? { text: "Worn: vehicles pay more on it", button: toolButton("fix", "Keep it up (F)") } : null;
+      ? { text: `Jammed: traffic at ${pct(speed)} of free speed`, button: toolButton("road", s.surface === "dirt" ? "Pave it <kbd>R</kbd>" : "A bus lane <kbd>R</kbd>") }
+      : condition < 0.5 ? { text: "Worn: vehicles pay more on it", button: toolButton("fix", "Keep it up <kbd>F</kbd>") } : null;
     return `<div class="kicker">${s.type === "rail" ? "Track" : `Road · ${s.surface ?? ""}${s.busLane ? " · bus lane" : ""}`}</div>
       <div class="head"><div class="title">${esc(roadKey && labelOf(world, roadKey)?.name ? labelOf(world, roadKey)!.name! : `${nameOf(a)} – ${nameOf(b)}`)}</div></div>
       ${roadKey && labelOf(world, roadKey)?.name ? `<div class="muted">${esc(nameOf(a))} – ${esc(nameOf(b))}</div>` : ""}

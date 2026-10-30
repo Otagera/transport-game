@@ -198,7 +198,7 @@ views, each reading the engine's own plan (haulage.ts), never a second one:
 **The cards point at the map (2026-10-30, from the map 949 playtest).** A card's tool button
 carries the places it's about (`data-at`, on the button from `carryWhy` or on its Waiting-on-you
 card); pressed, `pointAt` (main.ts) frames them (zoom up to 3x, never out past the whole map) and
-`DrawState.pointed` rings each for five seconds (render.ts `drawPointedRing`).
+`DrawState.pointed` rings each, steady, for five seconds (render.ts `drawPointedRing`; look.md §7).
 **Names that don't pile up:** `labelledTowns` counts the town picked in the panel (`focusTown`)
 as lit, so it's always named (map 949's Saki, picked from the list, wasn't); a site's name, zoomed
 in, and a ruin's "(closed)" -- zoomed in only, drawn after every living place -- go only where
@@ -229,6 +229,15 @@ rivers; the inherited roads and old line as found (`provenance === "inherited"`,
 faint; what you built and paved, and track running, over them; each town's dot now with its day-1
 ring (`world.startPopulation`) on top, red and dashed where it shrank; the letter's towns
 (`TermRecord.towns`) pinned, labelled on the side with room. Read off today's map, nothing stored.
+
+**The look, steps 1-3 (2026-10-30; look.md):** the palette in `tokens.css` (ink-and-cream chrome, the
+signal colours, the dark river, the four chains' tokens `FAMILY_COLOR` reads); the Board layout in
+`index.html` (`#controls-col`: `#mapctl` zoom and 3D, `#overlays`, `#log`, `#key` a closed chip;
+`#panel-col`: `#hint` inline, `#panel`; `#toolbar` docked) with the strip in ink, three numbers, the
+term's pledges in the panel (screen.ts `pledgesHtml`), "your riders" and "no seat" on Revenue;
+`controls.css`'s four button roles (quiet by default, `primary`, `on`/`active`, `tool`) with keys in
+`<kbd>` (`toolButton` lets them through its escaping); font sizes as `--fs-*`, spacing as `--sp-*`,
+radii as `--radius`/`--radius-control`.
 
 ## 6. Ambient traffic rendering
 

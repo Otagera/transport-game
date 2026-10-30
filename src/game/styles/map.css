@@ -5,62 +5,56 @@
  * under the plate. Nothing floats over the plate but a toast.
  */
 #controls-col, #panel-col { position: fixed; top: var(--top); bottom: 0; z-index: 5; display: flex; flex-direction: column; box-sizing: border-box; background: var(--surface); }
-#controls-col { left: 0; width: var(--left); border-right: 1px solid var(--line); padding: 12px; gap: 12px; overflow-y: auto; }
+#controls-col { left: 0; width: var(--left); border-right: 1px solid var(--line); padding: var(--sp-3); gap: var(--sp-3); overflow-y: auto; }
 #panel-col { right: 0; width: var(--right); border-left: 1px solid var(--line); }
 #panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 #log { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-#overlays { display: flex; flex-wrap: wrap; gap: 4px; }
-#overlays button { font: 600 12px system-ui, sans-serif; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
-#overlays button.on { background: var(--ink); color: var(--on-fill); border-color: var(--ink); }
-#zoom-control { display: flex; flex-wrap: wrap; gap: 4px; }
-#zoom-control button { font: 600 12px system-ui, sans-serif; min-width: 28px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
-#zoom-control button:hover { border-color: var(--muted); }
+#overlays { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+#zoom-control { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+#zoom-control button { min-width: 28px; }
 /* The 3D view's labels (view3d.ts): towns by tier, sites quieter; villages only up close. */
 body.in3d #overlays, body.in3d #overlay-caption, body.in3d #hint, body.in3d #key { display: none !important; }
 /* What the overlay shows, in a line under its buttons (outside review, 2026-10-26). */
-#overlay-caption { font-size: 12px; line-height: 1.4; color: var(--ink-2); margin-top: -4px; }
+#overlay-caption { font-size: var(--fs-dense); line-height: 1.4; color: var(--ink-2); margin-top: calc(var(--sp-1) * -1); }
 #overlay-caption[hidden] { display: none; }
-.label3d { pointer-events: auto; cursor: pointer; font: 600 12px system-ui, sans-serif; color: var(--ink); background: rgba(255,255,255,0.82); padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
-.label3d.city { font-size: 14px; }
-.label3d.village { font-weight: 500; font-size: 11px; opacity: 0.85; }
-.label3d.site { font-weight: 500; font-size: 11px; color: var(--goods-ink); }
+.label3d { pointer-events: auto; cursor: pointer; font: 600 var(--fs-dense) system-ui, sans-serif; color: var(--ink); background: rgba(255,255,255,0.82); padding: 0 var(--sp-2); border-radius: var(--radius-control); white-space: nowrap; }
+.label3d.city { font-size: var(--fs-body); }
+.label3d.village { font-weight: 500; font-size: var(--fs-caption); opacity: 0.85; }
+.label3d.site { font-weight: 500; font-size: var(--fs-caption); color: var(--goods-ink); }
 #toolbar {
   /* Docked under the plate, a rule above it (look.md §6): not floating. */
   position: fixed; left: var(--left); right: var(--right); bottom: 0; z-index: 5;
-  display: flex; justify-content: center; gap: 4px; align-items: flex-end; padding: 4px 8px; background: var(--surface); border-top: 1px solid var(--line);
+  display: flex; justify-content: center; gap: var(--sp-1); align-items: flex-end; padding: var(--sp-1) var(--sp-2); background: var(--surface); border-top: 1px solid var(--line);
 }
-#toolbar button { border: 1px solid transparent; background: none; border-radius: 7px; padding: 6px 8px; font: inherit; cursor: pointer; color: var(--ink); white-space: nowrap; }
-#toolbar button.active { background: var(--ink); color: var(--surface); }
-#toolbar kbd { font: 11px ui-monospace, monospace; opacity: 0.6; margin-left: 4px; }
-#toolbar .group { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 4px 4px; border-radius: 8px; }
-#toolbar .cap { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
-#toolbar .row { display: flex; gap: 2px; align-items: center; }
+#toolbar button { white-space: nowrap; padding: var(--sp-1) var(--sp-2); }
+#toolbar kbd { font: var(--fs-caption) ui-monospace, monospace; opacity: 0.6; margin-left: var(--sp-1); }
+#toolbar .group { display: flex; flex-direction: column; align-items: center; gap: 0; padding: var(--sp-1) var(--sp-1) var(--sp-1); border-radius: var(--radius); }
+#toolbar .cap { font-size: var(--fs-caption); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+#toolbar .row { display: flex; gap: 0; align-items: center; }
 #toolbar .group.road, #toolbar .group.rail { background: var(--surface-2); }
 #toolbar .group.build { border: 1px dashed var(--line); }
-#toolbar .group.time { margin-left: 4px; }
-#toolbar .switch { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; padding: 1px; }
-#toolbar .switch button { padding: 4px 8px; border-radius: 6px; }
-#toolbar .switch button.on { background: var(--ink); color: var(--surface); }
-#toolbar .switch kbd { margin: 0 4px; }
+#toolbar .group.time { margin-left: var(--sp-1); }
+#toolbar .switch { display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-control); padding: 0; }
+#toolbar .switch button { padding: var(--sp-1) var(--sp-2); border-color: transparent; }
+#toolbar .switch kbd { margin: 0 var(--sp-1); }
 /* Control hint line, over the toolbar (lab: "One line above the toolbar"). */
 #controls a { color: inherit; }
-#controls { position: fixed; right: 20px; top: 9px; max-width: 230px; text-align: right; font-size: 11px; line-height: 1.45; color: var(--muted); z-index: 3; }
+#controls { position: fixed; right: 20px; top: 9px; max-width: 230px; text-align: right; font-size: var(--fs-caption); line-height: 1.45; color: var(--muted); z-index: 3; }
 /* The hint, inline at the top of the panel column (look.md §6: nothing instructional floats on the plate). */
-#hint { display: flex; align-items: flex-start; gap: 8px; margin: 12px 12px 0; padding: 8px 10px 8px 12px; background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--you); border-radius: 8px; font-size: 13px; line-height: 1.35; }
+#hint { display: flex; align-items: flex-start; gap: var(--sp-2); margin: var(--sp-3) var(--sp-3) 0; padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3); background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--you); border-radius: var(--radius); font-size: var(--fs-body); line-height: 1.35; }
 #hint[hidden] { display: none; }
-#hint button { flex: none; border: 1px solid var(--line); background: none; border-radius: 6px; padding: 1px 6px; cursor: pointer; font: 11px var(--label-font); color: var(--muted); }
-#hint button:hover { color: var(--ink); border-color: var(--ink); }
+#hint button { flex: none; padding: 0 var(--sp-1); font: var(--fs-caption) var(--label-font); color: var(--muted); }
 #toast {
   position: fixed; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); bottom: 72px; transform: translateX(-50%); z-index: 7; box-shadow: 0 6px 20px var(--shadow);
-  background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  background: var(--ink); color: var(--surface); padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); font-size: var(--fs-body);
   opacity: 0; transition: opacity 0.4s; pointer-events: none; max-width: calc(100% - 32px);
 }
 #toast[data-bad="true"] { background: var(--bad); }
 /* The key: a chip, opened on demand (look.md §6) -- a manual, not furniture. */
-#key { flex: none; box-sizing: border-box; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 11px; line-height: 1.5; color: var(--muted); }
-#key b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
-#key i.fam { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin: 0 3px 0 4px; }
+#key { flex: none; box-sizing: border-box; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-2) var(--sp-2); font-size: var(--fs-caption); line-height: 1.5; color: var(--muted); }
+#key b { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: var(--sp-1); }
+#key i.fam { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin: 0 var(--sp-1) 0 var(--sp-1); }
 #key summary { cursor: pointer; color: var(--ink); font-weight: 600; }
-#key[open] summary { margin-bottom: 4px; }
-#key:not([open]) { align-self: flex-start; padding: 4px 10px; }
+#key[open] summary { margin-bottom: var(--sp-1); }
+#key:not([open]) { align-self: flex-start; padding: var(--sp-1) var(--sp-2); }
 
