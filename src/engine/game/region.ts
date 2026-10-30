@@ -120,7 +120,7 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
     // Version 6: the north landlocked -- its sea trade comes up the coast road (border.ts placeCoastRoad).
     if (version >= 6 && !SOUTHERN.has(generatedMapInfo(base, seed).region) && map.home) map = landlocked(map);
     // Version 8: the land first -- a relief its rivers lie in, and rivers that join as rivers do.
-    if (version >= 8 && map.home) map = landFirst(map, seed);
+    if (version >= 8 && map.home) map = landFirst(map, seed, version >= 10 ? generatedMapInfo(base, seed).trunk : null);
     map = laidOverLand(map);
     // Version 9: fictional names, true to the region (names.ts) -- never real towns in places they aren't.
     if (version >= 9) map = withFictionalNames(map, seed);
@@ -901,7 +901,8 @@ const RELIEF: Record<string, Omit<ReliefDef, "seed" | "plateaus">> = {
   northeast: { amplitude: 1, scale: 40 },
 };
 
-function landFirst(map: GameMapDef, seed: number): GameMapDef {
+/** `trunk` (map version 10): the home cluster's trunk, whose prices guard how much land its box gets. */
+function landFirst(map: GameMapDef, seed: number, trunk: readonly string[] | null): GameMapDef {
   const box = map.home!;
   const rivers = (map.terrain?.rivers ?? []).map((r) => {
     const widths = r.widths ?? r.points.map(() => r.width);
@@ -1034,5 +1035,33 @@ function landFirst(map: GameMapDef, seed: number): GameMapDef {
     return river;
   });
   if (heads.length) relief.heads = heads;
-  return { ...map, terrain: { ...map.terrain, rivers: reshaped, relief } };
+  const next: GameMapDef = { ...map, terrain: { ...map.terrain, rivers: reshaped, relief } };
+  return trunk ? withHomeLand(next, trunk) : next;
+}
+
+// --- Map version 10: the home cluster's land ---------------------------------------------------
+// (The fidelity scope, step 4: "the flat box round your start".) Versions 8-9 left the home box as
+// the seed drew it, so its prices -- the ladder's, measured on its trunk -- land as measured; the
+// relief faded in past it, and the box read as a flat patch in the land. Now the box gets the same
+// land at a share, as much as its trunk allows: a road along each leg of the trunk, planned as you'd
+// plan one, may cost at most HOME_GUARD more than on the flat box. Tried from most land to least.
+
+const HOME_SHARES = [0.85, 0.65, 0.45, 0.3, 0.15];
+const HOME_GUARD = 0.08;
+
+function withHomeLand(map: GameMapDef, trunk: readonly string[]): GameMapDef {
+  const relief = map.terrain?.relief;
+  const at = (id: string) => map.towns.find((t) => t.id === id);
+  const legs = trunk.slice(1).map((id, k) => [at(trunk[k]!), at(id)] as const).filter((l): l is readonly [GameTown, GameTown] => !!l[0] && !!l[1]);
+  if (!relief || legs.length === 0) return map;
+  const cost = (m: GameMapDef) => {
+    const terrain = buildGameTerrain(m);
+    return legs.map(([a, b]) => planCorridor(terrain, [{ x: Math.round(a.x), y: Math.round(a.y) }, { x: Math.round(b.x), y: Math.round(b.y) }], "auto", new Set([0, 1]))?.breakdown.total ?? Infinity);
+  };
+  const flat = cost(map);
+  for (const share of HOME_SHARES) {
+    const tried: GameMapDef = { ...map, terrain: { ...map.terrain, relief: { ...relief, home: share } } };
+    if (cost(tried).every((c, k) => c <= flat[k]! * (1 + HOME_GUARD))) return tried;
+  }
+  return map;
 }

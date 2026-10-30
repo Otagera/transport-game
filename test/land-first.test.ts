@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { GAME_MAP } from "../src/game/map";
 import { gameMap } from "@engine/game/region";
+import { generatedMapInfo } from "@engine/game/generate";
+import { planCorridor } from "@engine/pathing/plan";
 import { buildGameTerrain } from "@engine/game/terrain";
 import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 
@@ -94,4 +96,22 @@ describe("map version 8: the land first", () => {
     }
     expect(mouths).toBeGreaterThan(0);
   }, 120_000);
+
+  test("version 10: the home box gets the land at a share, and its trunk's legs cost at most 8% more to lay", () => {
+    for (const seed of SEEDS) {
+      const [flat, landed] = [gameMap(GAME_MAP, seed, tuning(9)), gameMap(GAME_MAP, seed, tuning(10))];
+      const trunk = generatedMapInfo(GAME_MAP, seed).trunk;
+      expect(landed.terrain?.relief?.home ?? 0).toBeGreaterThan(0);
+      const [a, b] = [buildGameTerrain(flat), buildGameTerrain(landed)];
+      // The trunk's towns by place: version 8 drew them with the names the trunk uses, 9 and 10 rename them where they stand.
+      const named = gameMap(GAME_MAP, seed, tuning(8));
+      const at = (id: string) => { const t = named.towns.find((x) => x.id === id)!; return { x: Math.round(t.x), y: Math.round(t.y) }; };
+      for (let k = 1; k < trunk.length; k += 1) {
+        const leg = [at(trunk[k - 1]!), at(trunk[k]!)];
+        const before = planCorridor(a, leg, "auto", new Set([0, 1]))!.breakdown.total;
+        const after = planCorridor(b, leg, "auto", new Set([0, 1]))!.breakdown.total;
+        expect(after).toBeLessThanOrEqual(before * 1.08 + 1e-6);
+      }
+    }
+  }, 180_000);
 });

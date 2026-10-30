@@ -166,12 +166,17 @@ function addRelief(def: GameMapDef, relief: ReliefDef, elevation: Float32Array, 
     for (let x = 0; x < width; x += 1) {
       const i = y * width + x;
       if (water[i]) continue;
-      // Nothing in the home cluster, fading in past it.
+      // In the home cluster its share (`home`: none before map version 10), fading to full past it.
       let mask = 1;
       if (box) {
         const dx = Math.max(box.x - x, 0, x - (box.x + box.width - 1));
         const dy = Math.max(box.y - y, 0, y - (box.y + box.height - 1));
-        mask = smooth01(Math.hypot(dx, dy) / HOME_FADE);
+        const inner = relief.home ?? 0;
+        const out = smooth01(Math.hypot(dx, dy) / HOME_FADE);
+        mask = inner + (1 - inner) * out;
+        // In the home box (version 10) its old roads keep to the level, so the land round them can
+        // rise without the trunk's prices rising with it.
+        if (relief.home !== undefined) mask *= 1 - (1 - out) * (1 - (0.15 + 0.85 * smooth01(fromRoad[i]! / 5)));
       }
       if (mask === 0) continue;
       // A town in a gentle dip, not a pit; a road a little eased, not a trench.
