@@ -11,6 +11,7 @@ import type { SettlementState } from "./settlement";
 import type { DayLedger } from "./ledger";
 import type { TripPlans } from "./transfers";
 import type { HaulPlans } from "./haulage";
+import type { StationInfo } from "./stations";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
@@ -48,7 +49,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station";
 
 export interface GameRoadDef {
   a: string;
@@ -288,6 +289,17 @@ export interface GameTuning {
   steelImportShareNow?: number;
   /** Days a town's cement and steel served are rolled over (goods.ts servedRate). Absent in older runs: the 1-day roll every goods outcome has. */
   servedTauDays?: number;
+  /**
+   * Stations on the old line (stations.ts; brief, Revision 5): placed with the world every
+   * `stationSpacingCells` along it -- at a town within `stationAtTownCells`, out of a town within
+   * `stationTownReach` ("Ede Road"), else at the ruin of a town that's gone -- and a station where
+   * `stationTownRiders` a day change trains grows a town. Absent in older runs: the line as it was.
+   */
+  railStations?: boolean;
+  stationSpacingCells?: number;
+  stationAtTownCells?: number;
+  stationTownReach?: number;
+  stationTownRiders?: number;
   /** Hauliers send what they've gathered of cement, steel or fuel (haulage.ts relayed) once it has waited this many days, not only full trucks (truckers.ts). Absent in older runs: full trucks only. */
   partLoadDays?: number;
   floodFirstDayMin?: number;
@@ -876,6 +888,8 @@ export interface GameWorld {
   transferRateEMA: Map<string, number>;
   /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */
   plans: TripPlans | null;
+  /** The old line's stations (stations.ts), by the place each is: absent without them. */
+  stations?: Map<string, StationInfo>;
   /** How hauliers relay goods town to town (haulage.ts). Null = not built yet; rebuilt when the roads, towns or yards change. */
   haulPlans: HaulPlans | null;
   /** pairKey -> road path, or null if the pair isn't connected. Cleared on every road change. */

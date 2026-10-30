@@ -12,6 +12,7 @@ import { polylineLength, segmentPolyline, splitPolyline, type Point } from "@eng
 import { roadCapacity } from "@engine/game/congestion";
 import { flowKey, goodsFlows, type GoodsFlow } from "@engine/game/goods";
 import { legReach, nextStop, relayed } from "@engine/game/haulage";
+import { stationOpen } from "@engine/game/stations";
 import { cargoName } from "@engine/game/fuel";
 import { farmTowns } from "@engine/game/food";
 import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, tierOf, tierRadius, type Badge, type Glyph, type SiteState, type Tier } from "./icons";
@@ -875,7 +876,8 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   const made = steadySite(world, site.id, flows);
   const perDay = (x: number) => x * SECONDS_PER_GAME_DAY;
   // A border crossing makes nothing: it's open (border.ts).
-  const siteState: SiteState = site.industry === "border" || site.industry === "gateway" ? "working" : !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
+  // A station: open where the line to it is restored, else hollow (stations.ts).
+  const siteState: SiteState = site.industry === "station" ? (stationOpen(world, site.id) ? "working" : "idle") : site.industry === "border" || site.industry === "gateway" ? "working" : !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
   const glyph = (site.industry && site.industry in GLYPHS ? site.industry : "quarry") as Glyph;
   drawSiteIcon(ctx, p.x, p.y, r * 2, glyph, siteState, COLORS.surface);
   if (lit) {

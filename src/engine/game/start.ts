@@ -1,5 +1,6 @@
 import { startUnions } from "./union";
 import { placeBorder, placeCoastRoad } from "./border";
+import { placeStations } from "./stations";
 import { startFloods } from "./floods";
 import { placeCrossings, placeRidgeField } from "./crossings";
 import { placeClusterOffers } from "./clusters";
@@ -70,6 +71,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeBorder(world);
   // And, on a landlocked map, the coast road its sea trade comes by (border.ts).
   placeCoastRoad(world);
+  // And the old line's stations (stations.ts): after every other site, so they sit where they did.
+  placeStations(world);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) {
     gameTick(world, SIM_DT);

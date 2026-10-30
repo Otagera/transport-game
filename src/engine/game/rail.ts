@@ -1,6 +1,6 @@
 import { waysFor } from "./crossings";
 import { forgetRoute } from "./ledger";
-import type { TerrainField } from "../map/types";
+import type { Segment, TerrainField } from "../map/types";
 import type { PathResult, RoutingContext, Vehicle } from "../simulation/types";
 import { buildRoutingContext, findPath } from "../simulation/routing";
 import { createVehicle } from "../simulation/vehicle";
@@ -85,9 +85,36 @@ export function planRail(world: GameWorld, a: string, b: string, alignment: Alig
 
 /** The inherited, out-of-service track directly joining two towns, if any. */
 export function derelictTrack(world: GameWorld, a: string, b: string) {
-  return world.simulation.map.segments.find(
-    (s) => s.type === "rail" && world.railOutOfService.has(s.id) && ((s.fromNodeId === a && s.toNodeId === b) || (s.fromNodeId === b && s.toNodeId === a)),
-  );
+  return derelictRun(world, a, b)?.[0];
+}
+
+/**
+ * The out-of-service old line between two places: the one piece joining them; or, with the
+ * old line's stations (stations.ts), any run of it between two of its stops, every piece on the
+ * way -- restored at once, station to station or end to end. Null if the old line doesn't join them.
+ */
+export function derelictRun(world: GameWorld, a: string, b: string): Segment[] | null {
+  const pieces = world.simulation.map.segments.filter((s) => s.type === "rail" && world.railOutOfService.has(s.id));
+  const direct = pieces.find((s) => (s.fromNodeId === a && s.toNodeId === b) || (s.fromNodeId === b && s.toNodeId === a));
+  if (direct) return [direct];
+  if (!world.tuning.railStations) return null;
+  // Along the old line only: a walk over its out-of-service pieces.
+  const from = new Map<string, { node: string; piece: Segment } | null>([[a, null]]);
+  const queue = [a];
+  while (queue.length > 0) {
+    const at = queue.shift()!;
+    if (at === b) break;
+    for (const piece of pieces) {
+      const next = piece.fromNodeId === at ? piece.toNodeId : piece.toNodeId === at ? piece.fromNodeId : null;
+      if (next === null || from.has(next)) continue;
+      from.set(next, { node: at, piece });
+      queue.push(next);
+    }
+  }
+  if (!from.has(b)) return null;
+  const run: Segment[] = [];
+  for (let at = b; from.get(at); at = from.get(at)!.node) run.unshift(from.get(at)!.piece);
+  return run;
 }
 
 function liveTrack(world: GameWorld, a: string, b: string) {
@@ -97,8 +124,8 @@ function liveTrack(world: GameWorld, a: string, b: string) {
 }
 
 export function restoreCost(world: GameWorld, a: string, b: string): number {
-  const track = derelictTrack(world, a, b);
-  return track ? Math.round(segmentLength(world, track) * world.tuning.railRestoreCostPerCell) : Infinity;
+  const run = derelictRun(world, a, b);
+  return run ? Math.round(run.reduce((sum, piece) => sum + segmentLength(world, piece), 0) * world.tuning.railRestoreCostPerCell) : Infinity;
 }
 
 /** What the Rail tool would do between two towns: restore the old line there, lay track on a retired road's alignment, or lay new track. */
@@ -140,8 +167,10 @@ export function buildTrack(world: GameWorld, a: string, b: string, alignment: Al
   const derelict = derelictTrack(world, a, b);
   const road = derelict ? null : retiredRoadBetween(world, a, b);
   if (derelict) {
-    world.railOutOfService.delete(derelict.id);
-    derelict.condition = 1;
+    for (const piece of derelictRun(world, a, b) ?? [derelict]) {
+      world.railOutOfService.delete(piece.id);
+      piece.condition = 1;
+    }
   } else if (road) {
     // Along the retired road's own line, which goes now: the road became the railway.
     const polyline: Array<{ x: number; y: number }> = [];
@@ -198,7 +227,7 @@ export interface HaltSite {
   distance: number;
 }
 
-function nearestOnPolyline(line: Point[], p: Point): { along: number; point: Point; distance: number } {
+export function nearestOnPolyline(line: Point[], p: Point): { along: number; point: Point; distance: number } {
   let best = { along: 0, point: line[0]!, distance: Infinity };
   let travelled = 0;
   for (let i = 1; i < line.length; i += 1) {

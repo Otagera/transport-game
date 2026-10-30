@@ -29,7 +29,7 @@ export type Glyph =
   | "oilfield" | "terminal" | "refinery" | "newrefinery" | "depot"
   | "quarry" | "works" | "silo"
   | "mill" | "flourmill"
-  | "border" | "gateway"
+  | "border" | "gateway" | "station"
   // The chains agreed next.
   | "steelport"
   | "ironmine" | "steelworks" | "plantation" | "palmmill" | "cottonfarm" | "textilemill" | "ranch" | "abattoir" | "cocoa" | "coalmine" | "powerstation" | "warehouse";
@@ -50,6 +50,7 @@ export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }
   steelport: { family: "building", name: "Steel import terminal" },
   border: { family: "trade", name: "Border crossing" },
   gateway: { family: "trade", name: "Coast road (imports, exports)" },
+  station: { family: "trade", name: "Station on the old line" },
   plantation: { family: "food", name: "Oil-palm plantation", next: true },
   palmmill: { family: "food", name: "Palm-oil mill", next: true },
   cottonfarm: { family: "food", name: "Cotton farms", next: true },
@@ -187,6 +188,13 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
     case "ironmine": // a pick
       path(() => { ctx.moveTo(-7, -4); ctx.quadraticCurveTo(0, -10, 7, -4); }, false);
       path(() => { ctx.moveTo(0, -7); ctx.lineTo(0, 8); }, false);
+      break;
+    case "station": // a platform canopy over the rails
+      ctx.fillRect(-8, -7, 16, 2.4);
+      ctx.fillRect(-6, -5, 2.2, 6);
+      ctx.fillRect(3.8, -5, 2.2, 6);
+      ctx.fillRect(-9, 3, 18, 1.6);
+      ctx.fillRect(-9, 6.4, 18, 1.6);
       break;
     case "border": // a barrier pole across the road, its post
     case "gateway":

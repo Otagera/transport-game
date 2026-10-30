@@ -40,7 +40,7 @@ import { planRoad, segmentPolyline, type Alignment, type RoadPlan } from "@engin
 import { corridorWear, roughCostPerDay, upkeepPerDay, wearSpeed } from "@engine/game/wear";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/game/receipts";
 import { growthTrend, roadFull, townGrowth } from "@engine/game/growth";
-import { checkHalt, checkTrack, checkTrain, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/game/rail";
+import { checkHalt, checkTrack, checkTrain, derelictRun, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/game/rail";
 import { checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/game/goods";
 import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, goodsFlows, isLorryRoute, lorryEstimate, lorrySummaries, townGoods, type LorryDiagnosis } from "@engine/game/goods";
 import type { RouteDiagnosis } from "@engine/game/world";
@@ -58,6 +58,7 @@ import { remittanceExpected } from "@engine/game/budget";
 import { carryOver, sweepDue } from "@engine/game/sweep";
 import { checkYard, hasYard, yardGain } from "@engine/game/yards";
 import { yardWouldBring } from "@engine/game/haulage";
+import { stationOf, stationOpen } from "@engine/game/stations";
 import { checkPark, parkLevyGain, parkReport } from "@engine/game/parks";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/metro";
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
@@ -1306,7 +1307,11 @@ function ghost(): Ghost | null {
       return withForecast(ghost, { kind: "track", a: selectedTown, b: to, alignment }, { label: "track on the old road", towns: [selectedTown, to] });
     }
     if (trackAction(world, selectedTown, to) === "restore") {
-      const label = `Restore the old line ${naira(restoreCost(world, selectedTown, to))} · built for export: it stops nowhere between`;
+      // With its stations (stations.ts): the run restored at once, and the stops on it named.
+      const run = derelictRun(world, selectedTown, to) ?? [];
+      const stops = run.slice(0, -1).map((piece, i) => (run[i + 1]!.fromNodeId === piece.toNodeId || run[i + 1]!.toNodeId === piece.toNodeId ? piece.toNodeId : piece.fromNodeId));
+      const between = stops.length > 0 ? `stops at ${stops.slice(0, 3).map(townName).join(", ")}${stops.length > 3 ? ` (+${stops.length - 3})` : ""} between` : "built for export: it stops nowhere between";
+      const label = `Restore the old line ${naira(restoreCost(world, selectedTown, to))} · ${between}`;
       const ghost = { from: selectedTown, to: end, ok: check.ok, label: check.ok ? label : check.reason };
       return withForecast(ghost, { kind: "track", a: selectedTown, b: to, alignment }, { label: "restoring", towns: [selectedTown, to] });
     }
@@ -1606,6 +1611,35 @@ function renderBorder(townId: string): void {
     </div>`;
 }
 
+// A station on the old line (stations.ts): what it was built for and how far off that is, whether
+// the line's open, and what changes trains here -- the feeder or halt that brings its town's people.
+function renderStation(townId: string): void {
+  const site = world.towns.get(townId)!;
+  const info = stationOf(world, townId);
+  const served = info ? world.towns.get(info.serves) ?? world.ruins.get(info.serves) : undefined;
+  const open = stationOpen(world, townId);
+  const away = served ? Math.round(Math.hypot(served.x - site.x, served.y - site.y)) : 0;
+  const riders = Math.round((world.transferRateEMA.get(townId) ?? 0) * SECONDS_PER_GAME_DAY);
+  const t = world.tuning;
+  const built = info?.kind === "gone"
+    ? `Built for ${served?.name ?? "a town"}, which has gone: nobody lives here now, and no road comes.`
+    : `Built for ${served?.name ?? "a town"}, ${away} cells off: the line passes no nearer. An old dirt road joins them.`;
+  const state = !open
+    ? "The line here is out of service. Restore it (Track, K, along the old line) and trains stop here."
+    : `Trains stop here. ${riders} a day change trains here.`;
+  const how = info?.kind === "gone"
+    ? "A road to it, and a feeder, would bring people to the line."
+    : `A feeder from ${served?.name ?? "the town"}, or a halt nearer it (Track, K, over the town), brings its people to the line.`;
+  const grows = t.stationTownRiders ? ` Where ${t.stationTownRiders} a day change trains, a town grows here${info?.kind === "gone" ? `: ${served?.name ?? "it"} again` : ""}.` : "";
+  townEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">Station on the old line · ${open ? "open" : "out of service"}</div>
+      <div class="title">${site.name}</div>
+      <p class="townshare">${built}</p>
+      <p class="townshare">${state} ${how}${grows}</p>
+    </div>`;
+}
+
 // An industrial site's card (brief, Revision 2): what it is and for how
 // long, where its stone goes and how much of it arrives, and the one
 // problem with it -- no road, or nothing moved and the day it closes.
@@ -1617,6 +1651,7 @@ function renderIndustry(townId: string): void {
   if (world.towns.get(townId)?.industry === "flourmill") return renderFlourMillSite(townId);
   if (world.towns.get(townId)?.industry === "border") return renderBorder(townId);
   if (world.towns.get(townId)?.industry === "gateway") return renderCoastRoad(townId);
+  if (world.towns.get(townId)?.industry === "station") return renderStation(townId);
   const limestone = cementActive(world);
   const cargo = limestone ? "limestone" : "stone";
   const site = world.towns.get(townId)!;

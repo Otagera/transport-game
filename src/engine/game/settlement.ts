@@ -6,6 +6,7 @@ import { emptyOutcome, gravityDemand, pairKey } from "./world";
 import { parsePoolKey, parseQueueKey } from "./tick";
 import { growTowns } from "./growth";
 import { applyRailDemand, rebuildNetworks } from "./rail";
+import { backToStation, foundStationTowns, stationPull } from "./stations";
 import { overWater, pointAlong, polylineLength, segmentLength, segmentPolyline, splitPolyline } from "./roads";
 
 // Towns that appear along busy roads, and -- rarely -- fade (step 3 of
@@ -140,9 +141,14 @@ export function updateSettlements(world: GameWorld, dt: number): GameEvent[] {
   const events: GameEvent[] = [];
   for (const townId of [...settlement.emergent]) {
     const town = world.towns.get(townId);
-    if (town && town.population < tuning.abandonBelowPopulation) events.push(abandonTown(world, townId));
+    // A town grown at a station goes back to being the station, never off the line (stations.ts).
+    if (town && town.population < tuning.abandonBelowPopulation) {
+      const name = town.name;
+      if (backToStation(world, townId)) events.push({ kind: "abandoned", townId, name });
+      else events.push(abandonTown(world, townId));
+    }
   }
-  const founded = tryFoundTown(world);
+  const founded = tryFoundTown(world) ?? foundStationTowns(world);
   if (founded) events.push(founded);
   // Demand follows population; recompute rates once a day, not per tick.
   refreshDemand(world);
@@ -166,7 +172,8 @@ function driftPopulations(world: GameWorld, dt: number): void {
   for (const townId of world.settlement.emergent) {
     const town = world.towns.get(townId);
     if (!town) continue;
-    const target = Math.min(tuning.maxEmergentPopulation, flowThrough(world, townId) * tuning.populationPerFlow);
+    // A town grown at a station is held up by the riders changing there too (stations.ts).
+    const target = Math.min(tuning.maxEmergentPopulation, Math.max(flowThrough(world, townId) * tuning.populationPerFlow, stationPull(world, townId)));
     town.population += (target - town.population) * alpha;
   }
 }

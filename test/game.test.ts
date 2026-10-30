@@ -58,6 +58,7 @@ import { issueBond as issueSteelBond } from "@engine/game/bonds";
 import { flowKey as goodsKey, recordGoodsDelivered, relayArrivals } from "@engine/game/goods";
 import { goodsOnTheWay, haulBreak, haulDistance, haulPlans, legReach, nextStop, relayed, yardWouldBring } from "@engine/game/haulage";
 import { buildYard } from "@engine/game/yards";
+import { backToStation, foundStationTowns, stationOpen } from "@engine/game/stations";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
@@ -79,7 +80,7 @@ import { bridgeCellsOn, corridorWear, fixRoadNow, repairCost, setMaintained, upk
 import { computeBurnRate } from "@engine/economy/report";
 import { bestRung, growthTrend, roadFull, townGrowth } from "@engine/game/growth";
 import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsAlong, goodsFlows, lorryEstimate, removeLorry, lorrySummaries } from "@engine/game/goods";
-import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, railPath, restoreCost, trackAction } from "@engine/game/rail";
+import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, derelictRun, railPath, restoreCost, trackAction } from "@engine/game/rail";
 import { slowOrder } from "@engine/game/wear";
 import type { Vehicle } from "@engine/simulation/types";
 import { createHintState, dismissHint, updateHints } from "../src/game/hints";
@@ -2976,8 +2977,8 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       expect(seaportLink(run(seed, { seaportImports: false })).share).toBe(1);
       // The old railway restored between the two: all of it.
       w.economy.funds = 1e9;
-      const ends = [w.port!, w.seaport].sort().join();
-      const rail = w.simulation.map.segments.find((s) => s.type === "rail" && w.railOutOfService.has(s.id) && [s.fromNodeId, s.toNodeId].sort().join() === ends);
+      // The old line, through its stations (stations.ts), between the two.
+      const rail = derelictRun(w, w.port!, w.seaport);
       if (rail) {
         expect(applyAction(w, { kind: "track", a: w.port!, b: w.seaport, alignment: "cheapest" }).ok).toBe(true);
         w.economy.elapsedSeconds += 1; // a new tick's reading
@@ -3161,7 +3162,7 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       expect(w.port).toBe(info.home.map.port!); // inland, a dry port
       // Steel's works and mine are placed over the whole region on purpose (steel.ts: a long haul),
       // and so are the far clusters' limestone fields (clusters.ts).
-      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field" && t.industry !== "border" && t.industry !== "gateway"); // the far fields, the border crossing and the coast road are out there by design (clusters.ts, crossings.ts, border.ts)
+      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field" && t.industry !== "border" && t.industry !== "gateway" && t.industry !== "station"); // the far fields, the border crossing, the coast road and the old line's stations are out there by design (clusters.ts, crossings.ts, border.ts, stations.ts)
       expect(sites.length).toBeGreaterThanOrEqual(4);
       for (const s of sites) expect(s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height).toBe(true);
     }
@@ -4829,5 +4830,73 @@ describe("goods get there over connected roads (haulage.ts; brief, The gateways,
     const was = steelImports(old);
     for (const t of old.towns.values()) if (!t.industry) t.population *= 2;
     expect(steelImports(old)).toBeCloseTo(was, 6);
+  }, 60_000);
+});
+
+describe("stations on the old line (stations.ts; brief, Revision 5, Stations on the old line)", () => {
+  // Seed 1 is a South-West region whose old line passes a town, towns further off, and empty land.
+  const game = (tuning: Partial<typeof DEFAULT_GAME_TUNING> = {}) => startGame(gameMap(GAME_MAP, 1, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, ...tuning });
+  const rail = (w: GameWorld) => w.simulation.map.segments.filter((s) => s.type === "rail");
+  const lineEnds = (w: GameWorld) => {
+    const degree = new Map<string, number>();
+    for (const s of rail(w)) for (const n of [s.fromNodeId, s.toNodeId]) degree.set(n, (degree.get(n) ?? 0) + 1);
+    return [...degree].filter(([, d]) => d === 1).map(([id]) => id);
+  };
+
+  test("the old line comes with its stations: at a town, out of one with a road to it, or at a town that's gone", () => {
+    const w = game();
+    const stations = [...w.stations!];
+    expect(stations.length).toBeGreaterThanOrEqual(3);
+    const kinds = new Set(stations.map(([, s]) => s.kind));
+    expect(kinds.has("out")).toBe(true);
+    for (const [id, s] of stations) {
+      // Every station is a stop on the line.
+      expect(rail(w).some((piece) => piece.fromNodeId === id || piece.toNodeId === id)).toBe(true);
+      if (s.kind === "out") {
+        expect(w.towns.get(id)!.name).toBe(`${w.towns.get(s.serves)!.name} Road`);
+        expect(w.simulation.map.segments.some((r) => r.type === "road" && (r.fromNodeId === id || r.toNodeId === id))).toBe(true);
+      }
+      if (s.kind === "gone") expect(w.ruins.has(s.serves)).toBe(true);
+      if (s.kind !== "town") expect(w.towns.get(id)!.population).toBe(0);
+    }
+    // All of it out of service, as the line was.
+    expect(rail(w).every((piece) => w.railOutOfService.has(piece.id))).toBe(true);
+  }, 60_000);
+
+  test("restoring the old line end to end reopens every stretch and station on it, at its whole length's price", () => {
+    const w = game({ startingFunds: 1e7 });
+    const [a, b] = lineEnds(w);
+    const run = derelictRun(w, a!, b!)!;
+    expect(run.length).toBe(rail(w).length);
+    expect(restoreCost(w, a!, b!)).toBeCloseTo(run.reduce((sum, p) => sum + segmentLength(w, p), 0) * w.tuning.railRestoreCostPerCell, 0);
+    expect(applyAction(w, { kind: "track", a: a!, b: b!, alignment: "cheapest" }).ok).toBe(true);
+    expect(rail(w).every((piece) => !w.railOutOfService.has(piece.id))).toBe(true);
+    for (const id of w.stations!.keys()) expect(stationOpen(w, id)).toBe(true);
+    expect(railPath(w, a!, b!)!.nodeIds.length).toBe(run.length + 1);
+  }, 60_000);
+
+  test("a run file without railStations has the line as it was: one piece, no stations", () => {
+    const old = game({ railStations: undefined as unknown as boolean });
+    expect(old.stations).toBeUndefined();
+    expect(rail(old).length).toBeLessThanOrEqual(2);
+  }, 60_000);
+
+  test("where riders change trains a station grows a town, and fades back to the station, not off the line", () => {
+    const w = game({ startingFunds: 1e7 });
+    const [id, info] = [...w.stations!].find(([, s]) => s.kind !== "town")!;
+    const [a, b] = lineEnds(w);
+    expect(applyAction(w, { kind: "track", a: a!, b: b!, alignment: "cheapest" }).ok).toBe(true);
+    expect(applyAction(w, { kind: "train", a: a!, b: b! }).ok).toBe(true);
+    w.transferRateEMA.set(id, (w.tuning.stationTownRiders! * 2) / SECONDS_PER_GAME_DAY);
+    w.settlement.lastFoundedAtSeconds = -Infinity;
+    const founded = foundStationTowns(w);
+    expect(founded?.kind === "founded" && founded.townId).toBe(id);
+    expect(w.towns.get(id)!.industry).toBeUndefined();
+    expect(w.towns.get(id)!.population).toBeGreaterThan(0);
+    if (info.kind === "gone") expect(w.ruins.has(info.serves)).toBe(false);
+    expect(backToStation(w, id)).toBe(true);
+    expect(w.towns.get(id)!.industry).toBe("station");
+    expect(rail(w).some((piece) => piece.fromNodeId === id || piece.toNodeId === id)).toBe(true);
+    if (info.kind === "gone") expect(w.ruins.has(info.serves)).toBe(true);
   }, 60_000);
 });

@@ -22,6 +22,7 @@ import { steadyFuel, steadySite } from "./steady";
 import { cementBreak, cementServed } from "@engine/game/cement";
 import { steelBreak, steelDemand, steelImports, steelServed } from "@engine/game/steel";
 import { goodsOnTheWay, haulBreak } from "@engine/game/haulage";
+import { stationOf, stationOpen } from "@engine/game/stations";
 import { railPath } from "@engine/game/rail";
 import { roadCapacity } from "@engine/game/congestion";
 import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
@@ -695,10 +696,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const use = (s: Site) => (s.capacity > 0 ? s.made / s.capacity : 0);
     // The border crossing too (border.ts): it makes nothing, but its card is where to see what crosses.
     const isBorder = (s: Site) => world.towns.get(s.id)?.industry === "border" || world.towns.get(s.id)?.industry === "gateway";
-    const rows = sortRows(sites().filter((s) => s.capacity > 0 || isBorder(s)), "sites", { name: (s) => nameOf(s.id), use, made: (s) => s.made });
+    // And the old line's stations (stations.ts): open or not, and how many change trains there.
+    const isStation = (s: Site) => world.towns.get(s.id)?.industry === "station";
+    const rows = sortRows(sites().filter((s) => s.capacity > 0 || isBorder(s) || isStation(s)), "sites", { name: (s) => nameOf(s.id), use, made: (s) => s.made });
     return `<h2>Sites · what each makes of what it could</h2>
       ${rows.length ? `<table><thead><tr>${th("sites", "name", "Site")}${th("sites", "made", "t/day")}${th("sites", "use", "Of capacity")}</tr></thead><tbody>
-      ${rows.map((s) => isBorder(s)
+      ${rows.map((s) => isStation(s)
+        ? `<tr class="row" data-pick="site|${s.id}"><td>${esc(nameOf(s.id))}</td><td>${int((world.transferRateEMA.get(s.id) ?? 0) * D)} change</td><td>${stationOpen(world, s.id) ? "open" : "closed"}</td></tr>`
+        : isBorder(s)
         ? `<tr class="row" data-pick="site|${s.id}"><td>${esc(nameOf(s.id))}</td><td>${int((exportsBy(world).find((e) => e.to === s.id)?.tonnes ?? 0) * D)}</td><td>open</td></tr>`
         : `<tr class="row" data-pick="site|${s.id}"><td>${use(s) < 0.6 ? "⚠ " : ""}${esc(nameOf(s.id))}</td><td>${int(s.made)}</td><td class="${use(s) < 0.6 ? "down" : ""}">${pct(use(s))}</td></tr>`).join("")}
       </tbody></table>` : `<p class="muted">No sites working.</p>`}`;
@@ -768,7 +773,18 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         ${problemHtml(siteProblem(s))}
         ${seeThrough(sel.id, out, inn)}
         <div class="tiles">
-          ${t.industry === "gateway"
+          ${t.industry === "station"
+            // A station on the old line (stations.ts): open or not, what it was built for, who changes trains here.
+            ? (() => {
+                const info = stationOf(world, t.id);
+                const served = info ? world.towns.get(info.serves) ?? world.ruins.get(info.serves) : undefined;
+                const site = world.towns.get(t.id)!;
+                const away = served ? Math.round(Math.hypot(served.x - site.x, served.y - site.y)) : 0;
+                return `${tile("The line here", stationOpen(world, t.id) ? "open" : "closed", stationOpen(world, t.id) ? "trains stop" : "restore it to open it")}
+                  ${tile("Built for", esc(served?.name ?? "—"), info?.kind === "gone" ? "a town that's gone" : `${away} cells off`)}
+                  ${tile("Change trains here", `${int((world.transferRateEMA.get(t.id) ?? 0) * D)}/day`, world.tuning.stationTownRiders ? `a town grows at ${world.tuning.stationTownRiders}` : "")}`;
+              })()
+            : t.industry === "gateway"
             // The coast road (border.ts): the map's way to the sea -- how much gets through, and how.
             ? `${tile("Imports arriving", pct(seaportLink(world).share), "of what lands at the coast")}
                ${tile("By", seaportLink(world).by === "rail" ? "rail" : "road", seaportLink(world).by === "road" ? `${pct(seaportLink(world).paved)} paved` : "")}`
@@ -830,7 +846,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "industry-opened": return { text: `${e.name} opened`, tone: "good", group: "sites", select: { kind: "site", id: e.townId } };
       case "industry-closed": return { text: `${e.name} closed (${e.reason})`, tone: "bad", group: "sites", select: null };
       case "refinery-opened": return { text: `${e.name} opened: a private refinery`, tone: "good", group: "sites", select: { kind: "site", id: e.townId } };
-      case "founded": return { text: `${e.name} grew up on the road`, tone: "good", group: "growth", select: { kind: "town", id: e.townId } };
+      case "founded": return { text: e.site && e.site === e.townId ? `${e.name} grew up at the station` : `${e.name} grew up on the road`, tone: "good", group: "growth", select: { kind: "town", id: e.townId } };
       case "abandoned": return { text: `${e.name} emptied out`, tone: "bad", group: "growth", select: null };
       case "milestone": return { text: `${e.name} ${["grew by a quarter", "grew by half", "doubled", "tripled"][e.index] ?? "grew"}: ${int(e.to)}k`, tone: "good", group: "growth", select: { kind: "town", id: e.townId } };
       case "corridor-taken": return { text: `You took ${ab(e)} from the danfos`, tone: "good", group: "corridors", select: { kind: "town", id: e.a } };

@@ -184,6 +184,13 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   servedTauDays: 10,
   // ...and a load of them for a small town goes once it has waited a week, part full.
   partLoadDays: 7,
+  // Stations on the old line (stations.ts): every ~30 cells, at a town within 4, out of a town
+  // within 20 ("Ede Road"), else where the town has gone; 40 riders a day changing grows a town.
+  railStations: true,
+  stationSpacingCells: 30,
+  stationAtTownCells: 4,
+  stationTownReach: 20,
+  stationTownRiders: 40,
   floodFirstDayMin: 45,
   floodFirstDayMax: 75,
   floodEveryDays: 180,

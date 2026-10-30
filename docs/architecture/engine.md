@@ -1262,6 +1262,35 @@ replays as played. Seed 0 stays the hand-made map, alone.
   it to the end in one go, the page a slice at a time (~40 ms, then a frame) under a loading
   card in `index.html`. The same ticks in the same order: the same world (tested).
 
+### Stations on the old line (2026-10-30; brief, Revision 5, Stations on the old line)
+
+`stations.ts`, behind `railStations` (absent in older runs: the line as it was, one piece).
+- **Placed** at the start after every other site (`placeStations`, start.ts), every
+  `stationSpacingCells` (30) along each inherited line, nudged by a hash of the line, never
+  within 12 cells of an end or half a spacing of another. Each by what stands nearest its
+  stretch of line: a town within `stationAtTownCells` (4) is the stop itself (the line runs in to
+  it, as a halt's does); within `stationTownReach` (20), a station of its own at the line's
+  nearest point, "{town} Road", population 0, kind `station`, with an inherited dirt road to the
+  town; else a station at the ruin (`world.ruins`, not a node) of a town that's gone, named from
+  `GONE_NAMES` by region (real places not among the map names: map 949 uses all 28 south-west
+  ones), no road. A town is served once across every line. The line is split at each
+  (`splitRail`, far end first), every piece out of service. `world.stations`: place -> kind and
+  the town or ruin it served.
+- **Restored a run at a time** (rail.ts `derelictRun`): with stations, the Track tool between
+  any two stops on the old line restores every piece between them at their summed length's
+  price; without, only the one piece joining them, as before.
+- **Its distance counts as a ride:** a station is a population-0 place with no jobs or goods, so
+  nobody's trip ends there; riders reach the line through it by changing (transfers.ts) from a
+  feeder, or a halt brings the line to the town.
+- **A station grows a town** (`foundStationTowns`, once a day after `tryFoundTown`): a station of
+  its own on a running passenger line, with `stationTownRiders` (40) a day changing there, becomes
+  an emergent town of its name (a gone town by its old name, its ruin taken off), counted against
+  `maxEmergentTowns`; held up by those riders (`stationPull`) as well as its road's traffic, and
+  emptied it goes back to the station (`backToStation`), never off the line.
+- 2D/3D: the `station` glyph (a canopy over rails) open when the line to it is restored
+  (`stationOpen`), hollow while it isn't; in 3D a station building, platform and water tower; its
+  card and the Sites list say what it was built for, how far off, and who changes trains there.
+
 ### The steel chain (2026-10-23; brief, More industries, more chains)
 
 `steel.ts`, built on cement's pattern (`cement.ts`) so its numbers sit where cement's were

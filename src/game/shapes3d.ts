@@ -176,6 +176,17 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     }
     return;
   }
+  // A station on the old line (stations.ts): a long low building, its platform and canopy, a water tower.
+  if (kind === "station") {
+    kit.box(16, 4, 6, "#d9c9a8", 0, -6);
+    kit.box(17, 0.5, 7, "#8a3b2a", 0, -6, 4);
+    kit.box(24, 0.8, 4, "#bdb6a8", 0, 1);
+    kit.box(14, 0.3, 4.4, "#5a5f66", 0, 1, 3.6);
+    for (const x of [-5, 0, 5]) kit.box(0.4, 3, 0.4, "#5a5f66", x, 2.6, 0.8);
+    kit.cylinder(1.6, 3, "#6f6a60", 13, -8, 5);
+    kit.cylinder(0.3, 5, "#5a5f66", 13, -8);
+    return;
+  }
   // A border crossing (border.ts): the customs post, its barrier across the road, lorries waiting, flags.
   if (kind === "border" || kind === "gateway") {
     kit.box(14, 4, 7, "#e2ddd2", 0, -8);
