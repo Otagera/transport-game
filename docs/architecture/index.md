@@ -74,6 +74,7 @@ scripts/game-bots.ts        Bot personas + the brief's measured checks
 scripts/game-strategist.ts  A long-game bot: the ladder and the chains to day 250+ (C2, C11, C14, ...)
 scripts/game-play.ts        Play from a terminal (an OpenCode player)
 scripts/game-run.ts         Read or replay a saved run
+scripts/shots.ts            The five screens at 1600x1000 @2x into shots/ (look.md §9)
 scripts/verify-look.ts      The look's checks (look.md §9): no literals, four roles, tokens agree, signal untouched
 scripts/game-probe.ts, corridor-probe.ts, game-lever-audit.ts   Calibration probes
 docs/

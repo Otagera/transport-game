@@ -7,7 +7,7 @@ a line in this file. Where this file and a screen disagree, this file wins; wher
 Settled 2026-10-30 by rendering six candidates on the real game at seed 0, day 41: three
 palettes (Survey sheet, Danfo, Terminal) and three layouts (Map-first, Two-pane, Board). The
 direction below is the synthesis the renders produced, not any one of the six. (The renders
-weren't kept in the repo; `scripts/shots.ts`, §9, is what makes them again.)
+weren't kept in the repo; `bun run shots`, §9, makes them again.)
 
 ---
 
@@ -205,7 +205,8 @@ the same tokens (`palette3d.ts`): its signal colours by their own, its paint by 
 | **Tokens agree** | the values in `tokens.css` and the tables in §2 have drifted apart |
 | **Signal untouched** | a signal token's value changed without its row in §2 changing with it |
 
-`scripts/shots.ts` (to add) captures the five screens on demand at 1600×1000 @2x. It
+`scripts/shots.ts` (`bun run shots [seed]`) captures the five screens on demand at 1600×1000 @2x --
+the map, a town picked, Revenue, the term's pledges, 3D -- into `shots/` (not in git). It
 measures; it does not gate.
 
 ---

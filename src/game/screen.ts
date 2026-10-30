@@ -370,7 +370,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const term = world.term;
     const left = term ? MAX_COMMITTED - term.pledges.filter((p) => p.committed).length : 0;
     if (term && left > 0 && term.pledges.some((p) => !p.committed)) {
-      items.push({ text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
+      items.push({ text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button class="primary" data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
     }
     // The rains (floods.ts): the fords named for this season, and those under water now.
     const floods = world.floods;
@@ -925,7 +925,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const term = world.term;
     if (!term) return "";
     const committed = term.pledges.filter((p) => p.committed).length;
-    return `<ul class="pledges choose">${term.pledges.map((p) => `<li><div class="line">${p.committed ? "★ " : ""}${esc(pledgeLine(p))} ${!p.committed && committed < MAX_COMMITTED ? `<button data-pledge="${esc(p.id)}">Pledge</button>` : ""}</div>${p.kept ? "" : pledgeMoveLine(p)}</li>`).join("")}</ul>`;
+    return `<ul class="pledges choose">${term.pledges.map((p) => `<li><div class="line">${p.committed ? "★ " : ""}${esc(pledgeLine(p))} ${!p.committed && committed < MAX_COMMITTED ? `<button class="primary" data-pledge="${esc(p.id)}">Pledge</button>` : ""}</div>${p.kept ? "" : pledgeMoveLine(p)}</li>`).join("")}</ul>`;
   }
   /**
    * A pledge's likely first move and its price against what you have (outside review,
@@ -965,11 +965,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const length = world.tuning.termDays ?? 120;
       const committed = term.pledges.filter((p) => p.committed).length;
       const grant = term.number === 1 && world.tuning.termOpeningGrant ? ` It opens with a grant of ${nairaK(world.tuning.termOpeningGrant)} to build with.` : "";
-      verdictEl.innerHTML = `<div class="top"><div class="title">Term ${term.number}: your pledges</div><button class="primary" data-verdict="close">${committed > 0 ? "Begin ▸" : "Later"}</button></div>
+      verdictEl.innerHTML = `<div class="top"><div class="title">Term ${term.number}: your pledges</div><button${committed > 0 ? ' class="primary"' : ""} data-verdict="close">${committed > 0 ? "Begin ▸" : "Later"}</button></div>
         <p class="lede">You run the state's transport for ${length} days a term.${grant} The state offers these, from what your towns need now. Pledge up to ${MAX_COMMITTED}: keep them and the next term's grant grows; keep none, or let the towns shrink, and it's a failed term. Two failed terms in a row and you're replaced.</p>
         ${pledgeChoices()}
         ${grantLine()}
-        <p class="muted">Pledged: ${committed} of ${MAX_COMMITTED}. They stay in the strip, with how far each has got.</p>`;
+        <p class="muted">Pledged: ${committed} of ${MAX_COMMITTED}. They stay in the panel, with how far each has got.</p>`;
       return;
     }
     const history = term.history;
