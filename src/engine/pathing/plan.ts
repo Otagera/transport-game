@@ -2,7 +2,7 @@ import type { SegmentLevel, TerrainField } from "../map/types";
 import { cellIndex, findTerrainPath, isWater, type GridPoint } from "./terrainAStar";
 import { walkCellsAlongSegment } from "./supercover";
 import { simplifyPolyline } from "./rdp";
-import { clampToTraversable, smoothChain } from "./smoothing";
+import { clampToTraversable, pullTaut, smoothChain } from "./smoothing";
 import { MAX_BRIDGE_SPAN, bridgeStepCost, stepCost, sumStepCosts, type CostBreakdown, type StepCost } from "./cost";
 
 export type AlignmentMode = "auto" | "straight" | "curve";
@@ -110,6 +110,8 @@ export function planCorridor(
   existingWaypointIndices: Set<number>,
   buildCostMultiplier: number = 1,
   profileMultiplier: number = 1,
+  /** Pull each ground run taut before smoothing (smoothing.ts pullTaut): the drawn line only, never the price. */
+  taut = false,
 ): CorridorPlan | null {
   if (waypoints.length < 2) {
     return null;
@@ -162,7 +164,7 @@ export function planCorridor(
 
     segmentLevels.push("ground");
     const run = rawChain.slice(prevIdx, idx + 1);
-    const simplified = simplifyPolyline(run, RDP_EPSILON);
+    const simplified = simplifyPolyline(taut ? pullTaut(terrain, run) : run, RDP_EPSILON);
     const smoothed = clampToTraversable(terrain, smoothChain(simplified, SAMPLES_PER_SEGMENT), simplified);
     polyline.push(...smoothed.slice(1));
   }

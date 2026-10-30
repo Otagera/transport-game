@@ -17,6 +17,8 @@ import { cargoName } from "@engine/game/fuel";
 import { farmTowns } from "@engine/game/food";
 import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, tierOf, tierRadius, type Badge, type Glyph, type SiteState, type Tier } from "./icons";
 import { steadySite } from "./steady";
+import { congestionColor, junctionPlates, offsetPolyline, overloaded } from "./corridor";
+import { segmentRung } from "@engine/game/roads";
 
 // The game's map, ported from the information lab (since discarded; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -231,28 +233,7 @@ export function focusFor(world: GameWorld, focusTown: string | null, focusRoute:
   return { segments, routes, towns };
 }
 
-/** The other side on each road now (danfos, kekes, okadas; trucks), rolled a little frame to frame so a band doesn't jump. */
-const band = new Map<string, { informal: number; trucks: number }>();
-function otherSideOnRoads(world: GameWorld): Map<string, { informal: number; trucks: number }> {
-  const now = new Map<string, { informal: number; trucks: number }>();
-  for (const vehicle of world.simulation.vehicles) {
-    if (vehicle.lifecycle !== "one-shot") continue;
-    const id = segmentOfVehicle(world, vehicle);
-    if (!id) continue;
-    const mode = world.informal.active.get(vehicle.id)?.mode ?? (vehicle.id.startsWith("truck-") ? "truck" : "danfo");
-    const count = now.get(id) ?? { informal: 0, trucks: 0 };
-    if (mode === "truck") count.trucks += 1;
-    else count.informal += 1;
-    now.set(id, count);
-  }
-  for (const id of new Set([...band.keys(), ...now.keys()])) {
-    const was = band.get(id) ?? { informal: 0, trucks: 0 };
-    const is = now.get(id) ?? { informal: 0, trucks: 0 };
-    band.set(id, { informal: was.informal + (is.informal - was.informal) * 0.08, trucks: was.trucks + (is.trucks - was.trucks) * 0.08 });
-  }
-  return band;
-}
-
+/** The road or track piece a vehicle is on now. */
 function segmentOfVehicle(world: GameWorld, vehicle: Vehicle): string | undefined {
   const length = vehicle.path.length;
   if (length < 2 || vehicle.pathIndex >= length) return undefined;
@@ -297,7 +278,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   const overlay = state.overlay ?? "none";
 
   drawGround(ctx, world, view);
-  drawRoads(ctx, world, view, otherSideOnRoads(world), overlay !== "none");
+  drawRoads(ctx, world, view, overlay !== "none");
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
@@ -338,29 +319,20 @@ function edgeLine(world: GameWorld, from: string, to: string, routing: RoutingCo
   return segment.fromNodeId === from ? line : [...line].reverse();
 }
 
-function strokeLine(ctx: CanvasRenderingContext2D, view: View, line: Point[], offset = 0): void {
+function strokeLine(ctx: CanvasRenderingContext2D, view: View, line: Point[]): void {
   ctx.beginPath();
   line.forEach((p, i) => {
     const s = toScreen(view, p.x, p.y);
-    if (i === 0) ctx.moveTo(s.x + offset, s.y + offset);
-    else ctx.lineTo(s.x + offset, s.y + offset);
+    if (i === 0) ctx.moveTo(s.x, s.y);
+    else ctx.lineTo(s.x, s.y);
   });
   ctx.stroke();
 }
 
-/** A polyline moved sideways by `d` screen pixels (the lab's offsetLine). */
-function strokeOffset(ctx: CanvasRenderingContext2D, view: View, line: Point[], d: number): void {
-  const sp = line.map((p) => toScreen(view, p.x, p.y));
+/** A polyline moved sideways by `d` screen pixels, mitred (corridor.ts offsetPolyline: no pinching at a bend). */
+export function strokeOffset(ctx: CanvasRenderingContext2D, view: View, line: Point[], d: number): void {
   ctx.beginPath();
-  sp.forEach((p, i) => {
-    const a = sp[Math.max(0, i - 1)]!;
-    const b = sp[Math.min(sp.length - 1, i + 1)]!;
-    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    const x = p.x - ((b.y - a.y) / len) * d;
-    const y = p.y + ((b.x - a.x) / len) * d;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
+  offsetPolyline(line.map((p) => toScreen(view, p.x, p.y)), d).forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
   ctx.stroke();
 }
 
@@ -498,86 +470,116 @@ function drawGround(ctx: CanvasRenderingContext2D, world: GameWorld, view: View)
 
 // --- Roads: traffic, the other side, your service -------------------------------------------
 
-const SLOW_ROAD_SPEED = 0.9;
-/** Below this a road reads as jammed (red); between it and SLOW_ROAD_SPEED, busy (orange). */
-const JAMMED_ROAD_SPEED = 0.7;
+/** A corridor's body width by its rung, in map-scale units (tokens.css --corridor-*): the rung shows on the road. */
+const RUNG_WIDTH = {
+  dirt: parseFloat(token("--corridor-dirt")),
+  paved: parseFloat(token("--corridor-paved")),
+  lane: parseFloat(token("--corridor-lane")),
+  rail: parseFloat(token("--corridor-rail")),
+};
+const CASING = parseFloat(token("--corridor-casing"));
+const RUNG_ORDER = { dirt: 0, paved: 1, lane: 2, rail: 3 } as const;
 
-function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, crowd: ReadonlyMap<string, { informal: number; trucks: number }>, dim: boolean): void {
+/**
+ * The roads and track (docs/architecture/look.md, Corridor encoding and Corridor geometry): one
+ * meaning per channel -- width the rung, colour the congestion (a ramp with headroom: past 150% a
+ * dash over the jammed body), the centreline core your service; the informal sector and trucks are
+ * on the vehicles, the overlays and the card, not bands beside the road (they read as two lanes).
+ * One object a road, in passes sorted by rung: every casing (--line), every body, the junction
+ * plates, then the cores, bus-lane stripes and ties.
+ */
+function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, dim: boolean): void {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+  const map = world.simulation.map;
   const yours = yourRidersOnRoads(world);
   const maxYours = Math.max(1, ...yours.values());
   // Under an overlay the network steps back, so the overlay is what you see (outside review,
   // 2026-10-26: switching modes barely changed a map whose roads stayed at full strength).
   const alphaFor = (id: string) => (focus && !focus.segments.has(id) ? FADED : dim ? OVERLAY_BACKDROP : 1);
-  for (const segment of world.simulation.map.segments) {
-    const line = segmentPolyline(world.simulation.map, segment);
-    ctx.globalAlpha = alphaFor(segment.id);
-    if (segment.type === "rail") {
-      // Track: dark, with the lab's light ties; disused, faded.
-      if (world.railOutOfService.has(segment.id)) ctx.globalAlpha *= 0.45;
+  const colors = { free: COLORS.free, busy: COLORS.busy, jammed: COLORS.jammed };
+  const items = map.segments.map((s) => {
+    const rung = segmentRung(s);
+    const rail = s.type === "rail";
+    const load = rail ? 0 : ((world.roadFlowEMA.get(s.id) ?? 0) + privateLoad(world, s.id)) / Math.max(1e-6, roadCapacity(world, s.id));
+    const speed = world.segmentSpeed.get(s.id) ?? 1;
+    const alpha = alphaFor(s.id) * (rail && world.railOutOfService.has(s.id) ? 0.45 : 1);
+    return { s, rung, rail, load, speed, alpha, line: segmentPolyline(map, s), width: RUNG_WIDTH[rung] * markScale, color: rail ? COLORS.rail : congestionColor(load, speed, colors), retired: s.retiredAt !== undefined };
+  }).sort((p, q) => RUNG_ORDER[p.rung] - RUNG_ORDER[q.rung]);
+  const live = items.filter((x) => !x.retired);
+
+  // A road retired (retire.ts): faded and broken until it's gone, under everything.
+  for (const x of items.filter((i) => i.retired)) {
+    ctx.globalAlpha = x.alpha * 0.45;
+    ctx.strokeStyle = COLORS.free;
+    ctx.lineWidth = 2 * markScale;
+    ctx.setLineDash([3 * markScale, 6 * markScale]);
+    strokeLine(ctx, view, x.line);
+  }
+  // Pass A: every casing, so a crossing reads as two roads; a dirt road's dashed, unfinished.
+  for (const x of live) {
+    ctx.globalAlpha = x.alpha;
+    ctx.strokeStyle = COLORS.groundEdge;
+    ctx.lineWidth = x.width + CASING * markScale;
+    ctx.setLineDash(x.rung === "dirt" ? [4 * markScale, 2 * markScale] : []);
+    strokeLine(ctx, view, x.line);
+  }
+  ctx.setLineDash([]);
+  // Pass B: every body, by its rung's width, in its congestion's colour.
+  for (const x of live) {
+    ctx.globalAlpha = x.alpha;
+    ctx.strokeStyle = x.color;
+    ctx.lineWidth = x.width;
+    strokeLine(ctx, view, x.line);
+    // Past the ramp's top, a dash over the jammed body: 150% and 400% aren't the same road.
+    if (!x.rail && overloaded(x.load)) {
+      ctx.strokeStyle = COLORS.ink;
+      ctx.lineWidth = x.width * 0.4;
+      ctx.setLineDash([2 * markScale, 3 * markScale]);
+      strokeLine(ctx, view, x.line);
       ctx.setLineDash([]);
-      ctx.strokeStyle = COLORS.rail;
-      ctx.lineWidth = 3 * markScale;
-      strokeLine(ctx, view, line);
-      ctx.strokeStyle = COLORS.ground;
-      ctx.lineWidth = 1 * markScale;
-      ctx.setLineDash([2 * markScale, 4 * markScale]);
-      strokeLine(ctx, view, line);
-      ctx.setLineDash([]);
-      continue;
     }
-    // A road retired (retire.ts): faded and broken until it's gone.
-    if (segment.retiredAt !== undefined) {
-      ctx.globalAlpha *= 0.45;
-      ctx.strokeStyle = COLORS.free;
-      ctx.lineWidth = 2 * markScale;
-      ctx.setLineDash([3 * markScale, 6 * markScale]);
-      strokeLine(ctx, view, line);
-      ctx.setLineDash([]);
-      continue;
-    }
-    // By what it carries (width) and how full it runs (colour): the lab's road.
-    const speed = world.segmentSpeed.get(segment.id) ?? 1;
-    // Private cars count in how full it runs (private.ts): a growing city's approaches thicken.
-    const load = Math.min(1.2, ((world.roadFlowEMA.get(segment.id) ?? 0) + privateLoad(world, segment.id)) / Math.max(1e-6, roadCapacity(world, segment.id)));
-    const w = (2 + load * 7) * markScale;
-    ctx.strokeStyle = COLORS.surface;
-    ctx.lineWidth = w + 2 * markScale;
-    strokeLine(ctx, view, line);
-    ctx.strokeStyle = speed < JAMMED_ROAD_SPEED ? COLORS.jammed : speed < SLOW_ROAD_SPEED ? COLORS.busy : COLORS.free;
-    ctx.lineWidth = w;
-    strokeLine(ctx, view, line);
-    if (segment.busLane) {
+  }
+  // Pass C: the junction plates -- where two or more meet, one disc in the most congested one's colour.
+  const bySegment = new Map(live.map((x) => [x.s.id, x]));
+  for (const plate of junctionPlates(world, (s) => s.retiredAt === undefined, (s) => RUNG_WIDTH[segmentRung(s)] * markScale)) {
+    const p = toScreen(view, plate.x, plate.y);
+    const meeting = [...bySegment.values()].filter((x) => x.s.fromNodeId === plate.node || x.s.toNodeId === plate.node);
+    const roads = meeting.filter((x) => !x.rail);
+    const worst = roads.reduce<(typeof roads)[number] | null>((w, x) => (!w || x.load > w.load || x.speed < w.speed ? x : w), null);
+    ctx.globalAlpha = Math.max(...meeting.map((x) => x.alpha));
+    ctx.fillStyle = COLORS.groundEdge;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, plate.radius + (CASING / 2) * markScale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = plate.rail || !worst ? COLORS.rail : worst.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, plate.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Pass D: on the centreline -- a lane's stripe, track's ties, your riders' core.
+  for (const x of live) {
+    ctx.globalAlpha = x.alpha;
+    if (x.rung === "lane") {
       ctx.strokeStyle = COLORS.player;
       ctx.lineWidth = 1.5 * markScale;
       ctx.setLineDash([6 * markScale, 4 * markScale]);
-      strokeLine(ctx, view, line);
-      ctx.setLineDash([]);
+      strokeLine(ctx, view, x.line);
+    } else if (x.rail) {
+      ctx.strokeStyle = COLORS.ground;
+      ctx.lineWidth = 1.2 * markScale;
+      ctx.setLineDash([2 * markScale, 4 * markScale]);
+      strokeLine(ctx, view, x.line);
     }
-    // The other side as bands: the informal sector yellow on one side, trucks brown on the other.
-    const crowded = crowd.get(segment.id);
-    if (crowded) {
-      if (crowded.informal >= 0.3) {
-        ctx.strokeStyle = COLORS.danfo;
-        ctx.lineWidth = Math.min(6.5, 1.5 + crowded.informal * 0.5) * markScale;
-        strokeOffset(ctx, view, line, -(w / 2 + 2.5 * markScale));
-      }
-      if (crowded.trucks >= 0.3) {
-        ctx.strokeStyle = COLORS.goods;
-        ctx.lineWidth = Math.min(6.5, 1.5 + crowded.trucks * 0.5) * markScale;
-        strokeOffset(ctx, view, line, w / 2 + 2.5 * markScale);
-      }
-    }
+    ctx.setLineDash([]);
   }
-  // Your service on top: a blue core by your riders along each piece.
   ctx.strokeStyle = COLORS.player;
-  for (const segment of world.simulation.map.segments) {
-    const riders = yours.get(segment.id) ?? 0;
+  for (const x of live) {
+    const riders = yours.get(x.s.id) ?? 0;
     if (riders <= 0) continue;
-    ctx.globalAlpha = alphaFor(segment.id);
-    ctx.lineWidth = (1.5 + (riders / maxYours) * 5) * markScale;
-    strokeLine(ctx, view, segmentPolyline(world.simulation.map, segment));
+    ctx.globalAlpha = x.alpha;
+    ctx.lineWidth = Math.min(x.width * 0.8, (1.5 + (riders / maxYours) * 4) * markScale);
+    strokeLine(ctx, view, x.line);
   }
   ctx.globalAlpha = 1;
 }

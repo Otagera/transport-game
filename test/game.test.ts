@@ -61,6 +61,10 @@ import { buildYard } from "@engine/game/yards";
 import { backToStation, foundStationTowns, stationOpen } from "@engine/game/stations";
 import { correspondentName, handoverNote, notATutorial, predecessors, termLetter } from "../src/game/correspondent";
 import { thenAndNowSvg } from "../src/game/thenandnow";
+import { MITER_LIMIT, congestionStop, junctionPlates, offsetPolyline, overloaded } from "../src/game/corridor";
+import { segmentRung } from "@engine/game/roads";
+import type { Segment } from "@engine/map/types";
+import { isDirt as isDirtRoad } from "@engine/game/congestion";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
@@ -5014,4 +5018,92 @@ describe("then and now (src/game/thenandnow.ts; brief, Revision 5, step 4 rebuil
     expect((after.match(/class="tn-was/g) ?? []).length).toBe(towns.filter((t) => w.startPopulation.has(t.id)).length);
     expect(after).toContain(`>${towns[0]!.name}</text>`);
   }, 60_000);
+});
+
+describe("the corridor (src/game/corridor.ts; look.md, Corridor encoding and geometry)", () => {
+  const dist = (p: { x: number; y: number }, line: Array<{ x: number; y: number }>) => {
+    let best = Infinity;
+    for (let i = 1; i < line.length; i += 1) {
+      const a = line[i - 1]!, b = line[i]!;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      best = Math.min(best, Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t));
+    }
+    return best;
+  };
+  /** The worst relative error, sampled densely along an offset line, of its distance from the source. */
+  const worst = (offset: Array<{ x: number; y: number }>, source: Array<{ x: number; y: number }>, d: number) => {
+    let err = 0;
+    for (let i = 1; i < offset.length; i += 1) for (let k = 0; k <= 50; k += 1) {
+      const a = offset[i - 1]!, b = offset[i]!;
+      err = Math.max(err, Math.abs(dist({ x: a.x + (b.x - a.x) * (k / 50), y: a.y + (b.y - a.y) * (k / 50) }, source) - Math.abs(d)) / Math.abs(d));
+    }
+    return err;
+  };
+  // The offset as it was drawn (render.ts strokeOffset before 2026-10-30): central differences, no mitre.
+  const centralDifference = (line: Array<{ x: number; y: number }>, d: number) => line.map((p, i) => {
+    const a = line[Math.max(0, i - 1)]!, b = line[Math.min(line.length - 1, i + 1)]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: p.x - ((b.y - a.y) / len) * d, y: p.y + ((b.x - a.x) / len) * d };
+  });
+
+  test("an offset through a right-angled bend stays within 1% of its distance; central differences pinched it", () => {
+    const bend = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }];
+    expect(worst(offsetPolyline(bend, 1), bend, 1)).toBeLessThan(0.01);
+    expect(worst(centralDifference(bend, 1), bend, 1)).toBeGreaterThan(0.01); // the bug it fixes
+  });
+
+  test("a hairpin's offset reaches no further than the mitre limit", () => {
+    const hairpin = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 0.4 }];
+    const [, corner] = offsetPolyline(hairpin, 1);
+    expect(Math.hypot(corner!.x - 10, corner!.y - 0)).toBeLessThanOrEqual(MITER_LIMIT * 1 + 1e-9);
+  });
+
+  test("the congestion ramp rises with load and never jumps, free to jammed, with headroom past 150%", () => {
+    const rank = { free: 0, busy: 1, jammed: 2 } as const;
+    const level = (load: number) => { const s = congestionStop(load); return rank[s.from] + (rank[s.to] - rank[s.from]) * s.t; };
+    let last = level(0);
+    for (let load = 0.001; load <= 3; load += 0.001) {
+      const now = level(load);
+      expect(now).toBeGreaterThanOrEqual(last - 1e-9);
+      expect(now - last).toBeLessThan(0.01);
+      last = now;
+    }
+    expect(level(0.4)).toBe(0);
+    expect(level(0.9)).toBe(1);
+    expect(level(1.6)).toBe(2);
+    expect(overloaded(1.2)).toBe(false);
+    expect(overloaded(4)).toBe(true);
+    // A road crawling reads jammed whatever its load.
+    expect(congestionStop(0.2, 0.5).from).toBe("jammed");
+  });
+
+  test("segmentRung agrees with the three expressions it replaced, on five maps", () => {
+    for (const seed of [1, 4, 77, 949, 2418]) {
+      const w = startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0 });
+      for (const s of w.simulation.map.segments) {
+        const was = s.type === "rail" ? "rail" : s.busLane ? "lane" : isDirtRoad(s) ? "dirt" : "paved";
+        expect(segmentRung(s)).toBe(was);
+        if (s.type === "road") expect(segmentRung(s)).toBe(s.busLane ? "lane" : isDirtRoad(s) ? "dirt" : "paved");
+      }
+    }
+  }, 120_000);
+
+  test("every node where two or more live pieces meet gets exactly one plate, as wide as the widest of them", () => {
+    const width = (s: Segment) => ({ dirt: 3, paved: 5, lane: 7, rail: 4 })[segmentRung(s)];
+    for (const seed of [1, 4, 77, 949, 2418]) {
+      const w = startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0 });
+      const live = (s: Segment) => s.retiredAt === undefined;
+      const plates = junctionPlates(w, live, width);
+      const at = new Map<string, Segment[]>();
+      for (const s of w.simulation.map.segments.filter(live)) for (const n of [s.fromNodeId, s.toNodeId]) at.set(n, [...(at.get(n) ?? []), s]);
+      const junctions = [...at].filter(([, pieces]) => pieces.length >= 2);
+      expect(plates.length).toBe(junctions.length);
+      expect(new Set(plates.map((p) => p.node)).size).toBe(plates.length);
+      for (const [node, pieces] of junctions) {
+        const plate = plates.find((p) => p.node === node)!;
+        expect(plate.radius).toBeGreaterThanOrEqual(Math.max(...pieces.map(width)) / 2);
+      }
+    }
+  }, 120_000);
 });

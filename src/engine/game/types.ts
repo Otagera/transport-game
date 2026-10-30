@@ -296,6 +296,12 @@ export interface GameTuning {
    * `stationTownRiders` a day change trains grows a town. Absent in older runs: the line as it was.
    */
   railStations?: boolean;
+  /**
+   * A road or track you build is pulled taut before it's smoothed (pathing/smoothing.ts pullTaut): a
+   * straight runs straight instead of A*'s dog-leg rounded into a lazy curve. The line drawn -- and
+   * so its length and travel time -- not its price. Absent in older runs: as they were built.
+   */
+  tautRoads?: boolean;
   stationSpacingCells?: number;
   stationAtTownCells?: number;
   stationTownReach?: number;

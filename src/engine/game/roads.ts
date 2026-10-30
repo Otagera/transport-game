@@ -4,6 +4,8 @@ import { BASE_COST_PER_CELL, BRIDGE_PREMIUM_PER_CELL, MAX_BRIDGE_SPAN, bridgeSte
 import { walkCellsAlongSegment } from "../pathing/supercover";
 import { cellIndex, isWater } from "../pathing/terrainAStar";
 import type { GameWorld } from "./types";
+import { isDirt } from "./congestion";
+import type { CorridorRung } from "./growth";
 
 // Roads over terrain (docs/principles.md §6, step 3). A road is planned and
 // priced by engine/pathing -- the terrain A*, the water rule, and cost.ts --
@@ -198,7 +200,8 @@ export function planAlignment(
     const from = { x: Math.round(townA.x), y: Math.round(townA.y) };
     const to = { x: Math.round(townB.x), y: Math.round(townB.y) };
     // Both ends are existing towns: only bridge banks are new nodes.
-    const corridor = planCorridor(terrain, [from, to], "auto", new Set([0, 1]));
+    // Pulled taut where the run allows (tautRoads; pathing/smoothing.ts pullTaut): the line drawn, not the price.
+    const corridor = planCorridor(terrain, [from, to], "auto", new Set([0, 1]), 1, 1, !!world.tuning.tautRoads);
     if (corridor) {
       // The grid plans between whole cells; the road starts and ends at
       // the towns themselves (a roadside town can sit between cells).
@@ -238,4 +241,13 @@ export function overWater(world: GameWorld, p: Point): boolean {
   const y = Math.round(p.y);
   if (x < 0 || y < 0 || x >= terrain.width || y >= terrain.height) return false;
   return terrain.water[y * terrain.width + x] === 1;
+}
+
+/**
+ * A road or track's rung on the ladder (docs/brief.md, Revision 1): dirt, paved, a bus lane, rail.
+ * The one definition -- growth.ts reads it for a corridor's capacity and its next rung, the map
+ * for a corridor's width (docs/architecture/look.md, Corridor encoding).
+ */
+export function segmentRung(segment: Segment): Exclude<CorridorRung, "none"> {
+  return segment.type === "rail" ? "rail" : segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
 }

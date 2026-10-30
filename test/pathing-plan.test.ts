@@ -171,3 +171,31 @@ describe("planCorridor", () => {
     expect(b.total).toBeCloseTo(b.base + b.gradient + b.water + b.density + b.nodes, 5);
   });
 });
+
+describe("a road pulled taut (smoothing.ts pullTaut; look.md, Corridor geometry)", () => {
+  const offChord = (line: Array<{ x: number; y: number }>) => {
+    const a = line[0]!, b = line[line.length - 1]!;
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return Math.max(...line.map((p) => Math.abs((p.x - a.x) * (b.y - a.y) - (p.y - a.y) * (b.x - a.x)) / L));
+  };
+
+  test("a straight over flat ground comes out straight, at the same price; A*'s dog-leg without it", () => {
+    const terrain = makeTerrain(120, 120);
+    const ends = [{ x: 5, y: 5 }, { x: 100, y: 37 }];
+    const taut = planCorridor(terrain, ends, "auto", new Set([0, 1]), 1, 1, true)!;
+    const loose = planCorridor(terrain, ends, "auto", new Set([0, 1]))!;
+    expect(offChord(taut.polyline)).toBeLessThan(1e-9);
+    expect(offChord(loose.polyline)).toBeGreaterThan(2); // the bug it fixes
+    // The drawn line only: the build price is the A* path's, either way.
+    expect(taut.breakdown).toEqual(loose.breakdown);
+  });
+
+  test("a road round a lake keeps its bend", () => {
+    const lake: Array<[number, number]> = [];
+    for (let y = 20; y <= 60; y += 1) for (let x = 45; x <= 55; x += 1) lake.push([x, y]);
+    const terrain = makeTerrain(120, 120, lake);
+    const plan = planCorridor(terrain, [{ x: 10, y: 40 }, { x: 100, y: 40 }], "auto", new Set([0, 1]), 1, 1, true)!;
+    expect(offChord(plan.polyline)).toBeGreaterThan(15);
+    for (const p of plan.polyline) expect(p.x >= 45 && p.x <= 55 && p.y >= 20 && p.y <= 60 && !(p.y < 20 || p.y > 60)).toBe(false);
+  });
+});

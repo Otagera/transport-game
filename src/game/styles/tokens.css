@@ -228,6 +228,13 @@
   --paint-bank: #465a2d;
   --paint-sand: #d6c496;
 
+  /* A corridor's body width by its rung, map-scale units (look.md, Corridor encoding): the rung shows on the road */
+  --corridor-dirt: 3;
+  --corridor-paved: 5;
+  --corridor-lane: 7;
+  --corridor-rail: 4;
+  --corridor-casing: 2;
+
   /* Type: five steps and no others (look.md §3); a letter keeps --letter-font */
   --fs-headline: 19px;
   --fs-body: 13px;

@@ -158,12 +158,42 @@ old left column held two log lines and the old right panel held one notice.
 
 ---
 
+## 6a. Corridor encoding
+
+**A corridor's channels each carry one variable: width is the rung, colour is congestion, the
+centreline core is your service.** A new variable may not be added to a line that already has
+one -- it goes to an overlay, to the vehicles, or to the card. (2026-10-30, from map 2642 and
+3218's screenshots: a grey band with a yellow one beside it read as two lanes.)
+
+| Channel | Means |
+| --- | --- |
+| body width | the rung (`segmentRung`, engine roads.ts): dirt 3 (its casing dashed: unfinished), paved 5, lane 7 with the `--you` stripe, rail 4 with its ties -- `--corridor-*`, in map-scale units |
+| body colour | congestion: load (flow and private cars over capacity) free to 0.5, into busy by 0.85, busy to 1, into jammed by 1.5; past 1.5 jammed with a dash over it (still, §7), so 150% and 400% differ; a road crawling below 0.7 speed reads jammed whatever its load (corridor.ts `RAMP`) |
+| centreline core | your riders, in `--you` |
+| casing | that this is one road object; `--line` |
+
+The informal sector and trucks are not on the line: they are the vehicles' own colours, the
+Informal share and Goods overlays, and the corridor's card.
+
+## 6b. Corridor geometry
+
+**A road is one object: one casing, one body, mitred with a limit of 4, meeting its neighbours
+at a filled junction plate. Roads draw in passes, casings then bodies then plates then
+centrelines, each sorted by rung. Nothing is offset from a centreline that another stroke
+already occupies.** (corridor.ts `offsetPolyline`: along the corner's bisector by
+`d / cos(θ/2)`; a plate where two or more live pieces meet, as wide as the widest, in the most
+congested one's colour; a town's marker draws over it.) A road you build is pulled taut before
+it's smoothed (pathing/smoothing.ts `pullTaut`, behind `tautRoads`): A* on the grid took a
+dog-leg that smoothing rounded into a lazy curve, 6-9 cells off a straight line on flat ground.
+The line drawn only; the price stays the A* path's.
+
 ## 7. Motion
 
 - Panel open, selection change, tab change: **120ms**, `cubic-bezier(.2,.8,.2,1)`.
 - A number in the strip changing: a 200ms tint, no counting animation.
 - **The plate never animates.** The simulation is already moving; anything else on it is
-  noise. (So the ring round the places a card's button names, render.ts `drawPointedRing`,
+  noise. (A corridor past 150% of its capacity carries a dash over its body -- still, not moving:
+  §6a's headroom without an exception to this rule.) (So the ring round the places a card's button names, render.ts `drawPointedRing`,
   is steady, not pulsing.)
 - Nothing eases on first paint.
 

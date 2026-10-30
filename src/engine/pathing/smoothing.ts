@@ -2,6 +2,8 @@ import type { TerrainField } from "../map/types";
 import type { GridPoint } from "./terrainAStar";
 import { isWater, inBounds } from "./terrainAStar";
 import { walkCellsAlongSegment } from "./supercover";
+import { stepCost } from "./cost";
+import { cellIndex } from "./terrainAStar";
 
 const MAX_TURN_ANGLE_RADIANS = (150 * Math.PI) / 180;
 
@@ -98,4 +100,67 @@ export function clampToTraversable(terrain: TerrainField, smoothed: GridPoint[],
   }
 
   return smoothed;
+}
+
+/** What a run of cells costs to build over, step by step (the A* cost function's own terms). */
+function runCost(terrain: TerrainField, cells: GridPoint[]): number {
+  let total = 0;
+  for (let i = 1; i < cells.length; i += 1) {
+    const a = cells[i - 1]!;
+    const b = cells[i]!;
+    const step = stepCost(terrain, cellIndex(terrain, a.x, a.y), cellIndex(terrain, b.x, b.y), Math.hypot(b.x - a.x, b.y - a.y));
+    total += step.base + step.gradient + step.water + step.density;
+  }
+  return total;
+}
+
+/**
+ * What a straight line costs over the cells it crosses: its true length shared over them (the cell
+ * walk steps four ways, so summing its steps priced a diagonal as a staircase), with each step's
+ * gradient and density as the A* cost function has them.
+ */
+function straightCost(terrain: TerrainField, a: GridPoint, b: GridPoint, cells: GridPoint[]): number {
+  if (cells.length < 2) return 0;
+  const share = Math.hypot(b.x - a.x, b.y - a.y) / (cells.length - 1);
+  let total = 0;
+  for (let i = 1; i < cells.length; i += 1) {
+    const step = stepCost(terrain, cellIndex(terrain, cells[i - 1]!.x, cells[i - 1]!.y), cellIndex(terrain, cells[i]!.x, cells[i]!.y), share);
+    total += step.base + step.gradient + step.water + step.density;
+  }
+  return total;
+}
+
+/**
+ * A ground run pulled taut (docs/architecture/look.md, Corridor geometry: "the curves are not
+ * right"): A* on the grid moves in eight directions, so among equal paths it takes a dog-leg --
+ * diagonal, then straight -- and on flat ground a road at an awkward angle bent 6-9 cells off its
+ * straight line, the smoothing rounding the corner into a lazy curve. From each point this jumps to
+ * the farthest later one it can reach in a straight line that crosses no water and costs no more
+ * than the path it replaces (`slack` over it), so a straight comes out straight and a road round a
+ * hill keeps its bend. Shapes the drawn line only: a road is still priced on its A* path
+ * (plan.ts costForRawChain), so the build price is unchanged.
+ */
+export function pullTaut(terrain: TerrainField, run: GridPoint[], slack = 0.01): GridPoint[] {
+  if (run.length <= 2) return run.slice();
+  // The path's own cost to each point, for comparing a shortcut against what it replaces.
+  const along = [0];
+  for (let i = 1; i < run.length; i += 1) along.push(along[i - 1]! + runCost(terrain, [run[i - 1]!, run[i]!]));
+  const out: GridPoint[] = [run[0]!];
+  let i = 0;
+  while (i < run.length - 1) {
+    let next = i + 1;
+    for (let j = run.length - 1; j > i + 1; j -= 1) {
+      const a = run[i]!;
+      const b = run[j]!;
+      const cells = walkCellsAlongSegment(a.x, a.y, b.x, b.y);
+      if (cells.some((c) => !inBounds(terrain, c.x, c.y) || isWater(terrain, c.x, c.y))) continue;
+      if (straightCost(terrain, a, b, cells) <= (along[j]! - along[i]!) * (1 + slack)) {
+        next = j;
+        break;
+      }
+    }
+    out.push(run[next]!);
+    i = next;
+  }
+  return out;
 }

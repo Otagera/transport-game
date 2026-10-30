@@ -1,7 +1,6 @@
 import type { GameWorld } from "./types";
 import { chainOf, demandAlong, townShare, townShareBetweenTowns } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
-import { isDirt } from "./congestion";
 import { laneEncroachment } from "./pushback";
 import { stoneServed } from "./industries";
 import { cementActive, cementServed } from "./cement";
@@ -10,6 +9,7 @@ import { jobsGrowth } from "./workers";
 import { foodGrowth } from "./food";
 import { stationTowns } from "./rail";
 import { metroGrowthShare } from "./metro";
+import { segmentRung } from "./roads";
 
 // The original towns grow (docs/principles.md §6, step 4: depth, one at a
 // time -- growth second, after decay). Served well, a town draws people;
@@ -79,7 +79,7 @@ export function bestRung(world: GameWorld, townId: string): CorridorRung {
     // Track in service at the town (a station, or a halt's spur) is the top
     // rung; the old line out of service, or rail switched off, isn't.
     if (segment.type === "rail" && (!world.tuning.railEnabled || world.railOutOfService.has(segment.id))) continue;
-    const rung: CorridorRung = segment.type === "rail" ? "rail" : segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
+    const rung: CorridorRung = segmentRung(segment);
     if (order.indexOf(rung) > order.indexOf(best)) best = rung;
   }
   return best;
@@ -105,7 +105,7 @@ function carriedShare(world: GameWorld, townId: string): number {
   for (const segment of world.simulation.map.segments) {
     if (segment.fromNodeId !== townId && segment.toNodeId !== townId) continue;
     if (segment.type === "rail" && (!world.tuning.railEnabled || world.railOutOfService.has(segment.id))) continue;
-    const rung: CorridorRung = segment.type === "rail" ? "rail" : segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
+    const rung: CorridorRung = segmentRung(segment);
     let share = rungShare(world, rung);
     if (rung === "lane") {
       const taken = encroached?.get(segment.id) ?? 0;
@@ -211,7 +211,7 @@ function busiestRoad(world: GameWorld, townId: string, rung: CorridorRung): { ro
   let best: { road: { a: string; b: string }; trips: number } | null = null;
   for (const segment of world.simulation.map.segments) {
     if (segment.type !== "road" || (segment.fromNodeId !== townId && segment.toNodeId !== townId)) continue;
-    const its: CorridorRung = segment.busLane ? "lane" : isDirt(segment) ? "dirt" : "paved";
+    const its: CorridorRung = segmentRung(segment);
     if (its !== rung) continue;
     const chain = chainOf(world, segment.id);
     if (!chain) continue;
