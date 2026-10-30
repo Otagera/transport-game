@@ -23,6 +23,7 @@ import { cementBreak, cementServed } from "@engine/game/cement";
 import { steelBreak, steelDemand, steelImports, steelServed } from "@engine/game/steel";
 import { goodsOnTheWay, haulBreak } from "@engine/game/haulage";
 import { stationOf, stationOpen } from "@engine/game/stations";
+import { handoverNote, termLetter, type Letter } from "./correspondent";
 import { railPath } from "@engine/game/rail";
 import { roadCapacity } from "@engine/game/congestion";
 import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
@@ -897,8 +898,13 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   // of the save. "Your record" in the strip opens it any time.
 
   const verdictOpen = () => verdictEl.classList.contains("open");
-  let verdictMode: "term" | "record" | "replaced" | "pledges" = "term";
-  function openVerdict(mode: "term" | "record" | "replaced" | "pledges" | null): void {
+  type VerdictMode = "term" | "record" | "replaced" | "pledges" | "handover";
+  /** The correspondent's letter (correspondent.ts), signed. */
+  function letterHtml(letter: Letter): string {
+    return `<div class="letter">${letter.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}<p class="sig">${esc(letter.from)}<span>Permanent Secretary, Ministry of Transportation</span></p></div>`;
+  }
+  let verdictMode: VerdictMode = "term";
+  function openVerdict(mode: VerdictMode | null): void {
     verdictEl.classList.toggle("open", mode !== null);
     if (mode) renderVerdict((verdictMode = mode));
   }
@@ -932,9 +938,16 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `<p class="muted">You have ${nairaK(world.economy.funds)}. The next term's grant: ${by(0)} if you keep none (a failed term), ${by(1)} with one kept, ${by(MAX_COMMITTED)} with both, and ${naira(t.termGrantPerThousand ?? 0)} more for every thousand people the towns grow. A move beyond your money waits for it, or a bond pays for a restore now.</p>`;
   }
 
-  function renderVerdict(mode: "term" | "record" | "replaced" | "pledges"): void {
+  function renderVerdict(mode: VerdictMode): void {
     const term = world.term;
     if (!term) return;
+    if (mode === "handover") {
+      // Day 1 (brief, Revision 5, step 4): what the state inherited and what you answer to, from the seed.
+      const first = term.number === 1 && !term.pledges.some((p) => p.committed);
+      verdictEl.innerHTML = `<div class="top"><div class="title">From the Ministry</div>${first ? `<button class="primary" data-verdict="pledges">To your pledges ▸</button>` : `<button data-verdict="record">Your record ▸</button>`}</div>
+        ${letterHtml(handoverNote(world))}`;
+      return;
+    }
     if (mode === "pledges") {
       // A term's start (the first included): what the state asks this term, chosen here.
       const length = world.tuning.termDays ?? 120;
@@ -955,7 +968,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${history.map((r) => `<tr><td>${r.number}</td><td>${r.kept.length} of ${r.kept.length + r.missed.length}</td><td>${int(r.peopleFrom)}k → ${int(r.peopleTo)}k (${signed(grown(r))})</td><td>${r.grant !== undefined ? nairaK(r.grant) : "—"}</td><td class="${r.failed ? "down" : "up"}">${r.failed === undefined ? "" : r.failed ? "failed" : "good"}</td></tr>`).join("")}
       </tbody></table>` : `<p class="muted">No term has ended yet.</p>`;
     if (mode === "record" || !last) {
-      verdictEl.innerHTML = `<div class="top"><div class="title">Your record</div><button data-verdict="close">Back to the map ✕</button></div>${record}`;
+      verdictEl.innerHTML = `<div class="top"><div class="title">Your record</div><span><button data-verdict="handover">The handover note</button> <button data-verdict="close">Back to the map ✕</button></span></div>${record}`;
       return;
     }
     const pledges = [...last.kept.map((t) => `<li class="kept">${esc(t)}</li>`), ...last.missed.map((t) => `<li class="missed">${esc(t)}</li>`)].join("");
@@ -967,7 +980,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       : `The state's verdict on term ${last.number}.`;
     verdictEl.innerHTML = `<div class="top"><div class="title">${mode === "replaced" ? "The state has replaced you" : `Term ${last.number}: the verdict`}</div>
       <button class="primary" data-verdict="close">${mode === "replaced" ? "Keep playing ▸" : `Begin term ${term.number} ▸`}</button></div>
-      <p class="lede">${esc(lede)}</p>
+      ${letterHtml(termLetter(world, last))}
+      <p class="lede muted">${esc(lede)}</p>
       <div class="heroes">
         <div class="hero"><div class="k">Pledges kept</div><div class="v num">${last.kept.length} of ${last.kept.length + last.missed.length}</div></div>
         <div class="hero"><div class="k">The towns</div><div class="v num">${signed(grown(last))}</div><div class="k">${int(last.peopleFrom)}k → ${int(last.peopleTo)}k</div></div>
@@ -1086,7 +1100,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
     if (el.dataset.range !== undefined) { range = Number(el.dataset.range); renderRevenue(); return true; }
     if (el.dataset.revenue) { openRevenue(el.dataset.revenue === "open"); return true; }
-    if (el.dataset.verdict) { openVerdict(el.dataset.verdict === "close" ? null : (el.dataset.verdict as "record" | "pledges")); return true; }
+    if (el.dataset.verdict) { openVerdict(el.dataset.verdict === "close" ? null : (el.dataset.verdict as VerdictMode)); return true; }
     return false;
   }
 

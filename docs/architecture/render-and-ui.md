@@ -208,6 +208,23 @@ No seat opens its overlay (`data-show-overlay`); a Waiting-on-you item 10 days o
 how long it has stood (screen.ts `waitingSince`, keyed by its text to the first colon, numbers
 left out, forgotten when it goes).
 
+**The correspondent (2026-10-30; brief, Revision 5, step 4 rebuilt).** `src/game/correspondent.ts`:
+pure functions over the world, no DOM, so the tests run every template. The Permanent Secretary's
+name (by region, from a hash of the map's towns) and how many he's written before (three to six)
+come from the map; his stance (`correct`, `behind`, `doubtful`, `finished`) from the term
+records -- nothing saved. `handoverNote`: three paragraphs, each clause read from the seed (the
+longest old line's ends, cargo by region, its stations by kind; the fords; the home chairman; an
+idle works or refinery and a town no road reaches) plus the two named constants. `termLetter`: a
+kept or missed pledge each (kind and town from `TermRecord.keptKeys`/`missedKeys`, the town's
+people then and now from `towns`), the road it filled (`roadFull`, from term 2), the union
+(the memory this term moved his chairman most, its figures in brackets dropped), the rains
+(`FloodState.risen`), paved road against last term (`pavedCells`) -- at most three, by weight;
+the replacement letter alone when he's finished with you. **C32** is `notATutorial`, a check on
+the grammar of an instruction (a key in brackets, the controls' names, a price, an imperative),
+asserted over every template on five seeds and every stance. The verdict screen's `handover`
+mode opens on day 1 before the pledges, once a map (`localStorage`, `game:handover:{seed}`), and
+from "Your record" any time; a term's letter heads its verdict (`.letter`, `--letter-font`).
+
 ## 6. Ambient traffic rendering
 
 `network.ts` draws instanced cars **from** the published `ambientLoads` number (see

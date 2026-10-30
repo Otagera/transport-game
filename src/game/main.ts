@@ -3284,7 +3284,16 @@ function frame(now: number): void {
   if (!askedFirstPledges && world.term) {
     askedFirstPledges = true;
     if (world.term.number === 1 && world.term.pledges.length > 0 && !world.term.pledges.some((p) => p.committed)) {
-      screen.openVerdict("pledges");
+      // The handover note first, once a map (brief, Revision 5, step 4): its button leads on to the pledges.
+      const seen = `game:handover:${seed}`;
+      let first = true;
+      try {
+        first = localStorage.getItem(seen) === null;
+        localStorage.setItem(seen, "1");
+      } catch {
+        // Storage refused (a private window): show it every time, as a new map would.
+      }
+      screen.openVerdict(first ? "handover" : "pledges");
       paused = true;
       renderToolbar();
     }

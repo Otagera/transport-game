@@ -11,6 +11,7 @@ import { cementBreak, cementServed } from "./cement";
 import { fuelPlanned, fuelReachable, fuelSupply, inHome } from "./fuel";
 import { cheapestRoadFrom } from "./moves";
 import { fieldId } from "./clusters";
+import { segmentLength } from "./roads";
 
 // Terms and pledges (docs/brief.md, Revision 5, step 2: the probe). Play runs in terms
 // of `termDays`; at each term's start the state offers three pledges, each made from a
@@ -61,6 +62,16 @@ export interface TermRecord {
   /** The mandate: no pledge kept or the towns shrank; and the grant this verdict set for the next term (debt it cleared included). */
   failed?: boolean;
   grant?: number;
+  /**
+   * For the correspondent's letter (src/game/correspondent.ts; brief, Revision 5, step 4): the kept
+   * pledges' kind and town; each pledged town's people at the term's start and end; when it ran;
+   * and paved road at its end, cells. Records only: nothing simulated reads them.
+   */
+  keptKeys?: string[];
+  towns?: Array<{ id: string; from: number; to: number }>;
+  fromSeconds?: number;
+  toSeconds?: number;
+  pavedCells?: number;
 }
 
 export interface TermState {
@@ -73,6 +84,8 @@ export interface TermState {
   /** Builds waiting for their week (a week on). */
   watching: Array<{ label: string; towns: string[]; atSeconds: number; people: number[]; trips: number }>;
   nextCheckAtSeconds: number;
+  /** Each town's people as the term began, for its record's `towns`. */
+  townsAtStart?: Record<string, number>;
   /** The mandate: failed terms in a row; when the state replaced you (absent: it hasn't). */
   failedInRow?: number;
   replacedAtSeconds?: number;
@@ -254,7 +267,8 @@ function offerPledges(world: GameWorld, number: number, missedLast: Set<string>)
 function openTerm(world: GameWorld, number: number, at: number, history: TermRecord[], watching: TermState["watching"]): GameEvent {
   const days = world.tuning.termDays ?? 120;
   const pledges = offerPledges(world, number, new Set(history.at(-1)?.missedKeys ?? []));
-  world.term = { number, startedAtSeconds: at, endsAtSeconds: at + days * D, pledges, peopleAtStart: people(world), history, watching, nextCheckAtSeconds: at + D };
+  const townsAtStart = Object.fromEntries([...world.towns.values()].filter((t) => !t.industry).map((t) => [t.id, t.population]));
+  world.term = { number, startedAtSeconds: at, endsAtSeconds: at + days * D, pledges, peopleAtStart: people(world), townsAtStart, history, watching, nextCheckAtSeconds: at + D };
   return { kind: "term-started", number, pledges: pledges.map((p) => p.text) };
 }
 
@@ -297,6 +311,12 @@ export function updateTerm(world: GameWorld): GameEvent[] {
     const missed = term.pledges.filter((p) => p.committed && !kept.includes(p));
     for (const p of term.pledges) p.kept = kept.includes(p);
     const record: TermRecord = { number: term.number, kept: kept.map((p) => p.text), missed: missed.map((p) => p.text), missedKeys: missed.map((p) => `${p.kind}:${p.townId}`), peopleFrom: term.peopleAtStart, peopleTo: people(world) };
+    // What the correspondent's letter reads (src/game/correspondent.ts): records, not simulation.
+    record.keptKeys = kept.map((p) => `${p.kind}:${p.townId}`);
+    record.towns = [...new Set([...kept, ...missed].map((p) => p.townId))].map((id) => ({ id, from: term.townsAtStart?.[id] ?? world.towns.get(id)?.population ?? 0, to: world.towns.get(id)?.population ?? 0 }));
+    record.fromSeconds = term.startedAtSeconds;
+    record.toSeconds = now;
+    record.pavedCells = world.simulation.map.segments.filter((s) => s.type === "road" && s.surface === "paved").reduce((sum, s) => sum + segmentLength(world, s), 0);
     let failedInRow = 0;
     let replacedAtSeconds = term.replacedAtSeconds;
     if (world.tuning.mandateEnabled) {

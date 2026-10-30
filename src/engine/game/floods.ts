@@ -52,6 +52,8 @@ export interface FloodState {
   coming: string[];
   /** Fords under water now. */
   under: string[];
+  /** Each time the water rose: the fords that went under, and those of the season's you'd raised. A record only. */
+  risen?: Array<{ atSeconds: number; under: string[]; bridged: string[] }>;
   /** Road pieces under water now (refreshed daily while it lasts: a town can split a road). */
   flooded: Set<string>;
   nextCheckAt: number;
@@ -194,6 +196,8 @@ export function updateFloods(world: GameWorld): GameEvent[] {
   // The water rises over the fords still low.
   if (floods.phase === "warned" && now >= floods.riseAt) {
     floods.under = floods.coming.filter((id) => !fordById(world, id)?.bridged);
+    // A record for the correspondent's letter (src/game/correspondent.ts): which went under, which you'd raised.
+    (floods.risen ??= []).push({ atSeconds: now, under: [...floods.under], bridged: floods.coming.filter((id) => !floods.under.includes(id)) });
     floods.coming = [];
     floods.phase = "flood";
     if (floods.under.length > 0) events.push({ kind: "flood-rose", fords: named(floods.under), days: Math.round((floods.fallAt - now) / D) });

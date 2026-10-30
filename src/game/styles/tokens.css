@@ -52,6 +52,7 @@
 
   /* Type and shape */
   --label-font: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --letter-font: Georgia, "Times New Roman", serif; /* the correspondent's letters */
   --label-tracking: 0.12em;
   --radius: 16px;
 

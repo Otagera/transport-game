@@ -1114,7 +1114,7 @@ His letter becomes the term's full screen, ahead of the revenue screen; `termVer
 
 **Not in this:** no second voice beside the chairman's; no letters mid-term (a correspondent who speaks when you build is a tutorial on a timer); no eras -- the arc is your own growth choking your corridors; no ending -- replacement ends a career, not the save, and the next appointee inherits your network. He writes the next of these.
 
-**Order:** C32 as a test; the term letter (everything it reads exists); the handover (each clause checked against what `region.ts` draws, its railway clause from the stations); then and now.
+**Order:** C32 as a test; the term letter (everything it reads exists); the handover (each clause checked against what `region.ts` draws, its railway clause from the stations); then and now. **Built 2026-10-30:** C32 (a test over every template), the term letter, the handover (render-and-ui.md §7); then and now still to build.
 
 ### Ideas parked (yours, 2026-10-24), with where they'd fit
 

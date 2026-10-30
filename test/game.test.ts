@@ -11,7 +11,7 @@ import { clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
 import { fuelReach } from "@engine/game/fuel";
 import type { GameEvent } from "@engine/game/settlement";
-import { pledgeMove, pledgeNow, pledgeProgress } from "@engine/game/term";
+import { pledgeMove, pledgeNow, pledgeProgress, type TermRecord } from "@engine/game/term";
 import { fuelPlanned, fuelReachable } from "@engine/game/fuel";
 import { describe, expect, test } from "bun:test";
 import { addBus, buildRoad, createGameWorld, largestGapMidpoint, networkShare, removeBus, roadCost, routeSummaries, townOutcomes, tripsFrom, waitingAt, diagnoseRoute, isCutOff, roadPath, debtAdvice, demandAlong, throughRoute, pairDemand, paveRoad, paveCost, checkPave, dirtRoadsOn, localTravel, roadChain, chainOf, checkRoad, addMinibus, isMinibusRoute, headline, routeKey, gameDay, directRoad } from "@engine/game/world";
@@ -59,6 +59,7 @@ import { flowKey as goodsKey, recordGoodsDelivered, relayArrivals } from "@engin
 import { goodsOnTheWay, haulBreak, haulDistance, haulPlans, legReach, nextStop, relayed, yardWouldBring } from "@engine/game/haulage";
 import { buildYard } from "@engine/game/yards";
 import { backToStation, foundStationTowns, stationOpen } from "@engine/game/stations";
+import { correspondentName, handoverNote, notATutorial, predecessors, termLetter } from "../src/game/correspondent";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
@@ -4898,5 +4899,102 @@ describe("stations on the old line (stations.ts; brief, Revision 5, Stations on 
     expect(w.towns.get(id)!.industry).toBe("station");
     expect(rail(w).some((piece) => piece.fromNodeId === id || piece.toNodeId === id)).toBe(true);
     if (info.kind === "gone") expect(w.ruins.has(info.serves)).toBe(true);
+  }, 60_000);
+});
+
+describe("the correspondent (src/game/correspondent.ts; brief, Revision 5, step 4 rebuilt)", () => {
+  const game = (seed: number) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0 });
+  const kinds = ["connect", "cement", "fuel", "seats", "service", "grow", "reach"];
+  /** A term record that fires every clause he has: each kind kept and missed, the union, the rains, paved road. */
+  const everything = (w: GameWorld, number: number): TermRecord => {
+    const towns = [...w.towns.values()].filter((t) => !t.industry).map((t) => t.id);
+    const now = w.economy.elapsedSeconds;
+    const union = w.unions?.[0];
+    if (union) union.memory.push({ day: gameDay(w), text: "you saw to his members (₦8,000)", delta: 0.2 }, { day: gameDay(w), text: `you refused him on ${w.towns.get(towns[0]!)!.name}–${w.towns.get(towns[1]!)!.name}`, delta: -0.3 });
+    const ford = w.floods?.fords[0];
+    if (ford && w.floods) (w.floods.risen ??= []).push({ atSeconds: now, under: [ford.id], bridged: w.floods.fords[1] ? [w.floods.fords[1].id] : [] });
+    return {
+      number, kept: kinds.map((k) => k), missed: kinds.map((k) => k), peopleFrom: 500, peopleTo: 520, failed: false, grant: 40_000,
+      keptKeys: kinds.map((k, i) => `${k}:${towns[i % towns.length]}`), missedKeys: kinds.map((k, i) => `${k}:${towns[(i + 3) % towns.length]}`),
+      towns: towns.map((id) => ({ id, from: 20, to: 31 })), fromSeconds: now - 1, toSeconds: now + 1, pavedCells: 400,
+    };
+  };
+
+  test("C32, not a tutorial: nothing he can write names a key, a control, a screen or a price, or tells you what to do", () => {
+    // The check itself catches what it must, and lets the world's own nouns through.
+    expect(notATutorial("Press R to pave the road")).not.toBeNull();
+    expect(notATutorial("Build a yard at Ede (Y).")).not.toBeNull();
+    expect(notATutorial("The bridge cost ₦1,200 a cell.")).not.toBeNull();
+    expect(notATutorial("Click the Track tool.")).not.toBeNull();
+    expect(notATutorial("You have the roads, the track and the buses.")).toBeNull();
+    for (const seed of [1, 4, 77, 2418, 543]) {
+      const w = game(seed);
+      const letters = [handoverNote(w), termLetter(w, everything(w, 1))];
+      // His every stance.
+      w.term!.history = [everything(w, 1), everything(w, 2)];
+      letters.push(termLetter(w, everything(w, 3)));
+      w.term!.history = [{ ...everything(w, 1), failed: true }];
+      letters.push(termLetter(w, everything(w, 2)));
+      w.term!.history = [{ ...everything(w, 1), failed: true }, { ...everything(w, 2), failed: true }];
+      w.term!.replacedAtSeconds = w.economy.elapsedSeconds;
+      letters.push(termLetter(w, w.term!.history[1]!));
+      for (const letter of letters) for (const p of letter.paragraphs) expect([p, notATutorial(p)]).toEqual([p, null]);
+    }
+  }, 120_000);
+
+  test("C34, the handover reads true on any seed: the line's real ends and stations, the real fords and chairman", () => {
+    for (const seed of [1, 2, 3, 4, 5, 77, 543, 949, 2418, 4882]) {
+      const w = game(seed);
+      const note = handoverNote(w);
+      expect(note.paragraphs.length).toBe(3);
+      expect(note.paragraphs.join(" ").length).toBeLessThan(1400);
+      const text = note.paragraphs[0]!;
+      const rail = w.simulation.map.segments.filter((s) => s.type === "rail");
+      if (rail.length > 0) {
+        // The two real ends of one of its old lines (the longest, where there's more than one), named.
+        const lines = new Map<string, Map<string, number>>();
+        for (const s of rail) {
+          const line = s.id.match(/^inherited-rail-\d+/)?.[0] ?? s.id;
+          const degree = lines.get(line) ?? new Map<string, number>();
+          for (const n of [s.fromNodeId, s.toNodeId]) degree.set(n, (degree.get(n) ?? 0) + 1);
+          lines.set(line, degree);
+        }
+        const named = [...lines.values()].some((degree) => [...degree].filter(([, d]) => d === 1).every(([end]) => text.includes(w.towns.get(end)!.name)));
+        expect(named).toBe(true);
+      }
+      const gone = [...(w.stations?.values() ?? [])].filter((s) => s.kind === "gone").length;
+      if (gone > 0) expect(text).toMatch(/serves? (?:a town|towns) that (?:is|are) no longer there/);
+      else expect(text).not.toContain("no longer there");
+      if ((w.floods?.fords.length ?? 0) > 0) expect(text).toContain("they ford it");
+      if (w.unions?.length) expect(text).toContain((w.unions.find((u) => u.id === "home") ?? w.unions[0]!).chairman);
+      // Every town he names is on this map.
+      const names = new Set([...w.towns.values(), ...w.ruins.values()].map((t) => t.name));
+      for (const p of note.paragraphs) for (const m of p.matchAll(/\b(?:between|from|to|at|in) ([A-Z][a-z']*(?:[ -][A-Z][a-z']*)*)/g)) {
+        if (["The", "Ministry", "Transportation"].includes(m[1]!)) continue;
+        expect([m[1], names.has(m[1]!) || /^(Cement|Refinery)/.test(m[1]!)]).toEqual([m[1], true]);
+      }
+      expect(note.paragraphs[2]).toContain(`I have written ${["three", "four", "five", "six"][predecessors(w) - 3]} of these`);
+    }
+  }, 120_000);
+
+  test("C33, every letter says something, and at most three things; a term with nothing pledged still gets one", () => {
+    const w = game(1);
+    const full = termLetter(w, everything(w, 2)).paragraphs[0]!;
+    expect(full.split(/(?<=\.) /).length).toBeLessThanOrEqual(1 + 3 * 3 + 1); // "Term n." + three clauses (each up to three sentences) + his stance
+    const empty = termLetter(game(1), { number: 1, kept: [], missed: [], peopleFrom: 500, peopleTo: 512 }).paragraphs[0]!;
+    expect(empty).toContain("The towns grew by 12,000 people");
+    // His name and count come from the map: the same map, the same man.
+    expect(correspondentName(game(1))).toBe(correspondentName(w));
+  }, 60_000);
+});
+
+describe("the correspondent's stance, letter by letter", () => {
+  test("a term's letter is written as things stood at its end: a good term 1 isn't doubted for a failed term 2", () => {
+    const w = startGame(gameMap(GAME_MAP, 1, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0 });
+    const good: TermRecord = { number: 1, kept: ["a"], missed: [], peopleFrom: 500, peopleTo: 520, failed: false, grant: 1 };
+    const bad: TermRecord = { number: 2, kept: [], missed: ["b"], peopleFrom: 520, peopleTo: 510, failed: true, grant: 1 };
+    w.term!.history = [good, bad];
+    expect(termLetter(w, good).paragraphs[0]).not.toContain("The state has noticed");
+    expect(termLetter(w, bad).paragraphs[0]).toContain("The state has noticed");
   }, 60_000);
 });
