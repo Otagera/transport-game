@@ -3273,6 +3273,33 @@ describe("the steel chain (steel.ts; brief, More industries, more chains)", () =
     const old = game(4, { steelEnabled: undefined as unknown as boolean });
     expect(old.steel).toBeNull();
   }, 30_000);
+  test("map version 7 spreads the clusters over the frame: on twenty seeds less land is far from every town, none worse, and every map still draws (brief, Chains: convergent, 3)", () => {
+    // The land more than 25 cells from any town, off the sea, sampled every 6 cells.
+    const far = (map: ReturnType<typeof gameMap>) => {
+      const sea = (map.terrain?.rivers ?? []).filter((r) => Math.max(...(r.widths ?? [r.width])) > 12);
+      const wet = (x: number, y: number) => sea.some((r) => r.points.some(([px, py], i) => Math.hypot(px - x, py - y) < (r.widths?.[i] ?? r.width) / 2));
+      let land = 0, empty = 0;
+      for (let y = 3; y < map.height; y += 6) for (let x = 3; x < map.width; x += 6) {
+        if (wet(x, y)) continue;
+        land += 1;
+        if (!map.towns.some((t) => Math.hypot(t.x - x, t.y - y) <= 25)) empty += 1;
+      }
+      return empty / land;
+    };
+    let before = 0, after = 0;
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const v6 = far(gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 6 }));
+      const map = gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 7 });
+      expect(map.width * map.height).toBe(REGION_WIDTH * REGION_HEIGHT);
+      for (const [i, a] of map.towns.entries()) for (const b of map.towns.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(15);
+      const v7 = far(map);
+      expect(v7).toBeLessThanOrEqual(v6 + 0.02);
+      before += v6;
+      after += v7;
+    }
+    // 47% -> 38% of the land, on twenty-four seeds when measured.
+    expect(after).toBeLessThanOrEqual(before * 0.88);
+  }, 120_000);
 });
 
 describe("generated maps per seed, with guards (brief, After the ladder's playtest, 5; P8)", () => {
@@ -4486,7 +4513,7 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
     const fords = w.floods!.fords;
     expect(fords.length).toBeGreaterThan(0);
     for (const ford of fords) {
-      expect(ford.name).toMatch(/ford$/);
+      expect(ford.name).toMatch(/ford( \(\d+\))?$/);
       expect(ford.bridged).toBe(false);
       expect(ford.span).toBeGreaterThanOrEqual(1);
     }

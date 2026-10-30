@@ -258,7 +258,8 @@ export interface GameTuning {
    * meandering, the old railway laid over the land; 3 the sites round a town placed past where
    * it's built up, on one side of it (fuel.ts ringSpot); 4 the land beyond the home cluster drawn
    * by region, and the coast with an estuary and bays (regionalLand); 5 a southern region's coast
-   * along its south (coastToSouth); 6 the north, north-east and Middle Belt landlocked (landlocked).
+   * along its south (coastToSouth); 6 the north, north-east and Middle Belt landlocked (landlocked);
+   * 7 the clusters spread over the frame (drawRegion, by the land each reaches that nothing else does).
    * Absent in older runs: 1, so a run file
    * replays on the map it was played on.
    */

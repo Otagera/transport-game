@@ -1235,6 +1235,24 @@ replays as played. Seed 0 stays the hand-made map, alone.
   from the home city; the north-east's Banki crossing now on its east edge. Six northern maps
   unplayed for 20 days, version 5 -> 6: the same 42 sites working, fuel 24.8% -> 24.6%, trips 573 ->
   574, export pay ₦220 -> ₦248 a day (their seaport was already a haul away).
+- **Version 7: the clusters spread over the frame** (`region.ts drawRegion`, `spread`; brief, Chains:
+  convergent, 3, "Room for them"; 2026-10-30). Measured first: on 24 seeds the towns' hull covered
+  56% of the 250 × 160 frame, but 47% of the dry land was more than 25 cells from any town (map
+  3218's right third and south-east bare). Each far cluster's centre had been the best of 12 spots by
+  distance from the home box and the other centres. **Farthest-point is the wrong score:** with 80
+  spots it got *worse* (48%), because it pushes clusters into the corners and half of each cluster's
+  reach falls off the frame. Now each centre is the best of 60 by how much dry land within reach
+  (`REACH` 28 cells) nothing yet reaches, and a cluster's towns sit out to 26 cells, not 20: 47% ->
+  38%, every seed better or level (test: twenty seeds). The strategist to day 250, five seeds, v6 ->
+  v7 (net a day, trips, people, C14 days 60-150): 543 ₦4,113/₦5,844, 1,127/1,170, 743k/757k, 42/4;
+  2411 ₦3,124/₦4,147, 998/1,029, 804k/792k, 13/10; 3218 ₦1,511/₦6,488, 1,808/1,897, 926k/973k,
+  66/91; 949 ₦4,037/₦3,363, 1,484/1,287, 910k/887k, 60/79; 7 ₦968/₦1,890, 1,043/1,004, 824k/815k,
+  85/62. Net up on four of five, trips on three, people within 3% either way; the bot's goods share
+  stays ~0 (it runs no lorries) and C14 still fails on four. Cost: tick 1.47 -> 1.52 ms over 15
+  days, warm-up ~9.3 s either way; the five maps played faster in all (4,071 s against 4,537 s).
+  **The frame stays 250 × 160:** spreading within it was enough, and nothing yet needs more room.
+  Industries in the gaps (the brief's second step) waits for the next industry to place: the sites
+  placed today belong beside their towns (fuel.ts `ringSpot`), and the quarries in the home box.
 - **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
   region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
   a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought

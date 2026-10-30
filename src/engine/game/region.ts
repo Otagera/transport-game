@@ -72,6 +72,17 @@ const HUB_SIZES = [70, 55, 45];
 const SMALL_TOWN: [number, number] = [8, 26];
 /** How deep the sea comes in from the coast edge, cells. */
 const SEA_DEPTH: [number, number] = [4, 7];
+/**
+ * Map version 7 (2026-10-30, Chains: convergent, Room for them): each cluster centre the best of
+ * this many spots that fit, not 12, by how much land it reaches that nothing yet does (not by how
+ * far it is from the rest: that pushed clusters into the corners, half their reach off the frame);
+ * and a cluster's towns a little wider round it. Map 3218's right third and south-east sat bare.
+ */
+const SPREAD_FITS = 60;
+const SPREAD_RADIUS = 26;
+/** A place "reaches" land this near it, cells; the reach is sampled on a grid this fine. */
+const REACH = 28;
+const REACH_STEP = 6;
 /** Draws of the region round the home cluster before giving up on the region (never seen in tests). */
 const MAX_DRAWS = 300;
 
@@ -89,13 +100,15 @@ export interface RegionInfo {
 
 /** The map a game is played on: the region when its tuning says so, else the seed's slice map. */
 export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?: boolean; riverValleys?: boolean; mapVersion?: number }): GameMapDef {
-  let map = tuning.regionEnabled ? regionMap(base, seed) : generatedMapInfo(base, seed).map;
   // Map version 2 (2026-10-28): rivers that wind, and an old railway that follows the land.
   const version = tuning.mapVersion ?? 1;
+  // Version 7: the clusters spread over the frame (drawRegion, `spread`).
+  const spread = version >= 7;
+  let map = tuning.regionEnabled ? regionInfo(base, seed, STANDARD, spread).map : generatedMapInfo(base, seed).map;
   // Version 5: a southern region's coast is its south -- drawn on its side, then turned.
   let turn = false;
   if (version >= 5 && tuning.regionEnabled && seed !== 0 && SOUTHERN.has(generatedMapInfo(base, seed).region)) {
-    const sideways = regionInfo(base, seed, { w: REGION_HEIGHT, h: REGION_WIDTH });
+    const sideways = regionInfo(base, seed, { w: REGION_HEIGHT, h: REGION_WIDTH }, spread);
     if (sideways.rejected < MAX_DRAWS) [map, turn] = [sideways.map, true];
   }
   if (version >= 2 && seed !== 0) {
@@ -115,12 +128,12 @@ export function regionMap(base: GameMapDef, seed: number): GameMapDef {
   return regionInfo(base, seed).map;
 }
 
-export function regionInfo(base: GameMapDef, seed: number, frame: Frame = STANDARD): RegionInfo {
+export function regionInfo(base: GameMapDef, seed: number, frame: Frame = STANDARD, spread = false): RegionInfo {
   const home = generatedMapInfo(base, seed);
   if (seed === 0) return { map: home.map, home, hubs: [home.trunk[0]], seaport: home.map.port!, rejected: 0 };
   const rng = createRng(seed + 3_000_017);
   for (let draw = 0; draw < MAX_DRAWS; draw += 1) {
-    const result = drawRegion(rng, home, frame);
+    const result = drawRegion(rng, home, frame, spread);
     if (result) return { ...result, home, rejected: draw };
   }
   return { map: home.map, home, hubs: [home.trunk[0]], seaport: home.map.port!, rejected: MAX_DRAWS };
@@ -281,7 +294,7 @@ function toBox(p: Point, box: { x: number; y: number; width: number; height: num
   return Math.hypot(dx, dy);
 }
 
-function drawRegion(rng: Rng, home: GeneratedMapInfo, frame: Frame = STANDARD): Omit<RegionInfo, "home" | "rejected"> | null {
+function drawRegion(rng: Rng, home: GeneratedMapInfo, frame: Frame = STANDARD, spread = false): Omit<RegionInfo, "home" | "rejected"> | null {
   const W = frame.w;
   const H = frame.h;
   const homeRivers = home.map.terrain?.rivers ?? [];
@@ -355,17 +368,23 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo, frame: Frame = STANDARD): 
   // leaving a quarter of it empty.
   const centres: Point[] = [];
   const room = (p: Point) => Math.min(toBox(p, homeBox) + CLUSTER_GAP - HOME_GAP, ...centres.map((c) => distance(c, p)));
+  // Version 7: the dry land within REACH of a spot that neither the home cluster's towns nor a
+  // cluster already placed (its centre, out to its towns' radius) reaches.
+  const land: Point[] = [];
+  if (spread) for (let y = REACH_STEP / 2; y < H; y += REACH_STEP) for (let x = REACH_STEP / 2; x < W; x += REACH_STEP) if (dryOf(water, { x, y }, 0)) land.push({ x, y });
+  const reached = (q: Point) => towns.some((t) => distance(t, q) <= REACH) || centres.some((c) => distance(c, q) <= SPREAD_RADIUS + REACH / 2);
+  const unreached = (p: Point) => land.filter((q) => distance(p, q) <= SPREAD_RADIUS + REACH / 2 && !reached(q)).length;
   for (let attempt = 0; attempt < 3000 && centres.length < CLUSTERS; ) {
     const port = !homeSea && centres.length === 0;
     let best: Point | null = null;
-    for (let fits = 0; fits < 12 && attempt < 3000; attempt += 1) {
+    for (let fits = 0; fits < (spread ? SPREAD_FITS : 12) && attempt < 3000; attempt += 1) {
       const p = port
         ? ((y) => ({ x: Math.round(coastAt(coast, seaSide, y) - seaSide * between(rng, 6, 9)), y }))(Math.round(between(rng, 20, H - 20)))
         : { x: Math.round(between(rng, 20, W - 21)), y: Math.round(between(rng, 18, H - 19)) };
       if (!inBounds(p) || !dry(p) || toBox(p, homeBox) < HOME_GAP || centres.some((c) => distance(c, p) < CLUSTER_GAP)) continue;
       if (port && dryOf(water, p, WATER_CLEARANCE + 6)) continue; // a port is by the sea
       fits += 1;
-      if (!best || room(p) > room(best)) best = p;
+      if (!best || (spread ? unreached(p) > unreached(best) : room(p) > room(best))) best = p;
     }
     if (best) centres.push(best);
   }
@@ -380,7 +399,7 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo, frame: Frame = STANDARD): 
     const spots: Point[] = [centre];
     for (let attempt = 0; attempt < 2000 && spots.length < perCluster; attempt += 1) {
       const angle = rng() * Math.PI * 2;
-      const r = between(rng, MIN_SPACING, CLUSTER_RADIUS);
+      const r = between(rng, MIN_SPACING, spread ? SPREAD_RADIUS : CLUSTER_RADIUS);
       const p = { x: Math.round(centre.x + Math.cos(angle) * r), y: Math.round(centre.y + Math.sin(angle) * r) };
       if (!inBounds(p) || !dry(p) || !spaced(p, [...towns, ...spots]) || toBox(p, homeBox) < HOME_GAP / 2) continue;
       spots.push(p);

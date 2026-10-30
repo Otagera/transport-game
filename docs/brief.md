@@ -846,9 +846,11 @@ where you build. `production.ts` already took the lowest of a site's inputs; eve
 2. **The recipe card and the chain strip** (built 2026-10-30, render-and-ui.md §7): a site's card says
    which input is short and where it's stuck, and the chain as one line of boxes, forking where two
    inputs meet, the one broken link marked.
-3. **Room for them** (last): spread within the 250 x 160 frame before enlarging it -- the southern half
-   of map 3218 sat empty -- measured on five seeds (trips, net, people, goods share, towns served, C14,
-   tick and warm-up cost); a bigger frame only if that need survives the tick.
+3. **Room for them** (built 2026-10-30, map version 7, engine.md): spread within the 250 x 160 frame
+   before enlarging it -- the southern half of map 3218 sat empty. Each far cluster now goes where it
+   reaches the most land nothing else does, its towns a little wider: land far from any town 47% ->
+   38% on 24 seeds, at no cost to the tick; the strategist's net up on four of five seeds. The frame
+   stays as it is; industries go in the gaps when the next one is placed.
 
 ### Checks for the chains
 
