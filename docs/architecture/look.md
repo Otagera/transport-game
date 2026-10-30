@@ -171,8 +171,8 @@ old left column held two log lines and the old right panel held one notice.
 
 ## 8. The 3D view
 
-The same palette, the same world. `shapes3d.ts` reads the tokens above rather than its own
-118 colour literals (and `view3d.ts` its 39). Then, in order -- these are `principles.md`
+The same palette, the same world. `shapes3d.ts` and `view3d.ts` read the tokens above
+(`palette3d.ts`; done 2026-10-30): signal by its own tokens, the world's paint by `--paint-*`. Then, in order -- these are `principles.md`
 §Visual direction, which the view was built without applying:
 
 1. **Albedo separation before lighting.** The ground is one sage across most of the plate.
@@ -188,9 +188,8 @@ The same palette, the same world. `shapes3d.ts` reads the tokens above rather th
 ## 9. Enforcement
 
 In `bun run verify` (typecheck, test, build, verify:bundle, then these: `scripts/verify-look.ts`,
-`bun run verify:look` alone), so the direction holds without anyone remembering it. Until the 3D
-view's tokens land (§8, the look's step 5), `shapes3d.ts` and `view3d.ts` are listed as pending
-rather than failing; the list must be empty when that step lands.
+`bun run verify:look` alone), so the direction holds without anyone remembering it. The 3D view reads
+the same tokens (`palette3d.ts`): its signal colours by their own, its paint by `--paint-*`.
 
 | Check | Fails when |
 | --- | --- |

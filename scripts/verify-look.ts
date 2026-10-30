@@ -15,11 +15,8 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 const failures: string[] = [];
 
-/**
- * The 3D view's colours move to tokens in look.md §8's first step (the look, step 5); until then
- * its files are named here, and this list is the reminder -- it must be empty when step 5 lands.
- */
-const PENDING_3D = new Set(["src/game/shapes3d.ts", "src/game/view3d.ts"]);
+/** Files allowed literals for now, each with its reason; empty since the 3D view read the tokens (2026-10-30). */
+const PENDING_3D = new Set<string>();
 
 function files(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(join(ROOT, dir))) {

@@ -26,6 +26,7 @@ import { tierOf, type Tier } from "./icons";
 import type { Focus } from "./render";
 import { steadyOver, steadyShortage } from "./steady";
 import { treeGeometry, type TreeKind } from "./shapes3d";
+import { paint as tokenPaint, paintAlpha, paintHex } from "./palette3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
 import { BLOCK_WALLS, CONCRETE, ROOFS, WALLS, WINDOWS, fillingStation, fuelSeller, haulageYard, kiosk, metroEntrance, motorPark, railStation } from "./shapes3d";
@@ -60,8 +61,8 @@ THREE.ShaderChunk.fog_fragment = /* glsl */ `
 // never from the mesh's normals: the sea's wide ribbon folds over itself at sharp bends, and lit
 // by its own normals those folds showed as dark slivers (why it was unlit).
 
-const WATER_DAY = { deep: 0x3f86b4, shallow: 0x7fbdd2, sky: 0xd6e6ee, foam: 0xeae6da, glint: 0xfff4dc, glintStrength: 0.55 };
-const WATER_NIGHT = { deep: 0x15253c, shallow: 0x253f5c, sky: 0x2a3450, foam: 0x4f5b6a, glint: 0xb8c8ff, glintStrength: 0.35 };
+const WATER_DAY = { deep: paintHex("--paint-blue-14"), shallow: paintHex("--paint-blue-8"), sky: paintHex("--paint-blue-1"), foam: paintHex("--paint-earth-2"), glint: paintHex("--paint-light-3"), glintStrength: 0.55 };
+const WATER_NIGHT = { deep: paintHex("--paint-dark-1"), shallow: paintHex("--paint-blue-20"), sky: paintHex("--paint-blue-21"), foam: paintHex("--paint-blue-19"), glint: paintHex("--paint-blue-2"), glintStrength: 0.35 };
 const waterMaterials = new Set<THREE.ShaderMaterial>();
 
 function makeWaterMaterial(): THREE.ShaderMaterial {
@@ -183,25 +184,26 @@ function setWaterNight(material: THREE.ShaderMaterial, night: boolean): void {
 }
 
 /** A town's own streets (townKit): paler than the roads between towns, so those still lead. */
-const STREET_DIRT = 0xae855e;
-const STREET_PAVED = 0x77797b;
+const STREET_DIRT = paintHex("--paint-earth-43");
+const STREET_PAVED = paintHex("--paint-grey-14");
 /**
  * The land by the map's region (world.region; map version 4 draws its shape, this its look): the
  * plain's dry and green, the banks, high ground, how dry the plain leans and how thick the trees.
  * The north dry and open, the south-south lush, the Middle Belt's high ground grey rock.
  */
 const BIOMES: Record<string, { dry: number; green: number; bank: number; high: number; dryness: number; trees: number }> = {
-  southwest: { dry: 0xc6b783, green: 0x9fb27a, bank: 0x7c9a55, high: 0x7d8f62, dryness: 0, trees: 1 },
-  southeast: { dry: 0xb9b47f, green: 0x8fae68, bank: 0x6f9450, high: 0x6c8a52, dryness: -0.12, trees: 1.35 },
-  southSouth: { dry: 0xadb57c, green: 0x84a75f, bank: 0x5c8846, high: 0x6c8a52, dryness: -0.28, trees: 1.7 },
-  middleBelt: { dry: 0xc6b783, green: 0x9fb27a, bank: 0x7c9a55, high: 0x948e80, dryness: 0.05, trees: 0.9 },
-  north: { dry: 0xd4bf8a, green: 0xb7b37c, bank: 0x8c9c5a, high: 0xa08f74, dryness: 0.32, trees: 0.45 },
-  northeast: { dry: 0xd8c18c, green: 0xbab47c, bank: 0x8c9c5a, high: 0xa38f72, dryness: 0.38, trees: 0.4 },
+  southwest: { dry: paintHex("--paint-earth-28"), green: paintHex("--paint-green-4"), bank: paintHex("--paint-green-12"), high: paintHex("--paint-green-11"), dryness: 0, trees: 1 },
+  southeast: { dry: paintHex("--paint-earth-32"), green: paintHex("--paint-green-7"), bank: paintHex("--paint-green-14"), high: paintHex("--paint-green-16"), dryness: -0.12, trees: 1.35 },
+  southSouth: { dry: paintHex("--paint-green-3"), green: paintHex("--paint-green-9"), bank: paintHex("--paint-green-20"), high: paintHex("--paint-green-16"), dryness: -0.28, trees: 1.7 },
+  middleBelt: { dry: paintHex("--paint-earth-28"), green: paintHex("--paint-green-4"), bank: paintHex("--paint-green-12"), high: paintHex("--paint-grey-11"), dryness: 0.05, trees: 0.9 },
+  north: { dry: paintHex("--paint-earth-25"), green: paintHex("--paint-green-2"), bank: paintHex("--paint-green-10"), high: paintHex("--paint-earth-42"), dryness: 0.32, trees: 0.45 },
+  northeast: { dry: paintHex("--paint-earth-23"), green: paintHex("--paint-earth-33"), bank: paintHex("--paint-green-10"), high: paintHex("--paint-earth-41"), dryness: 0.38, trees: 0.4 },
 };
-const ROAD_COLOURS = { paved: 0x56585b, dirt: 0xa47a55, busy: 0xd99a2b, jammed: 0xc8553d, retired: 0xb9b2a4, flooded: 0x2a6f97 };
+// Busy, jammed and flooded are signal (look.md §2): the same tokens as the 2D map's.
+const ROAD_COLOURS = { paved: paintHex("--paint-grey-21"), dirt: paintHex("--paint-earth-48"), busy: paintHex("--road-busy"), jammed: paintHex("--road-jammed"), retired: paintHex("--paint-earth-26"), flooded: paintHex("--flood") };
 /** A selection: your colour (the 2D map's --you), lit on what it's connected to; the rest toward the ground's pale. */
-const FOCUS_COLOUR = 0x2a78d6;
-const FADED_TO = new THREE.Color(0xd9d3c4);
+const FOCUS_COLOUR = paintHex("--you");
+const FADED_TO = new THREE.Color(paintHex("--paint-earth-11"));
 
 export interface View3D {
   /** Show it, built for this world (rebuilt if the world is a new one). */
@@ -236,7 +238,7 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
   host.append(renderer.domElement);
   // A soft vignette: the eye settles on the middle, where the camera's looking.
   const vignette = document.createElement("div");
-  vignette.style.cssText = "position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 48%, rgba(0,0,0,0) 55%, rgba(40,30,20,0.22) 100%);";
+  vignette.style.cssText = "position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 48%, transparent 55%, color-mix(in srgb, var(--ink) 22%, transparent) 100%);";
   host.append(vignette);
   const labels = new CSS2DRenderer();
   labels.domElement.style.cssText = "position:absolute;inset:0;pointer-events:none;";
@@ -412,12 +414,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   // so far land melts into it (with a blue-grey background and a beige fog, the land's far end
   // went to a beige wedge against the sky) -- and a cool blue-grey below it, round and under the
   // map, so the warm land stands off it (beige there, the slab sank into its backdrop).
-  const HORIZON = 0xe4e0d2;
+  const HORIZON = paintHex("--paint-earth-6");
   scene.background = new THREE.Color(HORIZON);
   scene.fog = new THREE.Fog(HORIZON, 900, 3000);
-  const hemi = new THREE.HemisphereLight(0xe8f0f8, 0x8a7a5a, 1.45);
+  const hemi = new THREE.HemisphereLight(paintHex("--paint-light-2"), paintHex("--paint-earth-50"), 1.45);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff0d4, 2.5);
+  const sun = new THREE.DirectionalLight(paintHex("--paint-light-5"), 2.5);
   sun.shadow.radius = 3;
   sun.shadow.bias = -0.0004;
   sun.castShadow = true;
@@ -467,7 +469,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     colours.needsUpdate = true;
     (scene.fog as THREE.Fog).color.setHex(horizonHex);
   };
-  paintSky(0x9dbfdc, HORIZON, 0xbcc7d0);
+  paintSky(paintHex("--paint-blue-6"), HORIZON, paintHex("--paint-blue-4"));
   const sky = (() => {
     const geo = skyGeo;
     const mesh = new THREE.Mesh(own(geo), own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
@@ -479,7 +481,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const edgeMaterial = own(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   const waterMaterial = own(makeWaterMaterial());
   // The blocks' windows: their own material, lit from inside at night.
-  const windowMaterial = own(new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  const windowMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-light-1") }));
   const wetNear = (cx: number, cy: number) => {
     for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) if (isWater(terrain, Math.round(cx) + dx, Math.round(cy) + dy)) return true;
     return false;
@@ -570,7 +572,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
     const high = new THREE.Color(biome.high), c = new THREE.Color(), rgb = { r: 0, g: 0, b: 0 };
-    const dry = new THREE.Color(biome.dry), green = new THREE.Color(biome.green), bankGreen = new THREE.Color(biome.bank), earth = new THREE.Color(0xb98a62);
+    const dry = new THREE.Color(biome.dry), green = new THREE.Color(biome.green), bankGreen = new THREE.Color(biome.bank), earth = new THREE.Color(paintHex("--paint-earth-39"));
     for (let py = 0; py < small.height; py += 1) for (let px = 0; px < small.width; px += 1) {
       const cx = (px + 0.5) / BASE, cy = (py + 0.5) / BASE;
       c.copy(green).lerp(dry, Math.max(0, Math.min(1, (patch(cx, cy) - 0.3 + biome.dryness) * 1.8)));
@@ -597,14 +599,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const g = grain.getContext("2d")!;
     const fleck = seeded(`grain-${W}-${H}`);
     for (let i = 0; i < 2600; i += 1) {
-      g.fillStyle = fleck() < 0.5 ? `rgba(60,45,25,${0.05 + fleck() * 0.07})` : `rgba(255,250,230,${0.04 + fleck() * 0.06})`;
+      g.fillStyle = fleck() < 0.5 ? paintAlpha("--ink", 0.05 + fleck() * 0.07) : paintAlpha("--surface", 0.04 + fleck() * 0.06);
       g.fillRect(Math.floor(fleck() * 128), Math.floor(fleck() * 128), 1 + Math.floor(fleck() * 2), 1 + Math.floor(fleck() * 2));
     }
     paint.fillStyle = paint.createPattern(grain, "repeat")!;
     paint.fillRect(0, 0, groundCanvas.width, groundCanvas.height);
     // The rivers' banks, under their water: a darker damp margin, then pale sand at the edge.
     paint.lineJoin = paint.lineCap = "round";
-    for (const [extra, style] of [[2.6, "rgba(70,90,45,0.28)"], [1.1, "rgba(214,196,150,0.95)"]] as const) {
+    for (const [extra, style] of [[2.6, paintAlpha("--paint-bank", 0.28)], [1.1, paintAlpha("--paint-sand", 0.95)]] as const) {
       for (const river of world.waterLines ?? []) {
         for (let k = 1; k < river.points.length; k += 1) {
           const [ax, ay] = river.points[k - 1]!, [bx, by] = river.points[k]!;
@@ -637,7 +639,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // 90 m deep (2026-10-28: at 48 m under a 2 km slab it read as a sheet of card), and shaded by
     // side and depth rather than lit -- the face you mostly see looks south, away from the sun,
     // and lit it sat in shadow, its laterite and sandstone muddied to one brown.
-    const BANDS: Array<[number, number]> = [[0, 0x6f8a45], [1, 0x5e4630], [4, 0xa65d3a], [24, 0xc9a36b], [52, 0x9a9083], [90, 0x8a8277]];
+    const BANDS: Array<[number, number]> = [[0, paintHex("--paint-green-19")], [1, paintHex("--paint-earth-61")], [4, paintHex("--paint-earth-51")], [24, paintHex("--paint-earth-34")], [52, paintHex("--paint-grey-10")], [90, paintHex("--paint-grey-12")]];
     const DEEPEST = 90;
     const SIDE_SHADE = [1, 0.8, 0.9, 0.94]; // north, east, south, west faces
     const STRATA: Array<[number, number]> = BANDS.slice(0, -1).flatMap(([depth, hex], k) => [[depth, hex], [BANDS[k + 1]![0] - 0.01, hex]] as Array<[number, number]>);
@@ -655,7 +657,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const top = elevationAt(p.x, p.y) * HEIGHT + (terrain.water[p.y * W + p.x] === 1 ? 0.6 : 0);
         for (const [depth, hex] of STRATA) {
           verts.push(p.x * M, depth < 4 ? top - depth : Math.min(top - 4, -depth), p.y * M); // the lip and topsoil follow the ground
-          tint.setHex(depth < 1 && terrain.water[p.y * W + p.x] === 1 ? 0x4f86ad : hex).multiplyScalar(SIDE_SHADE[side]! * (1 - 0.3 * (depth / DEEPEST)));
+          tint.setHex(depth < 1 && terrain.water[p.y * W + p.x] === 1 ? paintHex("--paint-blue-13") : hex).multiplyScalar(SIDE_SHADE[side]! * (1 - 0.3 * (depth / DEEPEST)));
           cols.push(tint.r, tint.g, tint.b);
         }
       }
@@ -672,7 +674,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     sideGeo.computeVertexNormals();
     scene.add(new THREE.Mesh(sideGeo, edgeMaterial));
     // Its underside, closed.
-    const under = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M)), own(new THREE.MeshLambertMaterial({ color: 0x6f675e, side: THREE.DoubleSide })));
+    const under = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M)), own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-19"), side: THREE.DoubleSide })));
     under.rotation.x = -Math.PI / 2;
     under.position.set(((W - 1) * M) / 2, -DEEPEST, ((H - 1) * M) / 2);
     scene.add(under);
@@ -711,7 +713,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         for (let k = i; k <= j; k += 2) {
           const p = steps[k]!;
           const foot = elevationAt(p.x, p.y) * HEIGHT - 1;
-          piers.box(2, height - foot, 2, "#9a9488", p.x * M, p.y * M, foot);
+          piers.box(2, height - foot, 2, tokenPaint("--paint-grey-7"), p.x * M, p.y * M, foot);
         }
       }
     }
@@ -788,7 +790,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   /** `line`, `lift`: where it runs and how high, for its focus line (drawn the first time it's lit). */
   const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean; rail: boolean; base: number; look: string; line: Point[]; lift: number; focusLine?: THREE.Mesh }>();
   const focusLineMaterial = own(new THREE.MeshBasicMaterial({ color: FOCUS_COLOUR, side: THREE.DoubleSide }));
-  const railMaterial = own(new THREE.MeshLambertMaterial({ color: 0x3b3a38, side: THREE.DoubleSide }));
+  const railMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-25"), side: THREE.DoubleSide }));
   // Every line a road runs (for keeping buildings off them).
   let roadLines: Point[][] = [];
   const pierMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -805,8 +807,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       return { x: p.x - ((b.y - a.y) / len) * off, y: p.y + ((b.x - a.x) / len) * off };
     });
   }
-  const laneMaterial = own(new THREE.MeshLambertMaterial({ color: 0xb8433a, side: THREE.DoubleSide }));
-  const lineMaterial = own(new THREE.MeshBasicMaterial({ color: 0xf2efe6, side: THREE.DoubleSide }));
+  const laneMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-red-1"), side: THREE.DoubleSide }));
+  const lineMaterial = own(new THREE.MeshBasicMaterial({ color: paintHex("--paint-light-4"), side: THREE.DoubleSide }));
   /** What a road is drawn as: rebuilt when it changes -- paved, laned, retired (what you've done to it shows). */
   const roadLook = (segment: { retiredAt?: number; surface?: string; busLane?: boolean; type: string }) => `${segment.type}:${segment.retiredAt !== undefined}:${segment.surface ?? ""}:${!!segment.busLane}`;
   function syncRoads(w: GameWorld): void {
@@ -827,7 +829,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       // A dirt road is laterite and narrower; a paved one is asphalt with a centre line; a bus lane
       // a red band down its side. What you've paved and laned reads from the air.
       const paved = segment.surface === "paved";
-      const base = rail ? 0x9a9184 : retired ? ROAD_COLOURS.retired : paved ? ROAD_COLOURS.paved : ROAD_COLOURS.dirt;
+      const base = rail ? paintHex("--paint-grey-9") : retired ? ROAD_COLOURS.retired : paved ? ROAD_COLOURS.paved : ROAD_COLOURS.dirt;
       const material = new THREE.MeshLambertMaterial({ color: base, side: THREE.DoubleSide });
       // Each a hair above the last: two roads on one line don't flicker through each other.
       const piers = new Kit();
@@ -883,7 +885,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   function colourRoad(w: GameWorld, id: string, road: { material: THREE.MeshLambertMaterial; rail: boolean; base: number }): void {
     if (road.rail) {
       // Disused track fades, as on the 2D map.
-      road.material.color.setHex(w.railOutOfService.has(id) ? 0xc9c2b4 : 0x9a9184);
+      road.material.color.setHex(w.railOutOfService.has(id) ? paintHex("--paint-earth-18") : paintHex("--paint-grey-9"));
       return;
     }
     const speed = w.segmentSpeed.get(id) ?? 1;
@@ -1162,7 +1164,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   // The fabric's two shapes, shared: a unit box for walls, a unit hip roof.
   const wallShape = own(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
   const roofShape = own(new THREE.ConeGeometry(0.75, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0));
-  const fabricMaterial = own(new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  const fabricMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-light-1") }));
   function houses(list: House[]): THREE.InstancedMesh[] {
     const walls = new THREE.InstancedMesh(wallShape, fabricMaterial, list.length);
     const roofs = new THREE.InstancedMesh(roofShape, fabricMaterial, list.length);
@@ -1292,12 +1294,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   let placedAt = performance.now();
   // Your vehicles in their route's colour where you've given it one (labels.ts), else their kind's.
   const tintColour = new THREE.Color();
-  const KIND_TINT: Partial<Record<VehicleKind3D, string>> = { bus: "#2a78d6", minibus: "#4f97e8", brt: "#c0392b", train: "#2a78d6" };
+  const KIND_TINT: Partial<Record<VehicleKind3D, string>> = { bus: tokenPaint("--you"), minibus: tokenPaint("--paint-blue-9"), brt: tokenPaint("--paint-red-3"), train: tokenPaint("--you") };
   const tinted = new Set<VehicleKind3D>(["bus", "minibus", "brt", "train"]);
   // Laterite dust behind whatever drives a worn road: rough enough to cost your buses
   // (wear.ts roughCostFactor), it shows. One instanced mesh of puffs, three a vehicle.
   const DUST_MAX = 3000;
-  const dust = new THREE.InstancedMesh(own(new THREE.IcosahedronGeometry(1, 1)), own(new THREE.MeshBasicMaterial({ color: 0xd8b48c, transparent: true, opacity: 0.22, depthWrite: false })), DUST_MAX);
+  const dust = new THREE.InstancedMesh(own(new THREE.IcosahedronGeometry(1, 1)), own(new THREE.MeshBasicMaterial({ color: paintHex("--paint-earth-24"), transparent: true, opacity: 0.22, depthWrite: false })), DUST_MAX);
   dust.frustumCulled = false;
   dust.count = 0;
   scene.add(dust);
@@ -1396,7 +1398,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // Painted into the ground (the land's texture), not laid on it as quads: those had hard
     // edges, cut into slopes at their corners, and their colours stood off the land like stickers.
     // Colours a step from the savanna's; corners nudged, so no field is a perfect rectangle.
-    const PALETTE = ["#9fae69", "#b0b770", "#c4b27d", "#b39a6c", "#93a660", "#cbbd8c", "#a88a62"];
+    const PALETTE = [tokenPaint("--paint-green-6"), tokenPaint("--paint-green-5"), tokenPaint("--paint-earth-29"), tokenPaint("--paint-earth-38"), tokenPaint("--paint-green-8"), tokenPaint("--paint-earth-27"), tokenPaint("--paint-earth-44")];
     const nudge = () => (rand() - 0.5) * 0.25;
     const quad = (corners: Point[], hex: string, alpha = 0.82) => {
       paint.globalAlpha = alpha;
@@ -1436,7 +1438,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
           const strips = Math.max(2, Math.round(fw / 0.33));
           for (let k = 1; k < strips; k += 2) {
             const i0 = -fw / 2 + (fw * k) / strips, i1 = -fw / 2 + (fw * (k + 1)) / strips;
-            quad([at(i0, -fh / 2), at(i1, -fh / 2), at(i1, fh / 2), at(i0, fh / 2)], "#7d6544", 0.22);
+            quad([at(i0, -fh / 2), at(i1, -fh / 2), at(i1, fh / 2), at(i0, fh / 2)], tokenPaint("--paint-earth-57"), 0.22);
           }
         }
       }
@@ -1694,16 +1696,16 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     setNight(dark) {
       // Night: a dark sky and haze, a dim blue moon for the sun, lit windows; what's drawn unlit
       // (the water, road lines, the map's cut edge) dimmed by hand, or it would glow.
-      paintSky(dark ? 0x0c1830 : 0x9dbfdc, dark ? 0x2a3450 : HORIZON, dark ? 0x1a2232 : 0xbcc7d0);
-      hemi.color.setHex(dark ? 0x7088c0 : 0xe8f0f8);
-      hemi.groundColor.setHex(dark ? 0x22222c : 0x8a7a5a);
+      paintSky(dark ? paintHex("--paint-dark-4") : paintHex("--paint-blue-6"), dark ? paintHex("--paint-blue-21") : HORIZON, dark ? paintHex("--paint-dark-3") : paintHex("--paint-blue-4"));
+      hemi.color.setHex(dark ? paintHex("--paint-blue-10") : paintHex("--paint-light-2"));
+      hemi.groundColor.setHex(dark ? paintHex("--paint-dark-2") : paintHex("--paint-earth-50"));
       hemi.intensity = dark ? 0.6 : 1.45;
-      sun.color.setHex(dark ? 0xa8bcff : 0xfff0d4);
+      sun.color.setHex(dark ? paintHex("--paint-blue-3") : paintHex("--paint-light-5"));
       sun.intensity = dark ? 0.5 : 2.5;
       setWaterNight(waterMaterial, dark);
-      lineMaterial.color.setHex(dark ? 0x77756e : 0xf2efe6);
+      lineMaterial.color.setHex(dark ? paintHex("--paint-grey-15") : paintHex("--paint-light-4"));
       edgeMaterial.color.setScalar(dark ? 0.3 : 1);
-      windowMaterial.emissive.setHex(dark ? 0xffc46a : 0x000000);
+      windowMaterial.emissive.setHex(dark ? paintHex("--paint-earth-20") : paintHex("--paint-dark-6"));
       windowMaterial.emissiveIntensity = dark ? 1.1 : 0;
     },
     cullLabels(cam) {
