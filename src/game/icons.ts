@@ -17,13 +17,24 @@
 
 export type Family = "energy" | "building" | "food" | "trade";
 
+/** A colour token's value (tokens.css, the one source: look.md §9). */
+const tokenCache = new Map<string, string>();
+function tokenColor(name: string): string {
+  let value = tokenCache.get(name);
+  if (value === undefined) {
+    value = typeof document === "undefined" ? "" : getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (value) tokenCache.set(name, value);
+  }
+  return value;
+}
+/** Each chain's colour, read from its token (look.md §2: fuel, building, food, trade). */
 export const FAMILY_COLOR: Record<Family, string> = {
-  energy: "#5a48d0",
-  building: "#9a5212",
-  food: "#3aa35a",
-  trade: "#138fb5",
+  get energy() { return tokenColor("--fuel"); },
+  get building() { return tokenColor("--building"); },
+  get food() { return tokenColor("--food"); },
+  get trade() { return tokenColor("--trade"); },
 };
-export const FAMILY_NAME: Record<Family, string> = { energy: "Energy", building: "Building", food: "Food and crops", trade: "Trade" };
+export const FAMILY_NAME: Record<Family, string> = { energy: "Fuel", building: "Building", food: "Food and crops", trade: "Trade" };
 
 export type Glyph =
   | "oilfield" | "terminal" | "refinery" | "newrefinery" | "depot"

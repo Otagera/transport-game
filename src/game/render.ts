@@ -58,7 +58,7 @@ export const COLORS = {
   grow: token("--good"),
   free: token("--road-free"),
   busy: token("--road-busy"),
-  jammed: token("--bad"),
+  jammed: token("--road-jammed"),
   warn: token("--warn"),
   flood: token("--flood"),
   // Kept names the page and the previews use.

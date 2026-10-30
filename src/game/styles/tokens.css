@@ -1,54 +1,61 @@
 /*
  * Design tokens: every colour, font and size the page shares with the 2D map (render.ts reads
- * them at start: change one here and the map follows). Neutral cool greys (the information lab,
- * 2026-10-23); otherwise the design lab's step 8 look: blue, mono labels, soft corners.
- * Named by role, not by hue. The 3D view keeps its own palette (shapes3d.ts: the buildings'
- * paint), and the engine its line colours (labels.ts): they're data, not the page's look.
+ * them at start: change one here and the map follows). The one source (docs/architecture/look.md,
+ * the visual contract, 2026-10-30): ink-and-cream chrome with no hue of its own; signal colours
+ * whose meanings are fixed; water the dark anchor. Named by role, not by hue. The engine keeps its
+ * route line colours (labels.ts): they're data.
  */
 :root {
-  /* Paper and ink */
-  --bg: #e9edf1;
-  --surface: #ffffff;
-  --surface-2: #f3f5f8;
-  --ink: #1b2129;
-  --ink-2: #4a5563;
-  --muted: #7b8694;
-  --line: #dde3ea;
-  --on-fill: #ffffff; /* text on a filled colour: a button pressed, a badge */
-  --shadow: rgba(20, 30, 45, 0.14);
+  /* Chrome -- the frame: ink, cream, rule, no hue and no meaning (look.md §2). */
+  --bg: #e6decf;
+  --surface: #f9f4ea;
+  --surface-2: #f1e9da;
+  --ink: #16130e;
+  --ink-2: #4a4335;
+  --muted: #8a8070;
+  --line: #d9cfbd;
+  --on-fill: #f9f4ea; /* text on a filled colour: cream on ink, a badge */
+  --shadow: rgba(22, 19, 14, 0.16);
 
-  /* Who: you, the other side, everyone else, goods, track */
-  --you: #2a78d6;
-  --informal: #e0a400;
-  --informal-light: #f8e08a;
-  --informal-ink: #9a7a00; /* the informal colour as text, readable on white */
-  --home: #a3abb5;
-  --goods: #8a5a2b;
-  --goods-ink: #6b4520;
-  --rail: #3f4852;
+  /* Signal -- data, meanings fixed (look.md §2). Who: you, the other side, everyone else, goods, track */
+  --you: #1c6ca8;
+  --informal: #f2b705; /* never chrome */
+  --informal-light: #f7dd85;
+  --informal-ink: #8a6a00; /* the informal colour as text, readable on cream */
+  --home: #b3aa97;
+  --goods: #a8673a;
+  --goods-ink: #7a4a28;
+  --rail: #3b352b;
 
   /* How it's going */
-  --good: #2b8a3e;
-  --bad: #c92a2a;
-  --bad-bg: #fff0f0;
-  --warn: #c77700;
-  --strike: #f08c00;
-  --strike-ink: #9a4f00;
+  --good: #1e7a4f;
+  --bad: #c0392b;
+  --bad-bg: #f8e4dc;
+  --warn: #c8880f;
+  --strike: #dd6b20;
+  --strike-ink: #8f4310;
   --flood: #2a6f97;
 
-  /* Series: the revenue screen's charts, the goods overlay's chains (fuel --s5, building --s4, food --s3) */
-  --s1: #2a78d6;
-  --s2: #eb6834;
-  --s3: #1baf7a;
-  --s4: #6250d6;
-  --s5: #e34948;
+  /* The four chains (icons.ts FAMILY_COLOR, the site tiles) */
+  --fuel: #c0392b;
+  --building: #6b4fa8;
+  --food: #1e7a4f;
+  --trade: #1c6ca8;
 
-  /* The map: land, water, hills, and roads by how full (traffic: free, busy, jammed is --bad) */
-  --map-ground: #f4f6f3;
-  --map-water: #b7d4e8;
-  --map-hill: #6e786e;
-  --road-free: #c3cbd4;
-  --road-busy: #e8742c;
+  /* Series: the revenue screen's charts, the goods overlay's chains (fuel --s5, building --s4, food --s3) */
+  --s1: #1c6ca8;
+  --s2: #dd6b20;
+  --s3: #1e7a4f;
+  --s4: #6b4fa8;
+  --s5: #c0392b;
+
+  /* The map: land, water (the dark anchor: look.md §1), hills, and roads by how full */
+  --map-ground: #f2ede1;
+  --map-water: #2c4a57;
+  --map-hill: #9a8e72;
+  --road-free: #cfc3ac;
+  --road-busy: #dd6b20;
+  --road-jammed: #c0392b;
 
   /* Type and shape */
   --label-font: ui-monospace, SFMono-Regular, Menlo, monospace;
