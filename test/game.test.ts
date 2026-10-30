@@ -5107,3 +5107,58 @@ describe("the corridor (src/game/corridor.ts; look.md, Corridor encoding and geo
     }
   }, 120_000);
 });
+
+describe("frame budgets don't change the game (principles.md §3: derive from elapsed time, never accumulate per frame)", () => {
+  // The page runs the simulation a different number of ticks a frame as it can, and between frames
+  // reads it for the panels, the cards, the map, the yard preview and the letters -- some of which
+  // fill caches on the world, and the yard preview adds a yard for a moment. None of that may change
+  // what happens: a run file replays only if the game is the same however it was watched.
+  const snapshot = (w: GameWorld) => JSON.stringify({
+    t: w.economy.elapsedSeconds,
+    funds: Math.round(w.economy.funds * 1000),
+    towns: [...w.towns.values()].map((t) => [t.id, Math.round(t.population * 1e6)]),
+    vehicles: w.simulation.vehicles.map((v) => [v.id, v.pathIndex, Math.round(v.edgeProgress * 1e6)]),
+    trucks: [...w.truckers].map(([k, a]) => [k, Math.round(a * 1000)]),
+    yards: [...w.yards],
+    budget: Object.entries(w.budget).map(([k, v]) => [k, Math.round(Number(v) * 1000)]),
+  });
+  const read = (w: GameWorld) => {
+    routeSummaries(w);
+    corridorSummaries(w);
+    averageHeadline(w);
+    for (const t of w.towns.values()) {
+      townGrowth(w, t.id);
+      roadFull(w, t.id);
+      townNoSeat(w, t.id);
+      tripsFrom(w, t.id);
+      goodsOnTheWay(w, t.id);
+    }
+    if (w.cement) {
+      cementBreak(w);
+      for (const t of [...w.towns.values()].slice(0, 6)) haulBreak(w, w.cement.worksId, t.id);
+    }
+    for (const t of [...w.towns.values()].slice(0, 4)) yardWouldBring(w, t.id);
+    handoverNote(w);
+    for (const p of w.term?.pledges ?? []) pledgeMove(w, p);
+    junctionPlates(w, (s) => s.retiredAt === undefined, () => 4);
+  };
+
+  test("the same seed, ticked straight through or in uneven frames with the screen read between, ends the same", () => {
+    const start = () => {
+      const w = startGame(gameMap(GAME_MAP, 949, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 1 });
+      const towns = [...w.towns.values()].filter((t) => !t.industry).sort((p, q) => q.population - p.population);
+      applyAction(w, { kind: "bus", a: towns[0]!.id, b: towns[1]!.id });
+      return w;
+    };
+    const ticks = 3 * SECONDS_PER_GAME_DAY * 30;
+    const straight = start();
+    for (let i = 0; i < ticks; i += 1) gameTick(straight, SIM_DT);
+    const watched = start();
+    const frames = [1, 7, 2, 30, 3, 61, 5];
+    for (let i = 0, f = 0; i < ticks; f += 1) {
+      for (let k = 0; k < frames[f % frames.length]! && i < ticks; k += 1, i += 1) gameTick(watched, SIM_DT);
+      if (f % 9 === 0) read(watched);
+    }
+    expect(snapshot(watched)).toBe(snapshot(straight));
+  }, 300_000);
+});

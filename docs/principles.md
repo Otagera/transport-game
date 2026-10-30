@@ -139,6 +139,18 @@ diagnostic cycle to find, several cost weeks. Where a finding produced a specifi
 during the actual rebuild, the deep-dive architecture doc for that area has the
 blow-by-blow; this section is the distilled rule.
 
+### Determinism
+
+- **Derive from elapsed time; never accumulate per frame** (2026-10-30, from the Shallot
+  assessment). The simulation only moves by `gameTick(world, SIM_DT)`, so a run file replays
+  (`game-run.ts --verify`). Anything that counts frames, reads the wall clock, or changes the
+  world while it's being *read* -- a panel, a card, a preview -- is a replay divergence waiting for
+  a different frame rate. Display smoothing lives off the world (`steady.ts`); caches on it must
+  be rebuilt the same however often they're asked (`world.plans`, `haulPlans`), and a preview that
+  tries something on the world puts it back (`yardWouldBring`). Guarded by a test: one seed
+  ticked straight through, the same seed ticked in uneven frames with the screen read between,
+  ending identical (test/game.test.ts, "frame budgets").
+
 ### Demand
 
 - **Passenger demand must be reciprocal by construction.** Commuting is round-trip.
