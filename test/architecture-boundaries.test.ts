@@ -79,3 +79,19 @@ describe("engine/ import boundary", () => {
     expect(violations).toEqual([]);
   });
 });
+
+// Labs (docs/architecture/index.md, Labs): a `.lab.ts` -- under scripts/lab/ or beside a test --
+// is investigation, expected to be deleted, and may be without discussion; so nothing permanent
+// (the game, the engine, a test, a standing script) imports one.
+describe("nothing permanent imports a lab", () => {
+  const ROOT = join(import.meta.dir, "..");
+  const permanent = [
+    ...collectTsFiles(join(ROOT, "src")),
+    ...collectTsFiles(join(ROOT, "test")).filter((f) => !f.endsWith(".lab.ts")),
+    ...collectTsFiles(join(ROOT, "scripts")).filter((f) => !f.includes(`${join("scripts", "lab")}`) && !f.endsWith(".lab.ts")),
+  ];
+  test.each(permanent.map((f) => [f.slice(ROOT.length + 1)]))("%s", (relative) => {
+    const lab = importSpecifiers(join(ROOT, relative)).filter((s) => s.endsWith(".lab") || s.endsWith(".lab.ts") || s.includes("/lab/"));
+    expect(lab).toEqual([]);
+  });
+});

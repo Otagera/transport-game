@@ -1,10 +1,10 @@
-import { GAME_MAP } from "../src/game/map";
-import { createGameWorld, networkShare, addBus, addMinibus, buildRoad } from "../src/engine/game/world";
-import { gameTick } from "../src/engine/game/tick";
+import { GAME_MAP } from "../../src/game/map";
+import { createGameWorld, networkShare, addBus, addMinibus, buildRoad } from "../../src/engine/game/world";
+import { gameTick } from "../../src/engine/game/tick";
 // The brief's Evidence 1, measured with every system on (before slice zero).
-import { ALL_SYSTEMS_ON, DEFAULT_GAME_TUNING } from "../src/engine/game/tuning";
-import { SIM_DT } from "../src/engine/loop";
-import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
+import { ALL_SYSTEMS_ON, DEFAULT_GAME_TUNING } from "../../src/engine/game/tuning";
+import { SIM_DT } from "../../src/engine/loop";
+import { SECONDS_PER_GAME_DAY } from "../../src/engine/economy/state";
 const run = (w: any, days: number) => { const n = Math.round(days * SECONDS_PER_GAME_DAY / SIM_DT); for (let i = 0; i < n; i++) gameTick(w, SIM_DT); };
 const pct = (x: number) => `${Math.round(x * 100)}%`.padStart(4);
 const strategies: [string, (w: any) => void][] = [

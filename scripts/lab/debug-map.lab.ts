@@ -1,8 +1,8 @@
 // Quick visual sanity check for map generation, since "look like places" is
 // part of Module 2's done criteria and isn't something a numeric test can
 // verify. Not part of the shipped app.
-import { generateMap, MAP_WIDTH, MAP_HEIGHT } from "../src/engine/map/generate";
-import type { GeneratedMap } from "../src/engine/map/types";
+import { generateMap, MAP_WIDTH, MAP_HEIGHT } from "../../src/engine/map/generate";
+import type { GeneratedMap } from "../../src/engine/map/types";
 
 const ELEVATION_RAMP = " .:-=+*#%@";
 

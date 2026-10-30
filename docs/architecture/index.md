@@ -24,6 +24,16 @@ For *what's been built and current state*, see [status.md](../status.md). For *w
 of this is shaped the way it is, see [principles.md](../principles.md) §3 (Findings) —
 that document is the reasoning; these are the resulting map.
 
+## Labs and tests
+
+A **`.test.ts`** is a permanent spec. A **`.lab.ts`** -- under `scripts/lab/`, or beside a test --
+is investigation: a question asked once, named so it's expected to be deleted, and it may be
+deleted without discussion. Nothing permanent imports one (the game, the engine, a test, a
+standing script: `architecture-boundaries.test.ts`). In `scripts/lab/` today: `coldstart`,
+`connect` (the brief's Evidence, before slice zero), `debug-map` (Module 2's look), `horizon` (does
+the 2-day forecast predict a month). The standing instruments stay in `scripts/` (bots, the
+strategist, run, play, probes, the lever audit, the region sheet, shots, the verify checks).
+
 ## Hard rules (enforced, not just convention)
 
 1. **`engine/` never imports a page or the DOM.** `test/architecture-boundaries.test.ts`

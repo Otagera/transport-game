@@ -1,13 +1,13 @@
-import { GAME_MAP } from "../src/game/map";
+import { GAME_MAP } from "../../src/game/map";
 // The brief's Evidence, measured with every system on (before slice zero).
-import { ALL_SYSTEMS_ON, DEFAULT_GAME_TUNING } from "../src/engine/game/tuning";
-import { createGameWorld, networkShare } from "../src/engine/game/world";
-import { gameTick } from "../src/engine/game/tick";
-import { startGame } from "../src/engine/game/start";
-import { forecast } from "../src/engine/game/forecast";
-import { applyAction, type ActionSpec } from "../src/engine/game/actions";
-import { SIM_DT } from "../src/engine/loop";
-import { SECONDS_PER_GAME_DAY } from "../src/engine/economy/state";
+import { ALL_SYSTEMS_ON, DEFAULT_GAME_TUNING } from "../../src/engine/game/tuning";
+import { createGameWorld, networkShare } from "../../src/engine/game/world";
+import { gameTick } from "../../src/engine/game/tick";
+import { startGame } from "../../src/engine/game/start";
+import { forecast } from "../../src/engine/game/forecast";
+import { applyAction, type ActionSpec } from "../../src/engine/game/actions";
+import { SIM_DT } from "../../src/engine/loop";
+import { SECONDS_PER_GAME_DAY } from "../../src/engine/economy/state";
 const run = (w: any, days: number) => { const n = Math.round(days * SECONDS_PER_GAME_DAY / SIM_DT); for (let i = 0; i < n; i++) gameTick(w, SIM_DT); };
 const cands: ActionSpec[] = [
   { kind: "bus", a: "kuto", b: "ipaja" }, { kind: "minibus", a: "kuto", b: "ipaja" }, { kind: "bus", a: "ise", b: "ipaja" },
