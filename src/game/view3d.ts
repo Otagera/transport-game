@@ -1256,6 +1256,53 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       else if (centre) put(7, 0.55, (k, rr, ry) => shophouse(k, rr, 0, 0, ry));
       else put(9, 1, (k, rr, ry) => (rand() < 0.75 ? bungalow(k, rr, 0, 0, ry) : shophouse(k, rr, 0, 0, ry)));
     }
+    // Along its roads out, past its edge (the fidelity scope, B4): a Nigerian town ribbons along its
+    // highways -- compounds and shops lining the road for a way, thinning as they go -- so from afar
+    // a town reads as a star along its roads, not a disc. Not past half way to the next town; its own
+    // stream of chance, so the rest of the town is drawn as before.
+    {
+      const rr = seeded(`ribbon-${town.id}`);
+      const inner = (radius / M) * 0.85;
+      const nearest = people.reduce((d, t) => (t.id === town.id ? d : Math.min(d, Math.hypot(t.x - town.x, t.y - town.y))), Infinity);
+      const outer = Math.min(radius / M + (tier === "village" ? 2 : 3 + Math.sqrt(town.population) * 0.55), nearest * 0.45);
+      for (const line of local) {
+        let from = -1, gap = Infinity;
+        line.forEach((p, k) => { const d = Math.hypot(p.x - town.x, p.y - town.y); if (d < gap) [gap, from] = [d, k]; });
+        if (gap > inner + 1) continue;
+        for (const step of [1, -1]) {
+          for (let k = from; k + step >= 0 && k + step < line.length; k += step) {
+            const a = line[k]!, b = line[k + step]!;
+            const len = Math.hypot(b.x - a.x, b.y - a.y) || 1e-6;
+            const tx = (b.x - a.x) / len, ty = (b.y - a.y) / len;
+            let done = false;
+            for (let t = 0; t < len; t += 1.3) {
+              const px = a.x + tx * t, py = a.y + ty * t;
+              const e = Math.hypot(px - town.x, py - town.y);
+              if (e > outer) { done = true; break; }
+              if (e < inner) continue;
+              const chance = 0.8 * (1 - (e - inner) / Math.max(1, outer - inner));
+              for (const side of [1, -1]) {
+                if (rr() > chance) continue;
+                const off = (8.5 + rr() * 3) / M;
+                const cx = px - ty * off * side, cy = py + tx * off * side;
+                const x = (cx - town.x) * M, z = (cy - town.y) * M;
+                if (placed.some((q) => Math.hypot(q.x - x, q.z - z) < q.r + 3.2)) continue;
+                if (wet(cx, cy, 4.2 / M) || nearRoad(cx, cy, 7.5 / M)) continue;
+                if (sites.some((st) => { const at = siteAt.get(st.id) ?? st; return Math.hypot(at.x - cx, at.y - cy) < 25 / M; })) continue;
+                placed.push({ x, z, r: 3.2 });
+                const y = Math.min(elevationAt(cx - 0.4, cy), elevationAt(cx + 0.4, cy), elevationAt(cx, cy - 0.4), elevationAt(cx, cy + 0.4)) * HEIGHT - base - 0.2;
+                const flat = rr() < 0.3;
+                fabric.push({
+                  x, y, z, w: 5 + rr() * 2.5, d: 4.5 + rr() * 2, h: 3, rh: flat ? 0.25 : 1.3 + rr() * 0.6, ry: -Math.atan2(ty, tx), floors: 0,
+                  wall: WALLS[Math.floor(rr() * WALLS.length)]!, roof: flat ? CONCRETE[Math.floor(rr() * CONCRETE.length)]! : ROOFS[Math.floor(rr() * ROOFS.length)]!,
+                });
+              }
+            }
+            if (done) break;
+          }
+        }
+      }
+    }
     // A town growing past its size (growth.ts growthTrend): trade spills out -- more market
     // umbrellas and stalls through its streets. Placed last, so the rest of it stays put.
     if (boom && tier !== "village") {
@@ -1528,6 +1575,39 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
           if (Math.hypot(x - t.x, y - t.y) <= r && occupied[y * W + x] === FREE) occupied[y * W + x] = TOWN;
     }
 
+    // Hamlets (map version 12): the land's small places between the towns -- a few compounds, round
+    // huts in the north and the Middle Belt, bungalows in the south, each with a field or two (painted
+    // below with the towns'). One mesh for them all. Clear of the water, the roads and the sites.
+    const sitesAt = [...w.towns.values()].filter((t) => t.industry);
+    const southern = ["southwest", "southeast", "southSouth"].includes(world.region ?? "southwest");
+    const hamletKit = new Kit();
+    const hamletFields: Array<{ x: number; y: number; size: number }> = [];
+    for (const h of w.hamlets ?? []) {
+      if (sitesAt.some((s) => Math.hypot(s.x - h.x, s.y - h.y) < 6)) continue;
+      const hr = seeded(`hamlet-${h.x}-${h.y}`);
+      const compounds = Math.round(2 + h.size * 2.5);
+      let placed = 0;
+      for (let n = 0; n < compounds * 3 && placed < compounds; n += 1) {
+        const a = hr() * Math.PI * 2, d = Math.sqrt(hr()) * (0.6 + h.size * 0.45);
+        const cx = h.x + Math.cos(a) * d, cy = h.y + Math.sin(a) * d;
+        const cell = Math.round(cy) * W + Math.round(cx);
+        if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2 || occupied[cell] !== FREE) continue;
+        occupied[cell] = TOWN;
+        const one = new Kit();
+        if (southern ? hr() < 0.25 : hr() < 0.75) hut(one, hr, 0, 0);
+        else bungalow(one, hr, 0, 0, hr() * Math.PI);
+        hamletKit.place(one.merged(), cx * M, elevationAt(cx, cy) * HEIGHT - 0.2, cy * M);
+        placed += 1;
+      }
+      if (placed > 0) hamletFields.push(h);
+    }
+    if (!hamletKit.empty) {
+      const hamlets = new THREE.Mesh(hamletKit.merged(), material);
+      hamlets.castShadow = true;
+      hamlets.receiveShadow = true;
+      scene.add(hamlets);
+    }
+
     // Fields: a ring round each town, beyond its houses; farm towns (food.ts) farm more, and a
     // farm belt's (clusters.ts) most. Some in rows (ridged yam and maize), some plain.
     const farming = new Set(farmTowns(w).map((t) => t.id));
@@ -1577,6 +1657,21 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
             quad([at(i0, -fh / 2), at(i1, -fh / 2), at(i1, fh / 2), at(i0, fh / 2)], tokenPaint("--paint-earth-57"), 0.22);
           }
         }
+      }
+    }
+    // A hamlet's fields: a few, close in.
+    for (const h of hamletFields) {
+      const hr = seeded(`hamlet-fields-${h.x}-${h.y}`);
+      for (let n = 0; n < 2 + h.size * 2; n += 1) {
+        const a = hr() * Math.PI * 2, d = 1.5 + h.size * 0.6 + hr() * 2;
+        const cx = h.x + Math.cos(a) * d, cy = h.y + Math.sin(a) * d;
+        const fw = 0.8 + hr() * 1.4, fh = 0.7 + hr() * 1.1, turn = hr() * Math.PI;
+        const u = { x: Math.cos(turn), y: Math.sin(turn) }, v = { x: -u.y, y: u.x };
+        const cell = Math.round(cy) * W + Math.round(cx);
+        if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2 || occupied[cell] !== FREE) continue;
+        occupied[cell] = FIELD;
+        const at = (i: number, j: number) => ({ x: cx + u.x * i + v.x * j, y: cy + u.y * i + v.y * j });
+        quad([at(-fw / 2, -fh / 2), at(fw / 2, -fh / 2), at(fw / 2, fh / 2), at(-fw / 2, fh / 2)], PALETTE[Math.floor(hr() * PALETTE.length)]!);
       }
     }
     groundTexture.needsUpdate = true;

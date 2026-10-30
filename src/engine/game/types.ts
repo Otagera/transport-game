@@ -117,6 +117,8 @@ export interface GameMapDef {
   home?: { x: number; y: number; width: number; height: number };
   /** The region's far clusters: each its regional town, its towns, and what it offers your chains (clusters.ts). */
   clusters?: ClusterDef[];
+  /** Hamlets (map version 12): the land's small places, drawn but not simulated -- a few hundred people each. */
+  hamlets?: Array<{ x: number; y: number; size: number }>;
 }
 
 export interface ClusterDef {
@@ -809,6 +811,8 @@ export interface GameWorld {
   home?: { x: number; y: number; width: number; height: number };
   /** The map's rivers and sea as drawn lines, for the screen to draw smooth (the terrain's water is their cells). */
   waterLines?: GameRiverDef[];
+  /** The map's hamlets (map version 12), for the screen: drawn, not simulated. */
+  hamlets?: Array<{ x: number; y: number; size: number }>;
   /** Money over the last game day: what the strip and route rows read (ledger.ts). */
   ledger: DayLedger;
   /** Sim time when the player's day 1 began: after the warm-up (start.ts), 0 for a cold world. */

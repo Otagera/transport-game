@@ -47,7 +47,10 @@ where it's steep, and each region its own trees (look.md §8). After your look (
 rising in headwater hills, sharp bends eased, the plateau higher and clear of the water. A5 **map
 version 9, fictional names** by the region's sounds (names.ts). **Map version 10, the home cluster's
 land** at a share its trunk's prices allow (roads between home towns ~16% dearer where the land rises).
-Next in the scope: a populated region and old roads by the land, then towns that read at a distance. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
+**Version 11, old roads by the land** (planned again over the
+relief, their corners eased); **version 12, hamlets** between the towns (drawn, not simulated); towns
+ribboning out along their roads in 3D. Next in the scope: atmosphere (B5), and a frame-time check on
+your Mac (B6). **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

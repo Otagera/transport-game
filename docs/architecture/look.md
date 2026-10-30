@@ -278,7 +278,11 @@ over all the water, each point carrying its distance to the shore (the water's l
 draws them, a capsule each stretch, so corners come out round) and the nearest river's frame for the
 ripples; the shader cuts the edge where the distance reaches nought. The sea's ripples are in the
 world's frame, a river's in its own, blended by how near the sea is over six cells, so an estuary
-fades into the sea instead of meeting it at a line.
+fades into the sea instead of meeting it at a line. **Towns along their roads** (B4): past its edge a town ribbons
+out along each road -- compounds and shops lining it, thinning to nothing a third or so of the way to
+the next town -- so from afar it reads as a star along its roads, not a disc; drawn with the fabric's
+instances, from a stream of chance of its own so the rest of the town is as before. **Hamlets** (map
+version 12, engine.md): the land's small places between the towns, a few compounds and fields each.
 
 ---
 

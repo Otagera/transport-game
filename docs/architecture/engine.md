@@ -1324,6 +1324,25 @@ replays as played. Seed 0 stays the hand-made map, alone.
   unplayed, version 9 -> 10: sites 196 -> 199, working 99 -> 99, fuel 33.6% -> 34.8%, trips 737 ->
   733; **a road between two home towns ₦272 -> ₦315** (hills ₦1 -> ₦42), beyond the box unchanged
   (₦296) -- the early game's roads dearer by a sixth where the land rises. Tested.
+- **Version 11: old roads by the land** (`region.ts roadsByTheLand`; the fidelity scope, A4: "old
+  roads have hard right-angle bends"). The region's old highways had been laid when it was drawn,
+  over its land before the relief, and straightened into long runs meeting at hard corners. Each
+  beyond the home cluster is planned again over the land as it is, its grid kinks taken out and its
+  corners eased (three passes of corner-cutting). Kept only where it stays 3 cells clear of every town
+  it doesn't serve, crosses no other road, and goes into the water no more times than the old line
+  (counted as crossings, not cells: rounding a corner by a river had widened its crossing by a cell
+  or two and been refused); else the eased old line, else as it was. The home cluster's roads keep
+  their lines. Tested.
+- **Version 12: hamlets** (`region.ts withHamlets`, `GameMapDef.hamlets`, `world.hamlets`; the
+  fidelity scope, A3: "the middle of the region is empty"). The land's small places: a spot every 7
+  cells, jittered, kept by chance in proportion to where people would live -- water within 8 cells
+  (not within 2), an old road within 3-6, low ground -- none within 9 cells of a town. A few hundred
+  people each: drawn (the 3D view: a few compounds, round huts in the north and Middle Belt,
+  bungalows in the south, each with a field or two, all in one mesh), **not simulated** -- no demand,
+  no trips, nothing a tick reads. Whether some should be towns of their own is a balance question,
+  left open. Tested. Twelve seeds, 15 days unplayed, version 10 -> 12 (11 and 12 together): sites
+  199 -> 199, working 99 -> 99, fuel 34.8% -> 33.6%, trips 733 -> 728 a day (-0.7%: the old roads'
+  new lines are a little longer or shorter); roads in and beyond the home box priced as before.
 - **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
   region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
   a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought

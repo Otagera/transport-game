@@ -121,6 +121,10 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
     if (version >= 6 && !SOUTHERN.has(generatedMapInfo(base, seed).region) && map.home) map = landlocked(map);
     // Version 8: the land first -- a relief its rivers lie in, and rivers that join as rivers do.
     if (version >= 8 && map.home) map = landFirst(map, seed, version >= 10 ? generatedMapInfo(base, seed).trunk : null);
+    // Version 11: the old roads beyond the home cluster laid again over that land, their corners eased.
+    if (version >= 11 && map.home) map = roadsByTheLand(map, generatedMapInfo(base, seed).map.roads.length);
+    // Version 12: the land's hamlets, where people would live -- drawn, not simulated.
+    if (version >= 12 && map.home) map = withHamlets(map, seed);
     map = laidOverLand(map);
     // Version 9: fictional names, true to the region (names.ts) -- never real towns in places they aren't.
     if (version >= 9) map = withFictionalNames(map, seed);
@@ -1064,4 +1068,122 @@ function withHomeLand(map: GameMapDef, trunk: readonly string[]): GameMapDef {
     if (cost(tried).every((c, k) => c <= flat[k]! * (1 + HOME_GUARD))) return tried;
   }
   return map;
+}
+
+// --- Map version 11: old roads by the land ---------------------------------------------------
+// (The fidelity scope, A4: "old roads have hard right-angle bends".) The region's old highways were
+// laid when the region was drawn, over its land as it then was -- before the relief (version 8) --
+// and straightened into long runs meeting at hard corners. Now each is planned again over the land
+// as it is, as a road you build is (round the hills, over the rivers at their narrows), its grid
+// kinks taken out, and its corners eased (three passes of corner-cutting), so it bends as a road
+// does. Kept only where it stays clear of every town it doesn't serve, crosses no other road, and
+// crosses the water no more times than the old line; else the eased old line, else as it was. The
+// home cluster's roads are its own (their prices are the trunk's), and keep their lines.
+
+function roadsByTheLand(map: GameMapDef, homeRoads: number): GameMapDef {
+  const terrain = buildGameTerrain(map);
+  const at = new Map(map.towns.map((t) => [t.id, t]));
+  const lineOf = (r: GameRoadDef): Point[] => [at.get(r.a)!, ...(r.via ?? []).map(([x, y]) => ({ x, y })), at.get(r.b)!];
+  const roads = [...map.roads];
+  // How many times a line goes into the water: its crossings, however wide each is.
+  const wetOn = (line: Point[]) => {
+    let crossings = 0, wet = false;
+    for (let k = 1; k < line.length; k += 1) {
+      const a = line[k - 1]!, b = line[k]!;
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 4));
+      for (let i = 0; i <= n; i += 1) {
+        const x = Math.round(a.x + ((b.x - a.x) * i) / n), y = Math.round(a.y + ((b.y - a.y) * i) / n);
+        const now = terrain.water[y * terrain.width + x] === 1;
+        if (now && !wet) crossings += 1;
+        wet = now;
+      }
+    }
+    return crossings;
+  };
+  const fits = (line: Point[], index: number, wet: number) => {
+    const road = roads[index]!;
+    for (const t of map.towns) {
+      if (t.id === road.a || t.id === road.b) continue;
+      if (line.slice(1).some((p, k) => toSegment(t, line[k]!, p) < ROAD_CLEARANCE)) return false;
+    }
+    for (let j = 0; j < roads.length; j += 1) {
+      if (j === index) continue;
+      const other = lineOf(roads[j]!);
+      for (let k = 1; k < line.length; k += 1) for (let m = 1; m < other.length; m += 1) if (crosses(line[k - 1]!, line[k]!, other[m - 1]!, other[m]!)) return false;
+    }
+    return wetOn(line) <= wet;
+  };
+  const eased = (line: Point[]) => chaikin(line.map((p): [number, number] => [p.x, p.y]), line.map(() => 0), 3).points.map(([x, y]) => ({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }));
+  for (let index = homeRoads; index < roads.length; index += 1) {
+    const road = roads[index]!;
+    const a = at.get(road.a), b = at.get(road.b);
+    if (!a || !b) continue;
+    const old = lineOf(road);
+    const plan = planCorridor(terrain, [{ x: Math.round(a.x), y: Math.round(a.y) }, { x: Math.round(b.x), y: Math.round(b.y) }], "auto", new Set([0, 1]));
+    const planned = plan ? straightened(terrain, plan.polyline.map((p, k, all) => (k === 0 ? a : k === all.length - 1 ? b : p))) : null;
+    const wet = wetOn(old);
+    for (const candidate of [planned && eased(planned), eased(old)]) {
+      if (!candidate || !fits(candidate, index, wet)) continue;
+      roads[index] = { ...road, via: candidate.slice(1, -1).map((p): [number, number] => [p.x, p.y]) };
+      break;
+    }
+  }
+  return { ...map, roads };
+}
+
+// --- Map version 12: hamlets ----------------------------------------------------------------
+// (The fidelity scope, A3: "the middle of the region is empty".) A region had its clusters and
+// little between them, where the country is full of villages: by the rivers, along the roads, on
+// the lower ground. Now the land's hamlets -- a few hundred people each, a handful of compounds and
+// their fields -- placed where people would live: a cell's worth scored by water within reach (not
+// in it), a road nearby, low and level ground; none within a town's reach or on the water. Drawn
+// (the 3D view), not simulated: no demand, no trips, nothing a tick reads, so play is unchanged.
+// Whether some should be towns of their own is a balance question, for later.
+
+const HAMLET_SPACING = 7; // cells between candidate spots
+const HAMLET_CLEAR = 9; // cells from any town
+
+function withHamlets(map: GameMapDef, seed: number): GameMapDef {
+  const terrain = buildGameTerrain(map);
+  const W = map.width, H = map.height;
+  const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
+  // Distance to the nearest water and the nearest old road, coarse: every spot is a cell.
+  const near = (x: number, y: number, reach: number, hit: (i: number) => boolean) => {
+    for (let r = 0; r <= reach; r += 1) for (let dy = -r; dy <= r; dy += 1) for (let dx = -r; dx <= r; dx += 1) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const xx = x + dx, yy = y + dy;
+      if (xx >= 0 && yy >= 0 && xx < W && yy < H && hit(yy * W + xx)) return r;
+    }
+    return Infinity;
+  };
+  const roadCells = new Uint8Array(W * H);
+  const at = new Map(map.towns.map((t) => [t.id, t]));
+  for (const road of map.roads) {
+    const line = [at.get(road.a)!, ...(road.via ?? []).map(([x, y]) => ({ x, y })), at.get(road.b)!];
+    for (let k = 1; k < line.length; k += 1) {
+      const a = line[k - 1]!, b = line[k]!;
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y)));
+      for (let i = 0; i <= n; i += 1) roadCells[Math.round(a.y + ((b.y - a.y) * i) / n) * W + Math.round(a.x + ((b.x - a.x) * i) / n)] = 1;
+    }
+  }
+  const hamlets: Array<{ x: number; y: number; size: number }> = [];
+  let k = 0;
+  for (let gy = HAMLET_SPACING / 2; gy < H - 3; gy += HAMLET_SPACING) {
+    for (let gx = HAMLET_SPACING / 2; gx < W - 3; gx += HAMLET_SPACING) {
+      k += 1;
+      const x = Math.round(gx + (hashed(seed, k * 3) - 0.5) * HAMLET_SPACING * 0.8);
+      const y = Math.round(gy + (hashed(seed, k * 3 + 1) - 0.5) * HAMLET_SPACING * 0.8);
+      if (x < 3 || y < 3 || x > W - 4 || y > H - 4 || terrain.water[y * W + x] === 1) continue;
+      if (map.towns.some((t) => Math.hypot(t.x - x, t.y - y) < HAMLET_CLEAR)) continue;
+      const toWater = near(x, y, 10, (i) => terrain.water[i] === 1);
+      if (toWater < 2) continue;
+      const toRoad = near(x, y, 6, (i) => roadCells[i] === 1);
+      const height = terrain.elevation[y * W + x]! / top;
+      // Where people would live: water within reach, a road nearby, low ground.
+      const score = (toWater <= 8 ? 0.45 : 0.1) + (toRoad <= 3 ? 0.35 : toRoad <= 6 ? 0.15 : 0) + 0.25 * (1 - height);
+      if (hashed(seed, k * 3 + 2) > score) continue;
+      hamlets.push({ x, y, size: Math.round((1 + 3 * hashed(seed, k * 7 + 5) * score) * 10) / 10 });
+    }
+  }
+  return { ...map, hamlets };
 }
