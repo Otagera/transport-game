@@ -281,7 +281,9 @@ function resize(): void {
   const right = cssPx("--right");
   // Clear of the strip above and the docked toolbar below (look.md §6: the key and the
   // controls are in the left column now, never over the plate), measured.
-  const bottomInset = (toolbar?.getBoundingClientRect().height ?? 48) + 8;
+  const toolbarHeight = toolbar?.getBoundingClientRect().height ?? 48;
+  root.style.setProperty("--bottom", `${toolbarHeight}px`);
+  const bottomInset = toolbarHeight + 8;
   fitted = fitView(world, window.innerWidth, window.innerHeight, 24, stripEl.offsetHeight, bottomInset, left, right);
   applyZoom();
 }

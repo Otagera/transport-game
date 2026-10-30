@@ -5,7 +5,8 @@
 //   - four roles: a button made with a class outside look.md §5's (primary, quiet, toggle, tool,
 //     and the toggle's state, on / active);
 //   - tokens agree: tokens.css and look.md §2's tables name the same value for each token;
-//   - signal untouched: the same, for the signal layer -- its values change only with its rows.
+//   - signal untouched: the same, for the signal layer -- its values change only with its rows;
+//   - nothing over the plate: only the page's regions are position: fixed; the rest is #plate-overlay's.
 //
 //   bun scripts/verify-look.ts
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -70,6 +71,27 @@ for (const p of [...files("src/game").filter((f) => f.endsWith(".ts")), "index.h
     for (const m of line.matchAll(/<button\b[^>]*?\bclass="([^"$]*)"/g)) {
       for (const c of m[1]!.split(/\s+/).filter(Boolean)) if (!ROLES.has(c)) failures.push(`four roles: ${p}:${i + 1}: a button of class "${c}" -- look.md §5 has primary, quiet, toggle, tool`);
     }
+  });
+}
+
+// --- Nothing fixed over the plate ---------------------------------------------------------------
+// Only the page's own regions are position: fixed -- the map, the strip, the two columns, the
+// toolbar, the full screens, the pointer's tooltip, and the plate's one overlay container; anything
+// over the map is that container's child (look.md §6).
+const FIXED_OK = new Set(["#map", "#strip", "#controls-col, #panel-col", "#toolbar", "#plate-overlay", "#revenue", "#verdict", "#loading", "#tip", "#revenue, #verdict"]);
+for (const p of files("src/game/styles").filter((f) => f.endsWith(".css"))) {
+  const text = code(read(p), true);
+  for (const m of text.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (!/position:\s*fixed/.test(m[2]!)) continue;
+    const selector = m[1]!.trim().replace(/\s+/g, " ");
+    if (!FIXED_OK.has(selector)) failures.push(`nothing over the plate: ${p}: "${selector}" is position: fixed -- make it a child of #plate-overlay`);
+  }
+}
+for (const p of files("src/game").filter((f) => f.endsWith(".ts"))) {
+  const lines = code(read(p), false).split("\n");
+  lines.forEach((line, i) => {
+    // The 3D view's host fills the window as the 2D map does.
+    if (/position:\s*fixed/.test(line) && !(p === "src/game/view3d.ts" && line.includes("host.style"))) failures.push(`nothing over the plate: ${p}:${i + 1}: position: fixed -- make it a child of #plate-overlay`);
   });
 }
 

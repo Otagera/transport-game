@@ -260,6 +260,7 @@
 
   /* The map sits between the log (left) and the panel (right), under the strip (--top, measured). */
   --top: 92px;
+  --bottom: 52px; /* the docked toolbar's height, measured (main.ts resize) */
   --left: 236px;
   --right: 352px;
 }

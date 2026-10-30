@@ -37,15 +37,19 @@ body.in3d #overlays, body.in3d #overlay-caption, body.in3d #hint, body.in3d #key
 #toolbar .switch { display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-control); padding: 0; }
 #toolbar .switch button { padding: var(--sp-1) var(--sp-2); border-color: transparent; }
 #toolbar .switch kbd { margin: 0 var(--sp-1); }
-/* Control hint line, over the toolbar (lab: "One line above the toolbar"). */
-#controls a { color: inherit; }
-#controls { position: fixed; right: 20px; top: 9px; max-width: 230px; text-align: right; font-size: var(--fs-caption); line-height: 1.45; color: var(--muted); z-index: 3; }
 /* The hint, inline at the top of the panel column (look.md §6: nothing instructional floats on the plate). */
 #hint { display: flex; align-items: flex-start; gap: var(--sp-2); margin: var(--sp-3) var(--sp-3) 0; padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3); background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--you); border-radius: var(--radius); font-size: var(--fs-body); line-height: 1.35; }
 #hint[hidden] { display: none; }
 #hint button { flex: none; padding: 0 var(--sp-1); font: var(--fs-caption) var(--label-font); color: var(--muted); }
+/*
+ * The one container over the plate (look.md §6; the Shallot assessment, 2026-10-30): it spans the
+ * plate's region and takes no pointer; anything over the map is its child, placed relative to it --
+ * never position: fixed, never a viewport sum (verify-look.ts checks it).
+ */
+#plate-overlay { position: fixed; left: var(--left); right: var(--right); top: var(--top); bottom: var(--bottom); z-index: 7; pointer-events: none; }
+#plate-overlay > * { pointer-events: auto; }
 #toast {
-  position: fixed; left: calc(var(--left) + (100vw - var(--left) - var(--right)) / 2); bottom: 72px; transform: translateX(-50%); z-index: 7; box-shadow: 0 6px 20px var(--shadow);
+  position: absolute; left: 50%; bottom: var(--sp-4); transform: translateX(-50%); box-shadow: 0 6px 20px var(--shadow);
   background: var(--ink); color: var(--surface); padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); font-size: var(--fs-body);
   opacity: 0; transition: opacity 0.4s; pointer-events: none; max-width: calc(100% - 32px);
 }

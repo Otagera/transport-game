@@ -140,7 +140,9 @@ old left column held two log lines and the old right panel held one notice.
 - **Controls** holds everything that acts on the map: zoom, 3D, the overlay set, the log,
   and the key as a collapsed chip. This is what makes the column worth its width and the
   plate clear at the same time.
-- **The plate** is the map and nothing else. It fills its region; it is never overlapped.
+- **The plate** is the map and nothing else. It fills its region; it is never overlapped. What
+  must sit over it (a toast) is a child of `#plate-overlay`, the one container spanning the plate
+  at `pointer-events: none`, placed relative to it -- never `position: fixed`, never a viewport sum.
   In 3D, its camera buttons (turn, tilt, night) move to the controls column with zoom.
 - **The panel** holds what is waiting on you, the term's pledges, the tabs, and whatever is
   selected. When it has little to show it narrows rather than holding space open.
@@ -234,6 +236,7 @@ the same tokens (`palette3d.ts`): its signal colours by their own, its paint by 
 | **Four roles** | a button is created with a class outside the four in §5 |
 | **Tokens agree** | the values in `tokens.css` and the tables in §2 have drifted apart |
 | **Signal untouched** | a signal token's value changed without its row in §2 changing with it |
+| **Nothing over the plate** | anything but the page's regions (map, strip, the two columns, toolbar, full screens, the pointer's tooltip, `#plate-overlay`) is `position: fixed` |
 
 `scripts/shots.ts` (`bun run shots [seed]`) captures the five screens on demand at 1600×1000 @2x --
 the map, a town picked, Revenue, the term's pledges, 3D -- into `shots/` (not in git). It
