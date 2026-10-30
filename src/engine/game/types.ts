@@ -12,6 +12,7 @@ import type { DayLedger } from "./ledger";
 import type { TripPlans } from "./transfers";
 import type { HaulPlans } from "./haulage";
 import type { StationInfo } from "./stations";
+import type { AssemblyState } from "./assembly";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
@@ -49,7 +50,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly";
 
 export interface GameRoadDef {
   a: string;
@@ -59,7 +60,7 @@ export interface GameRoadDef {
 }
 
 /**
- * The land beyond the home cluster (map version 7, terrain.ts): a rolling relief from a seed, lowest
+ * The land beyond the home cluster (map version 8, terrain.ts): a rolling relief from a seed, lowest
  * along the rivers and rising between them, `amplitude` elevation units at most; `ridged` makes
  * crests of it (steeper country); `plateaus` stand up out of it behind an escarpment.
  */
@@ -102,7 +103,7 @@ export interface GameMapDef {
   roads: GameRoadDef[];
   /** Step 3: authored terrain. Absent means flat dry land. */
   /** `valleys`: the rivers cut through the hills (terrain.ts); absent in maps drawn before it. */
-  /** `relief`: the land beyond the home cluster shaped first, its rivers in its valleys (terrain.ts; map version 7). */
+  /** `relief`: the land beyond the home cluster shaped first, its rivers in its valleys (terrain.ts; map version 8). */
   terrain?: { rivers?: GameRiverDef[]; hills?: GameHillDef[]; valleys?: boolean; relief?: ReliefDef };
   /** Step 4: the port city, where supplies come from (goods.ts). Absent means no supplies. */
   port?: string;
@@ -274,7 +275,8 @@ export interface GameTuning {
    * meandering, the old railway laid over the land; 3 the sites round a town placed past where
    * it's built up, on one side of it (fuel.ts ringSpot); 4 the land beyond the home cluster drawn
    * by region, and the coast with an estuary and bays (regionalLand); 5 a southern region's coast
-   * along its south (coastToSouth); 6 the north, north-east and Middle Belt landlocked (landlocked).
+   * along its south (coastToSouth); 6 the north, north-east and Middle Belt landlocked (landlocked);
+   * 7 the clusters spread over the frame (drawRegion, by the land each reaches that nothing else does).
    * Absent in older runs: 1, so a run file
    * replays on the map it was played on.
    */
@@ -315,6 +317,21 @@ export interface GameTuning {
    * `stationTownRiders` a day change trains grows a town. Absent in older runs: the line as it was.
    */
   railStations?: boolean;
+  /**
+   * The assembly plant (assembly.ts; brief, Chains: convergent): steel and fuel in -- each
+   * `assemblySteelPerDay` / `assemblyFuelPerDay` at full output -- buses and minibuses out, cheaper to
+   * you while it runs: `assemblyDiscountPerGeneration` a generation, one per `assemblyGenerationDays`
+   * of full output up to `assemblyMaxGenerations`, rolled over `assemblyDiscountTauDays`. `jobsAssembly`
+   * thousand workers. Absent in older runs: no plant.
+   */
+  assemblyPlant?: boolean;
+  assemblySteelPerDay?: number;
+  assemblyFuelPerDay?: number;
+  assemblyDiscountPerGeneration?: number;
+  assemblyGenerationDays?: number;
+  assemblyMaxGenerations?: number;
+  assemblyDiscountTauDays?: number;
+  jobsAssembly?: number;
   /**
    * A road or track you build is pulled taut before it's smoothed (pathing/smoothing.ts pullTaut): a
    * straight runs straight instead of A*'s dog-leg rounded into a lazy curve. The line drawn -- and
@@ -913,6 +930,8 @@ export interface GameWorld {
   transferRateEMA: Map<string, number>;
   /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */
   plans: TripPlans | null;
+  /** The assembly plant (assembly.ts): absent without one. */
+  assembly?: AssemblyState;
   /** The old line's stations (stations.ts), by the place each is: absent without them. */
   stations?: Map<string, StationInfo>;
   /** How hauliers relay goods town to town (haulage.ts). Null = not built yet; rebuilt when the roads, towns or yards change. */

@@ -81,7 +81,7 @@ export function buildGameTerrain(def: GameMapDef): TerrainField {
   return { width, height, elevation, water, settlementDensity: new Float32Array(width * height) };
 }
 
-// --- The land first (map version 7; the scope of 2026-10-30, A1-A2) --------------------------
+// --- The land first (map version 8; the scope of 2026-10-30, A1-A2) --------------------------
 // Beyond the home cluster the land was a plain with hills set on it, and the rivers drawn across
 // it on their own -- so they ran over rises, and the land between them said nothing. Now a relief
 // shaped by the water: lowest along the rivers and the coast, swelling between them into the

@@ -104,3 +104,22 @@
 .chain.good { border-color: var(--good); }
 /* A town's cement, steel and fuel between legs (screen.ts onTheWayHtml). */
 .onway { font-size: var(--fs-dense); color: var(--ink-2); margin: 0 0 var(--sp-2); line-height: 1.45; }
+
+/* The chain strip and the recipe card (screen.ts; brief, Chains: convergent): the map says where, the card says why. */
+.chainstrip { display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; margin: var(--sp-2) 0; font-size: var(--fs-caption); }
+.chainstrip .ins { display: flex; flex-direction: column; gap: var(--sp-1); }
+.chainstrip .ins.fork { padding-right: var(--sp-1); border-right: 2px solid var(--line); }
+.chainstrip .arrow { color: var(--muted); }
+.chainstrip .cbox { display: inline-flex; flex-direction: column; padding: var(--sp-1) var(--sp-2); border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface-2); color: var(--ink); font-weight: 600; }
+.chainstrip .cbox small { font-weight: 400; color: var(--muted); }
+.chainstrip .cbox.site { background: var(--ink); color: var(--on-fill); border-color: var(--ink); }
+.chainstrip .cbox.short { border-color: var(--warn); }
+.chainstrip .cbox.broken { border-color: var(--bad); border-width: 2px; }
+.recipe { margin: var(--sp-2) 0 var(--sp-3); }
+.recipe .rrow { display: grid; grid-template-columns: 1fr auto; gap: 0 var(--sp-2); font-size: var(--fs-dense); margin-bottom: var(--sp-1); }
+.recipe .rrow .rbar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.recipe .rrow .rbar b { display: block; height: 100%; background: var(--you); }
+.recipe .rrow.binding .n { color: var(--bad); font-weight: 600; }
+.recipe .rrow.binding .rbar b { background: var(--bad); }
+.recipe .stuck { font-size: var(--fs-dense); margin: var(--sp-1) 0; }
+.recipe .rfoot { font-size: var(--fs-caption); }

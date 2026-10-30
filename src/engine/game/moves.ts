@@ -3,6 +3,7 @@ import { chainOf, checkPave, demandAlong, isBrtRoute, isCutOff, isMinibusRoute, 
 import { isDirt } from "./congestion";
 import { isRailRoute } from "./rail";
 import type { ActionSpec } from "./actions";
+import { vehiclePrice } from "./assembly";
 
 // The moves worth forecasting, as data: what the developer view's "best
 // next moves" lists and what the probe's bots choose between
@@ -26,8 +27,7 @@ export interface VehicleMove {
  */
 export function vehicleMoves(world: GameWorld): VehicleMove[] {
   const list: VehicleMove[] = [];
-  const t = world.tuning;
-  const price = (kind: "bus" | "minibus" | "brt") => (kind === "minibus" ? t.minibusPurchaseCost : kind === "brt" ? t.brtPurchaseCost : t.busPurchaseCost);
+  const price = (kind: "bus" | "minibus" | "brt") => vehiclePrice(world, kind);
   for (const route of world.routes) {
     if (isRailRoute(route.id)) continue;
     const kind = isMinibusRoute(route.id) ? "minibus" : isBrtRoute(route.id) ? "brt" : "bus";

@@ -1,5 +1,5 @@
-// Map version 7, the land first (the scope of 2026-10-30, A1-A2): what it changes in play. Twelve
-// seeds, 15 days with nobody playing, version 6 against the latest (8) -- the sites placed and working, fuel
+// Map version 8, the land first (the scope of 2026-10-30, A1-A2): what it changes in play. Twelve
+// seeds, 15 days with nobody playing, version 7 against the latest (9) -- the sites placed and working, fuel
 // supplied, trips a day -- and what a road between two towns beyond the home box costs.
 //   bun scripts/lab/land-first.lab.ts
 import { GAME_MAP } from "../../src/game/map";
@@ -14,9 +14,9 @@ import { roadChain } from "../../src/engine/game/world";
 import { headline } from "../../src/engine/game/world";
 
 const seeds = [3, 11, 17, 42, 101, 256, 777, 1234, 2411, 2418, 4202, 8510];
-const sum = { 6: { sites: 0, working: 0, fuel: 0, fuelN: 0, trips: 0, road: 0, roadN: 0, hills: 0 }, 8: { sites: 0, working: 0, fuel: 0, fuelN: 0, trips: 0, road: 0, roadN: 0, hills: 0 } };
+const sum = { 7: { sites: 0, working: 0, fuel: 0, fuelN: 0, trips: 0, road: 0, roadN: 0, hills: 0 }, 9: { sites: 0, working: 0, fuel: 0, fuelN: 0, trips: 0, road: 0, roadN: 0, hills: 0 } };
 for (const seed of seeds) {
-  for (const version of [6, 8] as const) {
+  for (const version of [7, 9] as const) {
     const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: version });
     // Roads first, before the days run (the same pairs both versions: towns don't move).
     const far = [...w.towns.values()].filter((t) => !t.industry && !inHome(w, t)).sort((a, b) => a.id.localeCompare(b.id));
@@ -37,7 +37,7 @@ for (const seed of seeds) {
   process.stdout.write(".");
 }
 console.log();
-for (const v of [6, 8] as const) {
+for (const v of [7, 9] as const) {
   const s = sum[v];
   console.log(`version ${v}: sites ${s.sites}, working ${s.working}, fuel supplied ${((s.fuel / Math.max(1, s.fuelN)) * 100).toFixed(1)}%, trips ${Math.round(s.trips / seeds.length)} a day; a road beyond the home box ₦${Math.round(s.road / Math.max(1, s.roadN))} on average (hills ₦${Math.round(s.hills / Math.max(1, s.roadN))}), ${s.roadN} pairs`);
 }

@@ -37,7 +37,7 @@ const M = 8; // metres a map cell
 // Metres an elevation unit. The map's cells stand for far more than the 8 m they're drawn at,
 // so the hills are drawn low: at 7 m a unit, a 2D map's gentle hill stood up as a spike (your
 // playtest, 2026-10-26: "see another mountain in 3D"). 3.2 since the land got its relief (map
-// version 7: broad swells a few units high) -- at 2.2 the region read flat from any height.
+// version 8: broad swells a few units high) -- at 2.2 the region read flat from any height.
 const HEIGHT = 3.2;
 const VEHICLE_SCALE = 1.6; // a little larger than life, to be seen from above
 // Haze as distance does it (aerial perspective), not a flat fog: colour drains first, then the land
@@ -108,11 +108,13 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
       attribute float aAcross;
       attribute float aAlong;
       attribute float aWidth;
-      attribute vec2 aShore;
+      attribute float aShore;
+      attribute float aSea;
+      varying float vSea;
       varying float vAcross;
       varying float vAlong;
       varying float vWidth;
-      varying vec2 vShore;
+      varying float vShore;
       varying vec3 vWorld;
       #include <fog_pars_vertex>
       void main() {
@@ -120,6 +122,7 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
         vAlong = aAlong;
         vWidth = aWidth;
         vShore = aShore;
+        vSea = aSea;
         vec4 world = modelMatrix * vec4(position, 1.0);
         vWorld = world.xyz;
         vec4 mvPosition = viewMatrix * world;
@@ -139,7 +142,8 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
       varying float vAcross;
       varying float vAlong;
       varying float vWidth;
-      varying vec2 vShore;
+      varying float vShore;
+      varying float vSea;
       varying vec3 vWorld;
       #include <fog_pars_fragment>
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -154,21 +158,26 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
         return noise(q * vec2(0.09, 0.16)) * 0.6 + noise(q * vec2(0.27, 0.45) + 7.3) * 0.3 + noise(q * 0.8 + 3.1) * 0.1;
       }
       void main() {
-        float metres = vWidth; // ribbons are built in metres (a cell is 8 m)
-        bool sea = metres > 96.0;
-        // Narrower runs faster; the sea barely drifts.
-        float speed = sea ? 0.4 : clamp(144.0 / max(metres, 8.0), 2.0, 9.0);
-        vec2 p = vec2(vAlong, vAcross * metres * 0.5);
-        float flow = uTime * speed;
-        float h = ripples(p, flow);
+        // A river's water in its own frame (metres along it, across it), carried downstream; the
+        // sea's in the world's, barely drifting. Blended by how near the sea is (aSea, 0..1), so an
+        // estuary fades into the sea instead of meeting it at a line.
+        if (vShore < 0.0) discard;
+        float metres = max(vWidth, 8.0);
+        float speed = clamp(144.0 / metres, 2.0, 9.0);
+        vec2 pr = vec2(vAlong, vAcross);
+        vec2 ps = vWorld.xz * 0.6;
+        float fr = uTime * speed, fs = uTime * 0.4;
         float e = 0.6;
-        vec2 grad = vec2(ripples(p + vec2(e, 0.0), flow) - h, ripples(p + vec2(0.0, e), flow) - h) / e;
+        float hr = ripples(pr, fr), hs = ripples(ps, fs);
+        vec2 gr = vec2(ripples(pr + vec2(e, 0.0), fr) - hr, ripples(pr + vec2(0.0, e), fr) - hr) / e;
+        vec2 gs = vec2(ripples(ps + vec2(e, 0.0), fs) - hs, ripples(ps + vec2(0.0, e), fs) - hs) / e;
+        vec2 grad = mix(gr, gs, vSea);
+        vec2 p = mix(pr, ps, vSea);
+        float flow = mix(fr, fs, vSea);
         vec3 n = normalize(vec3(-grad.x * 0.9, 1.0, -grad.y * 0.9));
-        // Shallow at the banks, deep mid-channel; the sea deepens away from its shore.
-        float edge = abs(vAcross);
-        float shoreSide = vAcross < 0.0 ? vShore.x : vShore.y;
-        float toShore = sea ? (shoreSide > 0.5 ? 1.0 - edge : 1.0) * metres * 0.5 : (1.0 - edge) * metres * 0.5;
-        float depth = smoothstep(0.0, sea ? 90.0 : max(6.0, metres * 0.35), toShore);
+        // Shallow at the shore, deep mid-channel; the sea deepens slowly away from its shore.
+        float toShore = vShore;
+        float depth = smoothstep(0.0, mix(max(6.0, metres * 0.35), 90.0, vSea), toShore);
         vec3 col = mix(uShallow, uDeep, depth);
         // A little sky at low angles, and the sun's glint.
         vec3 view = normalize(cameraPosition - vWorld);
@@ -177,7 +186,7 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
         float glint = pow(max(dot(reflect(-uSun, n), view), 0.0), 400.0);
         col += uGlint * glint * uGlintStrength;
         // Foam where it meets land: a soft band, broken up and drifting with the water.
-        float band = (1.0 - smoothstep(0.0, sea ? 4.0 : max(0.8, metres * 0.07), toShore)) * (sea ? shoreSide : 1.0);
+        float band = 1.0 - smoothstep(0.0, mix(max(0.8, metres * 0.07), 4.0, vSea), toShore);
         float lace = smoothstep(0.55, 0.8, noise(p * vec2(0.35, 0.6) - vec2(flow * 0.6, uTime * 0.3)));
         col = mix(col, uFoam, band * (0.2 + 0.4 * lace));
         gl_FragColor = vec4(col, 1.0);
@@ -761,7 +770,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const decks = new Map<number, number>();
   const cellKey = (cx: number, cy: number) => Math.round(cy) * W + Math.round(cx);
   /** `piers`: bridge it over water, its piers added to this kit. */
-  function ribbonGeometry(points: Point[], width: number | number[], lift: number, piers?: Kit, clampToMap = false, water = false): THREE.BufferGeometry {
+  function ribbonGeometry(points: Point[], width: number | number[], lift: number, piers?: Kit): THREE.BufferGeometry {
     const widthAt = (k: number) => (Array.isArray(width) ? width[Math.min(width.length - 1, k)]! : width);
     const steps: Array<{ x: number; y: number; w: number }> = [];
     for (let k = 1; k < points.length; k += 1) {
@@ -794,18 +803,13 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
     const verts: number[] = [];
-    // For water (waterMaterial): across its width (-1 one bank, 1 the other), metres along it, its
-    // width, and whether each edge is a shore (not the map's cut edge, where the sea is clamped).
-    const across: number[] = [], along: number[] = [], wide: number[] = [], shore: number[] = [];
-    let run = 0;
     for (let i = 0; i < steps.length; i += 1) {
       const p = steps[i]!, q = steps[Math.min(steps.length - 1, i + 1)]!, o = steps[Math.max(0, i - 1)]!;
-      if (i > 0) run += Math.hypot(p.x - steps[i - 1]!.x, p.y - steps[i - 1]!.y) * M;
       const dx = q.x - o.x, dy = q.y - o.y, len = Math.hypot(dx, dy) || 1;
       const nx = (-dy / len) * (p.w / M / 2), ny = (dx / len) * (p.w / M / 2);
       const l = ground(p.x + nx, p.y + ny, lift), r = ground(p.x - nx, p.y - ny, lift);
       // A strip laid on a road (its lane, its centre line, a track's rails) rides the road's deck.
-      if (!piers && !clampToMap) {
+      if (!piers) {
         const under = decks.get(cellKey(p.x, p.y));
         if (under !== undefined) { l.y = Math.max(l.y, under + 0.12); r.y = Math.max(r.y, under + 0.12); }
       }
@@ -815,34 +819,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         r.y = Math.max(r.y, level + lift);
         decks.set(cellKey(p.x, p.y), Math.max(decks.get(cellKey(p.x, p.y)) ?? -Infinity, level + lift));
       }
-      const lx = l.x, lz = l.z, rx = r.x, rz = r.z;
-      if (clampToMap) {
-        // Water cut at the map's edge, as the land is: the sea runs to the diorama's side, not past it.
-        for (const v of [l, r]) {
-          v.x = Math.max(0, Math.min((W - 1) * M, v.x));
-          v.z = Math.max(0, Math.min((H - 1) * M, v.z));
-          v.y = elevationAt(v.x / M, v.z / M) * HEIGHT + lift;
-        }
-      }
       verts.push(l.x, l.y, l.z, r.x, r.y, r.z);
-      if (water) {
-        const leftShore = l.x === lx && l.z === lz ? 1 : 0, rightShore = r.x === rx && r.z === rz ? 1 : 0;
-        across.push(-1, 1);
-        along.push(run, run);
-        wide.push(p.w, p.w);
-        shore.push(leftShore, rightShore, leftShore, rightShore);
-      }
     }
     const index: number[] = [];
     for (let i = 0; i < steps.length - 1; i += 1) index.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-    if (water) {
-      geo.setAttribute("aAcross", new THREE.Float32BufferAttribute(across, 1));
-      geo.setAttribute("aAlong", new THREE.Float32BufferAttribute(along, 1));
-      geo.setAttribute("aWidth", new THREE.Float32BufferAttribute(wide, 1));
-      geo.setAttribute("aShore", new THREE.Float32BufferAttribute(shore, 2));
-    }
     geo.setIndex(index);
     geo.computeVertexNormals();
     return geo;
@@ -854,12 +836,77 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // playtest, 2026-10-26: "the water glitching"). Drawn a hair toward the eye of the land.
     // Unlit, one flat colour: the sea is one wide ribbon, and where it bends sharply it folds
     // over itself -- lit, the folded triangles faced down and showed as dark slivers.
-    const water = waterMaterial;
+    // One surface over all the water, not a ribbon a river (your look, 2026-10-30, map 8042's
+    // delta: a ribbon wider than its bend folded into a fan where the estuary met the sea, and a
+    // creek's sharp corners drew a sawtooth). A grid every half cell over the water; at each point
+    // the distance to the shore (the water's lines as the 2D map draws them: a capsule each
+    // stretch, so corners come out round), and its river's frame for the ripples -- metres along
+    // the nearest line and across it. The shader cuts the edge where the distance reaches nought.
+    const STEP = 0.5;
+    const GW = Math.floor((W - 1) / STEP) + 1, GH = Math.floor((H - 1) / STEP) + 1;
+    const shoreOf = new Float32Array(GW * GH).fill(1e6); // cells past the shore (negative: in the water)
+    const riverOf = new Float32Array(GW * GH).fill(1e6), seaOf = new Float32Array(GW * GH).fill(1e6);
+    const alongOf = new Float32Array(GW * GH), acrossOf = new Float32Array(GW * GH), widthOf = new Float32Array(GW * GH);
     for (const river of world.waterLines ?? []) {
-      const widths = (river.widths ?? river.points.map(() => river.width)).map((w) => w * M);
-      const mesh = new THREE.Mesh(own(ribbonGeometry(river.points.map(([x, y]) => ({ x, y })), widths, 0.6, undefined, true, true)), water);
-      scene.add(mesh);
+      const widths = river.widths ?? river.points.map(() => river.width);
+      // The sea: wide along its length (its typical width), not a river with one wide mouth.
+      const sea = [...widths].sort((a, b) => a - b)[Math.floor(widths.length / 2)]! > 12;
+      let run = 0;
+      for (let k = 1; k < river.points.length; k += 1) {
+        const [ax, ay] = river.points[k - 1]!, [bx, by] = river.points[k]!;
+        const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1e-6;
+        const wa = widths[k - 1]!, wb = widths[k]!;
+        const reach = Math.max(wa, wb) / 2 + 1;
+        const x0 = Math.max(0, Math.floor((Math.min(ax, bx) - reach) / STEP)), x1 = Math.min(GW - 1, Math.ceil((Math.max(ax, bx) + reach) / STEP));
+        const y0 = Math.max(0, Math.floor((Math.min(ay, by) - reach) / STEP)), y1 = Math.min(GH - 1, Math.ceil((Math.max(ay, by) + reach) / STEP));
+        for (let gy = y0; gy <= y1; gy += 1) for (let gx = x0; gx <= x1; gx += 1) {
+          const x = gx * STEP, y = gy * STEP;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (len * len)));
+          const cx = ax + dx * t, cy = ay + dy * t;
+          const d = Math.hypot(x - cx, y - cy) - (wa + (wb - wa) * t) / 2;
+          const i = gy * GW + gx;
+          if (d < shoreOf[i]!) shoreOf[i] = d;
+          if (sea) { if (d < seaOf[i]!) seaOf[i] = d; continue; }
+          if (d >= riverOf[i]!) continue;
+          riverOf[i] = d;
+          alongOf[i] = (run + t * len) * M;
+          acrossOf[i] = (((x - ax) * -dy + (y - ay) * dx) / len) * M;
+          widthOf[i] = (wa + (wb - wa) * t) * M;
+        }
+        run += len;
+      }
     }
+    // A quad wherever a corner is in the water or within a step of it, so the cut edge has room.
+    const verts: number[] = [], across: number[] = [], along: number[] = [], wide: number[] = [], shore: number[] = [], seaness: number[] = [], index: number[] = [];
+    const vertexAt = new Int32Array(GW * GH).fill(-1);
+    const vertex = (gx: number, gy: number) => {
+      const i = gy * GW + gx;
+      if (vertexAt[i]! >= 0) return vertexAt[i]!;
+      const x = gx * STEP, y = gy * STEP;
+      verts.push(x * M, elevationAt(x, y) * HEIGHT + 0.6, y * M);
+      across.push(acrossOf[i]!);
+      along.push(alongOf[i]!);
+      wide.push(widthOf[i]! || 8);
+      shore.push(-shoreOf[i]! * M);
+      // The sea's share: 1 well inside it, 0 well inside a river, between over six cells.
+      seaness.push(Math.max(0, Math.min(1, 0.5 + (riverOf[i]! - seaOf[i]!) / 6)));
+      return (vertexAt[i] = verts.length / 3 - 1);
+    };
+    for (let gy = 0; gy < GH - 1; gy += 1) for (let gx = 0; gx < GW - 1; gx += 1) {
+      const corners = [gy * GW + gx, gy * GW + gx + 1, (gy + 1) * GW + gx, (gy + 1) * GW + gx + 1];
+      if (corners.every((c) => shoreOf[c]! > STEP)) continue;
+      const a = vertex(gx, gy), b = vertex(gx + 1, gy), c = vertex(gx, gy + 1), d = vertex(gx + 1, gy + 1);
+      index.push(a, c, b, b, c, d);
+    }
+    const geo = own(new THREE.BufferGeometry());
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+    geo.setAttribute("aAcross", new THREE.Float32BufferAttribute(across, 1));
+    geo.setAttribute("aAlong", new THREE.Float32BufferAttribute(along, 1));
+    geo.setAttribute("aWidth", new THREE.Float32BufferAttribute(wide, 1));
+    geo.setAttribute("aShore", new THREE.Float32BufferAttribute(shore, 1));
+    geo.setAttribute("aSea", new THREE.Float32BufferAttribute(seaness, 1));
+    geo.setIndex(index);
+    scene.add(new THREE.Mesh(geo, waterMaterial));
   }
 
   // --- Roads: one mesh each, rebuilt when the network changes, recoloured as traffic does ----

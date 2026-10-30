@@ -10,6 +10,7 @@ import { averageNet } from "./history";
 import { corridorWear } from "./wear";
 import { chainOf } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
+import { vehiclePrice } from "./assembly";
 
 // Revision 2, step 1 (docs/brief.md, agreed 2026-10-19): show the problems
 // the late game already has. At day 210 of the R1 7 playtest, 2,865 trips a
@@ -88,7 +89,7 @@ export function seatMove(world: GameWorld, a: string, b: string): NamedMove {
   const route = world.routes.find((r) => (r.a === a && r.b === b) || (r.a === b && r.b === a)) ?? findRoute(world, a, b);
   if (route) {
     const kind = isRailRoute(route.id) ? "train" : isMinibusRoute(route.id) ? "minibus" : isBrtRoute(route.id) ? "brt" : "bus";
-    const price = kind === "train" ? t.trainPurchaseCost : kind === "minibus" ? t.minibusPurchaseCost : kind === "brt" ? t.brtPurchaseCost : t.busPurchaseCost;
+    const price = vehiclePrice(world, kind);
     const noun = kind === "brt" ? "BRT bus" : kind;
     // Only where one more would pay: a route losing money, or whose vehicles earn less than
     // they cost to run, loses more with another (the OpenCode player, day 95: following
@@ -106,8 +107,8 @@ export function seatMove(world: GameWorld, a: string, b: string): NamedMove {
   if (!path && railPath(world, a, b)) return { action: { kind: "train", a, b }, price: t.trainPurchaseCost, label: `Run a train ${pair} (T)` };
   const thin = pairDemand(world, a, b) * SECONDS_PER_GAME_DAY < MINIBUS_BELOW_PER_DAY;
   return thin
-    ? { action: { kind: "minibus", a, b }, price: t.minibusPurchaseCost, label: `Run a minibus ${pair} (M)` }
-    : { action: { kind: "bus", a, b }, price: t.busPurchaseCost, label: `Run a bus ${pair} (B)` };
+    ? { action: { kind: "minibus", a, b }, price: vehiclePrice(world, "minibus"), label: `Run a minibus ${pair} (M)` }
+    : { action: { kind: "bus", a, b }, price: vehiclePrice(world, "bus"), label: `Run a bus ${pair} (B)` };
 }
 
 export interface NoSeatPair {

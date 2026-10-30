@@ -4,43 +4,43 @@ import { gameMap } from "@engine/game/region";
 import { buildGameTerrain } from "@engine/game/terrain";
 import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 
-// Map version 7, the land first (region.ts landFirst, terrain.ts addRelief; the scope of 2026-10-30).
+// Map version 8, the land first (region.ts landFirst, terrain.ts addRelief; the scope of 2026-10-30).
 const SEEDS = [3, 11, 42, 101, 777, 2418, 4202, 8510];
 const tuning = (mapVersion: number) => ({ ...DEFAULT_GAME_TUNING, mapVersion });
 
-describe("map version 7: the land first", () => {
-  test("a relief beyond the home box; the home box's ground as version 6 drew it", () => {
+describe("map version 8: the land first", () => {
+  test("a relief beyond the home box; the home box's ground as version 7 drew it", () => {
     for (const seed of SEEDS) {
-      const v6 = gameMap(GAME_MAP, seed, tuning(6)), v7 = gameMap(GAME_MAP, seed, tuning(7));
-      expect(v6.terrain?.relief).toBeUndefined();
-      expect(v7.terrain?.relief).toBeDefined();
-      const [a, b] = [buildGameTerrain(v6), buildGameTerrain(v7)];
-      const box = v7.home!;
+      const v7a = gameMap(GAME_MAP, seed, tuning(7)), v8 = gameMap(GAME_MAP, seed, tuning(8));
+      expect(v7a.terrain?.relief).toBeUndefined();
+      expect(v8.terrain?.relief).toBeDefined();
+      const [a, b] = [buildGameTerrain(v7a), buildGameTerrain(v8)];
+      const box = v8.home!;
       let changedOutside = 0;
-      for (let y = 0; y < v7.height; y += 1) for (let x = 0; x < v7.width; x += 1) {
-        const i = y * v7.width + x;
+      for (let y = 0; y < v8.height; y += 1) for (let x = 0; x < v8.width; x += 1) {
+        const i = y * v8.width + x;
         const inside = x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height;
         if (inside && a.water[i] === b.water[i]) expect(b.elevation[i]).toBeCloseTo(a.elevation[i]!, 5);
         if (!inside && b.elevation[i]! > a.elevation[i]! + 0.2) changedOutside += 1;
       }
-      expect(changedOutside).toBeGreaterThan(v7.width * v7.height * 0.1);
+      expect(changedOutside).toBeGreaterThan(v8.width * v8.height * 0.1);
     }
   }, 120_000);
 
-  test("towns, roads and their places as version 6: only the land and the water's line change", () => {
+  test("towns, roads and their places as version 7: only the land and the water's line change", () => {
     for (const seed of SEEDS) {
-      const v6 = gameMap(GAME_MAP, seed, tuning(6)), v7 = gameMap(GAME_MAP, seed, tuning(7));
-      expect(v7.towns).toEqual(v6.towns);
-      expect(v7.roads.map((r) => [r.a, r.b])).toEqual(v6.roads.map((r) => [r.a, r.b]));
-      expect(() => buildGameTerrain(v7)).not.toThrow(); // no town in the water
+      const v7a = gameMap(GAME_MAP, seed, tuning(7)), v8 = gameMap(GAME_MAP, seed, tuning(8));
+      expect(v8.towns).toEqual(v7a.towns);
+      expect(v8.roads.map((r) => [r.a, r.b])).toEqual(v7a.roads.map((r) => [r.a, r.b]));
+      expect(() => buildGameTerrain(v8)).not.toThrow(); // no town in the water
     }
   }, 120_000);
 
   test("a tributary is narrower than the river it joins, and the same seed draws the same land", () => {
     let joins = 0;
     for (const seed of SEEDS) {
-      const map = gameMap(GAME_MAP, seed, tuning(7));
-      expect(gameMap(GAME_MAP, seed, tuning(7)).terrain).toEqual(map.terrain);
+      const map = gameMap(GAME_MAP, seed, tuning(8));
+      expect(gameMap(GAME_MAP, seed, tuning(8)).terrain).toEqual(map.terrain);
       const rivers = map.terrain!.rivers!;
       const sea = rivers.find((r) => Math.max(...(r.widths ?? [r.width])) > 12);
       for (const river of rivers) {
@@ -70,7 +70,7 @@ describe("map version 7: the land first", () => {
     };
     let mouths = 0;
     for (const seed of SEEDS) {
-      const map = gameMap(GAME_MAP, seed, tuning(7));
+      const map = gameMap(GAME_MAP, seed, tuning(8));
       const rivers = map.terrain!.rivers!;
       const sea = rivers.find((r) => Math.max(...(r.widths ?? [r.width])) > 12);
       for (const river of rivers) {

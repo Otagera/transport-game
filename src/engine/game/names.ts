@@ -16,7 +16,7 @@ import { NAMES, REGION_NAMES, townId } from "./generate";
 //   - north-east, Kanuri and Fulfulde: Ng-, -ram, -gu, -no; Mayo ....
 //
 // Drawn from the map's seed, so the same map is always named the same; never a real town's name
-// from the lists the maps used; never two alike. Map version 8 (region.ts); older runs keep theirs.
+// from the lists the maps used; never two alike. Map version 9 (region.ts); older runs keep theirs.
 
 type Rand = () => number;
 const pick = <T>(rand: Rand, list: readonly T[]): T => list[Math.floor(rand() * list.length)]!;

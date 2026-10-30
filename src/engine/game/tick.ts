@@ -1,4 +1,5 @@
 import { updateUnions } from "./union";
+import { nextEpoch } from "./epoch";
 import { updatePrivateTraffic } from "./private";
 import { updateTerm } from "./term";
 import { updateFloods } from "./floods";
@@ -35,6 +36,7 @@ import { updateProject } from "./project";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { goodsLoader, produceAndSpoil, recordGoodsDelivered, relayArrivals, relayLoader, updateGoodsOutcomes } from "./goods";
+import { updateAssembly } from "./assembly";
 
 // How much longer people wait at a motor park for a danfo to fill than
 // they wait for your bus before giving up.
@@ -133,6 +135,7 @@ function poolKeyFor(at: string, queueKey: string, origin: string, destination: s
 // Every rider is counted exactly once, when their trip resolves: arrived
 // on your buses, taken by a danfo, or stayed home.
 export function gameTick(world: GameWorld, dt: number): GameEvent[] {
+  nextEpoch(world); // what the screen read between ticks is read again (epoch.ts)
   const { simulation, tuning, informal, economy } = world;
   const fundsAtStart = economy.funds;
   const arrived = new Map<string, number>();
@@ -304,6 +307,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
 
   updateGoodsOutcomes(world, goodsDelivered, dt, goodsTrucked);
   updateFuelShortage(world);
+  updateAssembly(world, dt); // the plant learns as it runs, and its discount follows (assembly.ts)
 
   // 4. The informal sector: danfos, then kekes and okadas.
   const takings: Takings = { tolls: 0, levies: 0, agberos: 0, leviesByCorridor: new Map(), leviesByTown: new Map(), loading: 0, touts: 0 };

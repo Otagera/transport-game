@@ -9,7 +9,7 @@ import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
-import { fuelReach } from "@engine/game/fuel";
+import { fuelReach, fuelSupply } from "@engine/game/fuel";
 import type { GameEvent } from "@engine/game/settlement";
 import { pledgeMove, pledgeNow, pledgeProgress, type TermRecord } from "@engine/game/term";
 import { fuelPlanned, fuelReachable } from "@engine/game/fuel";
@@ -32,7 +32,6 @@ import { paveMoves } from "@engine/game/moves";
 import { startGame } from "@engine/game/start";
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/game/industries";
 import { bondAmount, repayBonds } from "@engine/game/bonds";
-import { siteProduction } from "@engine/game/production";
 import { expandCost } from "@engine/game/expand";
 import { expectedShare } from "@engine/game/growth";
 import { sweepDue, updateSweep } from "@engine/game/sweep";
@@ -63,6 +62,8 @@ import { correspondentName, handoverNote, notATutorial, predecessors, termLetter
 import { thenAndNowSvg } from "../src/game/thenandnow";
 import { MITER_LIMIT, congestionStop, junctionPlates, offsetPolyline, overloaded } from "../src/game/corridor";
 import { PRIORITY, Placer, drawsAt, tierOf } from "../src/game/density";
+import { assemblyGeneration, assemblyNeeds, assemblyShare, updateAssembly, vehiclePrice } from "@engine/game/assembly";
+import { siteChain, siteProduction } from "@engine/game/production";
 import { checkSignalBudget } from "../scripts/signal-budget";
 import { segmentRung } from "@engine/game/roads";
 import type { Segment } from "@engine/map/types";
@@ -3166,8 +3167,8 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
 
   test("the chains are the home cluster's: every site in its box, the port the home city's (map 4882's oilfield sat in the region's far corner)", () => {
     for (const seed of [3, 11, 4882]) {
-      // Version 7: regionInfo draws the region with its real names; version 8 renames them (names.ts).
-      const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 0 });
+      // Version 8: regionInfo draws the region with its real names; version 9 renames them (names.ts).
+      const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 8, maxEmergentTowns: 0, warmUpDays: 0 });
       const box = w.home!;
       const info = regionInfo(GAME_MAP, seed);
       expect(w.port).toBe(info.home.map.port!); // inland, a dry port
@@ -3205,8 +3206,8 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
   }, 60_000);
 
   test("a region plays: started as a new game is, a bus in the home cluster carries riders", () => {
-    // Version 7: regionInfo's trunk is named as the region draws it; version 8 renames the towns (names.ts).
-    const w = startRun(GAME_MAP, 3, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 0 });
+    // Version 8: regionInfo's trunk is named as the region draws it; version 9 renames the towns (names.ts).
+    const w = startRun(GAME_MAP, 3, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 8, maxEmergentTowns: 0, warmUpDays: 0 });
     expect(w.width).toBe(REGION_WIDTH);
     expect(w.home).toBeDefined();
     const info = regionInfo(GAME_MAP, 3);
@@ -3274,6 +3275,33 @@ describe("the steel chain (steel.ts; brief, More industries, more chains)", () =
     const old = game(4, { steelEnabled: undefined as unknown as boolean });
     expect(old.steel).toBeNull();
   }, 30_000);
+  test("map version 7 spreads the clusters over the frame: on twenty seeds less land is far from every town, none worse, and every map still draws (brief, Chains: convergent, 3)", () => {
+    // The land more than 25 cells from any town, off the sea, sampled every 6 cells.
+    const far = (map: ReturnType<typeof gameMap>) => {
+      const sea = (map.terrain?.rivers ?? []).filter((r) => Math.max(...(r.widths ?? [r.width])) > 12);
+      const wet = (x: number, y: number) => sea.some((r) => r.points.some(([px, py], i) => Math.hypot(px - x, py - y) < (r.widths?.[i] ?? r.width) / 2));
+      let land = 0, empty = 0;
+      for (let y = 3; y < map.height; y += 6) for (let x = 3; x < map.width; x += 6) {
+        if (wet(x, y)) continue;
+        land += 1;
+        if (!map.towns.some((t) => Math.hypot(t.x - x, t.y - y) <= 25)) empty += 1;
+      }
+      return empty / land;
+    };
+    let before = 0, after = 0;
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const v6 = far(gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 6 }));
+      const map = gameMap(GAME_MAP, seed, { regionEnabled: true, mapVersion: 7 });
+      expect(map.width * map.height).toBe(REGION_WIDTH * REGION_HEIGHT);
+      for (const [i, a] of map.towns.entries()) for (const b of map.towns.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(15);
+      const v7 = far(map);
+      expect(v7).toBeLessThanOrEqual(v6 + 0.02);
+      before += v6;
+      after += v7;
+    }
+    // 47% -> 38% of the land, on twenty-four seeds when measured.
+    expect(after).toBeLessThanOrEqual(before * 0.88);
+  }, 120_000);
 });
 
 describe("generated maps per seed, with guards (brief, After the ladder's playtest, 5; P8)", () => {
@@ -4487,7 +4515,7 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
     const fords = w.floods!.fords;
     expect(fords.length).toBeGreaterThan(0);
     for (const ford of fords) {
-      expect(ford.name).toMatch(/ford$/);
+      expect(ford.name).toMatch(/ford( \(\d+\))?$/);
       expect(ford.bridged).toBe(false);
       expect(ford.span).toBeGreaterThanOrEqual(1);
     }
@@ -4549,8 +4577,8 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
 
   test("your buses go round a flooded ford by a dry road you built, and back when the water falls", () => {
     // Seed 7585: the Ikire ford on the Ikire-Itori road; a high-bridged road Ikire-Ipetu is the other way across.
-    // Version 7: the towns by the names it drew (version 8 makes up its own, names.ts).
-    const w = startRun(GAME_MAP, 7585, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, floodFordsPerSeason: 1, floodDays: 8 });
+    // Version 8: the towns by the names it drew (version 9 makes up its own, names.ts).
+    const w = startRun(GAME_MAP, 7585, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 8, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, floodFordsPerSeason: 1, floodDays: 8 });
     const id = (name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
     const [ikire, itori, ipetu] = [id("Ikire"), id("Itori"), id("Ipetu")];
     expect(applyAction(w, { kind: "road", a: ikire, b: ipetu, alignment: "cheapest", high: true }).ok).toBe(true);
@@ -4588,7 +4616,7 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
 });
 
 describe("named crossings, straight or round, the ridge's limestone (crossings.ts; brief, Revision 5, step 6)", () => {
-  const start = (seed: number, overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...overrides });
+  const start = (seed: number, overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 8, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...overrides });
   const named = (w: GameWorld, name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
 
   test("each river's crossings are named, bank to bank within a bridge's span, clear of the fords", () => {
@@ -4652,7 +4680,7 @@ describe("named crossings, straight or round, the ridge's limestone (crossings.t
 
 describe("a new road over water: a causeway that floods, or a high bridge (floods.ts; brief, Revision 5, step 6)", () => {
   const quick = { floodFirstDayMin: 4, floodFirstDayMax: 5, floodWarnDays: 2, floodDays: 3, floodEveryDays: 10 };
-  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 8510, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 7, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, ...overrides });
+  const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 8510, { all: false, goodsOff: false, wearOff: false }, null, { mapVersion: 8, maxEmergentTowns: 0, warmUpDays: 1, startingFunds: 1e6, ...quick, ...overrides });
   const named = (w: GameWorld, name: string) => [...w.towns.values()].find((t) => t.name === name)!.id;
   const until = (w: GameWorld, kind: GameEvent["kind"], days = 20) => {
     for (let i = 0; i < days * SECONDS_PER_GAME_DAY * 30; i += 1) {
@@ -5168,6 +5196,41 @@ describe("frame budgets don't change the game (principles.md §3: derive from el
     }
     expect(snapshot(watched)).toBe(snapshot(straight));
   }, 300_000);
+
+  test("the screen reading the world just before an action doesn't change what the next tick does (epoch.ts; map 3218, day 433)", () => {
+    // Map 1's seaport is a coast town up a dirt highway: imports reach the home city by how much of
+    // it is paved (gateways.ts seaportLink), worked out once a tick. Keyed on the clock alone, the
+    // screen's read between ticks was what the next tick used -- paved in between or not -- and a
+    // live game parted from its replay by ₦1 on day 40.
+    const start = () => startGame(gameMap(GAME_MAP, 1, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 1, startingFunds: 1e6 });
+    const probe = start();
+    const legs = roadPath(probe, probe.port!, probe.seaport!)!.nodeIds;
+    expect(seaportLink(probe).by).toBe("road");
+    const day = SECONDS_PER_GAME_DAY * 30;
+    const paveAt = new Map(legs.slice(1).map((b, k) => [(k + 1) * Math.round(day / 3), { kind: "pave" as const, a: legs[k]!, b }]));
+    const ticks = (legs.length + 1) * Math.round(day / 3);
+    const play = (watch: boolean) => {
+      const w = start();
+      for (let i = 0; i < ticks; i += 1) {
+        const pave = paveAt.get(i);
+        if (watch && (pave || i % 13 === 0)) {
+          read(w);
+          const flows = goodsFlows(w);
+          for (const t of w.towns.values()) {
+            if (t.industry) siteChain(w, t.id, flows);
+            else fuelSupply(w, t.id);
+          }
+          seaportLink(w);
+        }
+        if (pave) applyAction(w, pave);
+        gameTick(w, SIM_DT);
+      }
+      return w;
+    };
+    const watched = play(true);
+    expect(seaportLink(watched).paved).toBeGreaterThan(0.5);
+    expect(snapshot(watched)).toBe(snapshot(play(false)));
+  }, 300_000);
 });
 
 describe("map density (src/game/density.ts; look.md, Map density)", () => {
@@ -5242,4 +5305,105 @@ describe("map density (src/game/density.ts; look.md, Map density)", () => {
     const strayRender = render + "\nfunction drawStray() { ctx.fillStyle = COLORS.player; drawSiteIcon(); }\n";
     expect(checkSignalBudget(strayRender, icons, stray).failures.join(" ")).toContain("--trade");
   });
+});
+
+describe("the assembly plant (assembly.ts; brief, Chains: convergent)", () => {
+  const game = (seed = 1, tuning: Partial<typeof DEFAULT_GAME_TUNING> = {}) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, ...tuning });
+  /** Steel and fuel arriving at the plant, as shares of what full output takes. */
+  const feed = (w: GameWorld, steel: number, fuel: number) => {
+    const plant = w.assembly!.siteId;
+    const need = assemblyNeeds(w);
+    w.goods.outcomes.set(goodsKey({ from: w.steel!.terminalId!, to: plant, kind: "supplies" }), { delivered: 0, spoiled: 0, arrived: need.steel * steel });
+    w.goods.outcomes.set(goodsKey({ from: w.fuel!.depotId, to: plant, kind: "supplies" }), { delivered: 0, spoiled: 0, arrived: need.fuel * fuel });
+    for (const from of [w.steel!.worksId, w.fuel!.refineryId]) if (from) w.goods.outcomes.delete(goodsKey({ from, to: plant, kind: "supplies" }));
+  };
+
+  test("short of one input it runs at that input's share, not the mean, and the reading names the short one", () => {
+    const w = game();
+    feed(w, 0.5, 1);
+    const s = assemblyShare(w);
+    expect(s.steel).toBeCloseTo(0.5, 6);
+    expect(s.fuel).toBeCloseTo(1, 6);
+    expect(s.share).toBeCloseTo(0.5 * staffFactor(w, w.assembly!.siteId), 6);
+    const p = siteProduction(w, w.assembly!.siteId)!;
+    expect(p.limit).toBe("input");
+    expect(p.binding).toBe("steel");
+  }, 60_000);
+
+  test("short of both, the reading names the lower", () => {
+    const w = game();
+    feed(w, 0.6, 0.3);
+    expect(siteProduction(w, w.assembly!.siteId)!.binding).toBe("fuel");
+    feed(w, 0.2, 0.7);
+    expect(siteProduction(w, w.assembly!.siteId)!.binding).toBe("steel");
+  }, 60_000);
+
+  test("its steel comes two ways, the port's and the works', so with the works idle the port's still feeds it", () => {
+    const w = game(4); // a South-South map: a works and the terminal
+    const plant = w.assembly!.siteId;
+    const fromPort = () => steelFlows(w).filter((f) => f.from === w.steel!.terminalId && f.to === plant).reduce((s, f) => s + f.rate, 0);
+    expect(w.steel!.working).toBe(false); // the works idle, as every game starts
+    expect(fromPort()).toBeGreaterThan(0);
+  }, 60_000);
+
+  test("the discount deepens with each generation while it runs, and fades when it's starved", () => {
+    const w = game();
+    const D = SECONDS_PER_GAME_DAY;
+    const list = w.tuning.busPurchaseCost;
+    feed(w, 1, 1);
+    const per = w.tuning.assemblyDiscountPerGeneration!;
+    let last = 0;
+    for (let day = 0; day < 120; day += 1) updateAssembly(w, D);
+    expect(assemblyGeneration(w)).toBeGreaterThanOrEqual(2);
+    expect(w.assembly!.discount).toBeGreaterThan(per * 2 * staffFactor(w, w.assembly!.siteId) * 0.9);
+    expect(vehiclePrice(w, "bus")).toBeLessThan(list);
+    last = w.assembly!.discount;
+    feed(w, 0, 1);
+    for (let day = 0; day < 30; day += 1) updateAssembly(w, D);
+    expect(w.assembly!.discount).toBeLessThan(last * 0.05);
+    expect(vehiclePrice(w, "train")).toBe(w.tuning.trainPurchaseCost); // buses and minibuses only
+  }, 60_000);
+
+  test("a run file without assemblyPlant has no plant, and pays list prices", () => {
+    const old = game(1, { assemblyPlant: undefined as unknown as boolean });
+    expect(old.assembly).toBeUndefined();
+    expect(vehiclePrice(old, "bus")).toBe(old.tuning.busPurchaseCost);
+  }, 60_000);
+});
+
+describe("the chain strip (production.ts siteChain; brief, Chains: convergent)", () => {
+  const game = (seed = 1) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0 });
+  const broken = (c: NonNullable<ReturnType<typeof siteChain>>) => [...c.inputs, c.output].filter((l) => l.broken);
+
+  test("the plant's fork marks its short arm, and only that", () => {
+    const w = game();
+    const plant = w.assembly!.siteId;
+    const need = assemblyNeeds(w);
+    for (const [from, share, n] of [[w.steel!.terminalId!, 0.3, need.steel], [w.fuel!.depotId, 1, need.fuel]] as const) w.goods.outcomes.set(goodsKey({ from, to: plant, kind: "supplies" }), { delivered: 0, spoiled: 0, arrived: n * share });
+    const c = siteChain(w, plant)!;
+    expect(c.inputs.map((i) => i.name)).toEqual(["steel", "fuel"]);
+    expect(broken(c).map((l) => l.name)).toEqual(["steel"]);
+    expect(c.inputs.find((i) => i.name === "steel")!.places).toContain(w.steel!.terminalId!);
+  }, 60_000);
+
+  test("a linear chain short of its one input marks exactly that link", () => {
+    for (const seed of [1, 4, 77, 949, 2418]) {
+      const w = game(seed);
+      if (!w.cement?.working) continue;
+      for (const key of [...w.goods.outcomes.keys()]) if (key.split(":")[1] === w.cement.worksId) w.goods.outcomes.set(key, { delivered: 0, spoiled: 0, trucked: 0, arrived: 0 });
+      const c = siteChain(w, w.cement.worksId)!;
+      expect(broken(c).map((l) => l.name)).toEqual(["limestone"]);
+      return;
+    }
+    throw new Error("no seed with a working cement works");
+  }, 120_000);
+
+  test("no site's chain ever marks more than one link", () => {
+    const w = game(3218);
+    for (let i = 0; i < 20 * SECONDS_PER_GAME_DAY * 30; i += 1) gameTick(w, SIM_DT);
+    for (const site of [...w.towns.values()].filter((t) => t.industry)) {
+      const c = siteChain(w, site.id);
+      if (c) expect(broken(c).length).toBeLessThanOrEqual(1);
+    }
+  }, 300_000);
 });

@@ -271,7 +271,14 @@ relief of map version 7 read flat), and steep ground painted as granite in outcr
 noise rather than one grey wash. (B3) each region its own trees (`MIXES`): rainforest giants and
 oil palms in the south, mangroves on the delta's creeks, baobabs and acacia in the north, granite
 boulders on high ground in the Middle Belt and the north -- four new shapes in `shapes3d.ts`
-(`rainforest`, `mangrove`, `baobab`, `boulder`), each one instanced draw like the rest.
+(`rainforest`, `mangrove`, `baobab`, `boulder`), each one instanced draw like the rest. **The water, one surface** (your look at map 8042's
+delta, the same day): drawn as a ribbon a river, a ribbon wider than its bend folded into a fan where
+the estuary met the sea, and a creek's sharp corners drew a sawtooth. Now one grid every half cell
+over all the water, each point carrying its distance to the shore (the water's lines as the 2D map
+draws them, a capsule each stretch, so corners come out round) and the nearest river's frame for the
+ripples; the shader cuts the edge where the distance reaches nought. The sea's ripples are in the
+world's frame, a river's in its own, blended by how near the sea is over six cells, so an estuary
+fades into the sea instead of meeting it at a line.
 
 ---
 

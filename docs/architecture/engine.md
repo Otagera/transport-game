@@ -711,6 +711,21 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   `runFile(recorder)` as JSON. `replayRun(base, file, untilTick)` rebuilds the world at any
   tick: the sim is deterministic (the seed is its only randomness), and a test pins that a
   saved run replays to the same funds, headline and towns. `scripts/game-run.ts` reads one.
+  **Reading the world must never change it** (`epoch.ts`; 2026-10-30). The page reads the world
+  between ticks for the panels, the map and the cards; a replay doesn't. A cache that holds a
+  reading "once a tick" keyed on the game clock alone (`gateways.ts seaportLink`,
+  `exportGateway`) was filled by the screen's read *at the clock the next tick starts at*, so the
+  next tick ran on it -- even after an action in between had paved the highway it described. Map
+  3218's day-433 run parted from its replay by ₦1 on day 40, and ~50k people by day 433; it doesn't
+  replay even on its own commit. Bisected on the replay with the screen's reads in its `onTick`:
+  the day summaries clean, `keepSteady` not, `goodsFlows` alone enough, four chains of five, the
+  gateways shared by those four. Now the world has an epoch, moved on at the start of every tick
+  and with every action, and a "once a tick" cache keys on it as well as the clock; inside a tick
+  nothing changes, so every replay comes out as before. **A cache on the world keys on what it
+  read** (haulPlans: the routing's identity and the places), **or on the epoch**, never on time
+  alone. The frame-budget test reads the world just before each action on map 1, whose seaport is
+  up a dirt highway it paves leg by leg (map 949's is the home city, so the old test never went
+  through the cache); with the epoch held at 0 it fails.
 - **`forecast.ts`** — `forecast(world, action, spec)` copies the world and runs the receipt
   machinery on the copy (`perform`, then ticks until the receipt finishes): the receipt the
   action would get two days on, if nothing else changes. The real world is untouched. A test
@@ -1235,7 +1250,25 @@ replays as played. Seed 0 stays the hand-made map, alone.
   from the home city; the north-east's Banki crossing now on its east edge. Six northern maps
   unplayed for 20 days, version 5 -> 6: the same 42 sites working, fuel 24.8% -> 24.6%, trips 573 ->
   574, export pay ₦220 -> ₦248 a day (their seaport was already a haul away).
-- **Version 7: the land first** (`region.ts landFirst`, `terrain.ts addRelief`, `GameMapDef.terrain.relief`;
+- **Version 7: the clusters spread over the frame** (`region.ts drawRegion`, `spread`; brief, Chains:
+  convergent, 3, "Room for them"; 2026-10-30). Measured first: on 24 seeds the towns' hull covered
+  56% of the 250 × 160 frame, but 47% of the dry land was more than 25 cells from any town (map
+  3218's right third and south-east bare). Each far cluster's centre had been the best of 12 spots by
+  distance from the home box and the other centres. **Farthest-point is the wrong score:** with 80
+  spots it got *worse* (48%), because it pushes clusters into the corners and half of each cluster's
+  reach falls off the frame. Now each centre is the best of 60 by how much dry land within reach
+  (`REACH` 28 cells) nothing yet reaches, and a cluster's towns sit out to 26 cells, not 20: 47% ->
+  38%, every seed better or level (test: twenty seeds). The strategist to day 250, five seeds, v6 ->
+  v7 (net a day, trips, people, C14 days 60-150): 543 ₦4,113/₦5,844, 1,127/1,170, 743k/757k, 42/4;
+  2411 ₦3,124/₦4,147, 998/1,029, 804k/792k, 13/10; 3218 ₦1,511/₦6,488, 1,808/1,897, 926k/973k,
+  66/91; 949 ₦4,037/₦3,363, 1,484/1,287, 910k/887k, 60/79; 7 ₦968/₦1,890, 1,043/1,004, 824k/815k,
+  85/62. Net up on four of five, trips on three, people within 3% either way; the bot's goods share
+  stays ~0 (it runs no lorries) and C14 still fails on four. Cost: tick 1.47 -> 1.52 ms over 15
+  days, warm-up ~9.3 s either way; the five maps played faster in all (4,071 s against 4,537 s).
+  **The frame stays 250 × 160:** spreading within it was enough, and nothing yet needs more room.
+  Industries in the gaps (the brief's second step) waits for the next industry to place: the sites
+  placed today belong beside their towns (fuel.ts `ringSpot`), and the quarries in the home box.
+- **Version 8: the land first** (`region.ts landFirst`, `terrain.ts addRelief`, `GameMapDef.terrain.relief`;
   the fidelity scope of 2026-10-30, A1-A2). Beyond the home cluster the land had been a plain with
   hills set on it and rivers drawn across it on their own. Now a relief from a seed of its own
   (`ReliefDef`), shaped by the water: lowest along the rivers and the coast, rising over 14 cells
@@ -1257,12 +1290,15 @@ replays as played. Seed 0 stays the hand-made map, alone.
   eased (two more passes of corner-cutting, back to the drawn line within reach of a town); the
   plateau 4 units high. The rivers' changes are tested as version 2 tested its smoothing: no water
   within a cell of a town. Towns, roads and sites don't move. Tested (`test/land-first.test.ts`): the home box's
-  ground unchanged, towns and roads as version 6, a tributary narrower than its host, the same
-  seed the same land. Twelve seeds unplayed for 15 days, version 6 -> 7 (`scripts/lab/
-  land-first.lab.ts`): sites 199 -> 203, working 95 -> 95, fuel 34.5% -> 34.9%, trips 592 -> 582 a
-  day; a road between two towns beyond the home box ₦240 -> ₦279 on average (hills ₦0 -> ₦40).
+  ground unchanged, towns and roads as version 7, a tributary narrower than its host, the same
+  seed the same land. Twelve seeds unplayed for 15 days (`scripts/lab/land-first.lab.ts`),
+  measured on version 6 before the spread clusters: sites 199 -> 203, working 95 -> 95, fuel 34.5%
+  -> 34.9%, trips 592 -> 582 a day; a road between two towns beyond the home box ₦240 -> ₦279 on
+  average (hills ₦0 -> ₦40). Again on version 7, the clusters spread, 7 -> 9 (names change
+  nothing): sites 191 -> 196, working 99 -> 99, fuel 34.6% -> 33.6%, trips 731 -> 737, a road
+  beyond the home box ₦254 -> ₦296 (hills ₦0 -> ₦45).
   `scripts/region-sheet.ts` takes `MAP_VERSION=6` to draw the older version beside it.
-- **Version 8: fictional names, true to the region** (`names.ts withFictionalNames`; the fidelity
+- **Version 9: fictional names, true to the region** (`names.ts withFictionalNames`; the fidelity
   scope, A5; your word, 2026-10-30: "fictional but taking into account how Nigeria is" -- real names
   "will confuse people when they see real names but not like-for-like geography"). Every map had
   named its towns from a list of its region's real towns, and put Lokoja and Numan where they
@@ -1276,8 +1312,8 @@ replays as played. Seed 0 stays the hand-made map, alone.
   Tested (`test/names.test.ts`). Also in version 8, on the rivers (your look): a tributary's mouth
   that version 2's meanders had left up to 4 cells from its host now joins it; a landlocked map's
   river no longer ends in a 14-cell mouth for a sea that's gone (version 6), and its sharp bends
-  are eased like the rest; the Middle Belt's plateau stands clear of the water. Twelve seeds, 15 days
-  unplayed, version 6 -> 8: the same as 6 -> 7 (sites 203, working 95, fuel 34.9%, trips 582).
+  are eased like the rest; the Middle Belt's plateau stands clear of the water. The names change nothing
+  in play (twelve seeds, 15 days unplayed: the same as version 8).
 - **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
   region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
   a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought
@@ -1304,6 +1340,25 @@ replays as played. Seed 0 stays the hand-made map, alone.
   generator that yields how far through the warm-up it is every game second; `startGame` runs
   it to the end in one go, the page a slice at a time (~40 ms, then a frame) under a loading
   card in `index.html`. The same ticks in the same order: the same world (tested).
+
+### The assembly plant (2026-10-30; brief, Chains: convergent)
+
+`assembly.ts`, behind `assemblyPlant` (absent in older runs: no plant). The first site with two
+inputs. Placed at the start after the other sites, before the stations: `ringSpot` 6-10 cells from the
+home cluster's second town, on an inherited road to it, kind `assembly`, `jobsAssembly` workers.
+- **Inputs:** it's a taker in `steelFlows` (beside the builders, `assemblySteelPerDay`) and in
+  `fuelFlows` (beside the burners, `assemblyFuelPerDay`), so each source splits over it by want: the
+  port's terminal and, on a map with one, the works -- substitution with no new mechanism. What
+  arrives is read over the served roll (`servedRate`), so a truck every few days reads as supply.
+- **Output** (`assemblyShare`): the lower input's share times its shift. `production.ts` gives it two
+  `inputs`, and every site's reading now names the `binding` one when the limit is an input.
+- **The discount** (`updateAssembly`, every tick): `fullDays` accrue at the running share; a
+  generation each `assemblyGenerationDays` (up to `assemblyMaxGenerations`); the discount rolls over
+  `assemblyDiscountTauDays` toward `assemblyDiscountPerGeneration × (1 + generation) × share`.
+  `vehiclePrice` is the one place a bus or minibus is priced -- buying (world.ts), the move lists
+  (moves.ts, problems.ts) and every label on screen read it.
+- On a new game it starts steel-starved (1-11% by day 40 on five maps): the terminal is by the port,
+  50-97 cells away, and the hauliers' legs are slow; bringing it steel is the first decision.
 
 ### Stations on the old line (2026-10-30; brief, Revision 5, Stations on the old line)
 
