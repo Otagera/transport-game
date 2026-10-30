@@ -18,7 +18,7 @@ import { farmTowns } from "@engine/game/food";
 import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, tierOf, tierRadius, type Badge, type Glyph, type SiteState, type Tier } from "./icons";
 import { steadySite } from "./steady";
 
-// The game's map, ported from the information lab (info-lab.html; brief, the carry-over plan:
+// The game's map, ported from the information lab (since discarded; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
 // how full they run, your service as one blue line along them and your vehicles filled as full as
 // their route runs, the other side as bands beside each road with its vehicles drawn on top when

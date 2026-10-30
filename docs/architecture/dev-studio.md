@@ -1,3 +1,7 @@
+> **Retired 2026-10-30:** the labs (design-lab.html, info-lab.html, sprite-lab.html, their
+> `src/` folders, `scripts/info-snapshot.ts` and `src/game/sprites.ts`) were discarded; the game
+> took what it needed from them long ago. Kept below as history; the code is in git history.
+
 # Dev studio and the `window.dev` console
 
 Everything under `src/dev/`, plus `window.dev` (installed from `main.ts`). Both are

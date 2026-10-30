@@ -8,8 +8,8 @@ whichever deep-dive covers the area you're touching:
   TypeScript, the tick loop, the bugs caught there.
 - [render-and-ui.md](render-and-ui.md) §7 — the game's page: the 2D canvas map, its panels
   and cards. §1-6 describe the retired 3D game.
-- [dev-studio.md](dev-studio.md) §4-5 — the design lab and the information lab (dev-only
-  pages). §1-3 describe the retired 3D game's studio.
+- [dev-studio.md](dev-studio.md) — retired: the 3D game's studio (§1-3) and the labs (§4-5: the
+  design, information and sprite labs, discarded 2026-10-30; in git history).
 - [look.md](look.md) — **the visual contract** (2026-10-30): palette (chrome and signal), type, spacing,
   the four control roles, the Board layout, motion, the 3D view's order, and the checks that hold it.
 - [content.md](content.md) — retired with the 3D game (its Zod content schemas).
@@ -67,18 +67,14 @@ src/
   game/           The game's page: 2D canvas map (render.ts), panels and cards (main.ts),
                   hints, verdicts, the hand-made map (map.ts) -- render-and-ui.md §7
     styles/       The page's CSS, linked from index.html: tokens.css (every colour the
-                  page and the 2D map share), then base, cards, map, screen, fullscreen
-  design-lab/     The design lab (dev-only) -- dev-studio.md §4
-  info-lab/       The information lab (dev-only): the three layers on a played game -- §5
+                  page and the 2D map share), then base, cards, map, screen, fullscreen (look.md, the visual contract)
 index.html        The game
-design-lab.html, info-lab.html   The labs (dev-only, not build inputs)
 public/content/vehicles.json      The original vehicle catalog the game's numbers cite
 scripts/game-bots.ts        Bot personas + the brief's measured checks
 scripts/game-strategist.ts  A long-game bot: the ladder and the chains to day 250+ (C2, C11, C14, ...)
 scripts/game-play.ts        Play from a terminal (an OpenCode player)
 scripts/game-run.ts         Read or replay a saved run
 scripts/game-probe.ts, corridor-probe.ts, game-lever-audit.ts   Calibration probes
-scripts/info-snapshot.ts    A saved run as the information lab's data
 docs/
   brief.md        The design contract
   principles.md   Design premise, scope, Findings (the "why")

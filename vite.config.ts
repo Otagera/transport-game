@@ -18,7 +18,7 @@ function gameBuild(): string {
 export default defineConfig({
   define: { "import.meta.env.VITE_GAME_BUILD": JSON.stringify(gameBuild()) },
   // One page: the game (index.html). The 3D original was retired on 2026-10-23
-  // (tag original-3d); the labs (design-lab.html, info-lab.html) are dev-only, never inputs.
+  // (tag original-3d); the labs were discarded 2026-10-30.
   build: {
     rolldownOptions: {
       input: {
