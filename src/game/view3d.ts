@@ -61,9 +61,28 @@ THREE.ShaderChunk.fog_fragment = /* glsl */ `
 // never from the mesh's normals: the sea's wide ribbon folds over itself at sharp bends, and lit
 // by its own normals those folds showed as dark slivers (why it was unlit).
 
-const WATER_DAY = { deep: paintHex("--paint-blue-14"), shallow: paintHex("--paint-blue-8"), sky: paintHex("--paint-blue-1"), foam: paintHex("--paint-earth-2"), glint: paintHex("--paint-light-3"), glintStrength: 0.55 };
+// The day's water is the 2D map's dark anchor (look.md §1, §8.2): its deep the --map-water token,
+// its shallows that a third of the way to the sky's pale.
+const WATER_DAY = { deep: paintHex("--map-water"), shallow: new THREE.Color(paintHex("--map-water")).lerp(new THREE.Color(paintHex("--paint-blue-1")), 0.35).getHex(), sky: paintHex("--paint-blue-1"), foam: paintHex("--paint-earth-2"), glint: paintHex("--paint-light-3"), glintStrength: 0.55 };
 const WATER_NIGHT = { deep: paintHex("--paint-dark-1"), shallow: paintHex("--paint-blue-20"), sky: paintHex("--paint-blue-21"), foam: paintHex("--paint-blue-19"), glint: paintHex("--paint-blue-2"), glintStrength: 0.35 };
 const waterMaterials = new Set<THREE.ShaderMaterial>();
+
+/** A soft round blob, opaque at the middle and gone at the edge: a contact shadow's alpha (look.md §8.3). */
+let blob: THREE.CanvasTexture | null = null;
+function softBlob(): THREE.CanvasTexture {
+  if (blob) return blob;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext("2d")!;
+  const gradient = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+  gradient.addColorStop(0, paintAlpha("--ink", 1));
+  gradient.addColorStop(0.55, paintAlpha("--ink", 0.55));
+  gradient.addColorStop(1, paintAlpha("--ink", 0));
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, 64, 64);
+  blob = new THREE.CanvasTexture(canvas);
+  return blob;
+}
 
 function makeWaterMaterial(): THREE.ShaderMaterial {
   const c = (hex: number) => new THREE.Color(hex);
@@ -575,7 +594,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const dry = new THREE.Color(biome.dry), green = new THREE.Color(biome.green), bankGreen = new THREE.Color(biome.bank), earth = new THREE.Color(paintHex("--paint-earth-39"));
     for (let py = 0; py < small.height; py += 1) for (let px = 0; px < small.width; px += 1) {
       const cx = (px + 0.5) / BASE, cy = (py + 0.5) / BASE;
-      c.copy(green).lerp(dry, Math.max(0, Math.min(1, (patch(cx, cy) - 0.3 + biome.dryness) * 1.8)));
+      const dryness = Math.max(0, Math.min(1, (patch(cx, cy) - 0.3 + biome.dryness) * 1.8));
+      c.copy(green).lerp(dry, dryness);
+      // Albedo separation before lighting (look.md §8.1): the dry savanna paler, the green deeper,
+      // so the plate isn't one sage.
+      c.offsetHSL(0, 0.05 * (1 - dryness), 0.11 * (dryness - 0.5));
       c.lerp(high, Math.min(1, elevationAt(cx, cy) / top) * 0.8);
       const bank = bankDist[Math.min(H - 1, Math.round(cy)) * W + Math.min(W - 1, Math.round(cx))]!;
       if (bank < 5) c.lerp(bankGreen, 0.7 * (1 - bank / 5));
@@ -678,6 +701,18 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     under.rotation.x = -Math.PI / 2;
     under.position.set(((W - 1) * M) / 2, -DEEPEST, ((H - 1) * M) / 2);
     scene.add(under);
+    // The plate sits on something (look.md §8.4): a table in the page's own ground, its shadow soft
+    // under the plate, rather than the diorama floating in a gradient.
+    const span = Math.max(W, H) * M;
+    const table = new THREE.Mesh(own(new THREE.PlaneGeometry(span * 8, span * 8)), own(new THREE.MeshLambertMaterial({ color: paintHex("--bg") })));
+    table.rotation.x = -Math.PI / 2;
+    table.position.set(((W - 1) * M) / 2, -DEEPEST - 1.5, ((H - 1) * M) / 2);
+    table.receiveShadow = true;
+    scene.add(table);
+    const rest = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M * 1.18, (H - 1) * M * 1.18)), own(new THREE.MeshBasicMaterial({ map: softBlob(), color: paintHex("--ink"), transparent: true, opacity: 0.5, depthWrite: false })));
+    rest.rotation.x = -Math.PI / 2;
+    rest.position.set(((W - 1) * M) / 2, -DEEPEST - 1.4, ((H - 1) * M) / 2);
+    scene.add(rest);
   }
 
   // A ribbon along a polyline of cells, `width` metres (one each point, or one for all).
@@ -791,6 +826,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean; rail: boolean; base: number; look: string; line: Point[]; lift: number; focusLine?: THREE.Mesh }>();
   const focusLineMaterial = own(new THREE.MeshBasicMaterial({ color: FOCUS_COLOUR, side: THREE.DoubleSide }));
   const railMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-25"), side: THREE.DoubleSide }));
+  const sleeperMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-earth-55"), side: THREE.DoubleSide }));
   // Every line a road runs (for keeping buildings off them).
   let roadLines: Point[][] = [];
   const pierMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -834,9 +870,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       // Each a hair above the last: two roads on one line don't flicker through each other.
       const piers = new Kit();
       const lift = 0.35 + (roads.size % 6) * 0.04;
-      const mesh = new THREE.Mesh(ribbonGeometry(line, rail ? 6 : retired ? 5 : paved ? 10 : 7.5, lift, piers), material);
+      const mesh = new THREE.Mesh(ribbonGeometry(line, rail ? 4.6 : retired ? 5 : paved ? 10 : 7.5, lift, piers), material);
       mesh.receiveShadow = true;
-      if (rail) mesh.add(new THREE.Mesh(ribbonGeometry(line, 2.6, lift + 0.25), railMaterial));
+      // Track by its own width and surface, never hue (look.md §8.5): a narrow ballast bed, the
+      // sleepers' timber band, and two thin dark rails on it -- against a road's one wide surface.
+      if (rail) {
+        mesh.add(new THREE.Mesh(ribbonGeometry(line, 2.8, lift + 0.18), sleeperMaterial));
+        for (const side of [1, -1]) mesh.add(new THREE.Mesh(ribbonGeometry(offsetLine(line, (side * 0.75) / M), 0.28, lift + 0.32), railMaterial));
+      }
       if (!rail && !retired && paved) mesh.add(new THREE.Mesh(ribbonGeometry(line, 0.35, lift + 0.08), lineMaterial));
       if (!rail && !retired && segment.busLane) for (const side of [1, -1]) mesh.add(new THREE.Mesh(ribbonGeometry(offsetLine(line, (side * 3.4) / M), 2.4, lift + 0.06), laneMaterial));
       if (!piers.empty) {
@@ -1165,7 +1206,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const wallShape = own(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
   const roofShape = own(new THREE.ConeGeometry(0.75, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0));
   const fabricMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-light-1") }));
+  // Contact shadows (look.md §8.3): a soft dark footprint where each building meets the ground --
+  // geometry, one instanced quad a building, never a full-frame AO (it would eat the roads' colours).
+  const contactShape = own(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
+  const contactMaterial = own(new THREE.MeshBasicMaterial({ map: softBlob(), color: paintHex("--ink"), transparent: true, opacity: 0.38, depthWrite: false }));
   function houses(list: House[]): THREE.InstancedMesh[] {
+    const contact = new THREE.InstancedMesh(contactShape, contactMaterial, list.length);
     const walls = new THREE.InstancedMesh(wallShape, fabricMaterial, list.length);
     const roofs = new THREE.InstancedMesh(roofShape, fabricMaterial, list.length);
     // A block's windows: a dark band round each floor above the ground, a touch proud of the wall.
@@ -1176,6 +1222,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       q.setFromAxisAngle(up, h.ry);
       walls.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y, h.z), q, new THREE.Vector3(h.w, h.h, h.d)));
       roofs.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y + h.h, h.z), q, new THREE.Vector3(h.w * 1.04, h.rh, h.d * 1.04)));
+      contact.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y + 0.04, h.z), q, new THREE.Vector3(h.w * 1.45, 1, h.d * 1.45)));
       walls.setColorAt(i, c.set(h.wall));
       roofs.setColorAt(i, c.set(h.roof));
       for (let f = 1; f < h.floors; f += 1) {
@@ -1189,7 +1236,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       mesh.castShadow = true;
       mesh.receiveShadow = true;
     }
-    return [walls, roofs, bands];
+    contact.renderOrder = -1;
+    return [contact, walls, roofs, bands];
   }
   /** A town's streets: one instanced draw, a flat slab a plot long each. */
   function streetMesh(list: Street[]): THREE.InstancedMesh {

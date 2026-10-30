@@ -183,6 +183,13 @@ The same palette, the same world. `shapes3d.ts` and `view3d.ts` read the tokens 
 5. **Road and rail as distinct channels** -- width and surface, not hue or brightness, which
    are taken.
 
+**Done 2026-10-30** (view3d.ts): (1) the ground's dry and green pushed apart in lightness before
+lighting (`offsetHSL` by dryness); (2) the day's water deep is `--map-water`, its shallows a third
+toward the sky; (3) a soft `--ink` footprint instanced under every building (`contactMaterial`,
+`softBlob`), no screen-space AO; (4) a table in `--bg` under the plate, its shadow soft beneath it;
+(5) track as a narrow ballast bed, a timber sleeper band and two thin dark rails, against a road's
+one wide surface.
+
 ---
 
 ## 9. Enforcement
