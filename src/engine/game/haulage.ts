@@ -100,6 +100,10 @@ export function haulPlans(world: GameWorld): HaulPlans {
 export function relayed(world: GameWorld, origin: string, kind: GoodsKind): boolean {
   if (!world.tuning.goodsRelay) return false;
   const site = world.towns.get(origin);
+  // A quarry's limestone too (relayLimestone): it feeds the cement works every town's growth waits
+  // on, and left out, a quarry past a yard's reach could only be railed straight to the works (map
+  // 3218, day 433). Crude (oilfield, terminal) and ore (the mine) are already fuel and steel sites.
+  if (world.tuning.relayLimestone && site?.industry === "quarry") return true;
   return isCementSite(site) || isSteelSite(site) || isFuelSite(site) || (kind === "supplies" && origin === borderFuelSite(world));
 }
 

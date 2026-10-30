@@ -284,6 +284,8 @@ export interface GameTuning {
   borderFuelShare?: number;
   /** Goods past a leg's reach go in legs, town to town, and off a freight train onward by road (haulage.ts). Absent in older runs: off -- a load past reach waits. */
   goodsRelay?: boolean;
+  /** A quarry's limestone goes in legs too (haulage.ts relayed), as the cement it makes does. Absent in older runs: off. */
+  relayLimestone?: boolean;
   /** On a map without a steel works, the terminal lands `steelImportShareNow` of what the towns want now, not of day 1's (steel.ts steelImports). Absent in older runs: day 1's. */
   steelImportsFollowTowns?: boolean;
   steelImportShareNow?: number;

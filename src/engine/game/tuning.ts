@@ -175,6 +175,10 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // past any yard's reach got no cement or steel at all): in legs, town to town, a yard
   // stretching a leg to 120 cells, and off a freight train onward by road.
   goodsRelay: true,
+  // ...and a quarry's limestone, to the works (map 3218: quarries past a yard's reach were railed
+  // straight there). Off by default: replaying that run, it cost 6-16% of trips and ~30% more trucks
+  // throughout, and paid back only late, once the near quarries worked out (+27k people by day 331).
+  relayLimestone: false,
   // Imported steel, on a map without a works, from the towns as they are (steel.ts): 70% of
   // what they want, 91% and then all of it as the port grows (portImportScale).
   steelImportsFollowTowns: true,
