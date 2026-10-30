@@ -557,6 +557,26 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     return (v(x0, y0) * (1 - sx) + v(x0 + 1, y0) * sx) * (1 - sy) + (v(x0, y0 + 1) * (1 - sx) + v(x0 + 1, y0 + 1) * sx) * sy;
   };
 
+  // The savanna's own grain (2026-10-30, the scope's B1: "blotchy, like camouflage"): the broad
+  // patches alone are 14 cells across and smooth, so at the region's scale the land read as a few
+  // soft blobs. Finer noise layered on them (5.5 and 2.2 cells), and the broad pattern warped by a
+  // slow one so its edges wander: patchy ground, dry and green at every scale.
+  const landSeed = [...`${W}x${H}${startPeople.map((t) => t.id).join("")}`].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 17);
+  const hash = (ix: number, iy: number, k: number) => {
+    let h = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(landSeed + k, 2246822519);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const noise = (x: number, y: number, k: number) => {
+    const x0 = Math.floor(x), y0 = Math.floor(y), tx = x - x0, ty = y - y0;
+    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    return (hash(x0, y0, k) * (1 - sx) + hash(x0 + 1, y0, k) * sx) * (1 - sy) + (hash(x0, y0 + 1, k) * (1 - sx) + hash(x0 + 1, y0 + 1, k) * sx) * sy;
+  };
+  const savanna = (cx: number, cy: number) => {
+    const wx = (noise(cx / 9, cy / 9, 1) - 0.5) * 6, wy = (noise(cx / 9, cy / 9, 2) - 0.5) * 6;
+    return 0.55 * patch(cx + wx, cy + wy) + 0.3 * noise(cx / 5.5, cy / 5.5, 3) + 0.15 * noise(cx / 2.2, cy / 2.2, 4);
+  };
+
   // --- The land: savanna in patches, greener by the rivers, red earth in the towns, olive on the hills
   // Painted, not coloured by vertex (2026-10-28, "the ground looks like stickers"): a vertex is
   // 4 m apart, so the land could only change colour in soft blobs, and the fields sat on it as
@@ -594,7 +614,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const dry = new THREE.Color(biome.dry), green = new THREE.Color(biome.green), bankGreen = new THREE.Color(biome.bank), earth = new THREE.Color(paintHex("--paint-earth-39"));
     for (let py = 0; py < small.height; py += 1) for (let px = 0; px < small.width; px += 1) {
       const cx = (px + 0.5) / BASE, cy = (py + 0.5) / BASE;
-      const dryness = Math.max(0, Math.min(1, (patch(cx, cy) - 0.3 + biome.dryness) * 1.8));
+      const dryness = Math.max(0, Math.min(1, (savanna(cx, cy) - 0.3 + biome.dryness) * 1.9));
       c.copy(green).lerp(dry, dryness);
       // Albedo separation before lighting (look.md §8.1): the dry savanna paler, the green deeper,
       // so the plate isn't one sage.
@@ -707,7 +727,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const table = new THREE.Mesh(own(new THREE.PlaneGeometry(span * 8, span * 8)), own(new THREE.MeshLambertMaterial({ color: paintHex("--bg") })));
     table.rotation.x = -Math.PI / 2;
     table.position.set(((W - 1) * M) / 2, -DEEPEST - 1.5, ((H - 1) * M) / 2);
-    table.receiveShadow = true;
+    // No cast shadows on it (2026-10-30, the scope's B1): the slab casts none, so a low sun laid
+    // the edge towns' buildings' shadows straight through it onto the table -- grey houses floating
+    // under the map. The soft rest below is its shadow.
     scene.add(table);
     const rest = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M * 1.18, (H - 1) * M * 1.18)), own(new THREE.MeshBasicMaterial({ map: softBlob(), color: paintHex("--ink"), transparent: true, opacity: 0.5, depthWrite: false })));
     rest.rotation.x = -Math.PI / 2;
