@@ -235,6 +235,10 @@
   --corridor-rail: 4;
   --corridor-casing: 2;
 
+  /* Map density's zoom tiers (look.md, Map density; density.ts): middle from 1.4x, near from 2x */
+  --tier-mid: 1.4;
+  --tier-near: 2;
+
   /* Type: five steps and no others (look.md §3); a letter keeps --letter-font */
   --fs-headline: 19px;
   --fs-body: 13px;

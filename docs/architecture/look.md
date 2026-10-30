@@ -63,6 +63,23 @@ Two layers, kept apart. **A restyle may change chrome freely and may never chang
 | site families | `#C0392B` fuel · `#6B4FA8` building · `#1E7A4F` food · `#1C6CA8` trade | the four chains (today hard-coded in `icons.ts` `FAMILY_COLOR`: to become tokens) |
 | `--map-ground` / `--map-water` / `--map-hill` | `#F2EDE1` / `#2C4A57` / `#9A8E72` | terrain |
 
+### The base map's signal budget
+
+**The base map draws from at most six signal groups** (2026-10-30, map density: at ~900k people
+on map 3218 the plate summed every system's own colour into noise). Each group may use the tokens
+listed; everything else belongs to an overlay, which may add up to three of its own while it's on.
+`verify-look.ts` (`scripts/signal-budget.ts`) fails when a base-map pass reaches a signal token in no
+group, or uses more than six groups. Counted as groups, not tokens: a ramp is one meaning.
+
+| Group | Tokens |
+| --- | --- |
+| congestion | `--road-free` `--road-busy` `--road-jammed` |
+| your service | `--you` `--home` (the town ring's stayed-home share, your service's complement) |
+| informal | `--informal` |
+| goods | `--goods` |
+| events | `--bad` `--warn` `--strike` `--flood` `--good` (verdicts: a town growing, a strike, a flood) |
+| the chains | `--fuel` `--building` `--food` `--trade` `--s3` `--s4` `--s5` |
+
 Route line colours (`labels.ts`) keep their own slots and are drawn from the signal layer; the lists' route swatches are `--route-1` to `--route-8`.
 
 ---
@@ -189,13 +206,36 @@ it's smoothed (pathing/smoothing.ts `pullTaut`, behind `tautRoads`): A* on the g
 dog-leg that smoothing rounded into a lazy curve, 6-9 cells off a straight line on flat ground.
 The line drawn only; the price stays the A* path's.
 
+## 6c. Map density
+
+**What the map draws depends on how far in you are, and every label asks for its place.**
+(2026-10-30, the term-4 playtest on map 3218: around Agbara three `TAKEN` tags, a strike pill, a
+past strike's note, names and thirty site icons sat on each other at one weight, because four of
+seven label passes placed nothing through the collision check the others used.)
+
+- **Three tiers** by zoom over fit (`density.ts`, `--tier-*`): **far** from fit to 1.4x --
+  ground, corridors, every town's mark, the names of towns of 15k and up, events, the active overlay,
+  and site icons only where they fit; **mid** to 2x -- plus village names, every site icon, fords,
+  `TAKEN`; **near** past 2x -- plus site, road and crossing names, ruins, wardens, and the danfos and trucks one by one even at 4x (below 4x they're one by one at every tier: since the corridor dropped its side bands, their capsules are where the informal sector shows at all).
+  (Fit is zoom 1 and never less, so the tiers start there.) Anything selected, pointed at or waiting on
+  you draws at any tier: the panel's places never vanish from the map.
+- **One placer** (`Placer`): every label claims a box, then all are resolved by priority -- the price
+  label, events, what you asked for, `TAKEN`, town names largest first, site names, road names,
+  ruins, site icons at far -- and only then paint, the most important on top. A road name gives way
+  to a strike whatever order they're claimed in. Three or more `TAKEN` within a town's reach are one
+  chip, "3 taken", which opens the log's Corridors.
+- **Events loud, state quiet:** a strike, a flood, a ford named for the rains draw in their signal
+  colour at full strength and carry the map's only drop shadow; everything standing draws quiet. A
+  change of hands is a few days' news (`CORRIDOR_TAG_DAYS`, 3), a past strike's note five.
+
 ## 7. Motion
 
 - Panel open, selection change, tab change: **120ms**, `cubic-bezier(.2,.8,.2,1)`.
 - A number in the strip changing: a 200ms tint, no counting animation.
 - **The plate never animates.** The simulation is already moving; anything else on it is
   noise. (A corridor past 150% of its capacity carries a dash over its body -- still, not moving:
-  §6a's headroom without an exception to this rule.) (So the ring round the places a card's button names, render.ts `drawPointedRing`,
+  §6a's headroom without an exception to this rule.)
+  Events stay still too: loud by colour and the only drop shadow (§6c), not by a pulse. (So the ring round the places a card's button names, render.ts `drawPointedRing`,
   is steady, not pulsing.)
 - Nothing eases on first paint.
 
@@ -236,6 +276,7 @@ the same tokens (`palette3d.ts`): its signal colours by their own, its paint by 
 | **Four roles** | a button is created with a class outside the four in §5 |
 | **Tokens agree** | the values in `tokens.css` and the tables in §2 have drifted apart |
 | **Signal untouched** | a signal token's value changed without its row in §2 changing with it |
+| **Signal budget** | a base-map pass reaches a signal token in no group of §2's budget, or the base map uses more than six groups |
 | **Nothing over the plate** | anything but the page's regions (map, strip, the two columns, toolbar, full screens, the pointer's tooltip, `#plate-overlay`) is `position: fixed` |
 
 `scripts/shots.ts` (`bun run shots [seed]`) captures the five screens on demand at 1600×1000 @2x --

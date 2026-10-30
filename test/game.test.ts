@@ -62,6 +62,8 @@ import { backToStation, foundStationTowns, stationOpen } from "@engine/game/stat
 import { correspondentName, handoverNote, notATutorial, predecessors, termLetter } from "../src/game/correspondent";
 import { thenAndNowSvg } from "../src/game/thenandnow";
 import { MITER_LIMIT, congestionStop, junctionPlates, offsetPolyline, overloaded } from "../src/game/corridor";
+import { PRIORITY, Placer, drawsAt, tierOf } from "../src/game/density";
+import { checkSignalBudget } from "../scripts/signal-budget";
 import { segmentRung } from "@engine/game/roads";
 import type { Segment } from "@engine/map/types";
 import { isDirt as isDirtRoad } from "@engine/game/congestion";
@@ -92,6 +94,8 @@ import type { Vehicle } from "@engine/simulation/types";
 import { createHintState, dismissHint, updateHints } from "../src/game/hints";
 import { MAX_VERDICT_WORDS, shortVerdict, wordCount } from "../src/game/verdicts";
 import type { RouteVerdict } from "@engine/game/world";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // Tests that pin what the player should *feel*, not just that the
 // mechanics run (docs/principles.md §6): bounded queues, a frequency
@@ -5161,4 +5165,78 @@ describe("frame budgets don't change the game (principles.md §3: derive from el
     }
     expect(snapshot(watched)).toBe(snapshot(straight));
   }, 300_000);
+});
+
+describe("map density (src/game/density.ts; look.md, Map density)", () => {
+  const box = (x: number, y: number, w = 40, h = 18) => ({ x0: x, y0: y, x1: x + w, y1: y + h });
+
+  test("the placer: the higher priority wins wherever it was claimed, and the loser isn't placed", () => {
+    for (const order of [["road", "strike"], ["strike", "road"]]) {
+      const p = new Placer();
+      for (const id of order) p.claim({ id, kind: id, priority: id === "strike" ? PRIORITY.event : PRIORITY.roadName, box: box(100, 100), at: { x: 100, y: 100 } });
+      const { placed } = p.resolve();
+      expect(placed.has("strike")).toBe(true);
+      expect(placed.has("road")).toBe(false);
+    }
+    // Clear of each other, both are placed.
+    const p = new Placer();
+    p.claim({ id: "a", kind: "townName", priority: PRIORITY.townName, box: box(0, 0), at: { x: 0, y: 0 } });
+    p.claim({ id: "b", kind: "townName", priority: PRIORITY.townName, box: box(200, 0), at: { x: 200, y: 0 } });
+    expect([...p.resolve().placed].sort()).toEqual(["a", "b"]);
+  });
+
+  test("five TAKEN tags in one place are one chip reading 5, and none of them alone", () => {
+    const p = new Placer();
+    for (let k = 0; k < 5; k += 1) p.claim({ id: `taken:${k}`, kind: "taken", priority: PRIORITY.taken, box: box(100 + k * 6, 100 + k * 4), at: { x: 100 + k * 6, y: 100 + k * 4 } });
+    const { placed, chips } = p.resolve([{ kind: "taken", radius: 40, min: 3, chipBox: (at) => box(at.x, at.y) }]);
+    expect(chips.length).toBe(1);
+    expect(chips[0]!.count).toBe(5);
+    for (let k = 0; k < 5; k += 1) expect(placed.has(`taken:${k}`)).toBe(false);
+    // Two aren't a crowd.
+    const q = new Placer();
+    for (let k = 0; k < 2; k += 1) q.claim({ id: `taken:${k}`, kind: "taken", priority: PRIORITY.taken, box: box(100 + k * 60, 100), at: { x: 100 + k * 60, y: 100 } });
+    expect(q.resolve([{ kind: "taken", radius: 40, min: 3, chipBox: (at) => box(at.x, at.y) }]).chips.length).toBe(0);
+  });
+
+  test("the tiers: zoomed out no site, road or crossing names, ruins or vehicles one by one; zoomed in all of them", () => {
+    const detail = ["siteName", "roadName", "ruin", "vehiclesOneByOne", "wardens"] as const;
+    expect(tierOf(1)).toBe("far");
+    expect(tierOf(3)).toBe("near");
+    for (const layer of detail) {
+      expect(drawsAt(tierOf(1), layer)).toBe(false);
+      expect(drawsAt(tierOf(3), layer)).toBe(true);
+    }
+    // Events, towns' marks and names, at every tier.
+    for (const layer of ["event", "townMark", "townName"] as const) expect(drawsAt("far", layer)).toBe(true);
+  });
+
+  test("what you've selected, or what's waiting on you, draws its name at any tier", () => {
+    expect(drawsAt("far", "siteName", true)).toBe(true);
+    expect(drawsAt("far", "siteName", false)).toBe(false);
+  });
+
+  test("a change of hands is a few days' news: a TAKEN tag ages off the map", () => {
+    const w = startGame(gameMap(GAME_MAP, 1, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0 });
+    const [c] = [...w.corridors.values()];
+    if (!c) return;
+    c.change = "taken";
+    c.changedAt = w.economy.elapsedSeconds - (CORRIDOR_TAG_DAYS - 1) * SECONDS_PER_GAME_DAY;
+    expect(corridorChanges(w).length).toBeGreaterThan(0);
+    c.changedAt = w.economy.elapsedSeconds - (CORRIDOR_TAG_DAYS + 1) * SECONDS_PER_GAME_DAY;
+    expect(corridorChanges(w).length).toBe(0);
+  }, 60_000);
+
+  test("the signal budget passes on the real map, and fails on a pass that reaches a seventh group", () => {
+    const read = (p: string) => readFileSync(join(import.meta.dir, "..", p), "utf8");
+    const [render, icons, look] = [read("src/game/render.ts"), read("src/game/icons.ts"), read("docs/architecture/look.md")];
+    expect(checkSignalBudget(render, icons, look).failures).toEqual([]);
+    // A seventh group: a token the budget doesn't place, used on the base map...
+    const louder = render.replace("export const COLORS = {", 'export const COLORS = {\n  extra: token("--route-3"),') + "\nfunction drawExtra() { ctx.fillStyle = COLORS.extra; }\n";
+    const lookWithRoutes = look.replace("| the chains |", "| routes | `--route-3` |\n| the chains |");
+    expect(checkSignalBudget(louder, icons, lookWithRoutes).failures.join(" ")).toContain("signal groups");
+    // ...and one in no group at all.
+    const stray = look.replace("`--trade` `--s3`", "`--s3`");
+    const strayRender = render + "\nfunction drawStray() { ctx.fillStyle = COLORS.player; drawSiteIcon(); }\n";
+    expect(checkSignalBudget(strayRender, icons, stray).failures.join(" ")).toContain("--trade");
+  });
 });

@@ -19,6 +19,7 @@ import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, 
 import { steadySite } from "./steady";
 import { congestionColor, junctionPlates, offsetPolyline, overloaded } from "./corridor";
 import { segmentRung } from "@engine/game/roads";
+import { PRIORITY, Placer, drawsAt, tierOf as zoomTierOf, type Box, type Chip, type Tier as ZoomTier } from "./density";
 
 // The game's map, ported from the information lab (since discarded; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -62,6 +63,7 @@ export const COLORS = {
   busy: token("--road-busy"),
   jammed: token("--road-jammed"),
   warn: token("--warn"),
+  shadow: token("--shadow"),
   flood: token("--flood"),
   // Kept names the page and the previews use.
   label: token("--ink"),
@@ -181,11 +183,18 @@ let markScale = 1;
 const FADED = 0.18;
 export interface Focus { segments: Set<string>; routes: Set<string>; towns: Set<string> }
 let focus: Focus | null = null;
-/** The towns whose name fits this frame (labelled, below). */
-let labelled = new Set<string>();
-/** Where this frame's names sit, screen boxes: a ruin's goes only where it clears them. */
-let labelBoxes: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
-const overlaps = (box: { x0: number; y0: number; x1: number; y1: number }) => labelBoxes.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0);
+/** This frame's zoom tier (density.ts): what draws at all. */
+let zoomTier: ZoomTier = "far";
+/** This frame's placed labels (density.ts Placer), by id: `town:`, `site:`, `icon:`, `ruin:`, and the passes' own. */
+let placed = new Set<string>();
+/** This frame's chips ("3 taken"), for a click on one (main.ts chipAt). */
+let chips: Chip[] = [];
+/** The chip under a screen point, if any. */
+export function chipAt(x: number, y: number): Chip | undefined {
+  return chips.find((c) => x >= c.box.x0 && x <= c.box.x1 && y >= c.box.y0 && y <= c.box.y1);
+}
+/** The tiers' zoom thresholds (tokens.css --tier-*). */
+const TIERS = { mid: parseFloat(token("--tier-mid")), near: parseFloat(token("--tier-near")) };
 /** The town you point at, picked on the map, or picked in the panel (focusTown): always named. */
 const isLit = (state: DrawState, id: string) => state.selectedTown === id || state.hoverTown === id || state.focusTown === id;
 
@@ -273,8 +282,11 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   markScale = growOf(view);
   focus = focusOf(world, state);
   const zoom = markScale * markScale;
-  // The other side's vehicles one by one only when there's room: below 4x, or zoomed in to 2x.
-  const oneByOne = (state.gameSpeed ?? 1) < 4 || zoom >= 2;
+  zoomTier = zoomTierOf(zoom, TIERS);
+  // The other side's vehicles one by one zoomed in (look.md, Map density: near), and further out
+  // too unless the game runs at 4x: since the corridor dropped its yellow band, the danfos' own
+  // capsules are where the informal sector shows on the map, and a day-2 map without them was empty.
+  const oneByOne = drawsAt(zoomTier, "vehiclesOneByOne") || (state.gameSpeed ?? 1) < 4;
   const overlay = state.overlay ?? "none";
 
   drawGround(ctx, world, view);
@@ -285,20 +297,19 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   drawVehicles(ctx, world, view, oneByOne, overlay !== "none");
   cityId = [...world.towns.values()].filter((t) => !t.industry).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id ?? null;
   farms = world.food ? new Set(farmTowns(world).map((t) => t.id)) : new Set();
-  labelled = labelledTowns(world, view, state);
+  // Every label claims its place first, by priority, and only then does anything paint (density.ts).
+  const paints = claimLabels(ctx, world, view, state);
   // The goods flows once a frame, for every site's gauge: worked out per site, they were half of drawing the map.
   const flows = goodsFlows(world);
   for (const town of [...world.towns.values()].sort((p, q) => p.population - q.population)) {
     if (town.industry) drawSite(ctx, world, view, town, state, flows);
     else drawTown(ctx, world, view, town, state);
   }
-  // A closed site or emptied town after the living ones' names, and only where it clears them.
-  for (const ruin of world.ruins.values()) drawRuin(ctx, view, ruin);
-  drawWardens(ctx, world, view);
-  drawStrikeLabels(ctx, world, view);
-  drawFords(ctx, world, view);
-  drawRoadNames(ctx, world, view);
-  drawTakenLabels(ctx, world, view);
+  for (const ruin of world.ruins.values()) if (placed.has(`ruin:${ruin.id}`)) drawRuin(ctx, view, ruin);
+  if (drawsAt(zoomTier, "wardens")) drawWardens(ctx, world, view);
+  // The rest, the least important first, so the most important paints on top.
+  for (const p of paints.filter((x) => placed.has(x.id)).sort((a, b) => b.priority - a.priority)) p.paint();
+  for (const chip of chips) drawChip(ctx, chip);
   // Last, so nothing on the map draws through the price.
   if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok, state.ghost.forecast);
   if (state.road) drawLabel(ctx, state.road.at, state.road.label, true, state.road.forecast);
@@ -778,30 +789,6 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
 
 let farms = new Set<string>();
 
-/**
- * Which towns get their name and size this frame: a village only zoomed in, the rest biggest
- * first, each only where its label clears the ones already placed -- zoomed out over the
- * region, names sat on each other (Auchi on Bonny). The town you point at or picked always.
- */
-function labelledTowns(world: GameWorld, view: View, state: DrawState): Set<string> {
-  const placed: Array<{ x0: number; y0: number; x1: number; y1: number }> = [];
-  labelBoxes = placed;
-  const out = new Set<string>();
-  const towns = [...world.towns.values()].filter((t) => !t.industry);
-  // Saki, picked from the panel's list, went unnamed: only a map click counted (map 949).
-  const lit = (t: GameTown) => isLit(state, t.id);
-  for (const town of towns.sort((p, q) => Number(lit(q)) - Number(lit(p)) || q.population - p.population)) {
-    if (tierOfTown(town) === "village" && !lit(town) && markScale * markScale < 2) continue;
-    const p = toScreen(view, town.x, town.y);
-    const r = townRadius(town, view);
-    const half = Math.max(24, town.name.length * 3.6);
-    const box = { x0: p.x - half, y0: p.y - r - 2, x1: p.x + half, y1: p.y + r + 34 };
-    if (!lit(town) && placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
-    placed.push(box);
-    out.add(town.id);
-  }
-  return out;
-}
 
 function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, town: GameTown, state: DrawState): void {
   const p = toScreen(view, town.x, town.y);
@@ -830,9 +817,8 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   // Waiting on you here: an amber mark on its top-right.
   if (state.problems?.has(town.id)) drawWaitingMark(ctx, p.x + r * 0.8, p.y - r * 0.8);
   if (state.pointed?.has(town.id)) drawPointedRing(ctx, p.x, p.y, r);
-  // Name and size for towns; a village's when zoomed in or pointed at (the region's small places
-  // stay quiet), and none where it would sit on a bigger town's (labelledTowns).
-  if (labelled.has(town.id)) {
+  // Name and size, where the placer gave it room (claimLabels).
+  if (placed.has(`town:${town.id}`)) {
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     // A white halo under each label, so a road under it doesn't make it hard to read.
@@ -893,6 +879,11 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   // A station: open where the line to it is restored, else hollow (stations.ts).
   const siteState: SiteState = site.industry === "station" ? (stationOpen(world, site.id) ? "working" : "idle") : site.industry === "border" || site.industry === "gateway" ? "working" : !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
   const glyph = (site.industry && site.industry in GLYPHS ? site.industry : "quarry") as Glyph;
+  // Zoomed out, a site draws where it fits or where the panel points at it (look.md, Map density).
+  if (zoomTier === "far" && !lit && !state.problems?.has(site.id) && !state.pointed?.has(site.id) && !placed.has(`icon:${site.id}`)) {
+    ctx.globalAlpha = 1;
+    return;
+  }
   drawSiteIcon(ctx, p.x, p.y, r * 2, glyph, siteState, COLORS.surface);
   if (lit) {
     ctx.strokeStyle = COLORS.ink;
@@ -902,12 +893,9 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   if (world.yards.has(site.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
   if (state.problems?.has(site.id)) drawWaitingMark(ctx, p.x + r, p.y - r);
   if (state.pointed?.has(site.id)) drawPointedRing(ctx, p.x, p.y, r);
-  // Its name when you point at it, or zoomed in where it clears the names already there.
-  ctx.font = `600 ${FS.caption} system-ui, sans-serif`;
-  const half = ctx.measureText(site.name).width / 2 + 2;
-  const box = { x0: p.x - half, y0: p.y + r + 4, x1: p.x + half, y1: p.y + r + 18 };
-  if (lit || (markScale * markScale >= 2 && !overlaps(box))) {
-    labelBoxes.push(box);
+  // Its name, where the placer gave it room (claimLabels).
+  if (placed.has(`site:${site.id}`)) {
+    ctx.font = `600 ${FS.caption} system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.lineJoin = "round";
@@ -947,155 +935,238 @@ function drawWardens(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     ctx.fillText("W", mid.x - 16, mid.y + 0.5);
   }
 }
-function drawTakenLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
-  ctx.save(); // its centred text mustn't leak into what draws next (the price label)
-  for (const corridor of corridorChanges(world)) {
-    const line = (roadChain(world, corridor.a, corridor.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
-    if (line.length === 0) continue;
-    const [, rest] = splitPolyline(line, polylineLength(line) / 3);
-    const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
-    const taken = corridor.change === "taken";
-    const text = taken ? "TAKEN" : "LOST";
-    ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const width = ctx.measureText(text).width + 10;
-    ctx.fillStyle = taken ? COLORS.player : COLORS.home;
-    ctx.beginPath();
-    ctx.roundRect(mid.x - 14 - width, mid.y - 9, width, 18, 4);
-    ctx.fill();
-    ctx.fillStyle = COLORS.onFill;
-    ctx.fillText(text, mid.x - 14 - width / 2, mid.y);
-  }
-  ctx.restore();
+
+/** A pill tag's box and painter: `loud` for an event (look.md, Map density: events loud, state quiet). */
+function tagPill(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, fill: string, ink: string, loud: boolean): { box: Box; paint: () => void } {
+  ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
+  const width = ctx.measureText(text).width + 10;
+  const box = { x0: x, y0: y - 9, x1: x + width, y1: y + 9 };
+  return {
+    box,
+    paint: () => {
+      ctx.save();
+      ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      // The map's only drop shadow is an event's: what's happening now stands off what stands.
+      if (loud) {
+        ctx.shadowColor = COLORS.shadow;
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetY = 2;
+      }
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.roundRect(box.x0, box.y0, width, 18, 4);
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.fillStyle = ink;
+      ctx.fillText(text, x + width / 2, y);
+      ctx.restore();
+    },
+  };
 }
-/** The roads you've named (labels.ts), written along them at their middle. */
-function drawRoadNames(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
-  if (!world.labels) return;
-  ctx.save();
-  ctx.font = `italic 600 ${FS.dense} system-ui, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  for (const [key, label] of Object.entries(world.labels)) {
-    if (!key.startsWith("road:") || !label.name) continue;
-    const [a, b] = key.slice(5).split("|") as [string, string];
-    const line = (roadChain(world, a, b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
-    if (line.length < 2) continue;
-    const [before, rest] = splitPolyline(line, polylineLength(line) / 2);
-    const p = rest[0]!, q = rest.find((r) => Math.hypot(r.x - p.x, r.y - p.y) > 1e-6) ?? before[before.length - 2] ?? line[0]!;
-    let angle = Math.atan2(q.y - p.y, q.x - p.x);
-    if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI; // never upside down
-    const at = toScreen(view, p.x, p.y);
-    ctx.save();
-    ctx.translate(at.x, at.y);
-    ctx.rotate(angle);
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = COLORS.surface;
-    ctx.strokeText(label.name, 0, -9);
-    ctx.fillStyle = COLORS.ink;
-    ctx.fillText(label.name, 0, -9);
-    ctx.restore();
-  }
-  ctx.restore();
+
+/** Where a road between two towns runs, its middle (or a third along) on screen. */
+function alongRoad(world: GameWorld, view: View, a: string, b: string, share: number): { at: Point; line: Point[] } | null {
+  const line = (roadChain(world, a, b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+  if (line.length < 2) return null;
+  const [, rest] = splitPolyline(line, polylineLength(line) * share);
+  return { at: toScreen(view, rest[0]!.x, rest[0]!.y), line };
 }
 
 /**
- * The fords (floods.ts): a season's named ones tagged with the day the water rises, flooded ones
- * in the water's blue; the rest named only zoomed in, where you'd look for a crossing.
+ * Every label on the map claims a box, by priority (density.ts PRIORITY), before anything paints: the
+ * price label, events (strikes, floods, fords closing), what you asked for, TAKEN tags (three or more in
+ * one place a chip), town names largest first, site names, road and crossing names, ruins, and -- zoomed
+ * out -- site icons. Resolved together, so a road name gives way to a strike whatever order they come
+ * in. Sets `placed` and `chips`; returns the painters for the passes' own labels.
  */
-function drawFords(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
-  // The rivers' named crossings (crossings.ts): a narrows, a crossing beside a town -- named
-  // zoomed in, with a tick on each bank, where you'd look for a place to cross.
-  if (world.crossings && markScale * markScale >= 2) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
-    ctx.strokeStyle = COLORS.labelMuted;
-    ctx.lineWidth = 1.5;
-    for (const c of world.crossings) {
-      for (const b of c.banks) {
-        const p = toScreen(view, b.x, b.y);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      const p = toScreen(view, c.x, c.y);
-      ctx.fillStyle = COLORS.labelMuted;
-      ctx.fillText(c.name, p.x, p.y - 10 * markScale);
-    }
-    ctx.restore();
-  }
-  const floods = world.floods;
-  if (!floods) return;
-  ctx.save();
-  ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  for (const ford of floods.fords) {
-    const coming = floods.phase === "warned" && floods.coming.includes(ford.id);
-    const under = floods.phase === "flood" && floods.under.includes(ford.id);
-    const p = toScreen(view, ford.x, ford.y);
-    const tag = under ? { text: `${ford.name} · FLOODED`, fill: COLORS.flood, ink: COLORS.onFill }
-      : coming ? { text: `${ford.name} · floods day ${gameDay(world, floods.riseAt) - 1}`, fill: COLORS.slow, ink: COLORS.onFill }
-      : null;
-    if (!tag) {
-      // Quiet otherwise: a town's crossing named zoomed in, a site's short road's not at all.
-      const site = world.towns.get(ford.a)?.industry || world.towns.get(ford.b)?.industry;
-      if (site || markScale * markScale < 4) continue;
-      ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
-      ctx.fillStyle = COLORS.labelMuted;
-      ctx.fillText(ford.bridged ? ford.name.replace(/(ford|causeway)$/, "bridge") : ford.name, p.x, p.y + 12 * markScale);
-      ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
-      continue;
-    }
-    if (under || coming) {
-      // The crossing itself, ringed.
-      ctx.strokeStyle = tag.fill;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 7 * markScale, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    const width = ctx.measureText(tag.text).width + 10;
-    ctx.fillStyle = tag.fill;
-    ctx.beginPath();
-    ctx.roundRect(p.x - width / 2, p.y + 10 * markScale, width, 18, 4);
-    ctx.fill();
-    ctx.fillStyle = tag.ink;
-    ctx.fillText(tag.text, p.x, p.y + 10 * markScale + 9);
-  }
-  ctx.restore();
-}
-function drawStrikeLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
-  ctx.save();
+function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, state: DrawState): Array<{ id: string; priority: number; paint: () => void }> {
+  const placer = new Placer();
+  const paints: Array<{ id: string; priority: number; paint: () => void }> = [];
+  const add = (id: string, kind: string, priority: number, box: Box, at: { x: number; y: number }, paint?: () => void) => {
+    placer.claim({ id, kind, priority, box, at });
+    if (paint) paints.push({ id, priority, paint });
+  };
   const now = world.economy.elapsedSeconds;
+  // 1. The price label: an action in progress.
+  if (state.ghost) add("ghost", "ghost", PRIORITY.ghost, { x0: state.ghost.to.x - 12, y0: state.ghost.to.y - 90, x1: state.ghost.to.x + 280, y1: state.ghost.to.y + 12 }, state.ghost.to);
+  // 2. Events: strikes called or on, a ford named for the rains or under them.
   for (const lane of world.lanes) {
     const last = lane.lastStrike;
-    const tag =
-      lane.strikeUntil > now ? { text: "STRIKE", fill: COLORS.strike, ink: COLORS.onFill }
-      : lane.strikeAt > now ? { text: `STRIKE DAY ${gameDay(world, lane.strikeAt)}`, fill: COLORS.slow, ink: COLORS.onFill }
-      : last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY
-        ? { text: `struck day ${gameDay(world, last.startedAt)}${last.cost === null ? "" : last.cost < 1 ? " · no loss" : ` · ₦${Math.round(last.cost).toLocaleString()}`}`, fill: withAlpha(COLORS.jammed, 0.14), ink: COLORS.strike }
-        : null;
-    if (!tag) continue;
-    const line = (roadChain(world, lane.a, lane.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
-    if (line.length === 0) continue;
-    const [, rest] = splitPolyline(line, polylineLength(line) / 2);
-    const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
-    ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const width = ctx.measureText(tag.text).width + 10;
-    ctx.fillStyle = tag.fill;
-    ctx.beginPath();
-    ctx.roundRect(mid.x + 14, mid.y - 9, width, 18, 4);
-    ctx.fill();
-    ctx.fillStyle = tag.ink;
-    ctx.fillText(tag.text, mid.x + 14 + width / 2, mid.y);
+    const event = lane.strikeUntil > now ? { text: "STRIKE", fill: COLORS.strike } : lane.strikeAt > now ? { text: `STRIKE DAY ${gameDay(world, lane.strikeAt)}`, fill: COLORS.slow } : null;
+    const past = !event && last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY
+      ? `struck day ${gameDay(world, last.startedAt)}${last.cost === null ? "" : last.cost < 1 ? " · no loss" : ` · ₦${Math.round(last.cost).toLocaleString()}`}` : null;
+    if (!event && !past) continue;
+    const where = alongRoad(world, view, lane.a, lane.b, 0.5);
+    if (!where) continue;
+    const tag = event ? tagPill(ctx, where.at.x + 14, where.at.y, event.text, event.fill, COLORS.onFill, true) : tagPill(ctx, where.at.x + 14, where.at.y, past!, withAlpha(COLORS.jammed, 0.14), COLORS.strike, false);
+    // A strike past is a note, not an event: it ranks with a change of hands.
+    add(`strike:${lane.a}|${lane.b}`, event ? "event" : "taken-note", event ? PRIORITY.event : PRIORITY.taken, tag.box, where.at, tag.paint);
   }
-  ctx.restore();
+  const floods = world.floods;
+  for (const ford of floods?.fords ?? []) {
+    const coming = floods!.phase === "warned" && floods!.coming.includes(ford.id);
+    const under = floods!.phase === "flood" && floods!.under.includes(ford.id);
+    const p = toScreen(view, ford.x, ford.y);
+    if (under || coming) {
+      const text = under ? `${ford.name} · FLOODED` : `${ford.name} · floods day ${gameDay(world, floods!.riseAt) - 1}`;
+      const fill = under ? COLORS.flood : COLORS.slow;
+      ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
+      const width = ctx.measureText(text).width + 10;
+      const tag = tagPill(ctx, p.x - width / 2, p.y + 10 * markScale + 9, text, fill, COLORS.onFill, true);
+      add(`ford:${ford.id}`, "event", PRIORITY.event, tag.box, p, () => {
+        // The crossing itself, ringed.
+        ctx.strokeStyle = fill;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 7 * markScale, 0, Math.PI * 2);
+        ctx.stroke();
+        tag.paint();
+      });
+      continue;
+    }
+    // Quiet otherwise: a town's crossing named well zoomed in, a site's short road's not at all.
+    const site = world.towns.get(ford.a)?.industry || world.towns.get(ford.b)?.industry;
+    if (site || !drawsAt(zoomTier, "roadName") || markScale * markScale < 4) continue;
+    const name = ford.bridged ? ford.name.replace(/(ford|causeway)$/, "bridge") : ford.name;
+    ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
+    const half = ctx.measureText(name).width / 2 + 2;
+    const y = p.y + 12 * markScale;
+    add(`fordname:${ford.id}`, "roadName", PRIORITY.roadName, { x0: p.x - half, y0: y - 7, x1: p.x + half, y1: y + 7 }, p, () => {
+      ctx.save();
+      ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = COLORS.labelMuted;
+      ctx.fillText(name, p.x, y);
+      ctx.restore();
+    });
+  }
+  // The rivers' named crossings (crossings.ts): named zoomed in, a tick on each bank.
+  if (world.crossings && drawsAt(zoomTier, "roadName")) {
+    for (const c of world.crossings) {
+      const p = toScreen(view, c.x, c.y);
+      ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
+      const half = ctx.measureText(c.name).width / 2 + 2;
+      const y = p.y - 10 * markScale;
+      add(`crossing:${c.name}`, "roadName", PRIORITY.roadName, { x0: p.x - half, y0: y - 7, x1: p.x + half, y1: y + 7 }, p, () => {
+        ctx.save();
+        ctx.strokeStyle = COLORS.labelMuted;
+        ctx.lineWidth = 1.5;
+        for (const b of c.banks) {
+          const q = toScreen(view, b.x, b.y);
+          ctx.beginPath();
+          ctx.arc(q.x, q.y, 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = COLORS.labelMuted;
+        ctx.fillText(c.name, p.x, y);
+        ctx.restore();
+      });
+    }
+  }
+  // 4. A change of hands: TAKEN or LOST, a few days, and a crowd of them a chip.
+  if (drawsAt(zoomTier, "taken")) {
+    for (const corridor of corridorChanges(world)) {
+      const where = alongRoad(world, view, corridor.a, corridor.b, 1 / 3);
+      if (!where) continue;
+      const taken = corridor.change === "taken";
+      const text = taken ? "TAKEN" : "LOST";
+      ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
+      const width = ctx.measureText(text).width + 10;
+      const tag = tagPill(ctx, where.at.x - 14 - width, where.at.y, text, taken ? COLORS.player : COLORS.home, COLORS.onFill, false);
+      add(`taken:${corridor.a}|${corridor.b}`, "taken", PRIORITY.taken, tag.box, where.at, tag.paint);
+    }
+  }
+  // 3 and 5. Town names: what you asked for first, then the largest first.
+  const lit = (id: string) => isLit(state, id);
+  const towns = [...world.towns.values()].filter((t) => !t.industry).sort((p, q) => q.population - p.population);
+  for (const town of towns) {
+    const isVillage = tierOfTown(town) === "village";
+    if (!drawsAt(zoomTier, isVillage ? "villageName" : "townName", lit(town.id))) continue;
+    const p = toScreen(view, town.x, town.y);
+    const r = townRadius(town, view);
+    const half = Math.max(24, town.name.length * 3.6);
+    add(`town:${town.id}`, "townName", lit(town.id) ? PRIORITY.lit : PRIORITY.townName, { x0: p.x - half, y0: p.y - r - 2, x1: p.x + half, y1: p.y + r + 34 }, p);
+  }
+  // 6. Site names zoomed in; and zoomed out, the site icons themselves only where they fit.
+  for (const site of [...world.towns.values()].filter((t) => t.industry)) {
+    const p = toScreen(view, site.x, site.y);
+    const r = townRadius(site, view);
+    if (drawsAt(zoomTier, "siteName", lit(site.id))) {
+      ctx.font = `600 ${FS.caption} system-ui, sans-serif`;
+      const half = ctx.measureText(site.name).width / 2 + 2;
+      add(`site:${site.id}`, "siteName", lit(site.id) ? PRIORITY.lit : PRIORITY.siteName, { x0: p.x - half, y0: p.y + r + 4, x1: p.x + half, y1: p.y + r + 18 }, p);
+    }
+    if (zoomTier === "far") add(`icon:${site.id}`, "siteIcon", PRIORITY.siteIcon, { x0: p.x - r - 2, y0: p.y - r - 2, x1: p.x + r + 2, y1: p.y + r + 2 }, p);
+  }
+  // 7. The roads you've named, along them at their middle.
+  if (world.labels && drawsAt(zoomTier, "roadName")) {
+    for (const [key, label] of Object.entries(world.labels)) {
+      if (!key.startsWith("road:") || !label.name) continue;
+      const [a, b] = key.slice(5).split("|") as [string, string];
+      const line = (roadChain(world, a, b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+      if (line.length < 2) continue;
+      const [before, rest] = splitPolyline(line, polylineLength(line) / 2);
+      const p = rest[0]!, q = rest.find((r) => Math.hypot(r.x - p.x, r.y - p.y) > 1e-6) ?? before[before.length - 2] ?? line[0]!;
+      let angle = Math.atan2(q.y - p.y, q.x - p.x);
+      if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI; // never upside down
+      const at = toScreen(view, p.x, p.y);
+      ctx.font = `italic 600 ${FS.dense} system-ui, sans-serif`;
+      const half = ctx.measureText(label.name).width / 2;
+      // Its box: the rotated text's bounds.
+      const corners = [[-half, -16], [half, -16], [half, -2], [-half, -2]].map(([x, y]) => ({ x: at.x + x! * Math.cos(angle) - y! * Math.sin(angle), y: at.y + x! * Math.sin(angle) + y! * Math.cos(angle) }));
+      const box = { x0: Math.min(...corners.map((c) => c.x)), y0: Math.min(...corners.map((c) => c.y)), x1: Math.max(...corners.map((c) => c.x)), y1: Math.max(...corners.map((c) => c.y)) };
+      add(`road:${key}`, "roadName", PRIORITY.roadName, box, at, () => {
+        ctx.save();
+        ctx.font = `italic 600 ${FS.dense} system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.translate(at.x, at.y);
+        ctx.rotate(angle);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = COLORS.surface;
+        ctx.strokeText(label.name!, 0, -9);
+        ctx.fillStyle = COLORS.ink;
+        ctx.fillText(label.name!, 0, -9);
+        ctx.restore();
+      });
+    }
+  }
+  // 8. Ruins, zoomed in.
+  if (drawsAt(zoomTier, "ruin")) {
+    for (const ruin of world.ruins.values()) {
+      const p = toScreen(view, ruin.x, ruin.y);
+      ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
+      const half = ctx.measureText(`${ruin.name} (${ruin.industry ? "closed" : "empty"})`).width / 2 + 2;
+      add(`ruin:${ruin.id}`, "ruin", PRIORITY.ruin, { x0: p.x - half, y0: p.y + 6, x1: p.x + half, y1: p.y + 20 }, p);
+    }
+  }
+  const resolved = placer.resolve([{
+    kind: "taken",
+    radius: 40 * markScale,
+    min: 3,
+    chipBox: (at, count) => {
+      ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
+      const width = ctx.measureText(`${count} taken`).width + 10;
+      return { x0: at.x - width / 2, y0: at.y - 9, x1: at.x + width / 2, y1: at.y + 9 };
+    },
+  }]);
+  placed = resolved.placed;
+  chips = resolved.chips;
+  return paints;
 }
+
+/** A crowd of TAKEN tags as one chip: "3 taken" (click: the log's Corridors). */
+function drawChip(ctx: CanvasRenderingContext2D, chip: Chip): void {
+  const tag = tagPill(ctx, chip.box.x0, (chip.box.y0 + chip.box.y1) / 2, `${chip.count} taken`, COLORS.player, COLORS.onFill, false);
+  tag.paint();
+}
+
 function drawRoadHighlight(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, segmentId: string): void {
   const segment = world.simulation.map.segments.find((s) => s.id === segmentId);
   if (!segment) return;
@@ -1193,15 +1264,10 @@ function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: GameTown): vo
   ctx.beginPath();
   ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
   ctx.fill();
-  // Its name only zoomed in, and only where it clears the living towns' and other ruins'
-  // (map 949: three "Limestone (closed)" lay over Ikire's name and each other).
-  if (markScale * markScale < 2) return;
+  // Placed by claimLabels: zoomed in, and only where it clears the living (map 949: three
+  // "Limestone (closed)" lay over Ikire's name and each other).
   const text = `${town.name} (${town.industry ? "closed" : "empty"})`;
   ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
-  const half = ctx.measureText(text).width / 2 + 2;
-  const box = { x0: p.x - half, y0: p.y + 6, x1: p.x + half, y1: p.y + 20 };
-  if (overlaps(box)) return;
-  labelBoxes.push(box);
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.labelMuted;
   ctx.fillText(text, p.x, p.y + 16);

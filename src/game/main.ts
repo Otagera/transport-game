@@ -79,7 +79,7 @@ import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
 import { averageBudget, averageNet } from "@engine/game/history";
-import { draw, fitView, focusFor, overlayCaption, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
+import { chipAt, draw, fitView, focusFor, overlayCaption, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { keepSteady, steadyFood, steadyFuel, steadyOver, steadyShortage, steadySite } from "./steady";
 import { createScreen } from "./screen";
@@ -872,6 +872,12 @@ canvas.addEventListener("click", (event) => {
     suppressClick = false;
     return;
   }
+  // A crowd of TAKEN tags drawn as one chip (render.ts): its list is the log's Corridors.
+  const rect = canvas.getBoundingClientRect();
+  if (chipAt(event.clientX - rect.left, event.clientY - rect.top)) {
+    document.querySelector<HTMLButtonElement>('#log button[data-log="corridors"]')?.click();
+    return;
+  }
   if (tool === "fix") {
     const road = roadAt(event.clientX, event.clientY);
     if (!road) return;
@@ -1593,7 +1599,7 @@ function renderBorder(townId: string): void {
       <p class="townshare">The state pays ₦${Math.round(t.exportPayPerTonne * (t.borderPayShare ?? 0.7))} a tonne over the border, against ₦${Math.round(t.exportPayPerTonne * seaportLink(world).share)} for what reaches the sea. Each farm town's crop goes whichever way nets more a tonne by road: a better road here, or to the coast, moves it.</p>
       ${seaportText()}
       <ul>
-        <li>${t.truckersEnabled ? "Hauliers carry what's close enough; what's far waits for your lorries or trains." : "Nobody else carries it: what you don't move doesn't leave."}</li>
+        <li>${t.truckersEnabled ? haulierMove("Hauliers carry what's close enough; what's far waits for your lorries or trains.", "Hauliers carry it, from a haulage yard further and in legs town to town; your freight trains carry it faster.") : "Nobody else carries it: what you don't move doesn't leave."}</li>
       </ul>
     </div>`;
 }
@@ -1867,7 +1873,7 @@ function renderFuelSite(townId: string): void {
     kicker = "Tank farm · fuel imports";
     lines = [
       `Imports ${perDay(t.fuelImportShare * fuel.baseDemand)} t of fuel a day through the port: ${pct(t.fuelImportShare)} of what the towns burnt on day 1.`,
-      "Road tankers carry it to the towns, nearest first (yellow on each bar); your lorries can too. Towns too far for the tankers run short.",
+      `Road tankers carry it to the towns, nearest first (yellow on each bar)${haulierMove("; your lorries can too", "")}. Towns too far for the tankers run short.`,
     ];
   } else if (site.industry === "refinery") {
     const out = perDay(refineryOutput(world));
@@ -1875,7 +1881,7 @@ function renderFuelSite(townId: string): void {
     lines = [
       `Turns crude into fuel: up to ${capacity} t a day, enough with the imports to supply every town.`,
       haulierMove(
-        `Its crude comes from ${source.name}. Tankers don't carry crude: only your lorries (on a road) or freight trains (on track) do. Track is dear on a leg this long; full lorries pay too.`,
+        `Its crude comes from ${source.name}. ${haulierMove("Tankers don't carry crude: only your lorries (on a road) or freight trains (on track) do. Track is dear on a leg this long; full lorries pay too.", "Tankers don't carry crude unless it's under contract: hauliers take it from a haulage yard at the source, or your freight trains on track. Track is dear on a leg this long.")}`,
         `Its crude comes from ${source.name}: by freight train on track, or by hauliers on a road from a haulage yard (<kbd>Y</kbd>) at ${source.name}. Track is dear on a leg this long.`,
       ),
       "Its fuel goes to the towns by road tanker, so it needs a road out.",

@@ -6,11 +6,13 @@
 //     and the toggle's state, on / active);
 //   - tokens agree: tokens.css and look.md §2's tables name the same value for each token;
 //   - signal untouched: the same, for the signal layer -- its values change only with its rows;
-//   - nothing over the plate: only the page's regions are position: fixed; the rest is #plate-overlay's.
+//   - nothing over the plate: only the page's regions are position: fixed; the rest is #plate-overlay's;
+//   - the signal budget: the base map draws from at most six signal groups (scripts/signal-budget.ts).
 //
 //   bun scripts/verify-look.ts
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { checkSignalBudget } from "./signal-budget";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
@@ -126,6 +128,10 @@ for (const [layer, table] of [["tokens agree", chrome], ["signal untouched", sig
     else if (has !== value) failures.push(`${layer}: ${name} is ${has} in tokens.css, ${value} in look.md §2 -- change both, or neither`);
   }
 }
+
+// --- The signal budget (look.md §2): six groups on the base map ----------------------------------
+const budget = checkSignalBudget(read("src/game/render.ts"), read("src/game/icons.ts"), look);
+failures.push(...budget.failures);
 
 for (const [p, n] of pending) console.log(`pending (the look, step 5): ${p} still has ${n} colour literals`);
 if (failures.length > 0) {
