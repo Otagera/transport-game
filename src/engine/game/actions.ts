@@ -1,4 +1,5 @@
 import { answerDemand, unionAfterAction } from "./union";
+import { nextEpoch } from "./epoch";
 import { upgradePort } from "./gateways";
 import { commitPledge, consoleMove, noteAction } from "./term";
 import type { GameWorld } from "./types";
@@ -65,6 +66,7 @@ export interface ActionOutcome {
 }
 
 export function applyAction(world: GameWorld, spec: ActionSpec): ActionOutcome {
+  nextEpoch(world); // the world as it was before the action is read again after it (epoch.ts)
   const outcome = apply(world, spec);
   // A build starts its week, to say what it did (term.ts).
   if (outcome.ok) {

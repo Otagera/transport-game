@@ -1,4 +1,5 @@
 import { updateUnions } from "./union";
+import { nextEpoch } from "./epoch";
 import { updatePrivateTraffic } from "./private";
 import { updateTerm } from "./term";
 import { updateFloods } from "./floods";
@@ -134,6 +135,7 @@ function poolKeyFor(at: string, queueKey: string, origin: string, destination: s
 // Every rider is counted exactly once, when their trip resolves: arrived
 // on your buses, taken by a danfo, or stayed home.
 export function gameTick(world: GameWorld, dt: number): GameEvent[] {
+  nextEpoch(world); // what the screen read between ticks is read again (epoch.ts)
   const { simulation, tuning, informal, economy } = world;
   const fundsAtStart = economy.funds;
   const arrived = new Map<string, number>();

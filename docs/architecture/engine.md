@@ -711,6 +711,21 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   `runFile(recorder)` as JSON. `replayRun(base, file, untilTick)` rebuilds the world at any
   tick: the sim is deterministic (the seed is its only randomness), and a test pins that a
   saved run replays to the same funds, headline and towns. `scripts/game-run.ts` reads one.
+  **Reading the world must never change it** (`epoch.ts`; 2026-10-30). The page reads the world
+  between ticks for the panels, the map and the cards; a replay doesn't. A cache that holds a
+  reading "once a tick" keyed on the game clock alone (`gateways.ts seaportLink`,
+  `exportGateway`) was filled by the screen's read *at the clock the next tick starts at*, so the
+  next tick ran on it -- even after an action in between had paved the highway it described. Map
+  3218's day-433 run parted from its replay by ₦1 on day 40, and ~50k people by day 433; it doesn't
+  replay even on its own commit. Bisected on the replay with the screen's reads in its `onTick`:
+  the day summaries clean, `keepSteady` not, `goodsFlows` alone enough, four chains of five, the
+  gateways shared by those four. Now the world has an epoch, moved on at the start of every tick
+  and with every action, and a "once a tick" cache keys on it as well as the clock; inside a tick
+  nothing changes, so every replay comes out as before. **A cache on the world keys on what it
+  read** (haulPlans: the routing's identity and the places), **or on the epoch**, never on time
+  alone. The frame-budget test reads the world just before each action on map 1, whose seaport is
+  up a dirt highway it paves leg by leg (map 949's is the home city, so the old test never went
+  through the cache); with the epoch held at 0 it fails.
 - **`forecast.ts`** — `forecast(world, action, spec)` copies the world and runs the receipt
   machinery on the copy (`perform`, then ticks until the receipt finishes): the receipt the
   action would get two days on, if nothing else changes. The real world is untouched. A test

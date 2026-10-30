@@ -2,6 +2,7 @@ import type { GameWorld } from "./types";
 import { railPath } from "./rail";
 import { roadPath } from "./world";
 import { isDirt } from "./congestion";
+import { epoch } from "./epoch";
 
 // The gateways (brief, The region, The gateways; agreed 2026-10-28), step 1: the seaport a real
 // place. Imports land at the seaport and come up to the home city's sites (the tank farm, the
@@ -22,7 +23,7 @@ export interface SeaportLink {
   paved: number;
 }
 
-const seen = new WeakMap<GameWorld, { at: number; link: SeaportLink }>();
+const seen = new WeakMap<GameWorld, { at: number; epoch: number; link: SeaportLink }>();
 
 /** How well the home city is joined to its seaport, worked out once a tick. */
 export function seaportLink(world: GameWorld): SeaportLink {
@@ -31,7 +32,8 @@ export function seaportLink(world: GameWorld): SeaportLink {
   if (!world.tuning.seaportImports || !world.port || seaport === port) return { seaport, share: 1, by: "here", paved: 1 };
   const now = world.economy.elapsedSeconds;
   const kept = seen.get(world);
-  if (kept && kept.at === now) return kept.link;
+  // The clock and the epoch (epoch.ts): a reading taken between ticks isn't the next tick's.
+  if (kept && kept.at === now && kept.epoch === epoch(world)) return kept.link;
   const t = world.tuning;
   let link: SeaportLink;
   if (railPath(world, port, seaport)) link = { seaport, share: 1, by: "rail", paved: 1 };
@@ -53,7 +55,7 @@ export function seaportLink(world: GameWorld): SeaportLink {
       link = { seaport, share: dirt + (all - dirt) * share, by: "road", paved: share };
     }
   }
-  seen.set(world, { at: now, link });
+  seen.set(world, { at: now, epoch: epoch(world), link });
   return link;
 }
 
@@ -69,7 +71,7 @@ export interface ExportGateway {
   pay: number;
 }
 
-const ways = new WeakMap<GameWorld, { at: number; byTown: Map<string, ExportGateway> }>();
+const ways = new WeakMap<GameWorld, { at: number; epoch: number; byTown: Map<string, ExportGateway> }>();
 
 /**
  * Goods leave by whichever gateway nets more a tonne by what's built (brief, The gateways): its pay
@@ -85,7 +87,7 @@ export function exportGateway(world: GameWorld, townId: string): ExportGateway |
   if (!world.border || !world.towns.has(world.border)) return sea;
   const now = world.economy.elapsedSeconds;
   let kept = ways.get(world);
-  if (!kept || kept.at !== now) ways.set(world, (kept = { at: now, byTown: new Map() }));
+  if (!kept || kept.at !== now || kept.epoch !== epoch(world)) ways.set(world, (kept = { at: now, epoch: epoch(world), byTown: new Map() }));
   const known = kept.byTown.get(townId);
   if (known) return known;
   const border = { to: world.border, pay: t.exportPayPerTonne * (t.borderPayShare ?? 0.7) };

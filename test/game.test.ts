@@ -9,7 +9,7 @@ import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
-import { fuelReach } from "@engine/game/fuel";
+import { fuelReach, fuelSupply } from "@engine/game/fuel";
 import type { GameEvent } from "@engine/game/settlement";
 import { pledgeMove, pledgeNow, pledgeProgress, type TermRecord } from "@engine/game/term";
 import { fuelPlanned, fuelReachable } from "@engine/game/fuel";
@@ -5192,6 +5192,41 @@ describe("frame budgets don't change the game (principles.md §3: derive from el
       if (f % 9 === 0) read(watched);
     }
     expect(snapshot(watched)).toBe(snapshot(straight));
+  }, 300_000);
+
+  test("the screen reading the world just before an action doesn't change what the next tick does (epoch.ts; map 3218, day 433)", () => {
+    // Map 1's seaport is a coast town up a dirt highway: imports reach the home city by how much of
+    // it is paved (gateways.ts seaportLink), worked out once a tick. Keyed on the clock alone, the
+    // screen's read between ticks was what the next tick used -- paved in between or not -- and a
+    // live game parted from its replay by ₦1 on day 40.
+    const start = () => startGame(gameMap(GAME_MAP, 1, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 1, startingFunds: 1e6 });
+    const probe = start();
+    const legs = roadPath(probe, probe.port!, probe.seaport!)!.nodeIds;
+    expect(seaportLink(probe).by).toBe("road");
+    const day = SECONDS_PER_GAME_DAY * 30;
+    const paveAt = new Map(legs.slice(1).map((b, k) => [(k + 1) * Math.round(day / 3), { kind: "pave" as const, a: legs[k]!, b }]));
+    const ticks = (legs.length + 1) * Math.round(day / 3);
+    const play = (watch: boolean) => {
+      const w = start();
+      for (let i = 0; i < ticks; i += 1) {
+        const pave = paveAt.get(i);
+        if (watch && (pave || i % 13 === 0)) {
+          read(w);
+          const flows = goodsFlows(w);
+          for (const t of w.towns.values()) {
+            if (t.industry) siteChain(w, t.id, flows);
+            else fuelSupply(w, t.id);
+          }
+          seaportLink(w);
+        }
+        if (pave) applyAction(w, pave);
+        gameTick(w, SIM_DT);
+      }
+      return w;
+    };
+    const watched = play(true);
+    expect(seaportLink(watched).paved).toBeGreaterThan(0.5);
+    expect(snapshot(watched)).toBe(snapshot(play(false)));
   }, 300_000);
 });
 
