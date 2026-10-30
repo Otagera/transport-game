@@ -171,6 +171,19 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   portUpgradeCosts: [40000, 120000],
   borderFuel: true,
   borderFuelShare: 0.2,
+  // Goods get there over connected roads (brief, Gateways; map 949's playtest: 17 of 26 towns
+  // past any yard's reach got no cement or steel at all): in legs, town to town, a yard
+  // stretching a leg to 120 cells, and off a freight train onward by road.
+  goodsRelay: true,
+  // Imported steel, on a map without a works, from the towns as they are (steel.ts): 70% of
+  // what they want, 91% and then all of it as the port grows (portImportScale).
+  steelImportsFollowTowns: true,
+  steelImportShareNow: 0.7,
+  // A town's cement and steel served, rolled over 10 days (goods.ts servedRate): a truck every
+  // few weeks to a small town read as a day at 100% and weeks at nothing.
+  servedTauDays: 10,
+  // ...and a load of them for a small town goes once it has waited a week, part full.
+  partLoadDays: 7,
   floodFirstDayMin: 45,
   floodFirstDayMax: 75,
   floodEveryDays: 180,

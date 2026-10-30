@@ -895,6 +895,57 @@ paying `tollFor` and, loaded at a market or the port, `loadingLevyPerTonne` (the
 `goodsFares x truckerFareShare` into `informal.earnings` and roll as `outcome.trucked`;
 `stoneServed` counts them at half, an industry's deliveries in full.
 
+**Goods relayed town to town** (2026-10-29; brief, The gateways, 4; `haulage.ts`, behind
+`goodsRelay`). Before it, a load past a leg's reach (`truckerMaxHaulCells` 40,
+`yardReachCells` 120 from a yard, `tankerMaxHaulCells` from a fuel site) waited and rotted:
+map 949 on day 244 had 17 of 26 towns 125-190 road cells from the works and the steel
+terminal, both with yards, and getting nothing, ~600 t of cement waiting. Now:
+- **What goes in legs** (`relayed`): goods from a cement, steel or fuel site (and fuel over
+  the border) -- what a town waits on to grow. Relaying everything was measured first, map
+  949 replayed to day 241: 550-870 hauliers' trucks against ~300, trips made 2,354 -> 1,917,
+  people grown 138k -> 106k, money ₦256k -> ₦678k (tolls, yard levies, exports from further
+  out) -- at day 141, 238 of the extra trucks were farm towns' cash crops in legs and 106 the
+  port's general supplies; cement and steel were 15. Everything else goes straight, as before.
+- **The plan** (`haulPlans`, on `world.haulPlans`, rebuilt when `simulation.routing` is
+  replaced -- every road change, `rebuildNetworks` -- or the towns or yards change): road
+  distances between every pair of places (a Dijkstra from each over the routing graph, the
+  same lengths `roadPath` finds); relays are the towns and any site with a yard. A leg from
+  a place costs `1/(1 - cells/reach) + cells/reach` (the wait to fill a truck, `haulShare`,
+  and the drive), its reach `legReach`. `nextStop(at, to, reach)` is the first stop on the
+  cheapest chain of legs (Dijkstra back from `to`, memoised): `to` itself when a direct
+  haul is quickest, null if no chain gets there.
+- **Hauliers** (`truckersPickUp`) take goods toward `nextStop`, not straight to their
+  destination: from the source's yard (`goods.yards`) and from `goods.relay` (town ->
+  `to|kind|origin` -> tonnes waiting between legs). A leg's hold key is
+  `from|stop|kind|final|origin` (a direct one keeps `from|to|kind`, so nothing changes where
+  goods went straight); `dispatchTrucks` gives such a truck's cargo a `trip`, as riders'.
+- **Arrivals** (`relayArrivals`, tick.ts, trucks' and yours): goods whose `trip` ends further
+  on go into `goods.relay` at that town; `recordGoodsDelivered` counts only the last leg, under
+  the flow's own key (`trip.origin`), so served shares and growth see them. What waits between
+  legs keeps or spoils as at its source (`produceAndSpoil`), counted in the flow's `spoiled`.
+- **Trains as the long leg** (`relayLoader`, after `goodsLoader`): a goods vehicle at a stop
+  also loads goods it can carry part of the way -- bound past its line, from the yard or from
+  what's waiting between legs -- to the stop ahead with the cheapest hauliers' way on, when
+  that's cheaper than hauliers from here.
+- **The cards** (screen.ts `carryWhy`, from `haulBreak`): no road; a gap (the yardless place
+  hauliers reach nearest the town, where a yard would carry it on; none: track); three legs
+  or more (track); never a yard that's built. Steel on a map without a works: the port's
+  next rung when it lands under 90% of the want (`steelPortShort`).
+- Each leg is its own fare (yours on a train, the hauliers' on a truck) and its own levy.
+
+**Served over ten days** (2026-10-29, `servedTauDays`; goods.ts `servedRate`). Every goods
+outcome rolls over `outcomeTauSeconds` (a day), and `cementServed` / `steelServed` cap the share
+at 1: a small town's steel -- a 20 t truck every few weeks for ~1 t a day wanted -- read as a
+day at 100% and weeks at nothing (map 949's Saki: all it wanted, read ~17%), and grew as if
+starved. With the key, outcomes also roll `arrived` (yours and the truckers') over 10 days and
+the served shares read that. The same lesson as "roll lumpy earnings over longer"
+(principles.md §3), for what goods do rather than what they earn.
+
+**Part loads** (2026-10-29, `partLoadDays`, truckers.ts). A hold of cement, steel or fuel
+(`relayed`) dispatches once it has gathered for 7 days, part full, not only at `truckLoad`
+(`world.truckerSince`: when each hold began). Map 949's far small towns want ~0.5 t of steel a
+day: a full 20 t a leg over two or three legs took months, and seven read none.
+
 **Rail's own job** (Revision 2; `rail.ts`): `trainsBySegment` counts every passenger and
 freight route's trains on each piece of its track path; `lineSlots(a, b)` is the fullest
 piece's count against `trackSlots`, and `checkTrain` / `checkFreight` refuse a full line.
@@ -1229,6 +1280,10 @@ room above `cementFreeShare` (+40%) is scaled by cement served, then the room ab
 - **Behind `steelEnabled`**: a run file without it places no steel and replays as played.
   First guesses to measure (C22, C24): 0.08 t a thousand a day, works 1.2x, ore 1.6 t a tonne,
   a mine 180 t a day, imports 0.3.
+- **Imports from the towns as they are** (2026-10-29, `steelImportsFollowTowns`): on a map
+  without a works, the terminal lands `steelImportShareNow` (0.7) of what the towns want now,
+  times the port's rung; sized from day 1's (`baseDemand`), map 949's port landed 20 t a day for
+  73 wanted by day 244, and no move but the port lifted it. Maps with a works keep day 1's.
 
 ### Sites need people (Revision 3, steps 2b–2c)
 

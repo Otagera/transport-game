@@ -124,6 +124,7 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
     outcomeIndex: null,
     settlement: createSettlementState(),
     plans: null,
+    haulPlans: null,
     transferRateEMA: new Map(),
     roughCostRateEMA: new Map(),
     ledger: createDayLedger(),

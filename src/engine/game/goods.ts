@@ -12,6 +12,7 @@ import { fuelFlows, isFuelSite, shortageAt } from "./fuel";
 import { cementFlows, isCementSite } from "./cement";
 import { isSteelSite, steelFlows } from "./steel";
 import { haulShare } from "./truckers";
+import { haulCost, relayed } from "./haulage";
 import { foodActive, foodFlows } from "./food";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
@@ -50,6 +51,8 @@ export interface GoodsOutcome {
   spoiled: number;
   /** By truckers (truckers.ts): carried, not yours. */
   trucked?: number;
+  /** Yours and the truckers' together, rolled over `servedTauDays` (servedRate): what a town is served, read by growth. */
+  arrived?: number;
 }
 
 export interface GoodsState {
@@ -57,6 +60,8 @@ export interface GoodsState {
   yards: Map<string, Map<string, number>>;
   /** `from:to:kind` -> rolling outcome. */
   outcomes: Map<string, GoodsOutcome>;
+  /** town -> `to|kind|origin` -> tonnes waiting there between legs, on their way from `origin` (haulage.ts). */
+  relay?: Map<string, Map<string, number>>;
 }
 
 export function createGoodsState(): GoodsState {
@@ -74,6 +79,21 @@ function yardKey(to: string, kind: GoodsKind): string {
 function parseYardKey(key: string): { to: string; kind: GoodsKind } {
   const bar = key.indexOf("|");
   return { to: key.slice(0, bar), kind: key.slice(bar + 1) as GoodsKind };
+}
+
+export function relayKey(to: string, kind: GoodsKind, origin: string): string {
+  return `${to}|${kind}|${origin}`;
+}
+
+export function parseRelayKey(key: string): { to: string; kind: GoodsKind; origin: string } {
+  const [to, kind, origin] = key.split("|") as [string, GoodsKind, string];
+  return { to, kind, origin };
+}
+
+/** Goods keep or spoil as their source's do: fuel, cement, steel and milled food keep. */
+function keeps(world: GameWorld, fromId: string): boolean {
+  const from = world.towns.get(fromId);
+  return isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill";
 }
 
 /**
@@ -146,10 +166,20 @@ export function produceAndSpoil(world: GameWorld, dt: number): void {
     const key = yardKey(flow.to, flow.kind);
     const waiting = (yard.get(key) ?? 0) + flow.rate * dt;
     // Bagged cement keeps, as fuel does (a week, not two days).
-    const from = world.towns.get(flow.from);
-    const lost = waiting * (isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill" ? leak : spoil);
+    const lost = waiting * (keeps(world, flow.from) ? leak : spoil);
     yard.set(key, waiting - lost);
     spoiled.set(flowKey(flow), lost);
+  }
+  // Goods waiting between legs (haulage.ts) keep or spoil as at their source.
+  for (const [, waits] of goods.relay ?? []) {
+    for (const [key, amount] of waits) {
+      if (amount <= 0) continue;
+      const { to, kind, origin } = parseRelayKey(key);
+      const lost = amount * (keeps(world, origin) ? leak : spoil);
+      waits.set(key, amount - lost);
+      const k = flowKey({ from: origin, to, kind });
+      spoiled.set(k, (spoiled.get(k) ?? 0) + lost);
+    }
   }
   for (const [key, lost] of spoiled) {
     const outcome = goods.outcomes.get(key) ?? { delivered: 0, spoiled: 0 };
@@ -184,25 +214,107 @@ export function goodsLoader(world: GameWorld, loaded: Map<string, number>, route
   };
 }
 
-/** Records goods delivered this tick against their flows' outcomes. */
+/**
+ * With goods relayed (haulage.ts): a goods vehicle also takes what it can carry
+ * part of the way -- goods here bound past its line, or waiting here between
+ * legs -- to the stop ahead hauliers get them on from quickest, if that's
+ * quicker than hauliers from here. Rail as the long leg, road as the last.
+ * Loaded in proportion when it won't all fit, as goodsLoader does.
+ */
+export function relayLoader(world: GameWorld, loaded: Map<string, number>, routeOf: Map<string, string>): Loader {
+  return (vehicle, at, index) => {
+    const yard = world.goods.yards.get(at);
+    const waits = world.goods.relay?.get(at);
+    if (!yard && !waits) return;
+    const free = freeSeats(vehicle);
+    if (free <= 0) return;
+    const ahead = nodesAhead(vehicle, index);
+    const dropAt = (final: string): string | null => {
+      if (ahead.has(final)) return final;
+      let best: string | null = null;
+      let cost = haulCost(world, at, final);
+      for (const stop of ahead) {
+        const c = haulCost(world, stop, final);
+        if (c < cost) {
+          best = stop;
+          cost = c;
+        }
+      }
+      return best;
+    };
+    const bound: { store: Map<string, number>; key: string; amount: number; stop: string; final: string; kind: GoodsKind; origin: string }[] = [];
+    for (const [key, amount] of yard ?? []) {
+      if (amount <= 0) continue;
+      const { to, kind } = parseYardKey(key);
+      if (ahead.has(to) || !relayed(world, at, kind)) continue; // goodsLoader's, or goods that go straight
+      const stop = dropAt(to);
+      if (stop) bound.push({ store: yard!, key, amount, stop, final: to, kind, origin: at });
+    }
+    for (const [key, amount] of waits ?? []) {
+      if (amount <= 0) continue;
+      const { to, kind, origin } = parseRelayKey(key);
+      const stop = dropAt(to);
+      if (stop) bound.push({ store: waits!, key, amount, stop, final: to, kind, origin });
+    }
+    const waiting = bound.reduce((sum, x) => sum + x.amount, 0);
+    if (waiting <= 0) return;
+    const share = Math.min(1, free / waiting);
+    for (const x of bound) {
+      const take = x.amount * share;
+      vehicle.cargo.push({ from: at, to: x.stop, kind: x.kind, amount: take, trip: { origin: x.origin, destination: x.final } });
+      x.store.set(x.key, x.amount - take);
+      const routeId = routeOf.get(vehicle.id);
+      if (routeId) loaded.set(routeId, (loaded.get(routeId) ?? 0) + take);
+    }
+  };
+}
+
+/** Records goods delivered this tick against their flows' outcomes: where they started, once they're where they were going. */
 export function recordGoodsDelivered(deliveries: DeliveryEvent[], delivered: Map<string, number>): void {
   for (const { entry, amount } of deliveries) {
     if (!entry || entry.kind === "passengers") continue;
-    const key = flowKey({ from: entry.from, to: entry.to, kind: entry.kind });
+    if (entry.trip && entry.trip.destination !== entry.to) continue; // a leg's end, not the goods' (relayArrivals)
+    const key = flowKey({ from: entry.trip?.origin ?? entry.from, to: entry.to, kind: entry.kind });
     delivered.set(key, (delivered.get(key) ?? 0) + amount);
+  }
+}
+
+/** Goods at the end of a leg, not of their way: they wait at this town for the next (haulage.ts). */
+export function relayArrivals(world: GameWorld, deliveries: DeliveryEvent[]): void {
+  for (const { entry, amount } of deliveries) {
+    if (!entry || entry.kind === "passengers" || !entry.trip || entry.trip.destination === entry.to) continue;
+    const relay = (world.goods.relay ??= new Map());
+    if (!relay.has(entry.to)) relay.set(entry.to, new Map());
+    const waits = relay.get(entry.to)!;
+    const key = relayKey(entry.trip.destination, entry.kind, entry.trip.origin);
+    waits.set(key, (waits.get(key) ?? 0) + amount);
   }
 }
 
 /** Once per tick, after the lorries move: roll each flow's delivered rate, yours and the truckers'. */
 export function updateGoodsOutcomes(world: GameWorld, delivered: Map<string, number>, dt: number, trucked: Map<string, number> = new Map()): void {
   const alpha = 1 - Math.exp(-dt / world.tuning.outcomeTauSeconds);
+  const servedTau = world.tuning.servedTauDays;
+  const slow = servedTau ? 1 - Math.exp(-dt / (servedTau * SECONDS_PER_GAME_DAY)) : 0;
   for (const flow of goodsFlows(world)) {
     const key = flowKey(flow);
     const outcome = world.goods.outcomes.get(key) ?? { delivered: 0, spoiled: 0 };
     outcome.delivered += ((delivered.get(key) ?? 0) / dt - outcome.delivered) * alpha;
     outcome.trucked = (outcome.trucked ?? 0) + ((trucked.get(key) ?? 0) / dt - (outcome.trucked ?? 0)) * alpha;
+    if (servedTau) outcome.arrived = (outcome.arrived ?? 0) + (((delivered.get(key) ?? 0) + (trucked.get(key) ?? 0)) / dt - (outcome.arrived ?? 0)) * slow;
     world.goods.outcomes.set(key, outcome);
   }
+}
+
+/**
+ * What a flow brings its town a second, for how well it's served (cement.ts, steel.ts): rolled
+ * over `servedTauDays` where set. On a day's roll, a small town's steel -- a 20 t truck every few
+ * weeks for ~1 t a day wanted -- read as a spike capped at 100% and then nothing: map 949's
+ * Saki, getting all it wanted, read ~17% served and grew as if starved.
+ */
+export function servedRate(world: GameWorld, outcome: GoodsOutcome | undefined): number {
+  if (!outcome) return 0;
+  return world.tuning.servedTauDays ? outcome.arrived ?? 0 : outcome.delivered + (outcome.trucked ?? 0);
 }
 
 // --- Lorry routes -----------------------------------------------------------

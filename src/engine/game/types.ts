@@ -10,6 +10,7 @@ import type { EconomyState } from "../economy/types";
 import type { SettlementState } from "./settlement";
 import type { DayLedger } from "./ledger";
 import type { TripPlans } from "./transfers";
+import type { HaulPlans } from "./haulage";
 import type { RoadPlan } from "./roads";
 import type { GoodsState } from "./goods";
 import type { DayHistory } from "./history";
@@ -280,6 +281,15 @@ export interface GameTuning {
   /** Fuel over a crossing to Benin or Niger (gateways.ts borderFuelSite), `borderFuelShare` of day 1's need. Absent in older runs: none. */
   borderFuel?: boolean;
   borderFuelShare?: number;
+  /** Goods past a leg's reach go in legs, town to town, and off a freight train onward by road (haulage.ts). Absent in older runs: off -- a load past reach waits. */
+  goodsRelay?: boolean;
+  /** On a map without a steel works, the terminal lands `steelImportShareNow` of what the towns want now, not of day 1's (steel.ts steelImports). Absent in older runs: day 1's. */
+  steelImportsFollowTowns?: boolean;
+  steelImportShareNow?: number;
+  /** Days a town's cement and steel served are rolled over (goods.ts servedRate). Absent in older runs: the 1-day roll every goods outcome has. */
+  servedTauDays?: number;
+  /** Hauliers send what they've gathered of cement, steel or fuel (haulage.ts relayed) once it has waited this many days, not only full trucks (truckers.ts). Absent in older runs: full trucks only. */
+  partLoadDays?: number;
   floodFirstDayMin?: number;
   floodFirstDayMax?: number;
   floodEveryDays?: number;
@@ -794,6 +804,8 @@ export interface GameWorld {
   food: FoodState | null;
   /** Goods truckers hold at yards, filling a truck (truckers.ts). */
   truckers: TruckerHeld;
+  /** Hold key -> when that load began to gather, seconds (truckers.ts, for a part load). */
+  truckerSince?: Map<string, number>;
   width: number;
   height: number;
   towns: Map<string, GameTown>;
@@ -864,6 +876,8 @@ export interface GameWorld {
   transferRateEMA: Map<string, number>;
   /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */
   plans: TripPlans | null;
+  /** How hauliers relay goods town to town (haulage.ts). Null = not built yet; rebuilt when the roads, towns or yards change. */
+  haulPlans: HaulPlans | null;
   /** pairKey -> road path, or null if the pair isn't connected. Cleared on every road change. */
   pathCache: Map<string, PathResult | null>;
   /** The map's region (generate.ts NameRegion: "north", "southSouth"...): what the 3D view draws its land as. Nothing simulated reads it. */

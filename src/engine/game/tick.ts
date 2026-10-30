@@ -34,7 +34,7 @@ import { creditLanes, laneEncroachment, lanesBySegment, struckSegments, updateLa
 import { updateProject } from "./project";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
-import { goodsLoader, produceAndSpoil, recordGoodsDelivered, updateGoodsOutcomes } from "./goods";
+import { goodsLoader, produceAndSpoil, recordGoodsDelivered, relayArrivals, relayLoader, updateGoodsOutcomes } from "./goods";
 
 // How much longer people wait at a motor park for a danfo to fill than
 // they wait for your bus before giving up.
@@ -216,9 +216,12 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
 
   // A lorry loads goods bound anywhere ahead on its route (goods.ts).
   const loadGoods = goodsLoader(world, boardings, routeOf);
+  // ...and, with goods relayed, what it can carry part of the way (goods.ts relayLoader).
+  const loadRelayed = tuning.goodsRelay ? relayLoader(world, boardings, routeOf) : null;
   const lorryLoader: Loader = (vehicle, at, index) => {
     atStart(vehicle, at, index);
     loadGoods(vehicle, at, index);
+    loadRelayed?.(vehicle, at, index);
   };
 
   // A danfo passing through takes anyone going its way -- your riders
@@ -268,6 +271,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
       if (vehicle.carries === "goods") {
         informal.earnings += goodsFares(world, deliveries) * tuning.truckerFareShare;
         recordGoodsDelivered(deliveries, goodsTrucked);
+        relayArrivals(world, deliveries);
       } else informal.earnings += passengerFares(world, deliveries);
       continue;
     }
@@ -283,6 +287,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
     bump(routeRevenue, routeOf.get(vehicle.id) ?? "", revenue);
     if (vehicle.carries === "goods") {
       recordGoodsDelivered(deliveries, goodsDelivered);
+      relayArrivals(world, deliveries);
       continue;
     }
     for (const { entry, amount } of deliveries) {

@@ -1,7 +1,9 @@
 import { isFuelSite } from "./fuel";
 import { borderFuelSite } from "./gateways";
 import type { GameWorld } from "./types";
-import type { GoodsKind } from "./goods";
+import { parseRelayKey, type GoodsKind } from "./goods";
+import { legReach, nextStop, relayed } from "./haulage";
+import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { roadPath } from "./world";
 import { tollFor, type Takings } from "./budget";
 import { hasYard } from "./yards";
@@ -31,6 +33,8 @@ import { createOneShotVehicle } from "../simulation/vehicle";
 export type TruckerHeld = Map<string, number>;
 
 const heldKey = (from: string, to: string, kind: GoodsKind) => `${from}|${to}|${kind}`;
+/** A leg of a relayed load (haulage.ts): to this leg's stop, bound for `final`, from `origin`. */
+const legKey = (from: string, to: string, kind: GoodsKind, final: string, origin: string) => `${from}|${to}|${kind}|${final}|${origin}`;
 
 /** How keen truckers are on a haul of this many cells: 1 next door, 0 at `max` (truckerMaxHaulCells) and beyond. */
 export function haulShare(world: GameWorld, cells: number, max = world.tuning.truckerMaxHaulCells): number {
@@ -42,36 +46,52 @@ export function truckersPickUp(world: GameWorld, dt: number): void {
   const { tuning, goods } = world;
   if (!tuning.truckersEnabled) return;
   const pickup = 1 - Math.exp(-dt / tuning.truckerPickupSeconds);
+  const relay = !!tuning.goodsRelay;
+  // Goods at `from` bound for `final`, from `origin` (here, unless they're between legs):
+  // what hauliers take of them now toward this leg's stop.
+  const take = (store: Map<string, number>, key: string, amount: number, from: string, final: string, kind: GoodsKind, origin: string) => {
+    // With goods relayed (haulage.ts), a load past this leg's reach goes to a town on the way.
+    const to = relay && relayed(world, origin, kind) ? nextStop(world, from, final, legReach(world, from, kind)) : final;
+    if (!to) return;
+    const path = roadPath(world, from, to);
+    if (!path) return;
+    // Fuel goes by road tanker, far: nearly all of it does here (fuel.ts).
+    // Crude doesn't go by the roadside: it's moved under contract -- yours,
+    // by rail, or hauliers' from a yard at the source (Revision 4: with no
+    // player lorries, a refinery mustn't need track to get any crude).
+    const site = world.towns.get(from)?.industry;
+    if ((site === "oilfield" || site === "terminal") && !(tuning.yardsEnabled && hasYard(world, from))) return;
+    // From a haulage yard (yards.ts), hauliers reach further and load faster.
+    const atYard = tuning.yardsEnabled && hasYard(world, from);
+    // Against your freight line's rate (freightrates.ts): keener against a dear one, less against a cheap.
+    const pull = haulierPull(world, from, to);
+    // Fuel over the border goes by tanker too (gateways.ts borderFuelSite).
+    const reach = legReach(world, from, kind) * pull;
+    // No more than a few loads held a destination (truckerHoldLoads): the rest stays at the
+    // yard, where it shows as waiting and spoils if nobody comes (map 2418, day 233:
+    // hauliers held 4,214 t of cement for Katsina-Ala, delivering none -- it vanished).
+    const k = to === final && origin === from ? heldKey(from, to, kind) : legKey(from, to, kind, final, origin);
+    const room = Math.max(0, (tuning.truckerHoldLoads ?? Infinity) * tuning.truckLoad - (world.truckers.get(k) ?? 0));
+    const taken = Math.min(amount, room, amount * Math.min(1, pickup * pull) * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach));
+    if (taken <= 0) return;
+    store.set(key, amount - taken);
+    // When this load began to gather, for a part load (dispatchTrucks).
+    if (tuning.partLoadDays && !(world.truckers.get(k) ?? 0)) (world.truckerSince ??= new Map()).set(k, world.economy.elapsedSeconds);
+    world.truckers.set(k, (world.truckers.get(k) ?? 0) + taken);
+  };
   for (const [from, yard] of goods.yards) {
     for (const [key, amount] of yard) {
       if (amount <= 0) continue;
       const bar = key.indexOf("|");
-      const to = key.slice(0, bar);
-      const kind = key.slice(bar + 1) as GoodsKind;
-      const path = roadPath(world, from, to);
-      if (!path) continue;
-      // Fuel goes by road tanker, far: nearly all of it does here (fuel.ts).
-      // Crude doesn't go by the roadside: it's moved under contract -- yours,
-      // by rail, or hauliers' from a yard at the source (Revision 4: with no
-      // player lorries, a refinery mustn't need track to get any crude).
-      const site = world.towns.get(from)?.industry;
-      if ((site === "oilfield" || site === "terminal") && !(tuning.yardsEnabled && hasYard(world, from))) continue;
-      // From a haulage yard (yards.ts), hauliers reach further and load faster.
-      const atYard = tuning.yardsEnabled && hasYard(world, from);
-      // Against your freight line's rate (freightrates.ts): keener against a dear one, less against a cheap.
-      const pull = haulierPull(world, from, to);
-      // Fuel over the border goes by tanker too (gateways.ts borderFuelSite).
-      const tankerLoad = isFuelSite(world.towns.get(from)) || (kind === "supplies" && from === borderFuelSite(world));
-      const reach = Math.max(tankerLoad ? tuning.tankerMaxHaulCells : tuning.truckerMaxHaulCells, atYard ? tuning.yardReachCells : 0) * pull;
-      // No more than a few loads held a destination (truckerHoldLoads): the rest stays at the
-      // yard, where it shows as waiting and spoils if nobody comes (map 2418, day 233:
-      // hauliers held 4,214 t of cement for Katsina-Ala, delivering none -- it vanished).
-      const k = heldKey(from, to, kind);
-      const room = Math.max(0, (tuning.truckerHoldLoads ?? Infinity) * tuning.truckLoad - (world.truckers.get(k) ?? 0));
-      const take = Math.min(amount, room, amount * Math.min(1, pickup * pull) * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach));
-      if (take <= 0) continue;
-      yard.set(key, amount - take);
-      world.truckers.set(k, (world.truckers.get(k) ?? 0) + take);
+      take(yard, key, amount, from, key.slice(0, bar), key.slice(bar + 1) as GoodsKind, from);
+    }
+  }
+  if (!relay) return;
+  for (const [at, waits] of goods.relay ?? []) {
+    for (const [key, amount] of waits) {
+      if (amount <= 0) continue;
+      const { to, kind, origin } = parseRelayKey(key);
+      take(waits, key, amount, at, to, kind, origin);
     }
   }
 }
@@ -94,8 +114,17 @@ export function dispatchTrucks(world: GameWorld, takings: Takings, fits: (segmen
   const { tuning, informal, simulation } = world;
   if (!tuning.truckersEnabled) return;
   for (const [key, held] of world.truckers) {
-    if (held < tuning.truckLoad) continue;
-    const [from, to, kind] = key.split("|") as [string, string, GoodsKind];
+    const [from, to, kind, final, origin] = key.split("|") as [string, string, GoodsKind, string?, string?];
+    // A full truck; or, for what a town waits on to grow (haulage.ts relayed), what's gathered
+    // once it has waited `partLoadDays`: a small far town wants half a tonne of steel a day, and
+    // a full 20 t a leg took months over two or three legs (map 949: seven towns at none).
+    let load = tuning.truckLoad;
+    if (held < tuning.truckLoad) {
+      const since = world.truckerSince?.get(key);
+      if (!tuning.partLoadDays || held < 1 || since === undefined || !relayed(world, origin ?? from, kind)) continue;
+      if (world.economy.elapsedSeconds - since < tuning.partLoadDays * SECONDS_PER_GAME_DAY) continue;
+      load = held;
+    }
     const path = roadPath(world, from, to);
     // A tanker isn't held back by the danfos' share of the road: fuel gets
     // through a jammed road slowly, never not at all (fuel.ts). It still
@@ -109,16 +138,21 @@ export function dispatchTrucks(world: GameWorld, takings: Takings, fits: (segmen
     const vehicle = createOneShotVehicle(id, from, to, simulation.routing, tuning.truckSpeed, tuning.truckLoad, tuning.lorryRoadSpace, new Map());
     if (!vehicle) continue;
     vehicle.carries = "goods";
-    vehicle.cargo = [{ from, to, kind, amount: tuning.truckLoad }];
-    world.truckers.set(key, held - tuning.truckLoad);
+    // A relayed load (legKey) carries where it's going and where it began (haulage.ts).
+    vehicle.cargo = [{ from, to, kind, amount: load, ...(final && origin ? { trip: { origin, destination: final } } : {}) }];
+    world.truckers.set(key, held - load);
+    if (tuning.partLoadDays) {
+      if (held - load > 0) world.truckerSince?.set(key, world.economy.elapsedSeconds);
+      else world.truckerSince?.delete(key);
+    }
     takings.tolls += tollFor(world, path.segmentIds, tuning.lorryRoadSpace);
     if (tuning.yardsEnabled && hasYard(world, from)) {
       // A yard's levy: more a tonne, run properly, the touts' share smaller (yards.ts).
-      const levy = tuning.yardLevyPerTonne * tuning.truckLoad;
+      const levy = tuning.yardLevyPerTonne * load;
       takings.loading += levy * (1 - tuning.yardToutShare);
       takings.touts += levy * tuning.yardToutShare;
     } else if (levied(world, from)) {
-      const levy = tuning.loadingLevyPerTonne * tuning.truckLoad;
+      const levy = tuning.loadingLevyPerTonne * load;
       takings.loading += levy * (1 - tuning.agberoCut);
       takings.touts += levy * tuning.agberoCut;
     }

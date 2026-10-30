@@ -1,6 +1,6 @@
 import type { GameTown, GameWorld } from "./types";
 import { importsArriving, portScale } from "./gateways";
-import { flowKey, type GoodsFlow } from "./goods";
+import { flowKey, servedRate, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
 import { isCutOff, roadPath, type ActionResult } from "./world";
 import { rebuildNetworks } from "./rail";
@@ -93,10 +93,20 @@ export function mineOutput(world: GameWorld): number {
   return (world.tuning.mineOutputPerDay / SECONDS_PER_GAME_DAY) * staffFactor(world, steel.mineId);
 }
 
-/** Imported steel through the terminal, tonnes a second. */
+/**
+ * Imported steel through the terminal, tonnes a second. On a map without a works
+ * (steelImportsFollowTowns), a share of what the towns want now: sized from day 1's
+ * towns, it was all the steel there would ever be -- map 949, day 244, 20 t a day for 73
+ * wanted, no move but the port's rungs to lift it; the port's rungs are now the decision.
+ */
 export function steelImports(world: GameWorld): number {
   const steel = world.steel;
-  return steel?.terminalId ? world.tuning.steelImportShare * steel.baseDemand * staffFactor(world, steel.terminalId) * importsArriving(world) * portScale(world) : 0;
+  if (!steel?.terminalId) return 0;
+  const t = world.tuning;
+  const following = !!t.steelImportsFollowTowns && !steel.worksId;
+  const wanted = following ? builders(world).reduce((sum, town) => sum + steelDemand(world, town.id), 0) : steel.baseDemand;
+  const share = following ? t.steelImportShareNow ?? t.steelImportShare : t.steelImportShare;
+  return share * wanted * staffFactor(world, steel.terminalId) * importsArriving(world) * portScale(world);
 }
 
 /**
@@ -136,7 +146,7 @@ export function steelServed(world: GameWorld, townId: string): number {
   for (const from of [steel.worksId, steel.terminalId]) {
     if (!from) continue;
     const outcome = world.goods.outcomes.get(flowKey({ from, to: townId, kind: "supplies" }));
-    got += (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+    got += servedRate(world, outcome);
   }
   return Math.min(1, got / wanted);
 }

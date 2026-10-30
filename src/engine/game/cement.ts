@@ -1,6 +1,6 @@
 import type { GameTown, GameWorld } from "./types";
 import { importsArriving, portScale } from "./gateways";
-import { flowKey, type GoodsFlow } from "./goods";
+import { flowKey, servedRate, type GoodsFlow } from "./goods";
 import { refreshDemand } from "./settlement";
 import { addRoadToMap, isCutOff, roadPath, type ActionResult } from "./world";
 import { rebuildNetworks } from "./rail";
@@ -133,7 +133,7 @@ export function cementServed(world: GameWorld, townId: string): number {
   for (const from of [cement.worksId, cement.siloId]) {
     if (!from) continue;
     const outcome = world.goods.outcomes.get(flowKey({ from, to: townId, kind: "supplies" }));
-    got += (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0);
+    got += servedRate(world, outcome);
   }
   return Math.min(1, got / wanted);
 }

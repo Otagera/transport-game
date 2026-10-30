@@ -16,11 +16,12 @@ import { hasYard } from "@engine/game/yards";
 import { siteFigure, type FigureData } from "./seethrough";
 import { exportsBy, farmTowns } from "@engine/game/food";
 import { borderCountry } from "@engine/game/border";
-import { exportGateway, seaportLink } from "@engine/game/gateways";
+import { exportGateway, nextPortRung, portScale, seaportLink } from "@engine/game/gateways";
 import { patchHtml } from "./patch";
 import { steadyFuel, steadySite } from "./steady";
 import { cementBreak, cementServed } from "@engine/game/cement";
-import { steelBreak, steelServed } from "@engine/game/steel";
+import { steelBreak, steelDemand, steelImports, steelServed } from "@engine/game/steel";
+import { haulBreak } from "@engine/game/haulage";
 import { railPath } from "@engine/game/rail";
 import { roadCapacity } from "@engine/game/congestion";
 import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
@@ -238,6 +239,34 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   };
   const toolButton = (tool: string, label: string) => `<button data-tool="${tool}">${esc(label)}</button>`;
 
+  /**
+   * Why goods from `from` aren't reaching a town, and the move that answers it (haulage.ts
+   * haulBreak) -- never a yard that's already built (map 949: "Yard at the works" offered for
+   * 170 days at a works with a yard, its cement unable to reach 17 towns past any yard's reach).
+   */
+  function carryWhy(what: string, from: string, townId: string): { why: string; button: string; at: string[] } {
+    const to = nameOf(townId);
+    const b = haulBreak(world, from, townId);
+    if (b?.kind === "road") return { why: `no road joins ${to} to ${nameOf(from)}`, button: toolButton("road", "Road (R)"), at: [townId] };
+    if (b?.kind === "gap" && b.yardAt) return { why: `hauliers can't get ${what} as far as ${to}; a yard at ${nameOf(b.yardAt)} would carry it on`, button: toolButton("yard", `Yard at ${nameOf(b.yardAt)} (Y)`), at: [b.yardAt, townId] };
+    if (b?.kind === "gap") return { why: `hauliers can't get ${what} as far as ${to}, even from your yards; freight track can`, button: toolButton("track", "Track (K)"), at: [from, townId] };
+    if (!hasYard(world, from)) return { why: `it isn't reaching ${to} from ${nameOf(from)}`, button: toolButton("yard", `Yard at ${nameOf(from)} (Y)`), at: [from] };
+    if (b?.kind === "legs" && b.legs >= 3) return { why: `it reaches ${to} in ${b.legs} legs by road, slowly; freight track is quicker`, button: toolButton("track", "Track (K)"), at: [from, townId] };
+    return { why: `it's on its way to ${to} by road, slower than ${to} grows; freight track is quicker`, button: toolButton("track", "Track (K)"), at: [from, townId] };
+  }
+  const mostHeld = (towns: Town[], by: (t: Town) => number) => [...towns].sort((p, q) => by(q) - by(p))[0]!;
+
+  /** The port lands too little steel for what the towns want (steel.ts steelImports): its next rung, if it has one. */
+  function steelPortShort(): { text: string; button: string } | null {
+    const steel = world.steel;
+    if (!steel?.terminalId || steel.worksId) return null;
+    const wanted = homeTowns().reduce((sum, t) => sum + steelDemand(world, t.id), 0);
+    const landed = steelImports(world);
+    const next = nextPortRung(world);
+    if (wanted <= 0 || landed >= 0.9 * wanted || !next) return null;
+    return { text: `the port lands ${int(landed * D)} t of steel a day for the ${int(wanted * D)} t the towns want; ${next.name} would land ${int((landed * D * next.scale) / portScale(world))} t`, button: `<button data-upgrade-port="1">Build ${esc(next.name)} · ${nairaK(next.price)}</button>` };
+  }
+
   /** A restore as a real button, with the bond beside it when you're short (the cement works' was under More). */
   function restoreButton(what: "works" | "refinery" | "steel"): string {
     const t = world.tuning;
@@ -268,7 +297,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const who = `${int(cement.people)}k people held back in ${plural(cement.towns.length, "town")}`;
       if (b?.kind === "idle") items.push({ text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
       else if (b?.kind === "quarry") items.push({ text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} (Y)`), at: [b.quarryId], weight: cement.people });
-      else if (b?.kind === "carry") items.push({ text: `Cement short, ${who}: the works' cement isn't reaching them`, button: toolButton("yard", "Yard at the works (Y)"), at: [world.cement.worksId], weight: cement.people });
+      else if (b?.kind === "carry") {
+        const c = carryWhy("cement", world.cement.worksId, mostHeld(cement.towns, (t) => t.cementHeld).id);
+        items.push({ text: `Cement short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: cement.people });
+      }
     }
     const steel = held((t) => t.steelHeld);
     if (world.steel && steel.towns.length > 0) {
@@ -277,7 +309,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const works = world.steel.worksId ?? world.steel.terminalId;
       if (b?.kind === "idle") items.push({ text: `The steel works is idle: ${who}`, button: restoreButton("steel"), at: works ? [works] : [], weight: steel.people });
       else if (b?.kind === "ore") items.push({ text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} (Y)`), at: [b.mineId], weight: steel.people });
-      else if (b?.kind === "carry") items.push({ text: `Steel short, ${who}: it isn't reaching them from ${nameOf(b.from)}`, button: toolButton("yard", `Yard at ${nameOf(b.from)} (Y)`), at: [b.from], weight: steel.people });
+      else if (b?.kind === "carry") {
+        const port = steelPortShort();
+        const c = carryWhy("steel", b.from, mostHeld(steel.towns, (t) => t.steelHeld).id);
+        items.push(port ? { text: `Steel short, ${who}: ${port.text}`, button: port.button, at: [b.from], weight: steel.people } : { text: `Steel short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: steel.people });
+      }
     }
     // Short by the network, not by this week's tankers (fuel.ts fuelPlanned): just after the
     // warm-up, towns planned full read short, and the idle refinery was named for them.
@@ -373,7 +409,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const button = b?.kind === "no-quarry" ? `<span class="muted">Next quarry ~day ${b.nextDay}</span>`
         : b?.kind === "quarry" ? toolButton("yard", `Yard at ${nameOf(b.quarryId)} (Y)`)
         : b?.kind === "idle" ? restoreButton("works")
-        : toolButton("yard", "Yard at the works (Y)");
+        : carryWhy("cement", world.cement!.worksId, t.id).button;
       return { text: `Short of cement (${pct(t.cement ?? 0)} of what it needs): ${int(t.cementHeld)}k fewer people than your service would grow it to`, button };
     }
     // Steel past +80% (steel.ts): the big towns' last growth.
@@ -381,7 +417,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const b = steelBreak(world);
       const button = b?.kind === "idle" ? `<button data-restore-steel="1">Restore the steel works · ${nairaK(world.tuning.steelRestoreCost)}</button>`
         : b?.kind === "ore" ? toolButton("yard", `Yard at ${nameOf(b.mineId)} (Y)`)
-        : b?.kind === "carry" ? toolButton("yard", `Yard at ${nameOf(b.from)} (Y)`)
+        : b?.kind === "carry" ? (steelPortShort()?.button ?? carryWhy("steel", b.from, t.id).button)
         : "";
       return { text: `Short of steel (${pct(t.steel ?? 0)} of what it needs): ${int(t.steelHeld)}k fewer people than your service would grow it to`, button };
     }

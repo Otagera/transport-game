@@ -53,9 +53,11 @@ import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopl
 import { variedGameMap } from "@engine/game/variation";
 import { generatedMapInfo, generatedGameMap } from "@engine/game/generate";
 import { REGION_HEIGHT, REGION_WIDTH, gameMap, regionInfo } from "@engine/game/region";
-import { restoreSteel, steelDemand, steelFlows, steelServed } from "@engine/game/steel";
+import { restoreSteel, steelDemand, steelFlows, steelImports, steelServed } from "@engine/game/steel";
 import { issueBond as issueSteelBond } from "@engine/game/bonds";
-import { flowKey as goodsKey } from "@engine/game/goods";
+import { flowKey as goodsKey, recordGoodsDelivered, relayArrivals } from "@engine/game/goods";
+import { haulBreak, haulDistance, legReach, nextStop, relayed } from "@engine/game/haulage";
+import { buildYard } from "@engine/game/yards";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
@@ -2180,7 +2182,9 @@ describe("R1 5: the score as visible as money", () => {
   });
 
   test("the trips-made trend compares the 5-day average with itself TREND_DAYS ago", () => {
-    const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0 });
+    // The trend's arithmetic, on one bus's gain: relayed goods' trucks (haulage.ts) on this small
+    // map's roads take about as many trips as the bus adds, so they're left out here.
+    const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0, goodsRelay: false });
     expect(tripsTrend(w)).toBeNull();
     addBus(w, "big", "mid");
     run(w, (TREND_DAYS + 2) * SECONDS_PER_GAME_DAY + 1);
@@ -3240,10 +3244,11 @@ describe("the steel chain (steel.ts; brief, More industries, more chains)", () =
     const town = [...w.towns.values()].filter((t) => !t.industry && w.basePopulation.has(t.id)).sort((p, q) => q.population - p.population)[0]!;
     const base = w.basePopulation.get(town.id)!;
     const key = goodsKey({ from: w.steel!.terminalId!, to: town.id, kind: "supplies" });
-    w.goods.outcomes.set(key, { delivered: 0, spoiled: 0, trucked: 0 });
+    w.goods.outcomes.set(key, { delivered: 0, spoiled: 0, trucked: 0, arrived: 0 });
     expect(steelServed(w, town.id)).toBe(0);
     expect(townGrowth(w, town.id)!.cap).toBeCloseTo(base * (1 + w.tuning.steelFreeShare), 6);
-    w.goods.outcomes.set(key, { delivered: steelDemand(w, town.id), spoiled: 0, trucked: 0 });
+    // Served reads the 10-day roll (goods.ts servedRate).
+    w.goods.outcomes.set(key, { delivered: steelDemand(w, town.id), spoiled: 0, trucked: 0, arrived: steelDemand(w, town.id) });
     expect(steelServed(w, town.id)).toBe(1);
     expect(townGrowth(w, town.id)!.cap).toBeGreaterThan(base * (1 + w.tuning.steelFreeShare) * 2);
   }, 30_000);
@@ -3554,10 +3559,11 @@ describe("Revision 3, step 2a: the building chain (cement.ts)", () => {
     const base = w.basePopulation.get(town)!;
     // Room to grow well past the free stretch: a lane-level road, served well.
     w.tuning = { ...w.tuning, townGrowthCap: 3 };
-    for (const from of [w.cement!.worksId]) w.goods.outcomes.set(flowKey({ from, to: town, kind: "supplies" }), { delivered: 0, spoiled: 0 });
+    for (const from of [w.cement!.worksId]) w.goods.outcomes.set(flowKey({ from, to: town, kind: "supplies" }), { delivered: 0, spoiled: 0, arrived: 0 });
     const none = townGrowth(w, town)!;
     expect(none.cap).toBeCloseTo(base * (1 + w.tuning.cementFreeShare), 6);
-    w.goods.outcomes.set(flowKey({ from: w.cement!.worksId, to: town, kind: "supplies" }), { delivered: cementDemand(w, town), spoiled: 0 });
+    // Served reads the 10-day roll (goods.ts servedRate).
+    w.goods.outcomes.set(flowKey({ from: w.cement!.worksId, to: town, kind: "supplies" }), { delivered: cementDemand(w, town), spoiled: 0, arrived: cementDemand(w, town) });
     const full = townGrowth(w, town)!;
     expect(full.cap).toBeGreaterThan(none.cap);
     expect(full.cementHeld).toBeCloseTo(0, 9);
@@ -4548,13 +4554,17 @@ describe("the rains: fords that flood (floods.ts; brief, Revision 5, step 6: the
     // Most have turned at an end and gone round (one may still be crawling out of the water).
     expect(buses.filter((v) => !over(v)).length).toBeGreaterThanOrEqual(2);
     expect(until(w, "flood-fell")?.kind).toBe("flood-fell");
-    tick(w, 4);
-    // Back the short way, over the old road, once it's dry.
-    const back = buses.filter((v) => v.path.some((node, k) => {
-      const from = v.path[(k - 1 + v.path.length) % v.path.length]!;
-      return flooded.has(w.simulation.routing.graph.get(from)?.find((e) => e.to === node)?.segmentId ?? "");
-    }));
-    expect(back.length).toBeGreaterThanOrEqual(2);
+    // Back the short way, over the old road, once it's dry: each takes it at its next end, so
+    // watched over days, not at one instant (hauliers' relayed trucks shift when).
+    const back = new Set<string>();
+    for (let s = 0; s < 16; s += 1) {
+      tick(w, 1);
+      for (const v of buses) if (v.path.some((node, k) => {
+        const from = v.path[(k - 1 + v.path.length) % v.path.length]!;
+        return flooded.has(w.simulation.routing.graph.get(from)?.find((e) => e.to === node)?.segmentId ?? "");
+      })) back.add(v.id);
+    }
+    expect(back.size).toBeGreaterThanOrEqual(2);
   }, 180_000);
 
   test("a run played before it (no floodsEnabled) has no fords", () => {
@@ -4721,4 +4731,79 @@ describe("your names and colours (labels.ts; brief, The map, \"Your mark on it\"
     const replayed = replayRun(GAME_MAP, JSON.parse(JSON.stringify(runFile(recorder))) as RunFile);
     expect(replayed.labels).toEqual(world.labels);
   }, 90_000);
+});
+
+describe("goods get there over connected roads (haulage.ts; brief, The gateways, 4)", () => {
+  // Seed 1 is a South-West region: the steel terminal by the port, the cement works, towns far out.
+  const game = (tuning: Partial<typeof DEFAULT_GAME_TUNING> = {}) => startGame(gameMap(GAME_MAP, 1, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, ...tuning });
+  const farthest = (w: GameWorld, from: string) => [...w.towns.values()].filter((t) => !t.industry && Number.isFinite(haulDistance(w, from, t.id))).sort((p, q) => haulDistance(w, from, q.id) - haulDistance(w, from, p.id))[0]!;
+
+  test("cement bound past a leg's reach goes to a town on the way, nearer to it; within reach, straight", () => {
+    const w = game();
+    const works = w.cement!.worksId;
+    const far = farthest(w, works);
+    const reach = legReach(w, works, "supplies");
+    expect(haulDistance(w, works, far.id)).toBeGreaterThan(reach);
+    const stop = nextStop(w, works, far.id, reach);
+    if (stop) {
+      expect(stop).not.toBe(far.id);
+      expect(haulDistance(w, works, stop)).toBeLessThan(reach);
+      expect(haulDistance(w, stop, far.id)).toBeLessThan(haulDistance(w, works, far.id));
+    } else expect(haulBreak(w, works, far.id)?.kind).toBe("gap");
+    const near = [...w.towns.values()].filter((t) => !t.industry).sort((p, q) => haulDistance(w, works, p.id) - haulDistance(w, works, q.id))[0]!;
+    expect(haulDistance(w, works, near.id)).toBeLessThan(reach);
+    expect(nextStop(w, works, near.id, reach)).toBe(near.id);
+  }, 60_000);
+
+  test("a yard at the stop on the way stretches its legs, and the cards name the gap it bridges", () => {
+    const w = game({ startingFunds: 1e6 });
+    const works = w.cement!.worksId;
+    const far = farthest(w, works);
+    // Each yard the card names carries the goods on past it, until they get there.
+    let b = haulBreak(w, works, far.id)!;
+    for (let k = 0; k < 8 && b.kind === "gap" && b.yardAt; k += 1) {
+      const at = b.yardAt;
+      expect(buildYard(w, at).ok).toBe(true);
+      b = haulBreak(w, works, far.id)!;
+      if (b.kind === "gap" && b.yardAt) expect(haulDistance(w, b.yardAt, far.id)).toBeLessThan(haulDistance(w, at, far.id));
+    }
+    expect(b.kind).toBe("legs");
+  }, 60_000);
+
+  test("a leg's end isn't a delivery: the goods wait there, and the last leg counts under where they began", () => {
+    const w = game();
+    const works = w.cement!.worksId;
+    const [via, to] = [...w.towns.values()].filter((t) => !t.industry).map((t) => t.id);
+    const leg = { entry: { from: works, to: via!, kind: "supplies" as const, amount: 20, trip: { origin: works, destination: to! } }, amount: 20 };
+    const delivered = new Map<string, number>();
+    recordGoodsDelivered([leg] as never, delivered);
+    expect(delivered.size).toBe(0);
+    relayArrivals(w, [leg] as never);
+    expect(w.goods.relay!.get(via!)!.get(`${to}|supplies|${works}`)).toBe(20);
+    const last = { entry: { from: via!, to: to!, kind: "supplies" as const, amount: 20, trip: { origin: works, destination: to! } }, amount: 20 };
+    recordGoodsDelivered([last] as never, delivered);
+    expect(delivered.get(goodsKey({ from: works, to: to!, kind: "supplies" }))).toBe(20);
+  }, 60_000);
+
+  test("only what a town waits on to grow goes in legs; a run file without goodsRelay never relays", () => {
+    const w = game();
+    expect(relayed(w, w.cement!.worksId, "supplies")).toBe(true);
+    expect(relayed(w, w.steel!.terminalId!, "supplies")).toBe(true);
+    const farm = [...w.towns.values()].find((t) => !t.industry)!;
+    expect(relayed(w, farm.id, "produce")).toBe(false);
+    const old = game({ goodsRelay: undefined as unknown as boolean });
+    expect(relayed(old, old.cement!.worksId, "supplies")).toBe(false);
+    expect(haulBreak(old, old.cement!.worksId, farthest(old, old.cement!.worksId).id)).toBeNull();
+  }, 60_000);
+
+  test("on a map without a works, imported steel follows the towns as they grow", () => {
+    const w = game();
+    const before = steelImports(w);
+    for (const t of w.towns.values()) if (!t.industry) t.population *= 2;
+    expect(steelImports(w)).toBeCloseTo(before * 2, 6);
+    const old = game({ steelImportsFollowTowns: undefined as unknown as boolean });
+    const was = steelImports(old);
+    for (const t of old.towns.values()) if (!t.industry) t.population *= 2;
+    expect(steelImports(old)).toBeCloseTo(was, 6);
+  }, 60_000);
 });
