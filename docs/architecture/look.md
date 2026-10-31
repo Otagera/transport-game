@@ -282,7 +282,13 @@ fades into the sea instead of meeting it at a line. **Towns along their roads** 
 out along each road -- compounds and shops lining it, thinning to nothing a third or so of the way to
 the next town -- so from afar it reads as a star along its roads, not a disc; drawn with the fabric's
 instances, from a stream of chance of its own so the rest of the town is as before. **Hamlets** (map
-version 12, engine.md): the land's small places between the towns, a few compounds and fields each.
+version 12, engine.md): the land's small places between the towns, a few compounds and fields each. **Weather** (B5):
+cloud shadows drifting over the land -- soft patches a few hundred metres across, more cloud in the
+south than the north, patched into the land's, trees', towns' and roads' materials with one clock
+(`withClouds`); the north's haze closer and its horizon dusty with the harmattan (`WEATHER`); and over
+a ford while it's flooded (floods.ts), a rain cloud of grey puffs low over it, casting its shade, with
+streaks falling under it -- the cloud thinning away as the camera comes in under it, so the rain on
+the town shows instead of a grey veil.
 
 ---
 

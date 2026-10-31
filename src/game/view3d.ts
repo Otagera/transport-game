@@ -68,6 +68,53 @@ const WATER_DAY = { deep: paintHex("--map-water"), shallow: new THREE.Color(pain
 const WATER_NIGHT = { deep: paintHex("--paint-dark-1"), shallow: paintHex("--paint-blue-20"), sky: paintHex("--paint-blue-21"), foam: paintHex("--paint-blue-19"), glint: paintHex("--paint-blue-2"), glintStrength: 0.35 };
 const waterMaterials = new Set<THREE.ShaderMaterial>();
 
+// --- Weather (the fidelity scope, B5) -------------------------------------------------------------
+// Cloud shadows drifting over the land: soft patches of shade, a few hundred metres across, moving
+// with the wind -- more cloud in the south, little in the dry north. Patched into the land's, the
+// trees', the towns' and the roads' materials (not the water's: its own shader), one clock for all.
+const CLOUD = { uCloudTime: { value: 0 }, uCloudCover: { value: 0.5 } };
+const clouded = new WeakSet<THREE.Material>();
+function withClouds<T extends THREE.Material>(material: T): T {
+  if (clouded.has(material)) return material;
+  clouded.add(material);
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uCloudTime = CLOUD.uCloudTime;
+    shader.uniforms.uCloudCover = CLOUD.uCloudCover;
+    shader.vertexShader = shader.vertexShader
+      .replace("void main() {", "varying vec2 vCloudXZ;\nvoid main() {")
+      .replace("#include <project_vertex>", `#include <project_vertex>
+        vec4 cloudWorld = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          cloudWorld = instanceMatrix * cloudWorld;
+        #endif
+        vCloudXZ = (modelMatrix * cloudWorld).xz;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("void main() {", `varying vec2 vCloudXZ;
+        uniform float uCloudTime;
+        uniform float uCloudCover;
+        float cloudHash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+        float cloudNoise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(cloudHash(i), cloudHash(i + vec2(1.0, 0.0)), u.x), mix(cloudHash(i + vec2(0.0, 1.0)), cloudHash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }
+        void main() {`)
+      .replace("#include <fog_fragment>", `{
+          vec2 drift = vCloudXZ - vec2(uCloudTime * 9.0, uCloudTime * 4.0);
+          float c = cloudNoise(drift / 420.0) * 0.65 + cloudNoise(drift / 160.0 + 3.7) * 0.35;
+          float shade = smoothstep(1.0 - uCloudCover, 1.12 - uCloudCover, c);
+          gl_FragColor.rgb *= 1.0 - 0.24 * shade;
+        }
+        #include <fog_fragment>`);
+  };
+  return material;
+}
+/** How cloudy each region's sky is, and how thick its haze (a share of the usual distance): the north's harmattan dust closer. */
+const WEATHER: Record<string, { cover: number; haze: number }> = {
+  southwest: { cover: 0.42, haze: 1 }, southeast: { cover: 0.5, haze: 1 }, southSouth: { cover: 0.55, haze: 0.95 },
+  middleBelt: { cover: 0.32, haze: 0.9 }, north: { cover: 0.14, haze: 0.62 }, northeast: { cover: 0.1, haze: 0.58 },
+};
+
 /** A soft round blob, opaque at the middle and gone at the edge: a contact shadow's alpha (look.md §8.3). */
 let blob: THREE.CanvasTexture | null = null;
 function softBlob(): THREE.CanvasTexture {
@@ -407,12 +454,15 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
       built!.sky.position.copy(camera.position);
       const seconds = performance.now() / 1000;
       for (const water of waterMaterials) water.uniforms.uTime!.value = seconds;
+      CLOUD.uCloudTime.value = seconds;
+      built!.rain(seconds, camera.position.distanceTo(controls.target));
       built!.cullLabels(camera);
       // The haze by how far out you are: in the distance up close, thin over the whole slab.
       const fog = built!.scene.fog as THREE.Fog;
       const away = camera.position.distanceTo(controls.target);
-      fog.near = away * 1.1 + 300;
-      fog.far = away * 3 + 1200;
+      const haze = (WEATHER[built!.world.region ?? "southwest"] ?? WEATHER.southwest!).haze;
+      fog.near = (away * 1.1 + 300) * haze;
+      fog.far = (away * 3 + 1200) * haze;
       built!.sun.target.position.copy(controls.target);
       built!.sun.position.copy(controls.target).add(new THREE.Vector3(-520, 520, -260));
       renderer.render(built!.scene, camera);
@@ -433,6 +483,8 @@ interface Built {
   size: { x: number; z: number };
   /** The sky, kept round the camera. */
   sky: THREE.Mesh;
+  /** The rain over flooded fords, falling: a frame's clock, seconds; how far the camera is from what it looks at, metres. */
+  rain(seconds: number, away: number): void;
   setNight(night: boolean): void;
   /** Labels shown only as near as they're readable: a village up close, the city from afar. */
   cullLabels(camera: THREE.Camera): void;
@@ -455,7 +507,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   // so far land melts into it (with a blue-grey background and a beige fog, the land's far end
   // went to a beige wedge against the sky) -- and a cool blue-grey below it, round and under the
   // map, so the warm land stands off it (beige there, the slab sank into its backdrop).
-  const HORIZON = paintHex("--paint-earth-6");
+  // The north's horizon dusty with the harmattan (B5), the rest as it was.
+  const weather = WEATHER[world.region ?? "southwest"] ?? WEATHER.southwest!;
+  const HORIZON = new THREE.Color(paintHex("--paint-earth-6")).lerp(new THREE.Color(paintHex("--paint-earth-23")), (1 - weather.haze) * 1.2).getHex();
+  CLOUD.uCloudCover.value = weather.cover;
   scene.background = new THREE.Color(HORIZON);
   scene.fog = new THREE.Fog(HORIZON, 900, 3000);
   const hemi = new THREE.HemisphereLight(paintHex("--paint-light-2"), paintHex("--paint-earth-50"), 1.45);
@@ -699,7 +754,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const pos = geo.attributes.position!;
     for (let i = 0; i < pos.count; i += 1) pos.setY(i, elevationAt(pos.getX(i) / M, pos.getZ(i) / M) * HEIGHT);
     geo.computeVertexNormals();
-    const land = new THREE.Mesh(geo, own(new THREE.MeshLambertMaterial({ map: groundTexture })));
+    const land = new THREE.Mesh(geo, own(withClouds(new THREE.MeshLambertMaterial({ map: groundTexture }))));
     land.receiveShadow = true;
     scene.add(land);
     // The map's edge as a diorama's (your word: "good visuals for the cliff off"): the land
@@ -954,7 +1009,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       // a red band down its side. What you've paved and laned reads from the air.
       const paved = segment.surface === "paved";
       const base = rail ? paintHex("--paint-grey-9") : retired ? ROAD_COLOURS.retired : paved ? ROAD_COLOURS.paved : ROAD_COLOURS.dirt;
-      const material = new THREE.MeshLambertMaterial({ color: base, side: THREE.DoubleSide });
+      const material = withClouds(new THREE.MeshLambertMaterial({ color: base, side: THREE.DoubleSide }));
       // Each a hair above the last: two roads on one line don't flicker through each other.
       const piers = new Kit();
       const lift = 0.35 + (roads.size % 6) * 0.04;
@@ -1032,7 +1087,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const RANK: Record<string, number> = { city: 0, regional: 1, town: 2, village: 3, site: 4 };
   // How far off (metres) each kind of label still shows.
   const REACH: Record<string, number> = { city: 3000, regional: 1500, town: 900, village: 420, site: 600 };
-  const material = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const material = own(withClouds(new THREE.MeshLambertMaterial({ vertexColors: true })));
   /** Whether a point (cells) is in a river as drawn, `pad` cells wide of it: for places near `at`. */
   function wetAround(at: { x: number; y: number }, reach: number): (x: number, y: number, pad: number) => boolean {
     const banks = (world.waterLines ?? []).flatMap((river) => river.points.slice(1).map((b, k) => ({ a: { x: river.points[k]![0], y: river.points[k]![1] }, b: { x: b[0], y: b[1] }, half: ((river.widths?.[k] ?? river.width) + (river.widths?.[k + 1] ?? river.width)) / 4 })))
@@ -1340,7 +1395,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   // The fabric's two shapes, shared: a unit box for walls, a unit hip roof.
   const wallShape = own(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
   const roofShape = own(new THREE.ConeGeometry(0.75, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0));
-  const fabricMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-light-1") }));
+  const fabricMaterial = own(withClouds(new THREE.MeshLambertMaterial({ color: paintHex("--paint-light-1") })));
   // Contact shadows (look.md §8.3): a soft dark footprint where each building meets the ground --
   // geometry, one instanced quad a building, never a full-frame AO (it would eat the roads' colours).
   const contactShape = own(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
@@ -1558,7 +1613,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
   };
-  const treeMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const treeMaterial = own(withClouds(new THREE.MeshLambertMaterial({ vertexColors: true })));
   const trees: Array<{ kind: TreeKind; cell: number; at: THREE.Matrix4 }> = [];
   const groves = new Map<TreeKind, THREE.InstancedMesh>();
   let planted = false;
@@ -1914,9 +1969,99 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     camera.position.set(target.x + 320, target.y + 380, target.z + 320);
   }
 
+  // Rain over a flooded ford (floods.ts; B5): while the water's up, a dark cloud low over the ford
+  // and streaks falling under it. Rebuilt when which fords are under changes; the rains season
+  // clouds the whole sky a little more.
+  const rainMaterial = own(new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    fog: true,
+    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), uTime: { value: 0 }, uColour: { value: new THREE.Color(paintHex("--paint-light-2")) } },
+    vertexShader: /* glsl */ `
+      attribute float aSeed;
+      attribute float aEnd;
+      uniform float uTime;
+      #include <fog_pars_vertex>
+      void main() {
+        vec3 p = position;
+        float fall = mod(uTime * 55.0 + aSeed * 130.0, 130.0);
+        p.y += 125.0 - fall - aEnd * 5.0;
+        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColour;
+      #include <fog_pars_fragment>
+      void main() {
+        gl_FragColor = vec4(uColour, 0.55);
+        #include <fog_fragment>
+      }
+    `,
+  }));
+  const stormMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.72 }));
+  let rainKey = "";
+  let rainGroup: THREE.Group | null = null;
+  function syncRain(w: GameWorld): void {
+    const floods = w.floods;
+    const under = floods?.phase === "flood" ? floods.under : [];
+    const key = under.join("|");
+    if (key === rainKey) return;
+    rainKey = key;
+    CLOUD.uCloudCover.value = Math.min(0.8, weather.cover + (under.length ? 0.2 : 0));
+    if (rainGroup) {
+      scene.remove(rainGroup);
+      rainGroup.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      rainGroup = null;
+    }
+    if (!under.length) return;
+    rainGroup = new THREE.Group();
+    for (const id of under) {
+      const ford = floods!.fords.find((f) => f.id === id);
+      if (!ford) continue;
+      const rr = seeded(`rain-${id}`);
+      const base = ground(ford.x, ford.y);
+      // The cloud: a few grey puffs, flattened, low over the ford, casting its shade.
+      const puffs = new Kit();
+      // Many small puffs, a little ragged, darker underneath (a rain cloud), not a few big lumps.
+      for (let k = 0; k < 16; k += 1) {
+        const a = rr() * Math.PI * 2, d = Math.sqrt(rr()) * 95, r = 26 + rr() * 26;
+        puffs.add(new THREE.IcosahedronGeometry(r, 2), k % 3 ? paintHex("--paint-grey-11") : paintHex("--paint-grey-12"), { x: Math.cos(a) * d, y: (rr() - 0.3) * 18, z: Math.sin(a) * d });
+      }
+      const cloud = new THREE.Mesh(puffs.merged(), stormMaterial);
+      cloud.scale.y = 0.38;
+      cloud.position.set(base.x, base.y + 150, base.z);
+      cloud.castShadow = true;
+      rainGroup.add(cloud);
+      // The rain: streaks falling under it.
+      const verts: number[] = [], seeds: number[] = [], ends: number[] = [];
+      for (let n = 0; n < 900; n += 1) {
+        const a = rr() * Math.PI * 2, d = Math.sqrt(rr()) * 150;
+        const x = base.x + Math.cos(a) * d, z = base.z + Math.sin(a) * d, y = elevationAt(x / M, z / M) * HEIGHT, seed = rr();
+        verts.push(x, y, z, x, y, z);
+        seeds.push(seed, seed);
+        ends.push(0, 1);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(seeds, 1));
+      geo.setAttribute("aEnd", new THREE.Float32BufferAttribute(ends, 1));
+      const streaks = new THREE.LineSegments(geo, rainMaterial);
+      streaks.frustumCulled = false;
+      rainGroup.add(streaks);
+    }
+    scene.add(rainGroup);
+  }
+
   let network = "";
   let slowAt = 0;
   return {
+    rain(seconds, away) {
+      rainMaterial.uniforms.uTime!.value = seconds;
+      // Close in, under the cloud, it thins away -- else it veils the view -- and the rain shows.
+      stormMaterial.opacity = Math.max(0.08, Math.min(0.72, (away - 250) / 600));
+    },
     world,
     scene,
     sun,
@@ -2013,6 +2158,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         colourRoads(w);
         syncTowns(w);
         if (planted) syncSellers(w);
+        syncRain(w);
         if (planted) syncBuilds(w);
         if (!planted) {
           plant(w);
