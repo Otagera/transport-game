@@ -288,7 +288,11 @@ south than the north, patched into the land's, trees', towns' and roads' materia
 (`withClouds`); the north's haze closer and its horizon dusty with the harmattan (`WEATHER`); and over
 a ford while it's flooded (floods.ts), a rain cloud of grey puffs low over it, casting its shade, with
 streaks falling under it -- the cloud thinning away as the camera comes in under it, so the rain on
-the town shows instead of a grey veil.
+the town shows instead of a grey veil. **The clouds themselves** (2026-10-31, your look: "I saw cloud
+shadows but didn't see the clouds"): the same drifting field as soft white puffs 260 m up, set up-sun of
+the shade each casts so it sits over its own shadow; seen only from afar (fading in past 1 km), broken
+up within and gone toward the map's edge. Fewer clouds than at first (the south's cover 0.5 -> 0.34): a
+cloudy map read as mist over its towns.
 
 ---
 

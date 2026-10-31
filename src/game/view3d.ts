@@ -111,8 +111,8 @@ function withClouds<T extends THREE.Material>(material: T): T {
 }
 /** How cloudy each region's sky is, and how thick its haze (a share of the usual distance): the north's harmattan dust closer. */
 const WEATHER: Record<string, { cover: number; haze: number }> = {
-  southwest: { cover: 0.42, haze: 1 }, southeast: { cover: 0.5, haze: 1 }, southSouth: { cover: 0.55, haze: 0.95 },
-  middleBelt: { cover: 0.32, haze: 0.9 }, north: { cover: 0.14, haze: 0.62 }, northeast: { cover: 0.1, haze: 0.58 },
+  southwest: { cover: 0.3, haze: 1 }, southeast: { cover: 0.34, haze: 1 }, southSouth: { cover: 0.38, haze: 0.95 },
+  middleBelt: { cover: 0.24, haze: 0.9 }, north: { cover: 0.12, haze: 0.62 }, northeast: { cover: 0.1, haze: 0.58 },
 };
 
 /** A soft round blob, opaque at the middle and gone at the edge: a contact shadow's alpha (look.md §8.3). */
@@ -2001,6 +2001,67 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     `,
   }));
   const stormMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.72 }));
+  // The clouds themselves (your look, 2026-10-31: "I saw cloud shadows but didn't see the clouds"):
+  // the same drifting field as their shadows, as soft white shapes CLOUD_HEIGHT above the land, set
+  // up-sun of the shade they cast so each sits over its own shadow. Seen only from afar -- they fade
+  // as the camera comes in, so close up they never veil what you're looking at.
+  const CLOUD_HEIGHT = 260;
+  const cloudLayer = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M, 1, 1).rotateX(-Math.PI / 2).translate(((W - 1) * M) / 2, CLOUD_HEIGHT, ((H - 1) * M) / 2)), own(new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    fog: true,
+    side: THREE.DoubleSide,
+    uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), uCloudTime: CLOUD.uCloudTime, uCloudCover: CLOUD.uCloudCover, uFade: { value: 0 }, uColour: { value: new THREE.Color(paintHex("--paint-light-1")) }, uShade: { value: new THREE.Color(paintHex("--paint-grey-1")) }, uMin: { value: new THREE.Vector2(0, 0) }, uMax: { value: new THREE.Vector2((W - 1) * M, (H - 1) * M) } },
+    vertexShader: /* glsl */ `
+      varying vec2 vXZ;
+      #include <fog_pars_vertex>
+      void main() {
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vXZ = world.xz;
+        vec4 mvPosition = viewMatrix * world;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uCloudTime;
+      uniform float uCloudCover;
+      uniform float uFade;
+      uniform vec3 uColour;
+      uniform vec3 uShade;
+      uniform vec2 uMin;
+      uniform vec2 uMax;
+      varying vec2 vXZ;
+      #include <fog_pars_fragment>
+      float cloudHash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+      float cloudNoise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(cloudHash(i), cloudHash(i + vec2(1.0, 0.0)), u.x), mix(cloudHash(i + vec2(0.0, 1.0)), cloudHash(i + vec2(1.0, 1.0)), u.x), u.y);
+      }
+      void main() {
+        if (uFade <= 0.0) discard;
+        // Over the ground its shadow falls on: the sun is up and to the north-west.
+        vec2 drift = vXZ + vec2(${CLOUD_HEIGHT.toFixed(1)}, ${(CLOUD_HEIGHT / 2).toFixed(1)}) - vec2(uCloudTime * 9.0, uCloudTime * 4.0);
+        float c = cloudNoise(drift / 420.0) * 0.65 + cloudNoise(drift / 160.0 + 3.7) * 0.35;
+        float body = smoothstep(1.0 - uCloudCover - 0.04, 1.2 - uCloudCover, c);
+        if (body <= 0.01) discard;
+        // Puffy, not a sheet: broken up within, thinner at its edges; and gone toward the map's edge,
+        // so none is cut off by it.
+        float puff = cloudNoise(drift / 55.0 + 11.0) * 0.6 + cloudNoise(drift / 22.0 + 5.0) * 0.4;
+        vec2 toEdge = min(vXZ - uMin, uMax - vXZ);
+        float inside = smoothstep(0.0, 260.0, min(toEdge.x, toEdge.y));
+        float alpha = body * smoothstep(0.25, 0.75, puff * (0.6 + 0.6 * body)) * 0.55 * uFade * inside;
+        if (alpha <= 0.01) discard;
+        gl_FragColor = vec4(mix(uShade, uColour, 0.45 + 0.55 * puff), alpha);
+        #include <fog_fragment>
+      }
+    `,
+  })));
+  cloudLayer.renderOrder = 2;
+  scene.add(cloudLayer);
+  const cloudMaterial = cloudLayer.material as THREE.ShaderMaterial;
+
   let rainKey = "";
   let rainGroup: THREE.Group | null = null;
   function syncRain(w: GameWorld): void {
@@ -2061,6 +2122,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       rainMaterial.uniforms.uTime!.value = seconds;
       // Close in, under the cloud, it thins away -- else it veils the view -- and the rain shows.
       stormMaterial.opacity = Math.max(0.08, Math.min(0.72, (away - 250) / 600));
+      // The clouds: from afar only.
+      cloudMaterial.uniforms.uFade!.value = Math.max(0, Math.min(1, (away - 1000) / 900));
     },
     world,
     scene,
@@ -2085,6 +2148,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       edgeMaterial.color.setScalar(dark ? 0.3 : 1);
       windowMaterial.emissive.setHex(dark ? paintHex("--paint-earth-20") : paintHex("--paint-dark-6"));
       windowMaterial.emissiveIntensity = dark ? 1.1 : 0;
+      cloudMaterial.uniforms.uColour!.value.setHex(dark ? paintHex("--paint-blue-21") : paintHex("--paint-light-1"));
+      cloudMaterial.uniforms.uShade!.value.setHex(dark ? paintHex("--paint-dark-3") : paintHex("--paint-grey-1"));
     },
     cullLabels(cam) {
       // As near as each is readable; a selected place's connections keep their names whatever the
