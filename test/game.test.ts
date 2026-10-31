@@ -1,3 +1,4 @@
+import { borderCountry } from "@engine/game/border";
 import { laneMood } from "@engine/game/union";
 import { LINE_COLOURS, labelOf, roadLabelKey, routeLabelKey } from "@engine/game/labels";
 import { waysFor } from "@engine/game/crossings";
@@ -3081,9 +3082,8 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     let over = 0, none = 0;
     for (let seed = 1; seed <= 8; seed += 1) {
       const w = run(seed);
-      const name = w.towns.get(w.border!)!.name;
       const fromBorder = fuelFlows(w).filter((f) => f.from === w.border);
-      if (name.startsWith("Idiroko") || name.startsWith("Jibia")) {
+      if (borderCountry(w) === "Benin" || borderCountry(w) === "Niger") {
         over += 1;
         expect(borderFuelSite(w)).toBe(w.border!);
         for (const f of fromBorder) expect(roadPath(w, w.border!, f.to)!.distance).toBeLessThanOrEqual(w.tuning.tankerMaxHaulCells);

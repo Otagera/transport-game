@@ -1308,7 +1308,11 @@ replays as played. Seed 0 stays the hand-made map, alone.
   Middle Belt, Hausa's Kafin, Tudun, Birnin in the north, Kanuri and Fulfulde's Ng-, -ram, Mayo in
   the north-east. From the seed (biggest town first), never a name from the old lists or the
   country's best-known towns, never two alike; every road, rail, port and cluster renamed with its
-  towns. Nothing else changes. The border crossings and the coast road keep their names for now.
+  towns. Nothing else changes. From 2026-10-31 the border crossing and the coast road are named the same
+  way on version-9 maps (`border.ts madeUpName`: the crossing by its region's sounds, the coast road by
+  its port's region's -- "Iwala road", "Nukiri road"); what a crossing does goes by the country over it
+  (`borderCountry`, from the region), no longer by its name. Older runs keep Idiroko, Jibia, Banki,
+  Belegete, Mfum and the Lagos and Port Harcourt roads.
   Tested (`test/names.test.ts`). Also in version 8, on the rivers (your look): a tributary's mouth
   that version 2's meanders had left up to 4 cells from its host now joins it; a landlocked map's
   river no longer ends in a 14-cell mouth for a sea that's gone (version 6), and its sharp bends

@@ -100,7 +100,7 @@ export function fictionalName(region: string, rand: Rand, used: Set<string>): st
 }
 
 /** A deterministic stream from a seed (mulberry32). */
-function stream(seed: number): Rand {
+export function stream(seed: number): Rand {
   let s = seed >>> 0;
   return () => {
     s = (s + 0x6d2b79f5) >>> 0;

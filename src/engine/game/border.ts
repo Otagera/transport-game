@@ -4,6 +4,8 @@ import { inheritedRoad } from "./cement";
 import { isCutOff } from "./world";
 import { rebuildNetworks } from "./rail";
 import { refreshDemand } from "./settlement";
+import { fictionalName, stream } from "./names";
+import { townId } from "./generate";
 
 // The gateways, step 2 (brief, The region, The gateways): one border crossing a map, on the edge
 // that faces the neighbouring country as that part of Nigeria does, by the towns nearest it,
@@ -11,22 +13,31 @@ import { refreshDemand } from "./settlement";
 // tonne (gateways.ts exportGateway). Placed at the start like the chains' sites, behind
 // `borderCrossing` (absent in older runs: no border).
 
-const CROSSINGS: Record<string, { name: string; edge: Edge }> = {
-  southwest: { name: "Idiroko", edge: "west" }, // to Benin
-  north: { name: "Jibia", edge: "north" }, // to Niger
-  northeast: { name: "Banki", edge: "east" }, // to Cameroon
-  middleBelt: { name: "Belegete", edge: "east" }, // to Cameroon
-  southeast: { name: "Mfum", edge: "east" }, // to Cameroon
-  southSouth: { name: "Mfum", edge: "east" },
+const CROSSINGS: Record<string, { name: string; edge: Edge; country: string }> = {
+  southwest: { name: "Idiroko", edge: "west", country: "Benin" },
+  north: { name: "Jibia", edge: "north", country: "Niger" },
+  northeast: { name: "Banki", edge: "east", country: "Cameroon" },
+  middleBelt: { name: "Belegete", edge: "east", country: "Cameroon" },
+  southeast: { name: "Mfum", edge: "east", country: "Cameroon" },
+  southSouth: { name: "Mfum", edge: "east", country: "Cameroon" },
 };
+
+// From map version 9 (names.ts) the crossing and the coast road are named as the towns are, by the
+// region's sounds -- a real border town's name on a made-up map read as a place it isn't. What the
+// crossing does goes by the country over it, never by its name.
+const fictional = (world: GameWorld) => (world.tuning.mapVersion ?? 1) >= 9;
+/** A made-up name of a region's, the same for the same map: seeded by its towns. */
+function madeUpName(world: GameWorld, region: string, salt: number): string {
+  const seed = [...world.towns.keys()].join("").split("").reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, salt);
+  return fictionalName(region, stream(seed), new Set([...world.towns.values()].map((t) => townId(t.name))));
+}
 type Edge = "north" | "west" | "east";
 
 export const BORDER_ID = "border";
 
-/** The country over a crossing, by its name. */
+/** The country over a crossing: the region's neighbour on the edge it faces. */
 export function borderCountry(world: GameWorld): string {
-  const name = world.border ? world.towns.get(world.border)?.name ?? "" : "";
-  return name.startsWith("Idiroko") ? "Benin" : name.startsWith("Jibia") ? "Niger" : "Cameroon";
+  return (CROSSINGS[world.region ?? ""] ?? CROSSINGS.southwest!).country;
 }
 
 export function placeBorder(world: GameWorld): void {
@@ -55,7 +66,7 @@ export function placeBorder(world: GameWorld): void {
     // On its own edge as far as 100 cells from a town; on another only within 60.
     if (!best || best.d > (edge === crossing.edge ? 100 : 60)) continue;
     // No people of its own: a border post isn't anywhere passengers go.
-    addSite(world, BORDER_ID, `${crossing.name} border`, "border", best).population = 0;
+    addSite(world, BORDER_ID, `${fictional(world) ? madeUpName(world, world.region ?? "southwest", 7) : crossing.name} border`, "border", best).population = 0;
     world.border = BORDER_ID;
     // The old road to the nearest town on the network.
     const town = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id)).sort((p, q) => Math.hypot(p.x - best!.x, p.y - best!.y) - Math.hypot(q.x - best!.x, q.y - best!.y))[0];
@@ -97,7 +108,9 @@ export function placeCoastRoad(world: GameWorld): void {
     if (!best || d < best.d) best = { ...p, d };
   }
   if (!best) return;
-  const name = world.region === "middleBelt" ? "Port Harcourt road" : "Lagos road";
+  // The road to the coast's port: Lagos's, or Port Harcourt's from the Middle Belt -- made up from map version 9.
+  const port = world.region === "middleBelt" ? "southSouth" : "southwest";
+  const name = fictional(world) ? `${madeUpName(world, port, 11)} road` : world.region === "middleBelt" ? "Port Harcourt road" : "Lagos road";
   addSite(world, COAST_ROAD_ID, name, "gateway", best).population = 0;
   world.seaport = COAST_ROAD_ID;
   const town = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id)).sort((p, q) => Math.hypot(p.x - best!.x, p.y - best!.y) - Math.hypot(q.x - best!.x, q.y - best!.y))[0];
