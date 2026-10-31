@@ -860,6 +860,62 @@ where you build. `production.ts` already took the lowest of a site's inputs; eve
 | C23 | Maps differ by what they make | Two maps from different regions: the strategist's first goods move is on a different chain |
 | C24 | The idle steel works is a decision | Restored by day 100 in a good game, and worth it (net and growth, against a twin that never restores it) |
 
+### The remit opens (agreed 2026-10-31)
+
+Your ask, 2026-10-31: *"I thought there was going to be an expansion or something given the added
+industries"*; of a bigger map or one that opens as you play, "the map opens as you play, I like". It
+answers the region's open question, how it opens, with the gate this brief held back for when a free
+map proved too open ("the state extending your remit to the next cluster, at a milestone"): it has --
+C16 and C14 fail after day 150-250, everything worth building in reach already built. Your answers, 2026-10-31: it
+opens at a term's verdict; you may build up to a closed cluster's edge; you choose which one opens.
+
+**Nothing is drawn later; your remit grows.** The far clusters are on the map from day 1 and run as
+now -- their towns grow, danfos and hauliers work them, their goods flow -- because you're not
+building afresh (your answer, 2026-10-23). What's closed is your authority there:
+
+- **Closed, in a cluster outside your remit:** your stops, lines, stations, yards, paving and roads
+  inside its land; restoring or expanding its sites. The tools say why ("Outside your remit: opens at
+  a term's verdict") rather than going quiet.
+- **Open everywhere:** looking, the cards, the inherited roads and railway your vehicles already use;
+  a road or track you lay up to a closed cluster's edge, so the corridor can wait at its door.
+  The seaport and the border posts are always yours to reach.
+- **A cluster's land** is the cells nearer its regional town than any other cluster's, as the
+  generator places them; the home cluster's is your remit at the start.
+
+**It opens at a term's verdict.** Terms are 120 days; three far clusters, so a good game opens one at
+days 120, 240 and 360 -- the stretch where the game now runs dry. A verdict that keeps its pledges
+offers the clusters next to your remit, each with what it brings (its limestone field or farm belt,
+the port, the old railway's far end), and **you choose one**; a failed term offers none. The far
+clusters' term-2 pledges (clusters.ts) ask for a cluster you can reach -- an open one -- or become
+the offer itself. The verdict's letter (correspondent.ts) says what was opened and why.
+
+**Each opening brings work, not just towns.** Its towns join the pledges and the panel's lists; its
+sites can be restored; and **the next chain lands there** -- the chains still to build (palm oil and
+cocoa in the south, cotton and cattle in the north, coal) placed in the cluster you open, by its
+region, in the gaps between its towns (Chains: convergent, 3). So what you choose to open decides
+what you can make next.
+
+**Costs nothing to the tick:** the far clusters already run; only what you may build changes.
+
+Behind `remitOpens`, off in older runs (they replay as played); a new game starts with it on.
+
+### The order
+
+1. **The remit:** the closed land and the tools' reasons; a cluster opened at a verdict, your choice
+   among those offered; the map's wash over closed land with "opens at a term's verdict"; the
+   strategist plays by it. Measured with the strategist on five seeds to day 400 against a twin
+   with everything open (C35, C36; C14, C16, C18 again).
+2. **Your playtest.**
+3. **A chain at each opening:** palm oil and cocoa first (More industries, The order 2), placed in
+   the cluster opened.
+
+### Checks for the remit
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C35 | An opening is new work | In the strategist, something is built in a newly opened cluster within 20 days of its opening, and C14's stretch (no move under 20 days) holds to day 400 |
+| C36 | The gate costs no game | The strategist's net and people at day 400 within a tenth of a twin with everything open from day 1 -- the remit paces the game, it doesn't shrink it |
+
 ## Revision 5 (agreed 2026-10-24, the cuts table pending): a game around the simulation
 
 **Why.** Your region game ran to day 482 (map 2418). Afterwards you said: "I slept on the game and I must say I am disappointed... I just don't have the language to speak on what I feel is missing."
