@@ -20,7 +20,7 @@ export type Layer =
   | "townMark" | "townName" | "villageName"
   | "siteIcon" | "siteName"
   | "ruin" | "roadName" | "ford" | "event" | "taken"
-  | "vehiclesOneByOne" | "wardens";
+  | "vehiclesOneByOne" | "wardens" | "hamlet";
 
 const RANK: Record<Tier, number> = { far: 0, mid: 1, near: 2 };
 /** The tier each layer first draws at (look.md, Map density). */
@@ -30,6 +30,7 @@ const FROM: Record<Layer, Tier> = {
   event: "far", // a strike, a flood, a ford closing: happening now
   siteIcon: "far", // at far, only where it fits (the placer, lowest priority) or the panel points at it
   villageName: "mid",
+  hamlet: "mid", // the land's small places (map version 12): ground, not signal, so only once you're in
   ford: "mid",
   taken: "mid",
   siteName: "near",

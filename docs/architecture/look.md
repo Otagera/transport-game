@@ -219,6 +219,9 @@ seven label passes placed nothing through the collision check the others used.)
   `TAKEN`; **near** past 2x -- plus site, road and crossing names, ruins, wardens, and the danfos and trucks one by one even at 4x (below 4x they're one by one at every tier: since the corridor dropped its side bands, their capsules are where the informal sector shows at all).
   (Fit is zoom 1 and never less, so the tiers start there.) Anything selected, pointed at or waiting on
   you draws at any tier: the panel's places never vanish from the map.
+- **Hamlets** (map version 12, from 2026-10-31) draw from **mid** in: a few small squares each in
+  `--map-hill`, faint, part of the ground -- not signal, nothing to click -- so the land between the
+  towns reads as lived-in on the map you build on, as it does in 3D.
 - **One placer** (`Placer`): every label claims a box, then all are resolved by priority -- the price
   label, events, what you asked for, `TAKEN`, town names largest first, site names, road names,
   ruins, site icons at far -- and only then paint, the most important on top. A road name gives way

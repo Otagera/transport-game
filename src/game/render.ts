@@ -290,6 +290,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   const overlay = state.overlay ?? "none";
 
   drawGround(ctx, world, view);
+  if (drawsAt(zoomTier, "hamlet")) drawHamlets(ctx, world, view);
   drawRoads(ctx, world, view, overlay !== "none");
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
@@ -476,6 +477,31 @@ function drawGround(ctx: CanvasRenderingContext2D, world: GameWorld, view: View)
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(terrainCanvas(world), tl.x, tl.y, world.width * view.scale, world.height * view.scale);
+  ctx.restore();
+}
+
+/**
+ * The land's hamlets (map version 12, region.ts): a few compounds each, drawn into the ground in
+ * its own darker tone -- not signal, nothing to click -- from the mid tier in (density.ts), as the
+ * 3D view draws them, so the empty middle the 2D map showed reads as lived-in country.
+ */
+function drawHamlets(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
+  if (!world.hamlets?.length) return;
+  ctx.save();
+  ctx.fillStyle = COLORS.hill;
+  ctx.globalAlpha = zoomTier === "near" ? 0.55 : 0.4;
+  const side = Math.max(1.5, 0.32 * view.scale);
+  for (const h of world.hamlets) {
+    // The same few compounds every frame: placed by the hamlet's own cell.
+    let seed = (h.x * 73856093) ^ (h.y * 19349663);
+    const next = () => ((seed = Math.imul(seed ^ (seed >>> 13), 1274126177) >>> 0) / 4294967296);
+    const n = Math.round(2 + h.size * 1.2);
+    for (let k = 0; k < n; k += 1) {
+      const a = next() * Math.PI * 2, d = Math.sqrt(next()) * (0.4 + h.size * 0.3);
+      const p = toScreen(view, h.x + Math.cos(a) * d, h.y + Math.sin(a) * d);
+      ctx.fillRect(p.x - side / 2, p.y - side / 2, side, side);
+    }
+  }
   ctx.restore();
 }
 
