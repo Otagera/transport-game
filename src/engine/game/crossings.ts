@@ -41,7 +41,8 @@ const MIN_GAP = 18; // cells between two named crossings on a river
 
 /** The rivers worth naming crossings on: not the sea (drawn as a very wide river off the map's edge). */
 function rivers(world: GameWorld) {
-  return (world.waterLines ?? []).filter((river) => Math.max(river.width, ...(river.widths ?? [])) < 9);
+  // Not a lake (map version 13): its narrow ends aren't crossings.
+  return (world.waterLines ?? []).filter((river) => !river.lake && Math.max(river.width, ...(river.widths ?? [])) < 9);
 }
 
 /** From the middle of the river at `p`, along `n`, to the first dry cell. */

@@ -1347,6 +1347,19 @@ replays as played. Seed 0 stays the hand-made map, alone.
   left open. Tested. Twelve seeds, 15 days unplayed, version 10 -> 12 (11 and 12 together): sites
   199 -> 199, working 99 -> 99, fuel 34.8% -> 33.6%, trips 733 -> 728 a day (-0.7%: the old roads'
   new lines are a little longer or shorter); roads in and beyond the home box priced as before.
+- **Version 13: more kinds of land** (`region.ts landForms`, `GameRiverDef.lake`, `GameMapDef.features`,
+  `world.features`; 2026-10-31, your list: "swamps in the delta, lakes, dry riverbeds and dunes in the
+  far north"). **Lakes are water** -- a river's capsules round a short axis, wide in the middle, `lake`
+  set so crossings.ts names none of its ends and the 3D water lies still -- placed on low ground clear
+  of the home box, 10 cells from any town and 2 from any road's line, the map kept only if every town
+  can still be reached: 1-2 a map by region (the north-east's a wide shallow one). **The rest is
+  scenery** (drawn, never priced or simulated, like the hamlets): swamp in patches on low ground by
+  the water (most in the delta: 150-190 patches a map there, a few dozen elsewhere); the sandy beds of
+  seasonal streams in the north and Middle Belt, run downhill to a river or the map's edge; one dune
+  field in the far north. Before the hamlets, so they settle round them. Twelve seeds, 15 days
+  unplayed, version 12 -> 13: working sites 99 -> 99, fuel 33.8%, trips 728, road prices the same; one
+  site fewer placed across the twelve (199 -> 198), a lake on its spot. Tested
+  (`test/land-forms.test.ts`).
 - **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
   region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
   a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought

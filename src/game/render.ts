@@ -422,6 +422,66 @@ function terrainCanvas(world: GameWorld): HTMLCanvasElement {
     }
   }
   g.putImageData(img, 0, 0);
+  // Map version 13's scenery, in the terrain's own tokens (ground, not signal): swamp as a faint wash
+  // of the water's colour with a few reed ticks, a dry stream bed as a pale line with a darker lip, a
+  // dune field as the hill tone's light ripples. Under the water, which paints over it.
+  const features = world.features;
+  if (features) {
+    g.save();
+    g.scale(TERRAIN_PX, TERRAIN_PX);
+    g.translate(0.5, 0.5);
+    for (const m of features.wetlands ?? []) {
+      // A few overlapping washes, not one disc: a swamp has no edge you could draw a circle round.
+      g.globalAlpha = 0.07;
+      g.fillStyle = COLORS.water;
+      for (let k = 0; k < 3; k += 1) {
+        const a = k * 2.1 + m.y, d = m.r * 0.35;
+        g.beginPath();
+        g.ellipse(m.x + Math.cos(a) * d, m.y + Math.sin(a) * d, m.r * 0.6, m.r * 0.4, a, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = 0.35;
+      g.strokeStyle = COLORS.water;
+      g.lineWidth = 0.08;
+      for (let k = 0; k < 4; k += 1) {
+        const a = (k / 4) * Math.PI * 2 + m.x, d = m.r * 0.45;
+        const x = m.x + Math.cos(a) * d, y = m.y + Math.sin(a) * d;
+        g.beginPath();
+        g.moveTo(x - 0.25, y);
+        g.lineTo(x + 0.25, y);
+        g.stroke();
+      }
+    }
+    g.lineJoin = g.lineCap = "round";
+    for (const bed of features.dryBeds ?? []) {
+      for (const [w, colour, alpha] of [[bed.width + 0.5, COLORS.hill, 0.3], [bed.width * 0.6, COLORS.ground, 0.9]] as const) {
+        g.globalAlpha = alpha;
+        g.strokeStyle = colour;
+        g.lineWidth = w;
+        g.beginPath();
+        bed.points.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.stroke();
+      }
+    }
+    for (const d of features.dunes ?? []) {
+      g.save();
+      g.translate(d.x, d.y);
+      g.rotate(d.turn);
+      g.beginPath();
+      g.ellipse(0, 0, d.rx, d.ry, 0, 0, Math.PI * 2);
+      g.clip();
+      g.strokeStyle = COLORS.hill;
+      g.globalAlpha = 0.28;
+      g.lineWidth = 0.18;
+      for (let r = -d.rx; r <= d.rx; r += 1.6) {
+        g.beginPath();
+        for (let t = -d.ry; t <= d.ry; t += 0.5) g.lineTo(r + Math.sin(t * 0.7) * 0.6, t);
+        g.stroke();
+      }
+      g.restore();
+    }
+    g.restore();
+  }
   const lines = world.waterLines;
   if (lines) {
     // Each stretch a tapered capsule, as terrain.ts's cells are made: a disc at each point, the

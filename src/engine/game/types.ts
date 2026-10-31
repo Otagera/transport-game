@@ -84,6 +84,18 @@ export interface GameRiverDef {
   width: number;
   /** Width at each point, in cells, narrowing or widening between them (variation.ts); absent means `width` throughout. */
   widths?: number[];
+  /** A lake (map version 13): still water, drawn as a river's capsules but not flowing. */
+  lake?: boolean;
+}
+
+/**
+ * The land's scenery (map version 13, region.ts landForms): drawn, never priced or simulated --
+ * swamp by the water on low ground, the dry beds of seasonal streams, and fields of dunes.
+ */
+export interface LandFeatures {
+  wetlands?: Array<{ x: number; y: number; r: number }>;
+  dryBeds?: Array<{ points: Array<[number, number]>; width: number }>;
+  dunes?: Array<{ x: number; y: number; rx: number; ry: number; turn: number }>;
 }
 
 export interface GameHillDef {
@@ -119,6 +131,8 @@ export interface GameMapDef {
   clusters?: ClusterDef[];
   /** Hamlets (map version 12): the land's small places, drawn but not simulated -- a few hundred people each. */
   hamlets?: Array<{ x: number; y: number; size: number }>;
+  /** Swamps, dry beds, dunes (map version 13): scenery, drawn but not priced. */
+  features?: LandFeatures;
 }
 
 export interface ClusterDef {
@@ -813,6 +827,8 @@ export interface GameWorld {
   waterLines?: GameRiverDef[];
   /** The map's hills as drawn (centre, radius, height), for the screen: the 3D view's granite outcrops. */
   hills?: GameHillDef[];
+  /** The map's swamps, dry beds and dunes (map version 13), for the screen: drawn, not priced. */
+  features?: LandFeatures;
   /** The map's hamlets (map version 12), for the screen: drawn, not simulated. */
   hamlets?: Array<{ x: number; y: number; size: number }>;
   /** Money over the last game day: what the strip and route rows read (ledger.ts). */

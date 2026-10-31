@@ -158,7 +158,7 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   causewaysEnabled: true,
   floodDetour: true,
   riverValleys: true,
-  mapVersion: 12,
+  mapVersion: 13,
   fuelPledgeNeedsMove: true,
   seaportImports: true,
   importsOverDirt: 0.6,
