@@ -298,7 +298,27 @@ up within and gone toward the map's edge. Fewer clouds than at first (the south'
 cloudy map read as mist over its towns. **Inselbergs** (B2, finished 2026-10-31): a small steep hill (the
 north's and Middle Belt's rocks, map version 4) gets a bare granite dome on its top, lumpy as granite
 weathers, a few boulders at its foot, nothing growing on it; drawn from the map's hills (`world.hills`,
-the screen's copy), one mesh for them all -- the land's shape and prices unchanged.
+the screen's copy), one mesh for them all -- the land's shape and prices unchanged. **More kinds of land** (map version 13, 2026-10-31): swamp painted into
+the ground as patches of reedy green with standing pools, mangroves on the delta's and palms or bush on
+others; a dry stream bed as pale sand with a darker lip and shade trees along it; a dune field as the
+palest sand with crests across the wind in the 3D ground only (the map's heights and prices are the
+terrain's), nothing growing on it; a lake as still water. On the 2D map the same in the terrain's own
+tokens, under the water: a faint wash of the water's colour with reed ticks, a pale line with a darker
+lip, the hill tone's light ripples. **Vehicles** (2026-10-31): rounded bodies, windows as panes between
+pillars, raked windscreens, head and tail lamps, wheels with hubs; the bus's door and destination board,
+the BRT's join; the danfo yellow with its two black bands, its roof rack loaded and its conductor
+hanging out of the open door; the keke's driver, the okada's rider and passenger; the lorry's load under
+a tarpaulin, the tanker's rounded tank and catwalk; a train a locomotive and its coach or covered wagon.
+**Buildings**: every house a door and windows (an upper storey windows only), lit at night with the
+blocks'; black water tanks on flat roofs; the bungalow's face, the shophouse's open front and signboard,
+the block's window bands, the mosque's balcony, door and crescent mast, the church's cross and tall
+windows, the hut's doorway. **The edge** (your word, 2026-10-31: "land fades off", in place of item 4's
+table): no cut slab -- the land runs on past the map, its edge's height gone within 12 cells and a
+gentle roll of its own, its colour the region's settling to the horizon's over ~230 cells (recoloured at
+night); the sea carried on as the map's own water, as deep at the edge as the map's sea and deepening
+outward; a river leaving the map runs on its way, narrowing to nothing. The sea's depth in the map is
+now measured from the land (the sea's line runs off the map, and from its far side it had shoaled to
+a pale band along the edge).
 
 ---
 

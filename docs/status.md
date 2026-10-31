@@ -50,7 +50,10 @@ land** at a share its trunk's prices allow (roads between home towns ~16% dearer
 **Version 11, old roads by the land** (planned again over the
 relief, their corners eased); **version 12, hamlets** between the towns (drawn, not simulated); towns
 ribboning out along their roads in 3D. **Weather in 3D** (B5): cloud shadows, the north's harmattan
-haze, rain over a flooded ford. Next in the scope: a frame-time check on your Mac (B6). **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
+haze, rain over a flooded ford; the clouds themselves from afar; inselbergs; made-up names for the border and
+coast road; hamlets on the 2D map; **map version 13**, lakes (water) and swamps, dry beds and dunes
+(scenery); vehicles and buildings in detail; and the land running on past the map's edge into haze
+(look.md §8). Your frame-time check: "not much stutter". **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

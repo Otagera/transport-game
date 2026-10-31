@@ -8,6 +8,7 @@
 // Draw calls kept low: the land one mesh, the water one, each road one (its colour changes),
 // each town one merged mesh, and each kind of vehicle one InstancedMesh.
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { MapControls } from "three/examples/jsm/controls/MapControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { GameTown, GameWorld } from "@engine/game/types";
@@ -538,6 +539,30 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       field[y * W + x] = sum / n;
     }
   }
+  // Dunes (map version 13): ridges in the 3D ground only -- the map's heights, and its prices, are
+  // the terrain's. Crests across the north-east wind, taller in the field's middle.
+  const dunes = world.features?.dunes ?? [];
+  const duneAt = (cx: number, cy: number) => {
+    let share = 0;
+    for (const d of dunes) {
+      const c = Math.cos(d.turn), sn = Math.sin(d.turn);
+      const u = ((cx - d.x) * c + (cy - d.y) * sn) / d.rx, v = (-(cx - d.x) * sn + (cy - d.y) * c) / d.ry;
+      const r = Math.hypot(u, v);
+      if (r < 1) share = Math.max(share, Math.min(1, (1 - r) * 3));
+    }
+    return share;
+  };
+  for (const d of dunes) {
+    const reach = Math.max(d.rx, d.ry) + 1;
+    for (let y = Math.max(0, Math.floor(d.y - reach)); y <= Math.min(H - 1, Math.ceil(d.y + reach)); y += 1) {
+      for (let x = Math.max(0, Math.floor(d.x - reach)); x <= Math.min(W - 1, Math.ceil(d.x + reach)); x += 1) {
+        const share = duneAt(x, y);
+        if (share <= 0 || terrain.water[y * W + x] === 1) continue;
+        const along = (x + y) * 0.62 + Math.sin(y * 0.31) * 1.4;
+        field[y * W + x] = field[y * W + x]! + share * 0.55 * (0.5 + 0.5 * Math.sin(along)) ** 2;
+      }
+    }
+  }
   // Map cell (x east, y south) to the 3D world (x east, z south, y up), on the ground.
   const elevationAt = (cx: number, cy: number) => {
     const x0 = Math.max(0, Math.min(W - 2, Math.floor(cx)));
@@ -548,6 +573,32 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     return (e(x0, y0) * (1 - tx) + e(x0 + 1, y0) * tx) * (1 - ty) + (e(x0, y0 + 1) * (1 - tx) + e(x0 + 1, y0 + 1) * tx) * ty;
   };
   const ground = (cx: number, cy: number, lift = 0) => new THREE.Vector3(cx * M, elevationAt(cx, cy) * HEIGHT + lift, cy * M);
+  // The sea's depth from the land, not from its own line: the sea is drawn as a wide line running
+  // off the map, and measured from that line's far side it shoaled to a pale band along the map's
+  // edge (the land beyond the edge, 2026-10-31). Distance to the nearest dry cell, the world past
+  // the map's edge counted as water.
+  const toLand = new Float32Array(W * H).fill(1e6);
+  for (let i = 0; i < W * H; i += 1) if (terrain.water[i] !== 1) toLand[i] = 0;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const order = pass === 0 ? [...Array(W * H).keys()] : [...Array(W * H).keys()].reverse();
+    for (const i of order) {
+      const x = i % W, y = (i - x) / W;
+      for (const [dx, dy, cost] of [[-1, 0, 1], [0, -1, 1], [-1, -1, 1.4], [1, -1, 1.4]] as const) {
+        const sx = pass === 0 ? dx : -dx, sy = pass === 0 ? dy : -dy;
+        const nx = x + sx, ny = y + sy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const v = toLand[ny * W + nx]! + cost;
+        if (v < toLand[i]!) toLand[i] = v;
+      }
+    }
+  }
+  const landAt = (x: number, y: number) => {
+    const x0 = Math.max(0, Math.min(W - 2, Math.floor(x))), y0 = Math.max(0, Math.min(H - 2, Math.floor(y)));
+    const tx = Math.max(0, Math.min(1, x - x0)), ty = Math.max(0, Math.min(1, y - y0));
+    const v = (xx: number, yy: number) => toLand[yy * W + xx]!;
+    return (v(x0, y0) * (1 - tx) + v(x0 + 1, y0) * tx) * (1 - ty) + (v(x0, y0 + 1) * (1 - tx) + v(x0 + 1, y0 + 1) * tx) * ty;
+  };
+
   const disposables: Array<{ dispose(): void }> = [];
   const own = <T extends { dispose(): void }>(thing: T): T => (disposables.push(thing), thing);
   const skyGeo = new THREE.SphereGeometry(5000, 32, 24);
@@ -745,8 +796,53 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         }
       }
     }
+    // Map version 13's scenery, painted in: swamp in patches of dark reedy green with standing pools;
+    // the dry beds of seasonal streams, pale sand with a darker lip; dunes, the palest sand.
+    const features = world.features ?? {};
+    const marsh = seeded(`marsh-${W}-${H}`);
+    for (const m of features.wetlands ?? []) {
+      const g = paint.createRadialGradient(m.x * PX, m.y * PX, 0, m.x * PX, m.y * PX, m.r * PX);
+      g.addColorStop(0, paintAlpha("--paint-green-20", 0.7));
+      g.addColorStop(0.7, paintAlpha("--paint-green-14", 0.45));
+      g.addColorStop(1, paintAlpha("--paint-green-14", 0));
+      paint.fillStyle = g;
+      paint.fillRect((m.x - m.r) * PX, (m.y - m.r) * PX, 2 * m.r * PX, 2 * m.r * PX);
+      for (let k = 0; k < 3 + Math.floor(m.r); k += 1) {
+        const a = marsh() * Math.PI * 2, d = marsh() * m.r * 0.6;
+        paint.fillStyle = paintAlpha("--paint-blue-13", 0.55);
+        paint.beginPath();
+        paint.ellipse((m.x + Math.cos(a) * d) * PX, (m.y + Math.sin(a) * d) * PX, (0.25 + marsh() * 0.45) * PX, (0.15 + marsh() * 0.3) * PX, marsh() * Math.PI, 0, Math.PI * 2);
+        paint.fill();
+      }
+    }
+    for (const bed of features.dryBeds ?? []) {
+      for (const [extra, style] of [[0.9, paintAlpha("--paint-earth-38", 0.45)], [0, paintAlpha("--paint-sand", 0.9)]] as const) {
+        paint.strokeStyle = style;
+        paint.lineWidth = (bed.width + extra) * PX;
+        paint.beginPath();
+        bed.points.forEach(([x, y], k) => (k ? paint.lineTo(x * PX, y * PX) : paint.moveTo(x * PX, y * PX)));
+        paint.stroke();
+      }
+    }
+    for (const d of features.dunes ?? []) {
+      paint.save();
+      paint.translate(d.x * PX, d.y * PX);
+      paint.rotate(d.turn);
+      const g = paint.createRadialGradient(0, 0, 0, 0, 0, Math.max(d.rx, d.ry) * PX);
+      g.addColorStop(0, paintAlpha("--paint-earth-17", 0.95));
+      g.addColorStop(0.75, paintAlpha("--paint-earth-17", 0.7));
+      g.addColorStop(1, paintAlpha("--paint-earth-17", 0));
+      paint.scale(1, d.ry / d.rx);
+      paint.fillStyle = g;
+      paint.beginPath();
+      paint.arc(0, 0, d.rx * PX, 0, Math.PI * 2);
+      paint.fill();
+      paint.restore();
+    }
     groundTexture.needsUpdate = true;
   }
+  /** The land beyond the edge, recoloured to the horizon it fades into (day or night). */
+  let recolourSkirt: (horizonHex: number) => void = () => {};
   {
     const geo = own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M, (W - 1) * 2, (H - 1) * 2));
     geo.rotateX(-Math.PI / 2);
@@ -757,67 +853,158 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const land = new THREE.Mesh(geo, own(withClouds(new THREE.MeshLambertMaterial({ map: groundTexture }))));
     land.receiveShadow = true;
     scene.add(land);
-    // The map's edge as a diorama's (your word: "good visuals for the cliff off"): the land
-    // ends in a clean cut, its side showing the ground below -- topsoil, red laterite,
-    // sandstone, rock -- rather than a plain running on, or the sea onto grass.
-    // Crisp bands: each a depth and the colour down to the next (a grass lip, topsoil, red
-    // laterite, sandstone, rock); a band's top and bottom rows apart, so its edges are sharp.
-    // 90 m deep (2026-10-28: at 48 m under a 2 km slab it read as a sheet of card), and shaded by
-    // side and depth rather than lit -- the face you mostly see looks south, away from the sun,
-    // and lit it sat in shadow, its laterite and sandstone muddied to one brown.
-    const BANDS: Array<[number, number]> = [[0, paintHex("--paint-green-19")], [1, paintHex("--paint-earth-61")], [4, paintHex("--paint-earth-51")], [24, paintHex("--paint-earth-34")], [52, paintHex("--paint-grey-10")], [90, paintHex("--paint-grey-12")]];
-    const DEEPEST = 90;
-    const SIDE_SHADE = [1, 0.8, 0.9, 0.94]; // north, east, south, west faces
-    const STRATA: Array<[number, number]> = BANDS.slice(0, -1).flatMap(([depth, hex], k) => [[depth, hex], [BANDS[k + 1]![0] - 0.01, hex]] as Array<[number, number]>);
-    const sides = [
-      Array.from({ length: W }, (_, x) => ({ x, y: 0 })),
-      Array.from({ length: H }, (_, y) => ({ x: W - 1, y })),
-      Array.from({ length: W }, (_, x) => ({ x: W - 1 - x, y: H - 1 })),
-      Array.from({ length: H }, (_, y) => ({ x: 0, y: H - 1 - y })),
-    ];
-    const verts: number[] = [], cols: number[] = [], index: number[] = [];
-    const tint = new THREE.Color();
-    sides.forEach((edge, side) => {
-      const start = verts.length / 3;
-      for (const p of edge) {
-        const top = elevationAt(p.x, p.y) * HEIGHT + (terrain.water[p.y * W + p.x] === 1 ? 0.6 : 0);
-        for (const [depth, hex] of STRATA) {
-          verts.push(p.x * M, depth < 4 ? top - depth : Math.min(top - 4, -depth), p.y * M); // the lip and topsoil follow the ground
-          tint.setHex(depth < 1 && terrain.water[p.y * W + p.x] === 1 ? paintHex("--paint-blue-13") : hex).multiplyScalar(SIDE_SHADE[side]! * (1 - 0.3 * (depth / DEEPEST)));
-          cols.push(tint.r, tint.g, tint.b);
+    // Beyond the map's edge (your word, 2026-10-31: "land fades off", in place of the diorama's cut
+    // slab): the land runs on -- the edge's own ground and height, rolling gently, the sea or a river
+    // carried outward where they meet the edge -- and fades into the horizon's haze, so there is no
+    // edge to see. A grid fine at the map and coarser outward, nothing on it; recoloured at night.
+    const OUT = [2, 4, 6, 8, 11, 14, 18, 24, 32, 42, 56, 74, 98, 130, 170, 220, 290, 380];
+    const axis = (n: number) => {
+      const inner: number[] = [];
+      for (let v = 0; v < n - 1; v += 2) inner.push(v);
+      inner.push(n - 1);
+      return [...OUT.map((d) => -d).reverse(), ...inner, ...OUT.map((d) => n - 1 + d)];
+    };
+    const xs = axis(W), ys = axis(H);
+    /** The land beyond the edge: the edge's height gone within 12 cells (stretched further it drew the
+     * edge's hills out as long straight ridges), and a gentle roll of its own coming in. */
+    const skirtGround = (x: number, y: number) => {
+      const cx = Math.max(0, Math.min(W - 1, x)), cy = Math.max(0, Math.min(H - 1, y));
+      const d = Math.hypot(x - cx, y - cy);
+      return elevationAt(cx, cy) * HEIGHT * Math.max(0, 1 - d / 12) + (noise(x / 34, y / 34, 21) - 0.5) * 9 * smooth01(d / 30);
+    };
+    // The sea at the edge carries on as sea, drawn with the map's own water so the two can't be told
+    // apart; a river leaving the map runs on a little way and is lost in the land; the rest is land.
+    const seaLines = (world.waterLines ?? []).filter((r) => !r.lake && [...(r.widths ?? [r.width])].sort((a, b) => a - b)[Math.floor((r.widths ?? [r.width]).length / 2)]! > 12);
+    const seaCache = new Map<number, boolean>();
+    const isSea = (cx: number, cy: number) => {
+      const key = Math.round(cy) * W + Math.round(cx);
+      let sea = seaCache.get(key);
+      if (sea === undefined) {
+        sea = terrain.water[key] === 1 && seaLines.some((r) => r.points.some(([px, py], k) => {
+          const w = (r.widths?.[k] ?? r.width) / 2 + 1.5;
+          return Math.hypot(px - cx, py - cy) < w;
+        }));
+        seaCache.set(key, sea);
+      }
+      return sea;
+    };
+    const skirtPos: number[] = [], landIndex: number[] = [], waterIndex: number[] = [], base: Array<{ c: THREE.Color; fade: number }> = [];
+    const wetPos: number[] = [], wetShore: number[] = [];
+    const vertexWater: boolean[] = [];
+    const c = new THREE.Color(), dry = new THREE.Color(biome.dry), green = new THREE.Color(biome.green), high = new THREE.Color(biome.high);
+    const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
+    for (const y of ys) for (const x of xs) {
+      const cx = Math.max(0, Math.min(W - 1, x)), cy = Math.max(0, Math.min(H - 1, y));
+      const d = Math.hypot(x - cx, y - cy);
+      const wetEdge = terrain.water[Math.round(cy) * W + Math.round(cx)] === 1;
+      const water = wetEdge && isSea(cx, cy);
+      vertexWater.push(water);
+      const edge = elevationAt(cx, cy) * HEIGHT;
+      // The edge's height gone within 12 cells (stretched further it drew the edge's hills out as
+      // long straight ridges), and a gentle roll of its own coming in.
+      const ground = skirtGround(x, y);
+      // Tucked a hair under the map's own edge, so no seam shows where the two meet.
+      skirtPos.push(x * M, d === 0 ? ground - 0.25 : ground, y * M);
+      wetPos.push(x * M, edge + 0.6, y * M);
+      // As deep as the map's own sea at the edge, deepening outward: no line where the two meet.
+      wetShore.push((Math.max(0, landAt(cx, cy) - 0.5) + d) * M);
+      // The savanna's patches near the map, settling to the region's average out where the grid is
+      // coarse (sampled on its long cells, the patches smeared into streaks).
+      const near = Math.max(0, Math.min(1, (savanna(x, y) - 0.3 + biome.dryness) * 1.9));
+      const dryness = near + (Math.max(0, Math.min(1, (0.5 - 0.3 + biome.dryness) * 1.9)) - near) * smooth01(d / 24);
+      c.copy(green).lerp(dry, dryness).offsetHSL(0, 0.05 * (1 - dryness), 0.11 * (dryness - 0.5));
+      c.lerp(high, Math.min(1, elevationAt(cx, cy) / top) * 0.8 * Math.max(0, 1 - d / 12));
+      base.push({ c: c.clone(), fade: smooth01(d / 230) ** 0.8 });
+    }
+    const skirtColours = new Float32Array(base.length * 3);
+    const paintSkirt = (horizonHex: number) => {
+      const horizon = new THREE.Color(horizonHex), mixed = new THREE.Color();
+      base.forEach((b, i) => {
+        mixed.copy(b.c).lerp(horizon, b.fade);
+        skirtColours.set([mixed.r, mixed.g, mixed.b], i * 3);
+      });
+      skirtGeo.attributes.color!.needsUpdate = true;
+    };
+    const NX = xs.length;
+    for (let j = 0; j < ys.length - 1; j += 1) for (let i = 0; i < NX - 1; i += 1) {
+      // Not where the map is: only the ring round it.
+      const inside = xs[i]! >= 0 && xs[i + 1]! <= W - 1 && ys[j]! >= 0 && ys[j + 1]! <= H - 1;
+      if (inside) continue;
+      const a = j * NX + i, b = a + 1, cc = a + NX, dd = cc + 1;
+      const wetCorners = [a, b, cc, dd].filter((v) => vertexWater[v]).length;
+      if (wetCorners >= 3) waterIndex.push(a, cc, b, b, cc, dd);
+      if (wetCorners < 4) landIndex.push(a, cc, b, b, cc, dd);
+    }
+    const skirtGeo = own(new THREE.BufferGeometry());
+    skirtGeo.setAttribute("position", new THREE.Float32BufferAttribute(skirtPos, 3));
+    skirtGeo.setAttribute("color", new THREE.BufferAttribute(skirtColours, 3));
+    skirtGeo.setIndex(landIndex);
+    skirtGeo.computeVertexNormals();
+    paintSkirt(HORIZON);
+    const skirt = new THREE.Mesh(skirtGeo, own(withClouds(new THREE.MeshLambertMaterial({ vertexColors: true }))));
+    skirt.receiveShadow = true;
+    scene.add(skirt);
+    recolourSkirt = paintSkirt;
+    // A river that leaves the map runs on the way it was going, bending a little, narrowing to nothing
+    // over 30 cells: lost in the land, not cut at the edge (nor carried on as a straight pipe).
+    for (const river of world.waterLines ?? []) {
+      if (river.lake || seaLines.includes(river)) continue;
+      for (const end of [0, river.points.length - 1]) {
+        const step = end === 0 ? 1 : -1;
+        // From the last point on the map, outward along the line's last stretch.
+        let k = end;
+        while (k + step >= 0 && k + step < river.points.length && (river.points[k]![0] < 0 || river.points[k]![1] < 0 || river.points[k]![0] > W - 1 || river.points[k]![1] > H - 1)) k += step;
+        const [ix, iy] = river.points[k]!, [px, py] = river.points[Math.max(0, Math.min(river.points.length - 1, k + step * 3))]!;
+        const nearEdge = Math.min(ix, iy, W - 1 - ix, H - 1 - iy);
+        // Not a creek that ends in the sea: it's arrived.
+        if (nearEdge > 3 || isSea(Math.max(0, Math.min(W - 1, ix)), Math.max(0, Math.min(H - 1, iy)))) continue;
+        let dir = Math.atan2(iy - py, ix - px);
+        const w0 = river.widths?.[k] ?? river.width;
+        const verts: number[] = [], acr: number[] = [], alo: number[] = [], wid: number[] = [], sho: number[] = [], idx: number[] = [];
+        let x = ix, y = iy;
+        const bend = ((ix * 31 + iy * 17) % 7) / 7 - 0.5;
+        for (let n = 0; n <= 30; n += 1) {
+          const t = n / 30, half = (w0 / 2) * (1 - t) ** 1.3;
+          const nx = -Math.sin(dir), ny = Math.cos(dir);
+          const h = Math.max(skirtGround(x, y), elevationAt(Math.max(0, Math.min(W - 1, x)), Math.max(0, Math.min(H - 1, y))) * HEIGHT) + 0.6;
+          for (const side of [-1, 0, 1]) {
+            verts.push((x + nx * half * side) * M, h, (y + ny * half * side) * M);
+            acr.push(side * half * M);
+            alo.push(n * M);
+            wid.push(2 * half * M);
+            sho.push((1 - Math.abs(side)) * half * M);
+          }
+          if (n > 0) {
+            const a = (n - 1) * 3, b = n * 3;
+            idx.push(a, b, a + 1, a + 1, b, b + 1, a + 1, b + 1, a + 2, a + 2, b + 1, b + 2);
+          }
+          dir += bend * 0.06;
+          x += Math.cos(dir);
+          y += Math.sin(dir);
         }
+        const geo = own(new THREE.BufferGeometry());
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+        geo.setAttribute("aAcross", new THREE.Float32BufferAttribute(acr, 1));
+        geo.setAttribute("aAlong", new THREE.Float32BufferAttribute(alo, 1));
+        geo.setAttribute("aWidth", new THREE.Float32BufferAttribute(wid, 1));
+        geo.setAttribute("aShore", new THREE.Float32BufferAttribute(sho, 1));
+        geo.setAttribute("aSea", new THREE.Float32BufferAttribute(new Float32Array(verts.length / 3), 1));
+        geo.setIndex(idx);
+        scene.add(new THREE.Mesh(geo, waterMaterial));
       }
-      const rows = STRATA.length;
-      for (let i = 0; i < edge.length - 1; i += 1) for (let k = 0; k < rows - 1; k += 1) {
-        const a = start + i * rows + k, b = a + rows;
-        index.push(a, b, a + 1, b, b + 1, a + 1);
-      }
-    });
-    const sideGeo = own(new THREE.BufferGeometry());
-    sideGeo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-    sideGeo.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
-    sideGeo.setIndex(index);
-    sideGeo.computeVertexNormals();
-    scene.add(new THREE.Mesh(sideGeo, edgeMaterial));
-    // Its underside, closed.
-    const under = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M)), own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-19"), side: THREE.DoubleSide })));
-    under.rotation.x = -Math.PI / 2;
-    under.position.set(((W - 1) * M) / 2, -DEEPEST, ((H - 1) * M) / 2);
-    scene.add(under);
-    // The plate sits on something (look.md §8.4): a table in the page's own ground, its shadow soft
-    // under the plate, rather than the diorama floating in a gradient.
-    const span = Math.max(W, H) * M;
-    const table = new THREE.Mesh(own(new THREE.PlaneGeometry(span * 8, span * 8)), own(new THREE.MeshLambertMaterial({ color: paintHex("--bg") })));
-    table.rotation.x = -Math.PI / 2;
-    table.position.set(((W - 1) * M) / 2, -DEEPEST - 1.5, ((H - 1) * M) / 2);
-    // No cast shadows on it (2026-10-30, the scope's B1): the slab casts none, so a low sun laid
-    // the edge towns' buildings' shadows straight through it onto the table -- grey houses floating
-    // under the map. The soft rest below is its shadow.
-    scene.add(table);
-    const rest = new THREE.Mesh(own(new THREE.PlaneGeometry((W - 1) * M * 1.18, (H - 1) * M * 1.18)), own(new THREE.MeshBasicMaterial({ map: softBlob(), color: paintHex("--ink"), transparent: true, opacity: 0.5, depthWrite: false })));
-    rest.rotation.x = -Math.PI / 2;
-    rest.position.set(((W - 1) * M) / 2, -DEEPEST - 1.4, ((H - 1) * M) / 2);
-    scene.add(rest);
+    }
+    if (waterIndex.length) {
+      const n = wetPos.length / 3;
+      const wetGeo = own(new THREE.BufferGeometry());
+      wetGeo.setAttribute("position", new THREE.Float32BufferAttribute(wetPos, 3));
+      wetGeo.setAttribute("aAcross", new THREE.Float32BufferAttribute(new Float32Array(n), 1));
+      wetGeo.setAttribute("aAlong", new THREE.Float32BufferAttribute(new Float32Array(n), 1));
+      wetGeo.setAttribute("aWidth", new THREE.Float32BufferAttribute(new Float32Array(n).fill(200), 1));
+      wetGeo.setAttribute("aShore", new THREE.Float32BufferAttribute(wetShore, 1));
+      wetGeo.setAttribute("aSea", new THREE.Float32BufferAttribute(new Float32Array(n).fill(1), 1));
+      wetGeo.setIndex(waterIndex);
+      scene.add(new THREE.Mesh(wetGeo, waterMaterial));
+    }
   }
 
   // A ribbon along a polyline of cells, `width` metres (one each point, or one for all).
@@ -905,7 +1092,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     for (const river of world.waterLines ?? []) {
       const widths = river.widths ?? river.points.map(() => river.width);
       // The sea: wide along its length (its typical width), not a river with one wide mouth.
-      const sea = [...widths].sort((a, b) => a - b)[Math.floor(widths.length / 2)]! > 12;
+      // A lake (map version 13) is still water too: the sea's slow drift, not a river's run.
+      const sea = !!river.lake || [...widths].sort((a, b) => a - b)[Math.floor(widths.length / 2)]! > 12;
       let run = 0;
       for (let k = 1; k < river.points.length; k += 1) {
         const [ax, ay] = river.points[k - 1]!, [bx, by] = river.points[k]!;
@@ -942,9 +1130,13 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       across.push(acrossOf[i]!);
       along.push(alongOf[i]!);
       wide.push(widthOf[i]! || 8);
-      shore.push(-shoreOf[i]! * M);
       // The sea's share: 1 well inside it, 0 well inside a river, between over six cells.
-      seaness.push(Math.max(0, Math.min(1, 0.5 + (riverOf[i]! - seaOf[i]!) / 6)));
+      const sea = Math.max(0, Math.min(1, 0.5 + (riverOf[i]! - seaOf[i]!) / 6));
+      seaness.push(sea);
+      // In the sea, the shore is the land's: never nearer than the line's own edge says, never shallower
+      // than the dry land's distance allows (the line's far side, off the map, isn't a shore).
+      const line = -shoreOf[i]! * M;
+      shore.push(line <= 0 ? line : line + (Math.max(line, Math.max(0, landAt(x, y) - 0.5) * M) - line) * sea);
       return (vertexAt[i] = verts.length / 3 - 1);
     };
     for (let gy = 0; gy < GH - 1; gy += 1) for (let gx = 0; gx < GW - 1; gx += 1) {
@@ -1399,6 +1591,22 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   // Contact shadows (look.md §8.3): a soft dark footprint where each building meets the ground --
   // geometry, one instanced quad a building, never a full-frame AO (it would eat the roads' colours).
   const contactShape = own(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2));
+  // A house's face, in its wall's unit box (x, z -0.5..0.5, y 0..1 a storey): a door and windows on
+  // the front, windows on the back and the ends -- a storey above the ground, windows only. Drawn as
+  // instances in the window colour, a touch proud of the wall, so a town reads as houses, not blocks.
+  const facadeShape = (door: boolean) => {
+    const parts: THREE.BufferGeometry[] = [];
+    const pane = (w: number, h: number, x: number, y: number, z: number, side: boolean) =>
+      parts.push(new THREE.BoxGeometry(side ? 0.012 : w, h, side ? w : 0.012).translate(x, y, z));
+    if (door) pane(0.16, 0.66, 0, 0.33, 0.505, false);
+    for (const x of door ? [-0.3, 0.3] : [-0.3, 0, 0.3]) pane(0.15, 0.26, x, 0.56, 0.505, false);
+    for (const x of [-0.25, 0.25]) pane(0.15, 0.26, x, 0.56, -0.505, false);
+    for (const x of [-0.505, 0.505]) pane(0.2, 0.26, x, 0.56, 0, true);
+    return own(mergeGeometries(parts)!);
+  };
+  const doorFace = facadeShape(true), upperFace = facadeShape(false);
+  // A black water tank on a flat roof -- on most houses with one, and every block.
+  const tankShape = own(new THREE.CylinderGeometry(0.6, 0.6, 1.4, 10).translate(0, 0.7, 0));
   const contactMaterial = own(new THREE.MeshBasicMaterial({ map: softBlob(), color: paintHex("--ink"), transparent: true, opacity: 0.38, depthWrite: false }));
   function houses(list: House[]): THREE.InstancedMesh[] {
     const contact = new THREE.InstancedMesh(contactShape, contactMaterial, list.length);
@@ -1406,6 +1614,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const roofs = new THREE.InstancedMesh(roofShape, fabricMaterial, list.length);
     // A block's windows: a dark band round each floor above the ground, a touch proud of the wall.
     const bands = new THREE.InstancedMesh(wallShape, windowMaterial, Math.max(1, list.reduce((n, h) => n + Math.max(0, h.floors - 1), 0)));
+    const houseCount = list.filter((h) => h.floors === 0).length;
+    const doors = new THREE.InstancedMesh(doorFace, windowMaterial, Math.max(1, houseCount));
+    const uppers = new THREE.InstancedMesh(upperFace, windowMaterial, Math.max(1, list.filter((h) => h.floors === 0 && h.h > 3.5).length));
+    const tanks = new THREE.InstancedMesh(tankShape, fabricMaterial, Math.max(1, list.filter((h) => h.rh < 0.5).length));
+    let door = 0, upper = 0, tank = 0;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
     let band = 0;
     list.forEach((h, i) => {
@@ -1415,6 +1628,24 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       contact.setMatrixAt(i, m.compose(new THREE.Vector3(h.x, h.y + 0.04, h.z), q, new THREE.Vector3(h.w * 1.45, 1, h.d * 1.45)));
       walls.setColorAt(i, c.set(h.wall));
       roofs.setColorAt(i, c.set(h.roof));
+      if (h.floors === 0) {
+        // Its face: the ground storey's door and windows, the upper storey's windows.
+        doors.setMatrixAt(door, m.compose(new THREE.Vector3(h.x, h.y, h.z), q, new THREE.Vector3(h.w, 3, h.d)));
+        doors.setColorAt(door, c.set(WINDOWS));
+        door += 1;
+        if (h.h > 3.5) {
+          uppers.setMatrixAt(upper, m.compose(new THREE.Vector3(h.x, h.y + 3, h.z), q, new THREE.Vector3(h.w, 3, h.d)));
+          uppers.setColorAt(upper, c.set(WINDOWS));
+          upper += 1;
+        }
+      }
+      // A flat roof's water tank, set to a back corner (by its place, so a redraw keeps it there).
+      if (h.rh < 0.5 && (h.floors > 0 || (Math.abs(h.x * 7 + h.z * 13) % 10) < 7)) {
+        const off = new THREE.Vector3(h.w * 0.25, 0, -h.d * 0.22).applyQuaternion(q);
+        tanks.setMatrixAt(tank, m.compose(new THREE.Vector3(h.x + off.x, h.y + h.h + h.rh, h.z + off.z), q, new THREE.Vector3(1, 1, 1)));
+        tanks.setColorAt(tank, c.set(paintHex("--paint-grey-26")));
+        tank += 1;
+      }
       for (let f = 1; f < h.floors; f += 1) {
         bands.setMatrixAt(band, m.compose(new THREE.Vector3(h.x, h.y + f * 3 + 1.1, h.z), q, new THREE.Vector3(h.w + 0.12, 0.9, h.d + 0.12)));
         bands.setColorAt(band, c.set(WINDOWS));
@@ -1422,12 +1653,15 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     });
     bands.count = band;
-    for (const mesh of [walls, roofs, bands]) {
+    doors.count = door;
+    uppers.count = upper;
+    tanks.count = tank;
+    for (const mesh of [walls, roofs, bands, tanks]) {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
     }
     contact.renderOrder = -1;
-    return [contact, walls, roofs, bands];
+    return [contact, walls, roofs, bands, doors, uppers, tanks];
   }
   /** A town's streets: one instanced draw, a flat slab a plot long each. */
   function streetMesh(list: Street[]): THREE.InstancedMesh {
@@ -1684,7 +1918,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const a = hr() * Math.PI * 2, d = Math.sqrt(hr()) * (0.6 + h.size * 0.45);
         const cx = h.x + Math.cos(a) * d, cy = h.y + Math.sin(a) * d;
         const cell = Math.round(cy) * W + Math.round(cx);
-        if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2 || occupied[cell] !== FREE) continue;
+        if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2 || occupied[cell] !== FREE || duneAt(cx, cy) > 0.25) continue;
         occupied[cell] = TOWN;
         const one = new Kit();
         if (southern ? hr() < 0.25 : hr() < 0.75) hut(one, hr, 0, 0);
@@ -1778,6 +2012,21 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       for (const [kind, wgt] of weights) if ((r -= wgt) <= 0) return kind;
       return weights[0]![0];
     };
+    // Map version 13's scenery, cell by cell: swamp (1) and a dry bed's banks (2).
+    const SWAMP = 1, BED = 2;
+    const featureOf = new Uint8Array(W * H);
+    for (const m of world.features?.wetlands ?? []) {
+      for (let y = Math.max(0, Math.floor(m.y - m.r)); y <= Math.min(H - 1, Math.ceil(m.y + m.r)); y += 1)
+        for (let x = Math.max(0, Math.floor(m.x - m.r)); x <= Math.min(W - 1, Math.ceil(m.x + m.r)); x += 1)
+          if (Math.hypot(x - m.x, y - m.y) < m.r * 0.8) featureOf[y * W + x] = SWAMP;
+    }
+    for (const bed of world.features?.dryBeds ?? []) {
+      for (const [x, y] of bed.points) for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) {
+        const xx = Math.round(x) + dx, yy = Math.round(y) + dy;
+        if (xx >= 0 && yy >= 0 && xx < W && yy < H && featureOf[yy * W + xx] === 0) featureOf[yy * W + xx] = BED;
+      }
+    }
+    const swampMix: Array<[TreeKind, number]> = world.region === "southSouth" ? [["mangrove", 5], ["palm", 2]] : [["bush", 4], ["palm", 1], ["shade", 1]];
     // Over the whole land, then again along the banks: the gallery forest is thick.
     const riverside: number[] = [];
     for (let i = 0; i < W * H; i += 1) if (bankDist[i]! > 0.6 && bankDist[i]! < 3.5) riverside.push(i);
@@ -1793,7 +2042,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const hill = elevationAt(cx, cy) / top;
       let chance: number, kind: TreeKind;
       const mix = MIXES[world.region ?? "southwest"] ?? MIXES.southwest!;
+      const feature = featureOf[cell]!;
+      // Dunes: nothing grows on the open sand.
+      if (what !== TOWN && duneAt(cx, cy) > 0.25) continue;
       if (what === TOWN) { chance = 0.05; kind = pick(mix.town); }
+      else if (feature === SWAMP) { chance = 0.55; kind = pick(swampMix); }
+      else if (feature === BED) { chance = 0.3; kind = pick([["shade", 3], ["acacia", 3], ["baobab", 1]]); }
       else if (bank < 3) { chance = 0.75; kind = pick(mix.bank); }
       else if (bank < 7) { chance = 0.35; kind = pick(mix.near); }
       else if (hill > 0.3) { chance = 0.3; kind = pick(mix.high); }
@@ -2184,6 +2438,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       setWaterNight(waterMaterial, dark);
       lineMaterial.color.setHex(dark ? paintHex("--paint-grey-15") : paintHex("--paint-light-4"));
       edgeMaterial.color.setScalar(dark ? 0.3 : 1);
+      recolourSkirt(dark ? paintHex("--paint-blue-21") : HORIZON);
       windowMaterial.emissive.setHex(dark ? paintHex("--paint-earth-20") : paintHex("--paint-dark-6"));
       windowMaterial.emissiveIntensity = dark ? 1.1 : 0;
       cloudMaterial.uniforms.uColour!.value.setHex(dark ? paintHex("--paint-blue-21") : paintHex("--paint-light-1"));
