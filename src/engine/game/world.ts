@@ -116,6 +116,7 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
     ...(def.clusters ? { clusters: structuredClone(def.clusters) } : {}),
     ...(def.terrain?.rivers ? { waterLines: structuredClone(def.terrain.rivers) } : {}),
     ...(def.hamlets ? { hamlets: structuredClone(def.hamlets) } : {}),
+    ...(def.terrain?.hills ? { hills: structuredClone(def.terrain.hills) } : {}),
     towns: new Map(def.towns.map((town) => [town.id, { ...town }])),
     tuning,
     simulation,

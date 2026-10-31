@@ -292,7 +292,10 @@ the town shows instead of a grey veil. **The clouds themselves** (2026-10-31, yo
 shadows but didn't see the clouds"): the same drifting field as soft white puffs 260 m up, set up-sun of
 the shade each casts so it sits over its own shadow; seen only from afar (fading in past 1 km), broken
 up within and gone toward the map's edge. Fewer clouds than at first (the south's cover 0.5 -> 0.34): a
-cloudy map read as mist over its towns.
+cloudy map read as mist over its towns. **Inselbergs** (B2, finished 2026-10-31): a small steep hill (the
+north's and Middle Belt's rocks, map version 4) gets a bare granite dome on its top, lumpy as granite
+weathers, a few boulders at its foot, nothing growing on it; drawn from the map's hills (`world.hills`,
+the screen's copy), one mesh for them all -- the land's shape and prices unchanged.
 
 ---
 

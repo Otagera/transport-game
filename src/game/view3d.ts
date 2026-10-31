@@ -1599,7 +1599,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
 
   // --- Fields and trees: the land between the towns ------------------------------------------
   // What's where, a cell at a time, so neither lands on water, a road, a town or each other.
-  const FREE = 0, WET = 1, ROAD = 2, TOWN = 3, FIELD = 4;
+  const FREE = 0, WET = 1, ROAD = 2, TOWN = 3, FIELD = 4, ROCK = 5;
   const occupied = new Uint8Array(W * H);
   const markRoads = (lines: Point[][]) => {
     for (const line of lines) {
@@ -1628,6 +1628,44 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       for (let y = Math.max(0, Math.floor(t.y - r)); y <= Math.min(H - 1, Math.ceil(t.y + r)); y += 1)
         for (let x = Math.max(0, Math.floor(t.x - r)); x <= Math.min(W - 1, Math.ceil(t.x + r)); x += 1)
           if (Math.hypot(x - t.x, y - t.y) <= r && occupied[y * W + x] === FREE) occupied[y * W + x] = TOWN;
+    }
+
+    // Inselbergs: a small steep hill (the north's and the Middle Belt's rocks, map version 4) gets a
+    // bare granite dome on its top, sheeted and streaked, a boulder or two at its foot -- the land's
+    // shape is the map's, this its rock showing. Drawn, not priced: one mesh for all of them.
+    const domes = new Kit();
+    const granite = [paintHex("--paint-grey-27"), paintHex("--paint-grey-28"), paintHex("--paint-grey-11")];
+    for (const hill of w.hills ?? []) {
+      if (hill.radius > 4.5 || hill.height < 2.8) continue;
+      const cx = hill.x, cy = hill.y;
+      if (cx < 2 || cy < 2 || cx > W - 3 || cy > H - 3 || occupied[Math.round(cy) * W + Math.round(cx)] !== FREE) continue;
+      const hr = seeded(`dome-${cx}-${cy}`);
+      const r = hill.radius * M * (0.45 + hr() * 0.15);
+      const geo = new THREE.IcosahedronGeometry(1, 3);
+      // A dome, lumpy as granite weathers: the sphere's upper half, pushed in and out.
+      const pos = geo.attributes.position!;
+      for (let i = 0; i < pos.count; i += 1) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        // By position only: the faces share corners, and one corner moved two ways would crack it.
+        const bump = 1 + 0.12 * Math.sin(x * 5.1 + cx) * Math.cos(z * 4.3 + cy) + 0.06 * Math.sin(y * 9.7);
+        pos.setXYZ(i, x * r * bump, Math.max(-0.2, y) * r * 0.55 * bump, z * r * bump);
+      }
+      const top = elevationAt(cx, cy) * HEIGHT;
+      domes.add(geo, granite[Math.floor(hr() * granite.length)]!, { x: cx * M, y: top - r * 0.18, z: cy * M, ry: hr() * Math.PI });
+      for (let k = 0; k < 3 + Math.floor(hr() * 4); k += 1) {
+        const a = hr() * Math.PI * 2, d = (r * (0.9 + hr() * 0.6)) / M;
+        const bx = cx + Math.cos(a) * d, by = cy + Math.sin(a) * d;
+        domes.add(new THREE.DodecahedronGeometry(1.5 + hr() * 2.5, 0), granite[k % granite.length]!, { x: bx * M, y: elevationAt(bx, by) * HEIGHT + 0.6, z: by * M, ry: hr() * Math.PI });
+      }
+      const reachCells = Math.ceil(r / M);
+      for (let y = Math.round(cy) - reachCells; y <= Math.round(cy) + reachCells; y += 1) for (let x = Math.round(cx) - reachCells; x <= Math.round(cx) + reachCells; x += 1)
+        if (x >= 0 && y >= 0 && x < W && y < H && Math.hypot(x - cx, y - cy) * M < r && occupied[y * W + x] === FREE) occupied[y * W + x] = ROCK;
+    }
+    if (!domes.empty) {
+      const rocks = new THREE.Mesh(domes.merged(), material);
+      rocks.castShadow = true;
+      rocks.receiveShadow = true;
+      scene.add(rocks);
     }
 
     // Hamlets (map version 12): the land's small places between the towns -- a few compounds, round
@@ -1750,7 +1788,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       else { const c = riverside[Math.floor(rand() * riverside.length)]!; cx = (c % W) + rand() - 0.5; cy = Math.floor(c / W) + rand() - 0.5; }
       const cell = Math.round(cy) * W + Math.round(cx);
       const what = occupied[cell];
-      if (what === WET || what === ROAD || what === FIELD) continue;
+      if (what === WET || what === ROAD || what === FIELD || what === ROCK) continue;
       const bank = bankDist[cell]!;
       const hill = elevationAt(cx, cy) / top;
       let chance: number, kind: TreeKind;

@@ -811,6 +811,8 @@ export interface GameWorld {
   home?: { x: number; y: number; width: number; height: number };
   /** The map's rivers and sea as drawn lines, for the screen to draw smooth (the terrain's water is their cells). */
   waterLines?: GameRiverDef[];
+  /** The map's hills as drawn (centre, radius, height), for the screen: the 3D view's granite outcrops. */
+  hills?: GameHillDef[];
   /** The map's hamlets (map version 12), for the screen: drawn, not simulated. */
   hamlets?: Array<{ x: number; y: number; size: number }>;
   /** Money over the last game day: what the strip and route rows read (ledger.ts). */
