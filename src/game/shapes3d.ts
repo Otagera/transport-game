@@ -7,6 +7,7 @@
 // and no two are the same. A whole town merges into one geometry: one draw call a town.
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { paint } from "./palette3d";
 
 type Rand = () => number;
@@ -85,11 +86,24 @@ export const BLOCK_WALLS = [paint("--paint-earth-4"), paint("--paint-earth-13"),
 /** A block's window bands. */
 export const WINDOWS = paint("--paint-grey-18");
 
-/** A bungalow in its compound: plastered walls, a zinc hip roof, a wall round the yard. */
+/** A face on a wall: in a kit's own frame turned by ry, `u` along the wall, at `v` out from the centre (+ the front). */
+function onWall(kit: Kit, colour: string, x: number, z: number, ry: number, u: number, v: number, w: number, h: number, y: number): void {
+  const cos = Math.cos(ry), sin = Math.sin(ry);
+  kit.box(w, h, 0.1, colour, x + u * cos + v * sin, z - u * sin + v * cos, y, ry);
+}
+const PANE = paint("--paint-grey-18");
+
+/** A bungalow in its compound: plastered walls, a zinc hip roof over a veranda, a wall round the yard. */
 export function bungalow(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
   const w = 7 + rand() * 4, d = 6 + rand() * 3, h = 3;
   kit.box(w, h, d, pick(rand, WALLS), x, z, 0, ry);
   kit.cone(Math.hypot(w, d) / 2 + 0.4, 2, pick(rand, ROOFS), x, z, h, 4, ry + Math.PI / 4);
+  // Its face: a door, a window either side; windows on the back.
+  onWall(kit, PANE, x, z, ry, 0, d / 2 + 0.03, 1, 2.1, 0);
+  for (const u of [-w * 0.3, w * 0.3]) {
+    onWall(kit, PANE, x, z, ry, u, d / 2 + 0.03, 1.1, 0.9, 1.2);
+    onWall(kit, PANE, x, z, ry, u, -d / 2 - 0.03, 1.1, 0.9, 1.2);
+  }
   if (rand() < 0.6) {
     // The compound wall: four low runs round the house, a gap for the gate.
     const cw = w + 6, cd = d + 6, wall = paint("--paint-earth-15");
@@ -102,11 +116,15 @@ export function bungalow(kit: Kit, rand: Rand, x: number, z: number, ry: number)
   }
 }
 
-/** A shophouse: a shop below with its awning, rooms above. */
+/** A shophouse: a shop below with its awning and signboard, rooms above with their windows. */
 export function shophouse(kit: Kit, rand: Rand, x: number, z: number, ry: number): void {
   const w = 8 + rand() * 3, d = 7, floors = 2 + (rand() < 0.3 ? 1 : 0), h = floors * 3;
   kit.box(w, h, d, pick(rand, WALLS), x, z, 0, ry);
   kit.box(w + 0.4, 0.3, d + 0.4, pick(rand, CONCRETE), x, z, h, ry);
+  // The shop's open front, its signboard over it, and the rooms' windows above.
+  onWall(kit, PANE, x, z, ry, 0, d / 2 + 0.03, w * 0.7, 2.2, 0);
+  onWall(kit, pick(rand, [paint("--paint-light-1"), paint("--paint-earth-52"), paint("--paint-blue-12")]), x, z, ry, 0, d / 2 + 0.06, w * 0.6, 0.5, 2.3);
+  for (let f = 1; f < floors; f += 1) for (const u of [-w * 0.3, 0, w * 0.3]) onWall(kit, PANE, x, z, ry, u, d / 2 + 0.03, 1, 1, f * 3 + 1);
   const awning = pick(rand, [paint("--paint-red-3"), paint("--paint-blue-12"), paint("--paint-green-24"), paint("--paint-earth-52"), paint("--paint-red-2")]);
   const cos = Math.cos(ry), sin = Math.sin(ry);
   kit.add(new THREE.BoxGeometry(w, 0.2, 2), awning, { x: x + (d / 2 + 1) * sin, y: 2.8, z: z + (d / 2 + 1) * cos, ry, rx: 0.25 });
@@ -119,6 +137,8 @@ export function block(kit: Kit, rand: Rand, x: number, z: number, ry: number, fl
   const wall = pick(rand, CONCRETE);
   kit.box(w, h, d, wall, x, z, 0, ry);
   for (let f = 1; f < floors; f += 1) kit.box(w + 0.6, 0.25, d + 0.6, paint("--paint-grey-5"), x, z, f * 3, ry);
+  // Its windows, a band a floor.
+  for (let f = 0; f < floors; f += 1) kit.box(w + 0.12, 0.9, d + 0.12, PANE, x, z, f * 3 + 1.1, ry);
   kit.cylinder(1.2, 1.8, paint("--paint-blue-16"), x + w * 0.2, z, h, 8);
   kit.cylinder(1.1, 1.6, paint("--paint-grey-26"), x - w * 0.2, z + d * 0.15, h, 8);
 }
@@ -130,6 +150,11 @@ export function mosque(kit: Kit, rand: Rand, x: number, z: number, scale = 1): v
   kit.dome(5 * s, paint("--paint-green-24"), x, z, 5 * s);
   kit.cylinder(1.1 * s, 16 * s, paint("--paint-light-4"), x + 8 * s, z + 8 * s, 0, 8);
   kit.cone(1.4 * s, 3 * s, paint("--paint-green-24"), x + 8 * s, z + 8 * s, 16 * s, 8, 0);
+  // The minaret's balcony, the hall's arched door and windows (as dark panels), the crescent's mast.
+  kit.cylinder(1.6 * s, 0.4 * s, paint("--paint-light-4"), x + 8 * s, z + 8 * s, 12 * s, 10);
+  kit.cylinder(0.06 * s, 1.6 * s, paint("--paint-earth-37"), x + 8 * s, z + 8 * s, 19 * s, 4);
+  kit.box(2.2 * s, 3.2 * s, 0.1, PANE, x, z + 7.05 * s);
+  for (const dx of [-4.5, 4.5]) kit.box(1.4 * s, 2 * s, 0.1, PANE, x + dx * s, z + 7.05 * s, 1.5 * s);
   if (rand() < 0.5) kit.dome(1.6 * s, paint("--paint-earth-37"), x, z, 9.8 * s);
 }
 
@@ -141,6 +166,11 @@ export function church(kit: Kit, rand: Rand, x: number, z: number, scale = 1): v
   kit.gable(16 * s, 9 * s, 4 * s, paint("--paint-earth-55"), x, z, 6 * s);
   kit.box(4 * s, 14 * s, 4 * s, wall, x + 10 * s, z);
   kit.cone(3 * s, 4 * s, paint("--paint-earth-55"), x + 10 * s, z, 14 * s);
+  // The cross, the door at its tower's foot, tall windows down the nave.
+  kit.box(0.25 * s, 2.4 * s, 0.25 * s, paint("--paint-light-4"), x + 10 * s, z, 18 * s);
+  kit.box(1.2 * s, 0.25 * s, 0.25 * s, paint("--paint-light-4"), x + 10 * s, z, 19.4 * s);
+  kit.box(0.1, 2.6 * s, 1.6 * s, PANE, x + 12.05 * s, z);
+  for (let i = 0; i < 4; i += 1) for (const dz of [-4.55, 4.55]) kit.box(1 * s, 2.6 * s, 0.1, PANE, x + (-6 + i * 3.4) * s, z + dz * s, 1.8 * s);
 }
 
 /** Market stalls under umbrellas, a few in a row. */
@@ -159,6 +189,7 @@ export function hut(kit: Kit, rand: Rand, x: number, z: number): void {
   const r = 2.2 + rand() * 0.8;
   kit.cylinder(r, 2.4, paint("--paint-earth-40"), x, z, 0, 10);
   kit.cone(r + 0.7, 2.4, paint("--paint-earth-36"), x, z, 2.4, 10, 0);
+  kit.box(0.9, 1.7, 0.1, PANE, x, z + r + 0.02); // its doorway
 }
 
 /** An industrial site: a refinery's tanks and columns, a quarry's pit and heaps, a works' sheds and stack. */
@@ -171,10 +202,8 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
       kit.cylinder(1.1, 16, paint("--paint-grey-2"), 20, 4, 0, 8);
       kit.box(10, 6, 8, paint("--paint-grey-6"), 18, 14);
     }
-    if (kind === "oilfield") for (let i = 0; i < 4; i += 1) {
-      kit.box(1, 4, 1, paint("--paint-grey-23"), -10 + i * 7, (i % 2) * 8);
-      kit.box(5, 0.6, 0.6, paint("--paint-red-3"), -10 + i * 7, (i % 2) * 8, 4);
-    }
+    // The pump jacks' posts; their beams nod, drawn by view3d.ts (SITE_LIFE) so they move.
+    if (kind === "oilfield") for (let i = 0; i < 4; i += 1) kit.box(1, 4, 1, paint("--paint-grey-23"), -10 + i * 7, (i % 2) * 8);
     return;
   }
   // A station on the old line (stations.ts): a long low building, its platform and canopy, a water tower.
@@ -216,84 +245,209 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
   if (kind === "steelworks" || kind === "steelport") kit.box(14, 10, 10, paint("--paint-grey-16"), -16, 10);
 }
 
+/**
+ * What a working site gives off, in its kit's own frame (site() above): where, and what -- a stack's
+ * smoke, a refinery's flare, a mill's steam, a quarry's dust, a pump jack's nodding beam. view3d.ts
+ * runs them while the site works and stills them when it stands idle.
+ */
+export type SiteEffect = "smoke" | "darkSmoke" | "flare" | "steam" | "dust" | "pumpjack";
+export const SITE_LIFE: Record<string, Array<{ x: number; z: number; y: number; what: SiteEffect }>> = {
+  refinery: [{ x: 16, z: -4, y: 22.5, what: "flare" }, { x: 20, z: 4, y: 16.5, what: "steam" }],
+  newrefinery: [{ x: 16, z: -4, y: 22.5, what: "flare" }, { x: 20, z: 4, y: 16.5, what: "steam" }],
+  oilfield: [0, 1, 2, 3].map((i) => ({ x: -10 + i * 7, z: (i % 2) * 8, y: 4.2, what: "pumpjack" as const })),
+  works: [{ x: 14, z: 8, y: 24.5, what: "smoke" }],
+  assembly: [{ x: 14, z: 8, y: 24.5, what: "steam" }],
+  steelworks: [{ x: 14, z: 8, y: 24.5, what: "darkSmoke" }, { x: -16, z: 10, y: 10.5, what: "smoke" }],
+  mill: [{ x: -1, z: 12, y: 14.5, what: "steam" }],
+  flourmill: [{ x: -1, z: 12, y: 14.5, what: "steam" }],
+  silo: [{ x: -1, z: 12, y: 14.5, what: "dust" }],
+  quarry: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 4, z: 0, y: 2, what: "dust" }],
+  ironmine: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 4, z: 0, y: 2, what: "dust" }],
+};
+
+/** A cargo ship, facing +x, its waterline at y = 0: hull, containers on deck, the bridge aft, its funnel. */
+export function cargoShip(rand: Rand): THREE.BufferGeometry {
+  const kit = new Kit();
+  const hull = pick(rand, [paint("--paint-red-6"), paint("--paint-blue-20"), paint("--paint-dark-5")]);
+  rounded(kit, 70, 7, 12, 2.5, hull, 0, 0, -3);
+  kit.box(68, 0.4, 11.6, paint("--paint-grey-21"), 0, 0, 4);
+  // The bow drawn in: a wedge forward.
+  kit.add(new THREE.ConeGeometry(6, 10, 4).rotateZ(-Math.PI / 2).scale(1, 0.7, 1), hull, { x: 38, y: 0.5, ry: Math.PI / 4 });
+  const boxes = [paint("--paint-red-3"), paint("--paint-blue-12"), paint("--paint-earth-52"), paint("--paint-green-24"), paint("--paint-grey-4"), paint("--paint-earth-47")];
+  for (let i = 0; i < 7; i += 1) for (let j = 0; j < 3; j += 1) {
+    const tiers = 1 + Math.floor(rand() * 3);
+    for (let k = 0; k < tiers; k += 1) kit.box(6, 2.4, 3.2, pick(rand, boxes), -14 + i * 6.6, -3.4 + j * 3.4, 4.4 + k * 2.5);
+  }
+  kit.box(9, 9, 11, paint("--paint-light-4"), -28, 0, 4.4);
+  kit.box(9.4, 1.2, 11.4, PANE_DARK, -28, 0, 11);
+  kit.cylinder(1.4, 5, pick(rand, boxes), -31, 0, 13.4, 10);
+  return kit.merged();
+}
+const PANE_DARK = paint("--paint-grey-18");
+
 // --- Vehicles: each facing +x, standing on y = 0, a little larger than life ---------------
 
 export type VehicleKind3D = "bus" | "brt" | "minibus" | "danfo" | "keke" | "okada" | "truck" | "tanker" | "train" | "freight";
-const TYRE = paint("--paint-grey-26"), GLASS = paint("--paint-blue-5");
-function wheels(kit: Kit, len: number, wid: number, r = 0.45, axles = 2): void {
-  for (let a = 0; a < axles; a += 1) {
-    const x = axles === 1 ? 0 : -len / 2 + 0.9 + (a * (len - 1.8)) / (axles - 1);
-    for (const z of [-wid / 2, wid / 2]) kit.add(new THREE.CylinderGeometry(r, r, 0.3, 8), TYRE, { x, y: r, z, rx: Math.PI / 2 });
+const TYRE = paint("--paint-grey-26"), GLASS = paint("--paint-blue-5"), HUB = paint("--paint-grey-2"), DARK = paint("--paint-dark-5");
+const HEADLAMP = paint("--paint-light-3"), TAIL = paint("--paint-red-3"), TRIM = paint("--paint-grey-22");
+/** A body with rounded edges, standing on y at its centre (x, z). */
+function rounded(kit: Kit, w: number, h: number, d: number, r: number, colour: string, x = 0, z = 0, y = 0): void {
+  kit.add(new RoundedBoxGeometry(w, h, d, 2, Math.min(r, h / 2 - 0.01, d / 2 - 0.01, w / 2 - 0.01)), colour, { x, y: y + h / 2, z });
+}
+function wheels(kit: Kit, len: number, wid: number, r = 0.45, axles = 2, at?: number[]): void {
+  const xs = at ?? Array.from({ length: axles }, (_, a) => (axles === 1 ? 0 : -len / 2 + 1 + (a * (len - 2)) / (axles - 1)));
+  for (const x of xs) for (const z of [-wid / 2, wid / 2]) {
+    kit.add(new THREE.CylinderGeometry(r, r, 0.32, 10), TYRE, { x, y: r, z, rx: Math.PI / 2 });
+    kit.add(new THREE.CylinderGeometry(r * 0.5, r * 0.5, 0.34, 8), HUB, { x, y: r, z: z + Math.sign(z) * 0.01, rx: Math.PI / 2 });
   }
 }
+/** Side windows as panes between pillars, both sides, from `x0` to `x1` at height y (h tall). */
+function panes(kit: Kit, x0: number, x1: number, y: number, h: number, wid: number, n: number, colour = GLASS): void {
+  const step = (x1 - x0) / n;
+  for (let i = 0; i < n; i += 1) kit.box(step * 0.82, h, wid + 0.04, colour, x0 + step * (i + 0.5), 0, y);
+}
+/** Lamps: headlamps at the front (+x), tail lamps at the back. */
+function lamps(kit: Kit, len: number, wid: number, y: number, back = len): void {
+  for (const z of [-wid / 2 + 0.3, wid / 2 - 0.3]) {
+    kit.box(0.08, 0.22, 0.38, HEADLAMP, len / 2 + 0.01, z, y);
+    kit.box(0.08, 0.26, 0.22, TAIL, -back / 2 - 0.01, z, y);
+  }
+}
+/** A person standing (a conductor, a rider): legs, body in its colour, head. */
+function person(kit: Kit, colour: string, x: number, z: number, y: number, sitting = false): void {
+  if (!sitting) kit.box(0.3, 0.8, 0.22, DARK, x, z, y);
+  kit.box(0.42, 0.65, 0.26, colour, x, z, y + (sitting ? 0.1 : 0.78));
+  kit.add(new THREE.SphereGeometry(0.15, 8, 6), paint("--paint-earth-63"), { x, y: y + (sitting ? 0.92 : 1.6), z });
+}
+
 export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
   const kit = new Kit();
-  const glassBand = (len: number, wid: number, y: number, h: number) => kit.box(len * 0.9, h, wid + 0.06, GLASS, 0, 0, y);
   switch (kind) {
     case "bus":
     case "brt": {
       // White: each is tinted by its route's colour, or its kind's (view3d.ts placeVehicles).
       const body = paint("--paint-light-1");
       const len = kind === "bus" ? 12 : 9;
-      const halves = kind === "bus" ? [0] : [-4.8, 4.8];
-      for (const off of halves) {
+      const halves = kind === "bus" ? [0] : [-4.85, 4.85];
+      halves.forEach((off, half) => {
         const k2 = new Kit();
-        k2.box(len, 2.6, 2.5, body, 0, 0, 0.5);
-        k2.box(len * 0.9, 0.9, 2.56, GLASS, 0, 0, 1.6);
-        k2.box(0.2, 1.2, 2.2, GLASS, len / 2, 0, 1.3);
-        wheels(k2, len, 2.5);
+        rounded(k2, len, 2.75, 2.5, 0.3, body, 0, 0, 0.4);
+        panes(k2, -len / 2 + 0.6, len / 2 - 1.6, 1.55, 1, 2.5, kind === "bus" ? 7 : 5);
+        // The front: a raked windscreen and its destination board, on the leading half only.
+        if (half === halves.length - 1) {
+          k2.add(new THREE.BoxGeometry(0.1, 1.35, 2.25), GLASS, { x: len / 2 + 0.02, y: 1.75, rz: -0.08 });
+          k2.box(0.06, 0.28, 1.6, paint("--paint-earth-20"), len / 2 + 0.05, 0, 2.62);
+          k2.box(0.2, 0.3, 2.45, TRIM, len / 2, 0, 0.35);
+        }
+        k2.box(1, 2, 0.04, DARK, len / 2 - 1.3, 1.27, 0.55); // the door
+        if (half === 0) k2.box(0.2, 0.3, 2.45, TRIM, -len / 2, 0, 0.35);
+        lamps(k2, len, 2.5, 0.8);
+        k2.box(len * 0.4, 0.35, 1.6, paint("--paint-grey-4"), -len * 0.1, 0, 3.15); // the roof's air unit
+        wheels(k2, len, 2.5, 0.5, 2, [len / 2 - 2.2, -len / 2 + 2.6]);
         kit.place(k2.merged(), off, 0, 0); // its own colours kept: windows, tyres
-      }
-      if (kind === "brt") kit.box(0.8, 2.3, 2.2, paint("--paint-grey-22"), 0, 0, 0.6);
+      });
+      if (kind === "brt") kit.add(new THREE.CylinderGeometry(1.2, 1.2, 0.8, 12), paint("--paint-grey-22"), { y: 1.75, rz: Math.PI / 2 });
       break;
     }
     case "minibus":
     case "danfo": {
-      const body = kind === "minibus" ? paint("--paint-light-1") : paint("--informal"); // a danfo is the informal sector's yellow (look.md §2)
-      kit.box(5.5, 2, 2.2, body, 0, 0, 0.45);
-      glassBand(5.5, 2.2, 1.45, 0.7);
-      if (kind === "danfo") {
-        kit.box(5.52, 0.3, 2.24, paint("--paint-dark-5"), 0, 0, 0.9);
-        kit.box(3.6, 0.15, 1.9, paint("--paint-grey-24"), -0.4, 0, 2.5);
-        kit.box(1.2, 0.6, 1, paint("--paint-earth-59"), -1, 0.3, 2.65);
-        kit.box(0.9, 0.5, 0.8, paint("--paint-blue-18"), 0.4, -0.35, 2.65);
+      // A danfo is the old Volkswagen in the informal sector's yellow (look.md §2), two black bands
+      // down its sides, its roof rack piled and its conductor hanging out of the open door; a
+      // minibus is yours, white and tinted, a flat-fronted van.
+      const danfo = kind === "danfo";
+      const body = danfo ? paint("--informal") : paint("--paint-light-1");
+      rounded(kit, 5.2, 1.95, 2.1, danfo ? 0.42 : 0.28, body, 0, 0, 0.4);
+      panes(kit, -2.3, 1.6, 1.55, 0.7, 2.1, 4);
+      kit.add(new THREE.BoxGeometry(0.1, 0.78, 1.9), GLASS, { x: 2.6, y: 1.72, rz: danfo ? -0.2 : -0.1 });
+      lamps(kit, 5.2, 2.1, 0.75);
+      kit.box(0.14, 0.24, 2.1, TRIM, 2.6, 0, 0.42);
+      if (danfo) {
+        for (const y of [0.92, 1.24]) kit.box(5.24, 0.1, 2.14, DARK, 0, 0, y);
+        // The roof rack and its load.
+        for (const z of [-0.85, 0.85]) kit.box(3.8, 0.08, 0.08, paint("--paint-grey-24"), -0.4, z, 2.5);
+        for (const [x, z, w, h, c] of [[-1.6, 0.35, 1.1, 0.55, paint("--paint-earth-59")], [-0.4, -0.35, 0.9, 0.5, paint("--paint-blue-18")], [0.6, 0.3, 0.8, 0.4, paint("--paint-red-3")], [-0.9, -0.3, 0.7, 0.35, paint("--paint-green-24")]] as const) {
+          rounded(kit, w, h, 0.65, 0.12, c, x, z, 2.38);
+        }
+        kit.box(1, 1.5, 0.05, DARK, 0.6, 1.07, 0.45); // the open door
+        person(kit, paint("--paint-blue-12"), 0.6, 1.25, 0.25); // the conductor, hanging out
+      } else {
+        kit.box(0.9, 1.4, 0.04, DARK, 0.5, 1.07, 0.55);
       }
-      wheels(kit, 5.5, 2.2, 0.4);
+      wheels(kit, 5.2, 2.1, 0.42, 2, [1.6, -1.7]);
       break;
     }
     case "keke": {
-      kit.box(2.4, 1.1, 1.3, paint("--informal"), 0, 0, 0.35);
-      kit.box(0.7, 0.9, 0.9, paint("--paint-green-24"), 1.3, 0, 0.35);
-      for (const [px, pz] of [[-1, -0.6], [-1, 0.6], [0.9, -0.6], [0.9, 0.6]] as const) kit.cylinder(0.05, 1.2, paint("--paint-grey-24"), px, pz, 1.45, 4);
-      kit.box(2.4, 0.12, 1.5, paint("--paint-green-24"), 0, 0, 2.6);
-      kit.add(new THREE.CylinderGeometry(0.35, 0.35, 0.2, 8), TYRE, { x: 1.3, y: 0.35, rx: Math.PI / 2 });
-      for (const z of [-0.6, 0.6]) kit.add(new THREE.CylinderGeometry(0.35, 0.35, 0.2, 8), TYRE, { x: -0.9, y: 0.35, z, rx: Math.PI / 2 });
+      rounded(kit, 2.5, 1, 1.3, 0.3, paint("--informal"), -0.2, 0, 0.35);
+      rounded(kit, 0.9, 1.1, 1.0, 0.35, paint("--informal"), 1.25, 0, 0.3); // the nose
+      kit.add(new THREE.BoxGeometry(0.08, 0.7, 1.0), GLASS, { x: 1.55, y: 1.65, rz: -0.25 });
+      for (const [px, pz] of [[-1.3, -0.6], [-1.3, 0.6], [1.0, -0.55], [1.0, 0.55]] as const) kit.cylinder(0.04, 1.25, paint("--paint-grey-24"), px, pz, 1.35, 4);
+      rounded(kit, 2.8, 0.14, 1.5, 0.06, paint("--paint-green-24"), -0.15, 0, 2.55); // the canopy
+      person(kit, paint("--paint-light-4"), 0.75, 0, 0.75, true);
+      kit.add(new THREE.CylinderGeometry(0.33, 0.33, 0.18, 10), TYRE, { x: 1.4, y: 0.33, rx: Math.PI / 2 });
+      for (const z of [-0.62, 0.62]) kit.add(new THREE.CylinderGeometry(0.33, 0.33, 0.18, 10), TYRE, { x: -0.95, y: 0.33, z, rx: Math.PI / 2 });
       break;
     }
     case "okada": {
-      kit.box(1.8, 0.35, 0.35, paint("--paint-grey-23"), 0, 0, 0.55);
-      for (const x of [-0.75, 0.75]) kit.add(new THREE.CylinderGeometry(0.35, 0.35, 0.12, 8), TYRE, { x, y: 0.35, rx: Math.PI / 2 });
-      kit.box(0.45, 0.8, 0.5, paint("--paint-earth-46"), -0.15, 0, 0.95);
-      kit.add(new THREE.SphereGeometry(0.22, 8, 6), paint("--paint-earth-63"), { x: -0.1, y: 2, z: 0 });
-      kit.box(0.4, 0.6, 0.45, paint("--paint-blue-12"), -0.55, 0, 0.9);
+      rounded(kit, 1.5, 0.35, 0.3, 0.1, paint("--paint-grey-23"), 0, 0, 0.45);
+      rounded(kit, 0.55, 0.3, 0.35, 0.12, paint("--paint-red-3"), 0.25, 0, 0.75); // the tank
+      kit.box(0.7, 0.12, 0.34, DARK, -0.35, 0, 0.82); // the seat
+      kit.box(0.08, 0.6, 0.06, paint("--paint-grey-20"), 0.72, 0, 0.6);
+      kit.box(0.06, 0.06, 0.7, paint("--paint-grey-20"), 0.74, 0, 1.18); // the bars
+      for (const x of [-0.72, 0.72]) {
+        kit.add(new THREE.CylinderGeometry(0.33, 0.33, 0.12, 12), TYRE, { x, y: 0.33, rx: Math.PI / 2 });
+        kit.add(new THREE.CylinderGeometry(0.14, 0.14, 0.14, 8), HUB, { x, y: 0.33, rx: Math.PI / 2 });
+      }
+      person(kit, paint("--paint-earth-46"), 0, 0, 0.88, true); // the rider
+      kit.add(new THREE.SphereGeometry(0.18, 8, 6), paint("--paint-red-4"), { x: 0, y: 1.82, z: 0 }); // his helmet
+      person(kit, paint("--paint-blue-12"), -0.48, 0, 0.88, true); // the passenger
       break;
     }
     case "truck":
     case "tanker": {
-      kit.box(2.2, 2.4, 2.4, paint("--paint-earth-3"), 3.2, 0, 0.5);
-      kit.box(0.15, 1, 2, GLASS, 4.3, 0, 1.6);
-      if (kind === "truck") kit.box(6, 2.8, 2.5, paint("--goods"), -1.2, 0, 0.6);
-      else kit.add(new THREE.CylinderGeometry(1.15, 1.15, 6, 12), paint("--paint-earth-47"), { x: -1.2, y: 1.85, rz: Math.PI / 2 });
-      wheels(kit, 8.5, 2.4, 0.5, 3);
+      // The cab: a bonnet and its grille, a raked windscreen; the load behind.
+      rounded(kit, 2.4, 2.3, 2.4, 0.25, paint("--paint-earth-3"), 3.1, 0, 0.55);
+      rounded(kit, 1.1, 1.1, 2.2, 0.15, paint("--paint-earth-3"), 4.55, 0, 0.55);
+      kit.box(0.08, 0.7, 1.4, DARK, 5.11, 0, 0.75); // the grille
+      kit.add(new THREE.BoxGeometry(0.1, 0.95, 2.1), GLASS, { x: 4.28, y: 2.25, rz: -0.18 });
+      for (const z of [-0.85, 0.85]) kit.box(0.08, 0.2, 0.3, HEADLAMP, 5.11, z, 0.95);
+      kit.box(8.2, 0.3, 2.3, TRIM, -0.5, 0, 0.55); // the chassis
+      if (kind === "truck") {
+        // Its load under a tarpaulin, roped, bulging over the top.
+        kit.box(5.8, 2.2, 2.5, paint("--goods"), -1.6, 0, 0.85);
+        const tarp = new THREE.CylinderGeometry(1.24, 1.24, 5.8, 14);
+        tarp.scale(0.45, 1, 1); // flattened (its x is up once turned): a bulge over the load, not a drum
+        kit.add(tarp, paint("--paint-blue-18"), { x: -1.6, y: 3.0, rz: Math.PI / 2 });
+        for (let i = 0; i < 4; i += 1) kit.box(0.06, 2.5, 2.56, DARK, -4.2 + i * 1.75, 0, 0.85);
+      } else {
+        // The tank: rounded ends, a catwalk on top, a band round it.
+        kit.add(new THREE.CylinderGeometry(1.15, 1.15, 5.4, 16), paint("--paint-earth-47"), { x: -1.6, y: 1.95, rz: Math.PI / 2 });
+        for (const x of [-4.3, 1.1]) kit.add(new THREE.SphereGeometry(1.15, 16, 8), paint("--paint-earth-47"), { x, y: 1.95 });
+        kit.box(5.2, 0.08, 0.5, paint("--paint-grey-20"), -1.6, 0, 3.15);
+        kit.add(new THREE.CylinderGeometry(1.17, 1.17, 0.3, 16), paint("--paint-light-4"), { x: -1.6, y: 1.95, rz: Math.PI / 2 });
+      }
+      for (const z of [-1.15, 1.15]) kit.box(0.08, 0.26, 0.22, TAIL, -4.65, z, 0.75);
+      wheels(kit, 8.5, 2.4, 0.5, 3, [3.6, -2.4, -3.6]);
       break;
     }
     case "train":
     case "freight": {
-      const body = kind === "train" ? paint("--paint-light-1") : paint("--paint-earth-58");
-      kit.box(18, 3.2, 3, body, 0, 0, 0.8);
-      if (kind === "train") kit.box(16.5, 1, 3.06, GLASS, 0, 0, 2.1);
-      else for (let i = 0; i < 4; i += 1) kit.box(0.2, 3.3, 3.05, paint("--paint-earth-62"), -6.75 + i * 4.5, 0, 0.75);
-      kit.box(18, 0.5, 2.6, paint("--paint-grey-24"), 0, 0, 0.3);
+      // The locomotive: a long hood, its cab at the front, a headlamp; behind it a coach (windows
+      // in a row) or a covered wagon (ribbed, the goods' brown).
+      // Yours (a passenger train) white, as your buses are, so the route's colour tints it whole; a freight
+      // train's engine the railway's yellow.
+      const loco = kind === "train" ? paint("--paint-light-4") : paint("--paint-earth-52");
+      kit.box(7, 0.5, 2.6, paint("--paint-grey-24"), 5.3, 0, 0.3);
+      rounded(kit, 5, 2.3, 2.4, 0.3, loco, 4.3, 0, 0.8);
+      rounded(kit, 2, 3.0, 2.8, 0.25, loco, 7.6, 0, 0.8);
+      kit.box(0.08, 0.9, 2.3, GLASS, 8.62, 0, 2.6);
+      kit.box(0.1, 0.25, 0.4, HEADLAMP, 8.63, 0, 1.6);
+      kit.box(5, 0.12, 2.42, DARK, 4.3, 0, 1.6);
+      const car = kind === "train" ? paint("--paint-light-1") : paint("--paint-earth-58");
+      kit.box(10.5, 0.5, 2.6, paint("--paint-grey-24"), -3.6, 0, 0.3);
+      rounded(kit, 10.5, 2.9, 2.9, 0.3, car, -3.6, 0, 0.8);
+      if (kind === "train") panes(kit, -8.4, 1.2, 2.2, 0.85, 2.9, 8);
+      else for (let i = 0; i < 6; i += 1) kit.box(0.14, 3.0, 2.98, paint("--paint-earth-62"), -8.3 + i * 1.9, 0, 0.75);
+      for (const x of [7, 3.2, 0.6, -7.8]) for (const z of [-1.1, 1.1]) kit.add(new THREE.CylinderGeometry(0.42, 0.42, 0.2, 10), TYRE, { x, y: 0.42, z, rx: Math.PI / 2 });
       break;
     }
   }
@@ -348,9 +502,9 @@ export function treeGeometry(kind: TreeKind): THREE.BufferGeometry {
       // The delta's: stilt roots arching into the water, a low dense crown.
       for (let k = 0; k < 6; k += 1) {
         const a = (k / 6) * Math.PI * 2;
-        kit.add(new THREE.CylinderGeometry(0.08, 0.12, 2.4, 4), paint("--paint-earth-62"), { x: Math.cos(a) * 0.9, y: 1, z: Math.sin(a) * 0.9, rx: Math.sin(a) * 0.5, rz: -Math.cos(a) * 0.5 });
+        kit.add(new THREE.CylinderGeometry(0.08, 0.12, 2.4, 4), paint("--paint-earth-64"), { x: Math.cos(a) * 0.9, y: 1, z: Math.sin(a) * 0.9, rx: Math.sin(a) * 0.5, rz: -Math.cos(a) * 0.5 });
       }
-      kit.add(new THREE.CylinderGeometry(0.2, 0.25, 1.6, 5), paint("--paint-earth-62"), { y: 2.6 });
+      kit.add(new THREE.CylinderGeometry(0.2, 0.25, 1.6, 5), paint("--paint-earth-64"), { y: 2.6 });
       kit.add(new THREE.IcosahedronGeometry(2.3, 0), paint("--paint-green-28"), { y: 4.2 });
       kit.add(new THREE.IcosahedronGeometry(1.7, 0), paint("--paint-green-25"), { x: 1.5, y: 3.7, z: 0.5 });
       break;
@@ -431,6 +585,32 @@ export function motorPark(kit: Kit, rand: Rand, ry: number): void {
   k.box(3, 1.4, 0.2, paint("--paint-green-24"), 14, 9, 5);
   kit.place(k.merged(), 0, 0, 0, ry);
 }
+/** A bus stop: a shelter (a roof on two posts, a back, a bench) and its sign in `sign`; its front toward +z. */
+export function busShelter(kit: Kit, ry: number, sign: string): void {
+  const k = new Kit();
+  k.box(4.2, 0.15, 1.8, paint("--paint-grey-6"), 0, 0, 2.5);
+  for (const x of [-1.9, 1.9]) k.box(0.12, 2.5, 0.12, paint("--paint-grey-20"), x, 0.7);
+  k.box(4, 1.6, 0.08, paint("--paint-grey-1"), 0, -0.8, 0.6);
+  k.box(3, 0.1, 0.45, paint("--paint-earth-52"), 0, -0.45, 0.5);
+  k.box(0.1, 3.2, 0.1, paint("--paint-grey-20"), 2.7, 0.9);
+  k.box(0.9, 0.9, 0.06, sign, 2.7, 0.9, 2.7);
+  kit.place(k.merged(), 0, 0, 0, ry);
+}
+/**
+ * A person, standing, life size, in two parts drawn as two instanced meshes with the same matrices:
+ * `clothes` (white, so each instance's colour tints it) and `rest` (legs and head, as they are).
+ */
+export function personGeometry(): { clothes: THREE.BufferGeometry; rest: THREE.BufferGeometry } {
+  const clothes = new Kit();
+  clothes.box(0.44, 0.7, 0.28, paint("--paint-light-1"), 0, 0, 0.78);
+  const rest = new Kit();
+  for (const x of [-0.1, 0.1]) rest.box(0.14, 0.8, 0.18, DARK, x, 0);
+  rest.add(new THREE.IcosahedronGeometry(0.16, 0), paint("--paint-earth-63"), { x: 0, y: 1.66, z: 0 });
+  return { clothes: clothes.merged(), rest: rest.merged() };
+}
+/** What people wear, read from afar: bright prints and whites. */
+export const CLOTHES = ["--paint-red-3", "--paint-blue-12", "--paint-earth-49", "--paint-green-24", "--paint-earth-45", "--paint-light-1", "--paint-earth-52", "--paint-blue-9"];
+
 /** A haulage yard: a fenced gravel lot, lorries, stacked goods, a gantry. */
 export function haulageYard(kit: Kit, rand: Rand, ry: number): void {
   const k = new Kit();

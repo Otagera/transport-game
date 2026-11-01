@@ -1,4 +1,4 @@
-import type { GameHillDef, GameMapDef, GameRiverDef, GameRoadDef, GameTown, ReliefDef } from "./types";
+import type { GameHillDef, GameMapDef, GameRiverDef, GameRoadDef, GameTown, LandFeatures, ReliefDef } from "./types";
 import type { TerrainField } from "../map/types";
 import { createRng, type Rng } from "../map/random";
 import { UnionFind } from "../map/connectivity";
@@ -124,6 +124,8 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
     // Version 11: the old roads beyond the home cluster laid again over that land, their corners eased.
     if (version >= 11 && map.home) map = roadsByTheLand(map, generatedMapInfo(base, seed).map.roads.length);
     // Version 12: the land's hamlets, where people would live -- drawn, not simulated.
+    // Version 13: more kinds of land -- lakes (water), and swamps, dry beds and dunes (scenery) -- before the hamlets settle round them.
+    if (version >= 13 && map.home) map = landForms(map, seed);
     if (version >= 12 && map.home) map = withHamlets(map, seed);
     map = laidOverLand(map);
     // Version 9: fictional names, true to the region (names.ts) -- never real towns in places they aren't.
@@ -1186,4 +1188,138 @@ function withHamlets(map: GameMapDef, seed: number): GameMapDef {
     }
   }
   return { ...map, hamlets };
+}
+
+// --- Map version 13: more kinds of land ---------------------------------------------------------
+// (The fidelity scope, 2026-10-31: "swamps in the delta, lakes, dry riverbeds and dunes in the far
+// north".) Lakes are water, like a river: drawn as a river's capsules round a short axis, wide in the
+// middle, the terrain's water cells from them -- so a road goes round or bridges one, and that is the
+// one change to play. Placed on low ground clear of the home box, 10 cells from any town, 2 from any
+// road's line, the map kept only if every town can still be reached. The rest is scenery (drawn, never
+// priced): swamp by the water on low ground (most in the delta), the sandy beds of seasonal streams in
+// the north, running downhill to a river or the map's edge, and a field of dunes in the far north.
+
+const FORMS: Record<string, { lakes: number; lakeSize: [number, number]; wet: number; beds: number; dunes: number }> = {
+  southwest: { lakes: 1, lakeSize: [3, 5], wet: 0.25, beds: 0, dunes: 0 },
+  southeast: { lakes: 1, lakeSize: [2.5, 4], wet: 0.2, beds: 0, dunes: 0 },
+  southSouth: { lakes: 2, lakeSize: [2.5, 4.5], wet: 1, beds: 0, dunes: 0 },
+  middleBelt: { lakes: 2, lakeSize: [3, 6], wet: 0.15, beds: 2, dunes: 0 },
+  north: { lakes: 1, lakeSize: [3, 5], wet: 0.1, beds: 5, dunes: 1 },
+  northeast: { lakes: 1, lakeSize: [5, 8], wet: 0.3, beds: 4, dunes: 1 },
+};
+
+function landForms(map: GameMapDef, seed: number): GameMapDef {
+  const forms = FORMS[map.region ?? "southwest"] ?? FORMS.southwest!;
+  const rng = createRng(seed + 13_000_013);
+  const box = map.home!;
+  const W = map.width, H = map.height;
+  let terrain = buildGameTerrain(map);
+  const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
+  const low = (x: number, y: number) => terrain.elevation[Math.round(y) * W + Math.round(x)]! / top;
+  const wet = (x: number, y: number) => terrain.water[Math.round(y) * W + Math.round(x)] === 1;
+  const at = new Map(map.towns.map((t) => [t.id, t]));
+  const roadLines = [...map.roads, ...(map.rails ?? [])].map((r) => [at.get(r.a)!, ...(r.via ?? []).map(([x, y]) => ({ x, y })), at.get(r.b)!]);
+  const nearRoad = (p: Point, clear: number) => roadLines.some((line) => line.slice(1).some((q, k) => toSegment(p, line[k]!, q) < clear));
+
+  // Lakes: still water on the lowest ground that's free.
+  const rivers = [...(map.terrain?.rivers ?? [])];
+  const lakes: GameRiverDef[] = [];
+  for (let n = 0, tries = 0; n < forms.lakes && tries < 300; tries += 1) {
+    const c = { x: between(rng, 10, W - 11), y: between(rng, 10, H - 11) };
+    const r = between(rng, ...forms.lakeSize);
+    const len = r * between(rng, 1.4, 2.6), turn = rng() * Math.PI;
+    if (low(c.x, c.y) > 0.35 || toBox(c, box) < len + r + 6) continue;
+    if (map.towns.some((t) => distance(t, c) < len + r + 10) || nearRoad(c, len + r + 2)) continue;
+    const points: Array<[number, number]> = [], widths: number[] = [];
+    const steps = 6;
+    for (let k = 0; k <= steps; k += 1) {
+      const t = k / steps - 0.5;
+      const wobble = between(rng, -0.6, 0.6);
+      points.push([Math.round((c.x + Math.cos(turn) * t * 2 * len - Math.sin(turn) * wobble) * 100) / 100, Math.round((c.y + Math.sin(turn) * t * 2 * len + Math.cos(turn) * wobble) * 100) / 100]);
+      widths.push(Math.round(Math.max(1.4, 2 * r * Math.cos(Math.PI * t) ** 0.6 * between(rng, 0.85, 1.1)) * 100) / 100);
+    }
+    const lake: GameRiverDef = { points, width: 2 * r, widths, lake: true };
+    if (!map.towns.every((t) => dryOf([lake], t, 8)) || nearRoad(c, 0) || roadLines.some((line) => line.slice(1).some((q, k) => points.some(([px, py]) => toSegment({ x: px, y: py }, line[k]!, q) < r + 2)))) continue;
+    if ([...rivers, ...lakes].some((o) => o.points.some(([ox, oy]) => points.some(([px, py]) => Math.hypot(ox - px, oy - py) < r + 4)))) continue;
+    lakes.push(lake);
+    n += 1;
+  }
+  let next: GameMapDef = map;
+  if (lakes.length) {
+    const tried: GameMapDef = { ...map, terrain: { ...map.terrain, rivers: [...rivers, ...lakes] } };
+    // The generator's guards again: no town in the water, every town reachable by building roads.
+    let ok = true;
+    try { terrain = buildGameTerrain(tried); } catch { ok = false; }
+    if (ok) {
+      const reach = new UnionFind(tried.towns.map((t) => t.id));
+      for (const road of tried.roads) reach.union(road.a, road.b);
+      for (const t of tried.towns) {
+        const nearest = tried.towns.filter((o) => o !== t).sort((a, b) => distance(t, a) - distance(t, b)).slice(0, 3);
+        for (const o of nearest) if (!reach.connected(t.id, o.id) && planCorridor(terrain, [t, o], "auto", new Set([0, 1]))) reach.union(t.id, o.id);
+      }
+      ok = reach.componentCount() === 1;
+    }
+    if (ok) next = tried;
+    else terrain = buildGameTerrain(map);
+  }
+
+  const features: LandFeatures = {};
+  // Swamp: low ground by the water, in patches.
+  if (forms.wet > 0) {
+    const wetlands: Array<{ x: number; y: number; r: number }> = [];
+    const water = terrain.water;
+    for (let y = 4; y < H - 4; y += 4) for (let x = 4; x < W - 4; x += 4) {
+      const jx = x + between(rng, -1.5, 1.5), jy = y + between(rng, -1.5, 1.5);
+      if (wet(jx, jy) || low(jx, jy) > 0.25 || toBox({ x: jx, y: jy }, box) < 2) continue;
+      let close = false;
+      for (let dy = -4; dy <= 4 && !close; dy += 1) for (let dx = -4; dx <= 4 && !close; dx += 1) {
+        const xx = Math.round(jx) + dx, yy = Math.round(jy) + dy;
+        if (xx >= 0 && yy >= 0 && xx < W && yy < H && water[yy * W + xx] === 1) close = true;
+      }
+      if (!close || rng() > forms.wet * 0.7) continue;
+      if (map.towns.some((t) => distance(t, { x: jx, y: jy }) < 6)) continue;
+      wetlands.push({ x: Math.round(jx * 10) / 10, y: Math.round(jy * 10) / 10, r: Math.round(between(rng, 2, 3.5 + forms.wet * 2) * 10) / 10 });
+    }
+    if (wetlands.length) features.wetlands = wetlands;
+  }
+  // Dry beds: from high ground downhill, until water, the edge or a town.
+  if (forms.beds > 0) {
+    const beds: Array<{ points: Array<[number, number]>; width: number }> = [];
+    for (let n = 0, tries = 0; n < forms.beds && tries < 120; tries += 1) {
+      let p = { x: between(rng, 8, W - 9), y: between(rng, 8, H - 9) };
+      if (low(p.x, p.y) < 0.25 || toBox(p, box) < 6 || wet(p.x, p.y)) continue;
+      const points: Array<[number, number]> = [[Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10]];
+      let heading = rng() * Math.PI * 2;
+      for (let step = 0; step < 40; step += 1) {
+        // Downhill, with a wander: try a fan of headings, take the lowest.
+        let best = { e: Infinity, a: heading };
+        for (const da of [-0.7, -0.35, 0, 0.35, 0.7]) {
+          const a = heading + da, q = { x: p.x + Math.cos(a) * 1.5, y: p.y + Math.sin(a) * 1.5 };
+          if (q.x < 1 || q.y < 1 || q.x > W - 2 || q.y > H - 2) continue;
+          const e = low(q.x, q.y) + between(rng, 0, 0.02);
+          if (e < best.e) best = { e, a };
+        }
+        if (best.e === Infinity) break;
+        heading = best.a;
+        p = { x: p.x + Math.cos(heading) * 1.5, y: p.y + Math.sin(heading) * 1.5 };
+        if (wet(p.x, p.y) || map.towns.some((t) => distance(t, p) < 4) || toBox(p, box) < 2) break;
+        points.push([Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10]);
+      }
+      if (points.length < 10) continue;
+      beds.push({ points, width: Math.round(between(rng, 0.8, 1.4) * 10) / 10 });
+      n += 1;
+    }
+    if (beds.length) features.dryBeds = beds;
+  }
+  // Dunes: a field in the far north, away from the towns and the home box.
+  if (forms.dunes > 0) {
+    for (let tries = 0; tries < 60; tries += 1) {
+      const d = { x: between(rng, 30, W - 31), y: between(rng, 12, H * 0.35), rx: between(rng, 16, 26), ry: between(rng, 9, 14), turn: between(rng, -0.4, 0.4) };
+      if (map.region === "northeast") d.x = between(rng, W * 0.55, W - 31);
+      if (toBox(d, box) < d.rx + 6 || map.towns.some((t) => distance(t, d) < Math.max(d.rx, d.ry) + 4) || wet(d.x, d.y)) continue;
+      features.dunes = [{ x: Math.round(d.x), y: Math.round(d.y), rx: Math.round(d.rx), ry: Math.round(d.ry), turn: Math.round(d.turn * 100) / 100 }];
+      break;
+    }
+  }
+  return Object.keys(features).length ? { ...next, features } : next;
 }

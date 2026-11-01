@@ -129,6 +129,13 @@ const LEVY_TAU_DAYS = 3;
 const RUNNING_ALONG = 0.005;
 
 const nextJudgedAt = new WeakMap<GameWorld, number>();
+/** When the corridors are next judged: the one clock kept off the world, so a saved world carries it (snapshot.ts). */
+export function corridorsDueAt(world: GameWorld): number | null {
+  return nextJudgedAt.get(world) ?? null;
+}
+export function setCorridorsDueAt(world: GameWorld, at: number): void {
+  nextJudgedAt.set(world, at);
+}
 
 /**
  * Called every tick with the levies reaching you this tick by corridor:

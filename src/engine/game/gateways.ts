@@ -1,3 +1,4 @@
+import { borderCountry } from "./border";
 import type { GameWorld } from "./types";
 import { railPath } from "./rail";
 import { roadPath } from "./world";
@@ -144,6 +145,6 @@ export function upgradePort(world: GameWorld): { ok: boolean; reason?: string; c
 /** The border site fuel comes over, or null. */
 export function borderFuelSite(world: GameWorld): string | null {
   if (!world.tuning.borderFuel || !world.border) return null;
-  const name = world.towns.get(world.border)?.name ?? "";
-  return name.startsWith("Idiroko") || name.startsWith("Jibia") ? world.border : null;
+  const country = borderCountry(world);
+  return country === "Benin" || country === "Niger" ? world.border : null;
 }

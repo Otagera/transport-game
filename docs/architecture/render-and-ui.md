@@ -250,6 +250,18 @@ waiting at the source's yard, on the way and where (`goodsOnTheWay`), or the gap
 (`haulBreak`); then what it makes against capacity, and how much gets away. The map says where, the
 card says why.
 
+**The site see-through, redrawn (2026-11-01; seethrough.ts `siteFigure`).** The first drawing (an
+isometric box, pipes and lanes in a 360-wide view squeezed to the panel, its words ~9 px) "looked
+like shit"; of three redrawings in a lab -- flow bands (a Sankey), the process column, a transit line
+-- you liked the first two, and this is them together. Read down the panel as the goods move: each
+input a bar filled to what arrives of what the plant could use, flowing down into the plant as a band
+as thick as it arrives; the plant a dial (amber when an input or the shift holds it back, green at
+capacity), its tonnes against capacity, its shift; a trunk out of the plant and a branch to each
+town as thick as its share of the tonnes sent (up to five, then "and N more"), each running on along
+its town's row as far as it's carried, the rest a track -- amber where it waits for hauliers, red and
+dotted where no road or tanker reaches. One SVG at the panel's width (290 units), so the words are
+the page's own sizes. Same `FigureData` from screen.ts; `kind` no longer drawn.
+
 ## 6. Ambient traffic rendering
 
 `network.ts` draws instanced cars **from** the published `ambientLoads` number (see
@@ -685,6 +697,41 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
 - **A booming town.** A town `growthTrend` calls growing gets extra market umbrellas through its
   streets (more in a city). They're placed after everything else in `townKit`, so a town switching in
   or out of growth doesn't reshuffle its houses.
+- **A site at work** (2026-11-01, the fidelity list's "sites that show their state"). What a site
+  gives off is a table in its kit's frame (`shapes3d.ts SITE_LIFE`): a works' stack smokes, a
+  steelworks' smokes black, a refinery burns its flare (its furnace stack steams), a mill or
+  flour mill steams over its silos, a silo and a quarry raise dust, an oilfield's pump jacks nod.
+  Each runs as hard as `siteProduction` says the site works (made over capacity, checked twice a
+  second, `goodsFlows` once for all) and stills when it stands idle: a refinery waiting to be
+  restored has no flare. The smoke, steam and dust are one `THREE.Points` for the map (2,400
+  puffs), moved on the graphics card; only each puff's on/off is written. Two lessons: a point's
+  size must go through the projection (`projectionMatrix[1][1]` times half the drawing's height,
+  over depth, as three's own points do) or it shrinks to nothing at the camera's 40° lens; and
+  `smoothstep(1.0, 0.2, r)` (edges reversed) is undefined in GLSL -- ANGLE on Metal gave near-zero,
+  which made the first smoke invisible. Grey on pale savanna barely shows: the puffs are near-
+  opaque by the stack, lit from above (bright tops, shaded undersides).
+- **The seaport's harbour.** At the seaport city (`w.seaport`; a coast-road gateway has none) a
+  jetty on piles, an apron of container stacks, gantry cranes whose booms swing, a ship moored
+  alongside and more standing off on slow circles in open sea; a crane and a ship more per rung of
+  `portLevel`, rebuilt when it grows. The quay is chosen once, before any town is drawn
+  (`quaySpot`): the nearest coast past 0.8 of the city's reach with open sea off it and dry
+  ground behind, clear of other towns and the old roads. The city's houses, streets and markets
+  keep off it (`onQuay`, beside the four checks that keep them off sites), so it reads as the
+  city's port district rather than a slab dropped on its outskirts.
+- **People** (2026-11-01, the fidelity list's "people who show the game"; `syncPeople`). Riders at
+  each of your road routes' stops: a shelter (`busShelter`, its sign in your colour) beside the
+  road the route takes out of the town, 8 m off its middle on the near side (the far side where a
+  railway runs along it), and in front of it a figure for every six `waitingAt` the town (up to 30,
+  shared between its stops), spilling along the road as the wait grows. At your motor parks,
+  passengers under the union's shelter by the informal pool waiting there (`parsePoolKey`'s `at`)
+  and three touts working the rows. At each town's markets (recorded by `townKit`), shoppers by
+  its size, a third more while it grows. People are one pair of instanced meshes (clothes tinted
+  from `CLOTHES`, the rest as is; 3,000 at most, 1.3× life to be seen at the closest zoom), each
+  moving on the graphics card by its `aWander` (a shift of the weight at a stop, a slow loop round
+  the stalls); the matrices are written only when a crowd's size changes. Your motor parks,
+  yards and metro entrances (`standAt`) now keep clear of the town's buildings (`builtAt`, every
+  house and market `townKit` placed) as well as the quay, stepping outward till they are -- a
+  town's outskirts run past its reach, and parks were landing on compounds.
 
 **Kept from the old map, in the lab's style** (the lab had no need to show them): the build
 preview and its price label, the fix tool's road, strike and TAKEN/LOST tags, wardens, the
@@ -774,6 +821,31 @@ than the best so far (a road is never cheaper: cost.ts), so the answer is the sa
 seeds: identical; 178 s of plans -> 0.15 s). And the 2D map's first frame paints its land once
 (`terrainCanvas`): three arrays made a pixel to write four bytes, ~1 s; written straight in.
 After: the card opens ~0.35 s after the game shows, 5.2 s from the page opening (12.8 before).
+
+**The arrival, as one movement (2026-11-01, "onboarding/the loading screen ... better
+transition").** It had been three page switches: the loading card on a blank page, gone in a
+frame; then the handover note, then the pledges, each a blank full page with no map in sight. Now
+the loading card rises in, and when the week has run it lifts away (`#loading.done`, removed once
+faded) while the map settles in under it (`body.arriving`, a touch nearer to where it rests). The
+verdict screen -- the handover note, the pledges, a term's verdict, your record -- is a card over
+the map you're about to run, the page behind it dimmed (a spread shadow) and taking no clicks
+(`body:has(#verdict.open)`). It rises in and fades away (`transition-behavior: allow-discrete` on
+`display`, `@starting-style`); its width follows its page (`data-mode`, set by `openVerdict`: the
+letter narrow, the pledges wider, the verdict widest), and a new page's content lifts in a step
+at a time (`.enter`, for 0.7 s only, so a redraw within a page -- a pledge made -- doesn't replay
+it). `prefers-reduced-motion` turns the movement off.
+
+**Saved games (2026-11-01, "people might not play all at once"; `saves.ts`, main.ts `chooseStart`,
+`keep`).** The game saves itself -- each game day, when you pause, when you leave the tab -- one
+save a map (a new game on the same map replaces it once it has run a day), the five most recent
+kept, in this browser's IndexedDB: the world (engine `snapshot.ts`) and the run's recorder (what
+"Save run" writes, and the days the charts read), with a summary the card lists without opening
+the world (~0.9 MB a world, ~6 ms to copy). Opening the game with a save of the address's map, or
+with no map asked for and any saves, the loading card offers them first ("Term 1, day 45 · 812k
+people · ₦34,000 · saved 2 hours ago") or a new map; "New map" in the strip (`?new=1`) skips the
+offer. A save from this build resumes at once; from another, its run replays from day one with the
+card counting ("Catching up: day 12 of 45") -- a run file replays as played. You come back paused,
+told where. Storage refused (a private window): nothing is kept, nothing breaks.
 
 ### Styles and tokens (2026-10-28)
 

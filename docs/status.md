@@ -50,7 +50,17 @@ land** at a share its trunk's prices allow (roads between home towns ~16% dearer
 **Version 11, old roads by the land** (planned again over the
 relief, their corners eased); **version 12, hamlets** between the towns (drawn, not simulated); towns
 ribboning out along their roads in 3D. **Weather in 3D** (B5): cloud shadows, the north's harmattan
-haze, rain over a flooded ford. Next in the scope: a frame-time check on your Mac (B6). **The remit opens** (remit.ts, brief, Chains: convergent, built 2026-11-01): you start with the home cluster's land, a kept term's verdict opens one of the two nearest closed clusters (your choice, in Waiting on you), closed land veiled on the map; pledges made keepable (the worst seat pair cut by a third; a pledge with no move in your remit not offered). Measured to day 400 on three maps: terms kept 8 of 9, 2-3 clusters opened, people within 3% of an all-open twin but net 31-51% lower -- C36 fails (engine.md, Your remit). **Open for you:** a softer pace (openings sooner, or the strategist chasing new land) before C36 is judged. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
+haze, rain over a flooded ford; the clouds themselves from afar; inselbergs; made-up names for the border and
+coast road; hamlets on the 2D map; **map version 13**, lakes (water) and swamps, dry beds and dunes
+(scenery); vehicles and buildings in detail; and the land running on past the map's edge into haze
+(look.md §8). Your frame-time check: "not much stutter". Then, in your order (2026-11-01; render-and-ui.md,
+The map layer and The start): **sites at work in 3D** (smoke, steam, dust, a refinery's flare, pump
+jacks, each as hard as the site runs; the seaport's harbour, growing with the port); **people** (riders
+at your stops by who's waiting, passengers and touts at your motor parks, shoppers at the markets);
+**the site see-through redrawn** (of three tried, you liked flow bands and the process column: both
+together); **the arrival as one movement** (the loading card lifting away, the letter, pledges and
+verdict as a card over the dimmed map); and **saved games** (it saves itself; the loading card offers
+your games; engine.md, snapshot.ts). The remit in 3D is next. **The remit opens** (remit.ts, brief, Chains: convergent, built 2026-11-01): you start with the home cluster's land, a kept term's verdict opens one of the two nearest closed clusters (your choice, in Waiting on you), closed land veiled on the map; pledges made keepable (the worst seat pair cut by a third; a pledge with no move in your remit not offered). Measured to day 400 on three maps: terms kept 8 of 9, 2-3 clusters opened, people within 3% of an all-open twin but net 31-51% lower -- C36 fails (engine.md, Your remit). **Open for you:** a softer pace (openings sooner, or the strategist chasing new land) before C36 is judged. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

@@ -116,6 +116,17 @@ function tableTokens(text: string): Map<string, string> {
   return out;
 }
 const css = read("src/game/styles/tokens.css");
+// One definition a token: defined twice, the last silently wins and the first's users get the wrong
+// colour (--paint-earth-62 was two browns, 2026-10-31 -- the freight wagons' ribs drew as mangrove roots).
+{
+  const seen = new Map<string, number>();
+  css.split("\n").forEach((line, i) => {
+    const m = line.match(/^\s*(--[a-z0-9-]+)\s*:/);
+    if (!m) return;
+    if (seen.has(m[1]!)) failures.push(`tokens agree: src/game/styles/tokens.css:${i + 1}: ${m[1]} is defined twice (first on line ${seen.get(m[1]!)! + 1})`);
+    else seen.set(m[1]!, i);
+  });
+}
 const defined = new Map([...css.matchAll(/(--[a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((m) => [m[1]!, m[2]!.toLowerCase()]));
 const colour = section("## 2. Colour");
 const chrome = tableTokens(colour.slice(0, colour.indexOf("### Signal")));

@@ -711,6 +711,18 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   `runFile(recorder)` as JSON. `replayRun(base, file, untilTick)` rebuilds the world at any
   tick: the sim is deterministic (the seed is its only randomness), and a test pins that a
   saved run replays to the same funds, headline and towns. `scripts/game-run.ts` reads one.
+  `replayRunSteps` is the same replay a step at a time, for a loading card (a saved game opened
+  by another build, below).
+- **`snapshot.ts`** — a saved game's world (2026-11-01; the page's saves.ts keeps it in IndexedDB).
+  The world is plain data, structured-cloneable (the receipts' and forecasts' copies already
+  relied on it), and the caches keyed on a world refill the same; one thing kept off it isn't a
+  cache: when the corridors are next judged (`corridors.ts corridorsDueAt`). A plain copy judged
+  them at once and then a fraction of a tick later each day than the run it came from -- its
+  corridors parted from the original's, and a run file saved after a load stopped replaying as
+  played. `snapshotOf` carries it, `restoreSnapshot` sets it back; `test/snapshot.test.ts` pins a
+  restored copy running on equal to the original through a judging, and `replayRunSteps` equal to
+  `replayRun`. **Anything else the simulation reads off the world, kept in a module, belongs in the
+  snapshot too.**
   **Reading the world must never change it** (`epoch.ts`; 2026-10-30). The page reads the world
   between ticks for the panels, the map and the cards; a replay doesn't. A cache that holds a
   reading "once a tick" keyed on the game clock alone (`gateways.ts seaportLink`,
@@ -1308,7 +1320,11 @@ replays as played. Seed 0 stays the hand-made map, alone.
   Middle Belt, Hausa's Kafin, Tudun, Birnin in the north, Kanuri and Fulfulde's Ng-, -ram, Mayo in
   the north-east. From the seed (biggest town first), never a name from the old lists or the
   country's best-known towns, never two alike; every road, rail, port and cluster renamed with its
-  towns. Nothing else changes. The border crossings and the coast road keep their names for now.
+  towns. Nothing else changes. From 2026-10-31 the border crossing and the coast road are named the same
+  way on version-9 maps (`border.ts madeUpName`: the crossing by its region's sounds, the coast road by
+  its port's region's -- "Iwala road", "Nukiri road"); what a crossing does goes by the country over it
+  (`borderCountry`, from the region), no longer by its name. Older runs keep Idiroko, Jibia, Banki,
+  Belegete, Mfum and the Lagos and Port Harcourt roads.
   Tested (`test/names.test.ts`). Also in version 8, on the rivers (your look): a tributary's mouth
   that version 2's meanders had left up to 4 cells from its host now joins it; a landlocked map's
   river no longer ends in a 14-cell mouth for a sea that's gone (version 6), and its sharp bends
@@ -1343,6 +1359,19 @@ replays as played. Seed 0 stays the hand-made map, alone.
   left open. Tested. Twelve seeds, 15 days unplayed, version 10 -> 12 (11 and 12 together): sites
   199 -> 199, working 99 -> 99, fuel 34.8% -> 33.6%, trips 733 -> 728 a day (-0.7%: the old roads'
   new lines are a little longer or shorter); roads in and beyond the home box priced as before.
+- **Version 13: more kinds of land** (`region.ts landForms`, `GameRiverDef.lake`, `GameMapDef.features`,
+  `world.features`; 2026-10-31, your list: "swamps in the delta, lakes, dry riverbeds and dunes in the
+  far north"). **Lakes are water** -- a river's capsules round a short axis, wide in the middle, `lake`
+  set so crossings.ts names none of its ends and the 3D water lies still -- placed on low ground clear
+  of the home box, 10 cells from any town and 2 from any road's line, the map kept only if every town
+  can still be reached: 1-2 a map by region (the north-east's a wide shallow one). **The rest is
+  scenery** (drawn, never priced or simulated, like the hamlets): swamp in patches on low ground by
+  the water (most in the delta: 150-190 patches a map there, a few dozen elsewhere); the sandy beds of
+  seasonal streams in the north and Middle Belt, run downhill to a river or the map's edge; one dune
+  field in the far north. Before the hamlets, so they settle round them. Twelve seeds, 15 days
+  unplayed, version 12 -> 13: working sites 99 -> 99, fuel 33.8%, trips 728, road prices the same; one
+  site fewer placed across the twelve (199 -> 198), a lake on its spot. Tested
+  (`test/land-forms.test.ts`).
 - **Growing the port** (`gateways.ts portScale`, `upgradePort`; the `upgradePort` action; brief, The
   region: "its handling is a rung like a road's"; 2026-10-29). Imports were set at day 1's need, so
   a growing region's only answer to the shortage that followed was the refinery. Two rungs, bought

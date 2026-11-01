@@ -219,6 +219,9 @@ seven label passes placed nothing through the collision check the others used.)
   `TAKEN`; **near** past 2x -- plus site, road and crossing names, ruins, wardens, and the danfos and trucks one by one even at 4x (below 4x they're one by one at every tier: since the corridor dropped its side bands, their capsules are where the informal sector shows at all).
   (Fit is zoom 1 and never less, so the tiers start there.) Anything selected, pointed at or waiting on
   you draws at any tier: the panel's places never vanish from the map.
+- **Hamlets** (map version 12, from 2026-10-31) draw from **mid** in: a few small squares each in
+  `--map-hill`, faint, part of the ground -- not signal, nothing to click -- so the land between the
+  towns reads as lived-in on the map you build on, as it does in 3D.
 - **One placer** (`Placer`): every label claims a box, then all are resolved by priority -- the price
   label, events, what you asked for, `TAKEN`, town names largest first, site names, road names,
   ruins, site icons at far -- and only then paint, the most important on top. A road name gives way
@@ -288,7 +291,34 @@ south than the north, patched into the land's, trees', towns' and roads' materia
 (`withClouds`); the north's haze closer and its horizon dusty with the harmattan (`WEATHER`); and over
 a ford while it's flooded (floods.ts), a rain cloud of grey puffs low over it, casting its shade, with
 streaks falling under it -- the cloud thinning away as the camera comes in under it, so the rain on
-the town shows instead of a grey veil.
+the town shows instead of a grey veil. **The clouds themselves** (2026-10-31, your look: "I saw cloud
+shadows but didn't see the clouds"): the same drifting field as soft white puffs 260 m up, set up-sun of
+the shade each casts so it sits over its own shadow; seen only from afar (fading in past 1 km), broken
+up within and gone toward the map's edge. Fewer clouds than at first (the south's cover 0.5 -> 0.34): a
+cloudy map read as mist over its towns. **Inselbergs** (B2, finished 2026-10-31): a small steep hill (the
+north's and Middle Belt's rocks, map version 4) gets a bare granite dome on its top, lumpy as granite
+weathers, a few boulders at its foot, nothing growing on it; drawn from the map's hills (`world.hills`,
+the screen's copy), one mesh for them all -- the land's shape and prices unchanged. **More kinds of land** (map version 13, 2026-10-31): swamp painted into
+the ground as patches of reedy green with standing pools, mangroves on the delta's and palms or bush on
+others; a dry stream bed as pale sand with a darker lip and shade trees along it; a dune field as the
+palest sand with crests across the wind in the 3D ground only (the map's heights and prices are the
+terrain's), nothing growing on it; a lake as still water. On the 2D map the same in the terrain's own
+tokens, under the water: a faint wash of the water's colour with reed ticks, a pale line with a darker
+lip, the hill tone's light ripples. **Vehicles** (2026-10-31): rounded bodies, windows as panes between
+pillars, raked windscreens, head and tail lamps, wheels with hubs; the bus's door and destination board,
+the BRT's join; the danfo yellow with its two black bands, its roof rack loaded and its conductor
+hanging out of the open door; the keke's driver, the okada's rider and passenger; the lorry's load under
+a tarpaulin, the tanker's rounded tank and catwalk; a train a locomotive and its coach or covered wagon.
+**Buildings**: every house a door and windows (an upper storey windows only), lit at night with the
+blocks'; black water tanks on flat roofs; the bungalow's face, the shophouse's open front and signboard,
+the block's window bands, the mosque's balcony, door and crescent mast, the church's cross and tall
+windows, the hut's doorway. **The edge** (your word, 2026-10-31: "land fades off", in place of item 4's
+table): no cut slab -- the land runs on past the map, its edge's height gone within 12 cells and a
+gentle roll of its own, its colour the region's settling to the horizon's over ~230 cells (recoloured at
+night); the sea carried on as the map's own water, as deep at the edge as the map's sea and deepening
+outward; a river leaving the map runs on its way, narrowing to nothing. The sea's depth in the map is
+now measured from the land (the sea's line runs off the map, and from its far side it had shoaled to
+a pale band along the edge).
 
 ---
 

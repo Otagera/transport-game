@@ -291,6 +291,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   const overlay = state.overlay ?? "none";
 
   drawGround(ctx, world, view);
+  if (drawsAt(zoomTier, "hamlet")) drawHamlets(ctx, world, view);
   drawRoads(ctx, world, view, overlay !== "none");
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
@@ -422,6 +423,66 @@ function terrainCanvas(world: GameWorld): HTMLCanvasElement {
     }
   }
   g.putImageData(img, 0, 0);
+  // Map version 13's scenery, in the terrain's own tokens (ground, not signal): swamp as a faint wash
+  // of the water's colour with a few reed ticks, a dry stream bed as a pale line with a darker lip, a
+  // dune field as the hill tone's light ripples. Under the water, which paints over it.
+  const features = world.features;
+  if (features) {
+    g.save();
+    g.scale(TERRAIN_PX, TERRAIN_PX);
+    g.translate(0.5, 0.5);
+    for (const m of features.wetlands ?? []) {
+      // A few overlapping washes, not one disc: a swamp has no edge you could draw a circle round.
+      g.globalAlpha = 0.07;
+      g.fillStyle = COLORS.water;
+      for (let k = 0; k < 3; k += 1) {
+        const a = k * 2.1 + m.y, d = m.r * 0.35;
+        g.beginPath();
+        g.ellipse(m.x + Math.cos(a) * d, m.y + Math.sin(a) * d, m.r * 0.6, m.r * 0.4, a, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = 0.35;
+      g.strokeStyle = COLORS.water;
+      g.lineWidth = 0.08;
+      for (let k = 0; k < 4; k += 1) {
+        const a = (k / 4) * Math.PI * 2 + m.x, d = m.r * 0.45;
+        const x = m.x + Math.cos(a) * d, y = m.y + Math.sin(a) * d;
+        g.beginPath();
+        g.moveTo(x - 0.25, y);
+        g.lineTo(x + 0.25, y);
+        g.stroke();
+      }
+    }
+    g.lineJoin = g.lineCap = "round";
+    for (const bed of features.dryBeds ?? []) {
+      for (const [w, colour, alpha] of [[bed.width + 0.5, COLORS.hill, 0.3], [bed.width * 0.6, COLORS.ground, 0.9]] as const) {
+        g.globalAlpha = alpha;
+        g.strokeStyle = colour;
+        g.lineWidth = w;
+        g.beginPath();
+        bed.points.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.stroke();
+      }
+    }
+    for (const d of features.dunes ?? []) {
+      g.save();
+      g.translate(d.x, d.y);
+      g.rotate(d.turn);
+      g.beginPath();
+      g.ellipse(0, 0, d.rx, d.ry, 0, 0, Math.PI * 2);
+      g.clip();
+      g.strokeStyle = COLORS.hill;
+      g.globalAlpha = 0.28;
+      g.lineWidth = 0.18;
+      for (let r = -d.rx; r <= d.rx; r += 1.6) {
+        g.beginPath();
+        for (let t = -d.ry; t <= d.ry; t += 0.5) g.lineTo(r + Math.sin(t * 0.7) * 0.6, t);
+        g.stroke();
+      }
+      g.restore();
+    }
+    g.restore();
+  }
   const lines = world.waterLines;
   if (lines) {
     // Each stretch a tapered capsule, as terrain.ts's cells are made: a disc at each point, the
@@ -515,6 +576,31 @@ function closedCanvas(world: GameWorld): HTMLCanvasElement | null {
   }
   closedImage = { world, key, canvas };
   return canvas;
+}
+
+/**
+ * The land's hamlets (map version 12, region.ts): a few compounds each, drawn into the ground in
+ * its own darker tone -- not signal, nothing to click -- from the mid tier in (density.ts), as the
+ * 3D view draws them, so the empty middle the 2D map showed reads as lived-in country.
+ */
+function drawHamlets(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
+  if (!world.hamlets?.length) return;
+  ctx.save();
+  ctx.fillStyle = COLORS.hill;
+  ctx.globalAlpha = zoomTier === "near" ? 0.55 : 0.4;
+  const side = Math.max(1.5, 0.32 * view.scale);
+  for (const h of world.hamlets) {
+    // The same few compounds every frame: placed by the hamlet's own cell.
+    let seed = (h.x * 73856093) ^ (h.y * 19349663);
+    const next = () => ((seed = Math.imul(seed ^ (seed >>> 13), 1274126177) >>> 0) / 4294967296);
+    const n = Math.round(2 + h.size * 1.2);
+    for (let k = 0; k < n; k += 1) {
+      const a = next() * Math.PI * 2, d = Math.sqrt(next()) * (0.4 + h.size * 0.3);
+      const p = toScreen(view, h.x + Math.cos(a) * d, h.y + Math.sin(a) * d);
+      ctx.fillRect(p.x - side / 2, p.y - side / 2, side, side);
+    }
+  }
+  ctx.restore();
 }
 
 // --- Roads: traffic, the other side, your service -------------------------------------------
