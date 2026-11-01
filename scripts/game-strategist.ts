@@ -25,7 +25,7 @@
 import { GAME_MAP } from "../src/game/map";
 import { startRun } from "../src/engine/game/runlog";
 import { applyAction, type ActionSpec } from "../src/engine/game/actions";
-import { remitOffers } from "../src/engine/game/remit";
+import { clusterAt, inRemit, remitOffers, remitRefusal } from "../src/engine/game/remit";
 import { MAX_COMMITTED, pledgeMove, pledgeProgress } from "../src/engine/game/term";
 import { gameTick } from "../src/engine/game/tick";
 import { SIM_DT } from "../src/engine/loop";
@@ -117,9 +117,28 @@ function act(world: GameWorld, day: number, action: ActionSpec, why: string): bo
     made.set(action.kind, (made.get(action.kind) ?? 0) + 1);
     if (!["lorry", "sell", "fix"].includes(action.kind)) buildsToday += 1;
   }
-  if (result.ok && action.kind === "open") openings.push(`${world.towns.get(action.hub)?.name} day ${day}`);
+  if (result.ok && action.kind === "open") {
+    openings.push(`${world.towns.get(action.hub)?.name} day ${day}`);
+    openedOn.set(action.hub, day);
+  }
+  // C35: the first build in a cluster after its opening.
+  if (result.ok && !["lorry", "sell", "fix", "pledge", "open", "bond", "project"].includes(action.kind)) {
+    for (const town of placesOf(action)) {
+      const hub = clusterAt(world, town)?.hub;
+      if (hub && openedOn.has(hub) && !firstBuild.has(hub)) firstBuild.set(hub, day);
+    }
+  }
   if (result.ok && LOG) console.log(`  day ${day}: ${why} -- ${JSON.stringify(action)}`);
   return result.ok;
+}
+
+/** The far clusters opened, by regional town, and the day; the day of the first build in each (C35). Reset per map. */
+const openedOn = new Map<string, number>();
+const firstBuild = new Map<string, number>();
+/** The towns and sites an action builds at. */
+function placesOf(action: ActionSpec): string[] {
+  const a = action as { a?: string; b?: string; townId?: string; siteId?: string; town?: string };
+  return [a.a, a.b, a.townId, a.siteId, a.town].filter((x): x is string => !!x);
 }
 
 /** One game day's decisions. Returns the moves made, and whether it's waiting on money for a rung. */
@@ -127,6 +146,9 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   let moves = 0;
   let waiting = false;
   const did = (ok: boolean) => (ok ? (moves += 1, true) : false);
+  // Only what your remit allows (remit.ts): a refused first choice would otherwise be chosen again
+  // every day, and block everything behind it until its cluster opened.
+  const allowed = (spec: ActionSpec) => !remitRefusal(world, spec);
 
   // The term's pledges, as a player who reads the strip and means to keep them: those with a move
   // to name first, the nearest done next (pledgeMove, pledgeProgress); then, each day, the named
@@ -173,7 +195,7 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   if (averageNet(world) < 0 && world.economy.funds < 3 * RESERVE) return { moves, waiting };
 
   // Climb: the first town grown to all its road allows gets the next rung.
-  const full = [...world.basePopulation.keys()].map((id) => roadFull(world, id)).find((f) => f?.road && !f.thin);
+  const full = [...world.basePopulation.keys()].map((id) => roadFull(world, id)).find((f) => f?.road && !f.thin && allowed({ kind: f.next === "lane" ? "lane" : f.next === "paved" ? "pave" : "track", a: f.road.a, b: f.road.b } as ActionSpec));
   if (full?.road) {
     const { a, b } = full.road;
     if (full.next === "paved") {
@@ -194,7 +216,7 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   }
 
   // Connect a cut-off town: the cheapest road from it to one on the network.
-  const cut = [...world.basePopulation.keys()].filter((id) => isCutOff(world, id));
+  const cut = [...world.basePopulation.keys()].filter((id) => isCutOff(world, id) && inRemit(world, id));
   for (const id of cut.slice(0, 1)) {
     const town = world.towns.get(id)!;
     const near = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id)).sort((p, q) => Math.hypot(p.x - town.x, p.y - town.y) - Math.hypot(q.x - town.x, q.y - town.y))[0];
@@ -229,11 +251,11 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
     const v = world.simulation.vehicles.find((x) => x.id === r.vehicleIds[0]);
     return v && v.path.includes(a) && v.path.includes(b);
   });
-  let pair = noSeatPairs(world).find((p) => p.perDay >= 60 && !served(p.a, p.b));
+  let pair = noSeatPairs(world).find((p) => p.perDay >= 60 && !served(p.a, p.b) && allowed({ kind: "bus", a: p.a, b: p.b }));
   // With money to spare, the busiest trip nobody of yours carries, whoever does now: a player
   // reads the desire lines, not only the empty platforms.
   if (!pair && world.economy.funds > 20000) {
-    const towns = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id));
+    const towns = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id) && inRemit(world, t.id));
     let best: { a: string; b: string; perDay: number } | null = null;
     for (let i = 0; i < towns.length; i += 1) for (let j = i + 1; j < towns.length; j += 1) {
       const a = towns[i]!.id, b = towns[j]!.id;
@@ -250,11 +272,12 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   // A big town expecting more of you than it gets (Revision 4, 2): a bus on its biggest trip,
   // or another vehicle on a route through it. One a day.
   const wanting = [...world.basePopulation.keys()]
+    .filter((id) => inRemit(world, id))
     .map((id) => ({ id, g: townGrowth(world, id) }))
     .filter((x) => x.g && x.g.expected > 0 && x.g.playerShare < x.g.expected)
     .sort((p, q) => q.g!.expected - q.g!.playerShare - (p.g!.expected - p.g!.playerShare))[0];
   if (wanting) {
-    const trip = tripsFrom(world, wanting.id).find((t) => t.reachable && !served(wanting.id, t.to));
+    const trip = tripsFrom(world, wanting.id).find((t) => t.reachable && !served(wanting.id, t.to) && inRemit(world, t.to));
     const through = world.routes.find((r) => !isRailRoute(r.id) && world.simulation.vehicles.find((v) => v.id === r.vehicleIds[0])?.path.includes(wanting.id));
     if (trip && spend(world, world.tuning.busPurchaseCost)) did(act(world, day, { kind: "bus", a: wanting.id, b: trip.to }, `${world.towns.get(wanting.id)!.name} expects ${Math.round(wanting.g!.expected * 100)}% (you ${Math.round(wanting.g!.playerShare * 100)}%): a bus`));
     else if (through && spend(world, world.tuning.busPurchaseCost)) did(act(world, day, { kind: through.id.startsWith("mini:") ? "minibus" : "bus", a: through.a, b: through.b }, `${world.towns.get(wanting.id)!.name} expects more: another vehicle`));
@@ -300,13 +323,13 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   // what a park pays for is clearer roads; its levy gain is a few naira a day (measured 2026-10-23).
   if (world.tuning.parksEnabled && day % 10 === 0) {
     const slowest = (id: string) => Math.min(...world.simulation.map.segments.filter((seg) => seg.fromNodeId === id || seg.toNodeId === id).map((seg) => world.segmentSpeed.get(seg.id) ?? 1));
-    const best = [...world.basePopulation.keys()].filter((id) => !world.parks.has(id) && world.towns.get(id)!.population >= 50 && slowest(id) < 0.8).sort((p, q) => world.towns.get(q)!.population - world.towns.get(p)!.population)[0];
+    const best = [...world.basePopulation.keys()].filter((id) => !world.parks.has(id) && inRemit(world, id) && world.towns.get(id)!.population >= 50 && slowest(id) < 0.8).sort((p, q) => world.towns.get(q)!.population - world.towns.get(p)!.population)[0];
     if (best && spend(world, world.tuning.parkCost)) did(act(world, day, { kind: "park", townId: best }, `a motor park: the roads into ${world.towns.get(best)!.name} jam (${Math.round(slowest(best) * 100)}% speed), ~₦${Math.round(parkLevyGain(world, best))}/day more levy`));
   }
   // A metro (Revision 4, 6): the biggest town that can take one, a line at a time, every five
   // days at most.
   if (world.tuning.metroEnabled && day % 5 === 0) {
-    const town = [...world.towns.values()].filter((t) => !t.industry && checkMetro(world, t.id).ok).sort((p, q) => q.population - p.population)[0];
+    const town = [...world.towns.values()].filter((t) => !t.industry && inRemit(world, t.id) && checkMetro(world, t.id).ok).sort((p, q) => q.population - p.population)[0];
     if (town && spend(world, metroPrice(world, town.id))) did(act(world, day, { kind: "metro", townId: town.id }, `${town.name} (${Math.round(town.population)}k): ${metroLines(world, town.id) === 0 ? "a metro" : "another metro line"}`));
   }
   // The works: restored once cement holds 10k people back.
@@ -340,7 +363,7 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
         const left = Math.max(0, flow.rate - (outcome?.delivered ?? 0) - (outcome?.trucked ?? 0)) * D;
         unmoved.set(flow.from, (unmoved.get(flow.from) ?? 0) + left);
       }
-      const best = [...unmoved].filter(([id, t]) => t >= 30 && !world.yards.has(id) && !isCutOff(world, id)).sort((x, y) => y[1] - x[1])[0];
+      const best = [...unmoved].filter(([id, t]) => t >= 30 && !world.yards.has(id) && !isCutOff(world, id) && inRemit(world, id)).sort((x, y) => y[1] - x[1])[0];
       if (best && spend(world, world.tuning.yardCost)) did(act(world, day, { kind: "yard", townId: best[0] }, `${Math.round(best[1])} t a day sit unmoved: a haulage yard`));
     }
   } else {
@@ -488,8 +511,14 @@ for (const seed of SEEDS) {
   console.log(`  rungs (road pieces): ${[...rungs].map(([r, n]) => `${r} ${n}`).join(", ")} | most money held ${k(Math.max(...days.map((d) => d.funds)))}`);
   console.log(`  moves: ${[...made].sort((x, y) => y[1] - x[1]).map(([kind, n]) => `${kind} ${n}`).join(", ")}`);
   console.log(`  remit (remit.ts): ${world.remit ? `opened ${openings.join(", ") || "none"}; terms kept ${world.term?.history.filter((t) => t.kept.length > 0 && !t.failed).length ?? 0} of ${world.term?.history.length ?? 0}` : "off"}`);
+  if (openedOn.size) {
+    const waits = [...openedOn].map(([hub, d]) => ({ name: world.towns.get(hub)?.name, wait: firstBuild.has(hub) ? firstBuild.get(hub)! - d : null }));
+    console.log(`  C35 first build in a newly opened cluster: ${waits.map((w) => `${w.name} ${w.wait === null ? "none" : `${w.wait} days`}`).join(", ")} (wanted <= 20)`);
+  }
   for (const t of world.term?.history ?? []) console.log(`    term ${t.number}: kept ${t.kept.join("; ") || "none"} | missed ${t.missed.join("; ") || "none"}`);
   openings.length = 0;
+  openedOn.clear();
+  firstBuild.clear();
   made.clear();
   sold.clear();
   const short = [...world.basePopulation.keys()].map((id) => ({ id, g: townGrowth(world, id) })).filter((x) => x.g && x.g.expected > 0);

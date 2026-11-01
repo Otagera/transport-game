@@ -1449,13 +1449,15 @@ may build there. `world.remit` is plain data -- `open` (regional towns, in the o
   `legReach`, then a freight train). A pledge whose move is missing or outside your remit
   (`remitRefusal`) isn't offered: the cement pledge had named a yard in a closed cluster.
 - **Measured** (strategist, maps 2411/3218/949 to day 400, on vs a twin with everything open):
-  terms kept 3/3, 2/3, 3/3, opening 3, 2 and 3 clusters (before the
-  pledge fixes it was 1 of 3 kept everywhere). People within 3% (817k/798k, 971k/993k, 910k/916k),
-  but net/day 31-51% lower (3656/5317, 4388/8879, 4160/7971): C36 fails. The gap is yards and
-  freight -- 12/6/24 yards against 36/37/33, since a yard in a closed cluster waits for its opening
-  and the strategist doesn't rush the new land when it opens (C35, a build there within 20 days, not yet
-  read out). Unresolved: whether that's the
-  strategist or the gate's pace (a third opening only at day 362).
+  terms kept 7 of 9, 2-3 clusters opened (before the pledge fixes, 1 of 3 kept everywhere and one
+  opening). C35: something built in each newly opened cluster the day it opened. C36: net/day
+  6765/5317 (+27%), 8592/8879 (-3%), 7223/7971 (-9%); people 800k/798k, 1039k/993k, 920k/916k.
+- **A gated player must choose among what's allowed.** The first measure had net 31-51% under the
+  twin, and it was the strategist, not the gate: it took the single best place for a yard, a park, a
+  road's next rung, a cut-off town's road, a no-seat bus, and when that place was closed the action
+  was refused and the same place came first again the next day -- blocking every yard until its
+  cluster opened (12 yards against 36). Filtering each choice by `remitRefusal`/`inRemit` first
+  closed the gap. Any automated player (the forecaster's moves, a bot) must do the same.
 
 ### Stations on the old line (2026-10-30; brief, Revision 5, Stations on the old line)
 

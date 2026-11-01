@@ -64,7 +64,7 @@ export function landOf(world: GameWorld, at: { x: number; y: number }): ClusterD
 }
 
 /** The far cluster a town or site belongs to, or undefined for home: its own cluster first, then its land. */
-function clusterAt(world: GameWorld, townId: string): ClusterDef | undefined {
+export function clusterAt(world: GameWorld, townId: string): ClusterDef | undefined {
   const own = clusterOf(world, townId);
   if (own) return own;
   const town = world.towns.get(townId);
