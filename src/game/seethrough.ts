@@ -1,12 +1,16 @@
-// A site, see-through (your idea after april-zhu.com/colorfigures, 2026-10-24): the plant
-// drawn as a machine, from live numbers, so a chain reads as a thing working or stuck rather
-// than a column of percentages. What comes in (piped from its source, flowing as fast as it
-// arrives), the plant (filled to what it makes of what it could, its shift standing at the
-// gate), what goes out (a lane to each town: flowing when it's carried, dashed when it waits,
-// red when no road or tanker reaches). Whatever holds it back glows amber, and says so.
+// A site, see-through (your idea after april-zhu.com/colorfigures, 2026-10-24; redrawn 2026-11-01
+// from the two you picked of three, "flow bands" and "the process column"): read down the panel as
+// the goods move. What comes in -- each input a bar filled to what arrives of what the plant could
+// use, flowing down into it as thick as it arrives; the plant -- a dial of what it makes of what it
+// could, its tonnes, its shift; and where it goes -- a trunk out of the plant as thick as it runs,
+// a branch off it to each town as thick as the tonnes sent there, running on along that town's
+// row as far as they're carried, the rest left as a track: amber where it waits for hauliers, red
+// and dotted where no road or tanker reaches. Whatever holds it back is amber, and the caption
+// says so.
 //
-// Pure: data in, an SVG string out. The panel redraws often; each flow's dashes keep their
-// phase from the clock (a negative delay), so a redraw doesn't restart them.
+// Pure: data in, an HTML string out (one SVG at the panel's width, so its words are the page's
+// size). The panel redraws often; each flow's dashes keep their phase from the clock (a negative
+// delay), so a redraw doesn't restart them.
 
 export interface FigureInput {
   name: string;
@@ -35,94 +39,124 @@ export interface FigureData {
   outputs: FigureOutput[];
   /** What the caption says is stuck, or "" when nothing is. */
   stuck: string;
-  /** A refinery or tank farm gets its chimneys and tanks; everything else a works shed. */
+  /** A refinery or tank farm, or a works (the old drawing's chimneys; not drawn since 2026-11-01). */
   kind: "refinery" | "works";
 }
 
-const W = 360;
-const H = 212;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-const short = (s: string, n = 14) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-
-/** Dashes that move: faster the more flows; still (and grey) at none. Phase kept from the clock. */
-function flowing(path: string, share: number, color: string, width: number, nowMs: number): string {
-  if (share <= 0.02) return `<path d="${path}" fill="none" stroke="var(--line)" stroke-width="${width}" stroke-dasharray="3 5" stroke-linecap="round"/>`;
-  const seconds = Math.max(0.35, 2.4 - 2 * Math.min(1, share));
-  const delay = -((nowMs / 1000) % seconds);
-  return `<path d="${path}" fill="none" stroke="${color}" stroke-opacity="0.25" stroke-width="${width + 3}" stroke-linecap="round"/>
-    <path class="flow" d="${path}" fill="none" stroke="${color}" stroke-width="${width}" stroke-dasharray="6 8" stroke-linecap="round" style="animation-duration:${seconds.toFixed(2)}s;animation-delay:${delay.toFixed(2)}s"/>`;
-}
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+const tons = (v: number) => (v >= 10 ? `${Math.round(v)}` : v >= 1 ? v.toFixed(1).replace(/\.0$/, "") : v > 0 ? "<1" : "0");
+/** A flow's dash speed (faster the more flows) and its phase from the clock, so a redraw doesn't restart it. */
+const pace = (share: number, nowMs: number) => {
+  const seconds = Math.max(0.5, 2.6 - 2 * Math.min(1, share));
+  return `animation-duration:${seconds.toFixed(2)}s;animation-delay:${(-((nowMs / 1000) % seconds)).toFixed(2)}s`;
+};
+const capacityOf = (d: FigureData) => (d.running > 0.01 ? d.madePerDay / d.running : 0);
+const outColour = (o: FigureOutput) => (o.state === "far" || o.state === "noroad" ? "var(--bad)" : o.state === "waiting" ? "var(--warn)" : "var(--goods)");
+const caption = (d: FigureData) => (d.stuck ? `<figcaption class="warn">${esc(d.stuck)}</figcaption>` : `<figcaption class="ok">Running as it should.</figcaption>`);
 
 export function siteFigure(d: FigureData, nowMs: number): string {
-  const amber = "var(--warn)";
-  const plant = { x: 126, y: 72, w: 100, h: 70 };
-  const parts: string[] = [];
+  const W = 290, X = 54, END = W - 4, ROW = 36, TRUNK = 22;
+  const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+  const p: string[] = [];
+  let y = 0;
+  const band = (path: string, width: number, colour: string, opacity = 1) => `<path d="${path}" fill="none" stroke="${colour}" stroke-width="${width.toFixed(1)}" stroke-opacity="${opacity}" stroke-linecap="butt" stroke-linejoin="round"/>`;
+  const moving = (path: string, width: number, share: number) => (share > 0.02 && width >= 2 ? `<path class="flow" d="${path}" fill="none" stroke="var(--surface)" stroke-opacity="0.85" stroke-width="${Math.min(2, width / 2).toFixed(1)}" stroke-dasharray="2 9" style="${pace(share, nowMs)}"/>` : "");
+  const tag = (text: string, at: number) => `<text x="${X}" y="${at + 9}" class="tag">${text}</text>`;
 
-  // In: one pipe for each input, into the plant's left side.
-  const inputs = d.inputs.slice(0, 2);
+  // In.
+  p.push(tag("In", y));
+  y += 14;
+  const inputs = d.inputs.slice(0, 3);
+  const inTop = y;
+  const inWidths = inputs.map((input) => 3 + 9 * Math.max(0, Math.min(1, input.share)));
+  const plantTop = inTop + Math.max(1, inputs.length) * ROW + 10;
+  const lanes = (widths: number[], from: number) => {
+    let x = from;
+    return widths.map((w) => { const c = x + w / 2; x += w; return c; });
+  };
+  const inLanes = lanes(inWidths, 26 - inWidths.reduce((s, w) => s + w, 0) / 2);
   inputs.forEach((input, i) => {
-    const y = plant.y + 22 + i * 24;
-    const short_ = d.limit === "input" && i === 0;
-    parts.push(flowing(`M 14 ${y} L ${plant.x} ${y}`, input.share, short_ ? amber : "var(--goods)", 4, nowMs));
-    parts.push(`<text x="14" y="${y - 8}" class="t">${esc(short(input.name, 10))} · ${esc(short(input.from))}</text>`);
-    parts.push(`<text x="14" y="${y + 15}" class="t ${short_ ? "warn" : "muted"}">${Math.round(input.share * 100)}% of what it can use</text>`);
+    const top = inTop + i * ROW, yc = top + 24;
+    const warn = d.limit === "input" && i === 0;
+    const colour = warn ? "var(--warn)" : "var(--goods)";
+    p.push(`<text x="${X}" y="${top + 12}" class="t b">${esc(input.name)}${input.from ? ` <tspan class="m" font-weight="400">from ${esc(short(input.from, 20))}</tspan>` : ""}</text>`);
+    p.push(`<text x="${END}" y="${top + 12}" class="t ${warn ? "warn" : ""}" text-anchor="end">${pct(input.share)}</text>`);
+    // Its bar: the full length what the plant could use, filled to what arrives.
+    p.push(`<rect x="${X}" y="${yc - 6}" width="${END - X}" height="12" rx="3" fill="var(--line)" fill-opacity="0.6"/>`);
+    const fillTo = X + (END - X) * Math.max(0, Math.min(1, input.share));
+    if (input.share > 0.01) p.push(`<rect x="${X}" y="${yc - 6}" width="${fillTo - X}" height="12" rx="3" fill="${colour}" fill-opacity="0.9"/>`, moving(`M ${X + 3} ${yc} L ${fillTo - 3} ${yc}`, 6, input.share));
+    // Down into the plant, as thick as it arrives.
+    const lx = inLanes[i]!, r = 8;
+    const path = `M ${X} ${yc} L ${lx + r} ${yc} Q ${lx} ${yc} ${lx} ${yc + r} L ${lx} ${plantTop}`;
+    p.push(band(path, inWidths[i]!, colour, input.share > 0.01 ? 0.85 : 0.3));
+    p.push(moving(path, inWidths[i]!, input.share));
   });
-
-  // The plant: an isometric block, its tank filled to what it makes of what it could.
-  const { x, y, w, h } = plant;
-  const top = `M ${x} ${y} L ${x + w / 2} ${y - 16} L ${x + w} ${y} L ${x + w / 2} ${y + 16} Z`;
-  parts.push(`<path d="${top}" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1.2"/>`);
-  parts.push(`<path d="M ${x} ${y} L ${x} ${y + h} L ${x + w / 2} ${y + h + 16} L ${x + w / 2} ${y + 16} Z" fill="var(--surface-2)" stroke="var(--ink-2)" stroke-width="1.2"/>`);
-  parts.push(`<path d="M ${x + w / 2} ${y + 16} L ${x + w / 2} ${y + h + 16} L ${x + w} ${y + h} L ${x + w} ${y} Z" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1.2"/>`);
-  // The gauge on its face: how full it runs.
-  const gx = x + w / 2 + 10;
-  const gh = h - 18;
-  parts.push(`<rect x="${gx}" y="${y + 22}" width="14" height="${gh}" rx="3" fill="var(--surface-2)" stroke="var(--ink-2)" stroke-width="1"/>`);
-  parts.push(`<rect x="${gx}" y="${y + 22 + gh * (1 - d.running)}" width="14" height="${gh * d.running}" rx="3" fill="${d.limit === "capacity" ? "var(--good)" : d.running > 0 ? "var(--goods)" : "var(--line)"}"/>`);
-  parts.push(`<text x="${gx + 20}" y="${y + 34}" class="t">${Math.round(d.running * 100)}%</text>`);
-  parts.push(`<text x="${gx + 20}" y="${y + 48}" class="t muted">${Math.round(d.madePerDay)} t/day</text>`);
-  // Chimneys and tanks (a refinery), or a shed roof (a works); smoke while it runs.
-  if (d.kind === "refinery") {
-    for (const [cx, ch] of [[x + 18, 34], [x + 34, 26]] as const) {
-      parts.push(`<rect x="${cx}" y="${y - ch}" width="9" height="${ch}" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1.2"/>`);
-      if (d.running > 0.05) parts.push(`<circle class="smoke" cx="${cx + 4.5}" cy="${y - ch - 6}" r="5" fill="var(--line)" style="animation-delay:${(-((nowMs / 1000) % 2.4)).toFixed(2)}s"/>`);
-    }
-  } else {
-    parts.push(`<path d="M ${x + 10} ${y - 6} L ${x + 26} ${y - 22} L ${x + 42} ${y - 6}" fill="none" stroke="var(--ink-2)" stroke-width="1.2"/>`);
-    if (d.running > 0.05) parts.push(`<circle class="smoke" cx="${x + 26}" cy="${y - 30}" r="5" fill="var(--line)" style="animation-delay:${(-((nowMs / 1000) % 2.4)).toFixed(2)}s"/>`);
+  if (!inputs.length) {
+    p.push(`<text x="${X}" y="${inTop + 12}" class="t b">Nothing goes in</text><text x="${X}" y="${inTop + 26}" class="t m">it starts here</text>`);
+    const w = Math.max(3, 12 * d.running);
+    p.push(band(`M 26 ${inTop} L 26 ${plantTop}`, w, "var(--goods)", 0.85), moving(`M 26 ${inTop} L 26 ${plantTop}`, w, d.running));
   }
-  if (d.limit === "idle") parts.push(`<text x="${x + w / 2}" y="${y + h / 2 + 10}" class="t warn" text-anchor="middle">idle</text>`);
-  // The shift at the gate: five figures, filled as full as it's staffed.
+
+  // The plant: a dial where the flows meet, what it makes of what it could, its shift.
+  const PH = 56, mid = plantTop + PH / 2;
+  const dial = d.limit === "idle" ? "var(--line)" : d.limit === "capacity" ? "var(--good)" : d.limit === "input" || d.limit === "workers" ? "var(--warn)" : "var(--goods)";
+  const R = 17, C = 2 * Math.PI * R;
+  p.push(`<rect x="1" y="${plantTop}" width="${W - 2}" height="${PH}" rx="9" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>`);
+  p.push(`<circle cx="26" cy="${mid}" r="${R}" fill="var(--surface)" stroke="var(--line)" stroke-width="6"/><circle cx="26" cy="${mid}" r="${R}" fill="none" stroke="${dial}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(C * Math.max(0, Math.min(1, d.running))).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 26 ${mid})"/>`);
+  p.push(`<text x="${X}" y="${mid - 3}" class="big">${d.limit === "idle" ? "Idle" : pct(d.running)} <tspan class="prod">${esc(d.product)}</tspan></text>`);
+  p.push(`<text x="${X}" y="${mid + 14}" class="t m">${d.running > 0.01 ? `${tons(d.madePerDay)} of ${tons(capacityOf(d))} t a day` : "makes nothing"}</text>`);
   if (d.staffing !== null) {
     const filled = Math.round(Math.max(0, Math.min(1, d.staffing)) * 5);
-    for (let k = 0; k < 5; k += 1) {
-      const px = x + 4 + k * 12;
-      const fill = k < filled ? "var(--ink-2)" : "none";
-      const stroke = d.limit === "workers" ? amber : "var(--ink-2)";
-      parts.push(`<circle cx="${px + 4}" cy="${y + h + 26}" r="2.6" fill="${fill}" stroke="${stroke}"/><path d="M ${px} ${y + h + 36} Q ${px + 4} ${y + h + 28} ${px + 8} ${y + h + 36}" fill="${fill}" stroke="${stroke}"/>`);
-    }
-    parts.push(`<text x="${x + 66}" y="${y + h + 35}" class="t ${d.limit === "workers" ? "warn" : "muted"}">shift ${Math.round(d.staffing * 100)}%</text>`);
+    const warn = d.limit === "workers";
+    for (let k = 0; k < 5; k += 1) p.push(`<circle cx="${END - 66 + k * 9}" cy="${mid + 10}" r="3" fill="${k < filled ? (warn ? "var(--warn)" : "var(--ink-2)") : "none"}" stroke="${warn ? "var(--warn)" : "var(--ink-2)"}" stroke-width="1.2"/>`);
+    p.push(`<text x="${END}" y="${mid - 3}" class="t ${warn ? "warn" : "m"}" text-anchor="end">shift ${pct(d.staffing)}</text>`);
   }
 
-  // Out: a lane to each town, fanning from the plant's right side.
+  // Out: a trunk as thick as it runs, a branch to each town as thick as its tonnes.
+  y = plantTop + PH + 6;
+  p.push(tag("Out", y));
+  const outTop = y + 14;
   const outs = d.outputs.slice(0, 5);
-  const sx = x + w;
-  const sy = y + h / 2 + 8;
-  outs.forEach((out, i) => {
-    const ty = 30 + i * ((H - 70) / Math.max(1, outs.length - 1 || 1));
-    const path = `M ${sx} ${sy} C ${sx + 40} ${sy} ${W - 110} ${ty} ${W - 96} ${ty}`;
-    if (out.state === "far" || out.state === "noroad") {
-      parts.push(`<path d="${path}" fill="none" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="2 5" stroke-linecap="round"/>`);
-      parts.push(`<text x="${W - 92}" y="${ty + 4}" class="t bad">✕ ${esc(short(out.to, 11))}</text>`);
-      parts.push(`<text x="${W - 92}" y="${ty + 16}" class="t bad small">${out.state === "far" ? "out of reach" : "no road"}</text>`);
-    } else {
-      parts.push(flowing(path, out.carried, out.state === "waiting" ? amber : "var(--informal)", 3, nowMs));
-      parts.push(`<text x="${W - 92}" y="${ty + 4}" class="t">${esc(short(out.to, 11))} ${Math.round(out.perDay)}t</text>`);
-      parts.push(`<text x="${W - 92}" y="${ty + 16}" class="t ${out.state === "waiting" ? "warn" : "muted"} small">${Math.round(out.carried * 100)}% carried</text>`);
+  const rest = d.outputs.slice(5);
+  const sent = d.outputs.reduce((s, o) => s + o.perDay, 0) || 1;
+  const thickOf = (perDay: number) => Math.min(12, Math.max(3, TRUNK * (perDay / sent)));
+  const outWidths = outs.map((o) => thickOf(o.perDay));
+  if (rest.length) outWidths.push(thickOf(rest.reduce((s, o) => s + o.perDay, 0)));
+  // The first branch leaves first, so it runs on the trunk's right; the rest to its left, uncrossed.
+  const outLanes = lanes([...outWidths].reverse(), 26 - outWidths.reduce((s, w) => s + w, 0) / 2).reverse();
+  outs.forEach((o, i) => {
+    const top = outTop + i * ROW, yc = top + 24;
+    const bad = o.state === "far" || o.state === "noroad";
+    const colour = outColour(o);
+    const carried = bad ? 0 : Math.max(0, Math.min(1, o.carried));
+    const w = outWidths[i]!, lx = outLanes[i]!, r = 8;
+    p.push(`<text x="${X}" y="${top + 12}" class="t ${bad ? "bad" : "b"}">${bad ? "✕ " : ""}${esc(short(o.to, 18))} <tspan class="m" font-weight="400">${tons(o.perDay)} t a day</tspan></text>`);
+    p.push(`<text x="${END}" y="${top + 12}" class="t ${bad ? "bad" : o.state === "waiting" ? "warn" : ""}" text-anchor="end">${bad ? (o.state === "far" ? "out of reach" : "no road") : o.state === "waiting" ? `${pct(carried)} · waits` : `${pct(carried)} carried`}</text>`);
+    // The branch, and its track along the row: as far as it's carried, solid and moving.
+    const branch = `M ${lx} ${plantTop + PH} L ${lx} ${yc - r} Q ${lx} ${yc} ${lx + r} ${yc} L ${X} ${yc}`;
+    const track = `M ${X} ${yc} L ${END} ${yc}`;
+    const tw = Math.max(5, w);
+    if (bad) {
+      // Nothing gets there: the branch reaches the row and stops, its track dotted red.
+      p.push(band(branch, w, colour, 0.6), `<path d="${track}" stroke="${colour}" stroke-width="${tw.toFixed(1)}" stroke-dasharray="2 4" stroke-opacity="0.45"/>`);
+      return;
+    }
+    p.push(band(branch, w, "var(--goods)", 0.9), moving(branch, w, carried));
+    // Its track: the full length what's sent, filled as far as it's carried; waiting, amber.
+    p.push(`<path d="${track}" stroke="${o.state === "waiting" ? colour : "var(--line)"}" stroke-width="${tw.toFixed(1)}" stroke-opacity="${o.state === "waiting" ? 0.35 : 0.7}"/>`);
+    if (carried > 0.01) {
+      const run = `M ${X} ${yc} L ${(X + (END - X) * carried).toFixed(1)} ${yc}`;
+      p.push(band(run, tw, "var(--goods)", 0.9), moving(run, tw, carried));
     }
   });
-  if (d.outputs.length > outs.length) parts.push(`<text x="${W - 92}" y="${H - 10}" class="t muted small">and ${d.outputs.length - outs.length} more</text>`);
-  parts.push(`<text x="${x + w / 2}" y="${H - 6}" class="t muted" text-anchor="middle">${esc(d.product)}</text>`);
-
-  return `<figure class="seethrough"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="How this site is working">${parts.join("")}</svg>${d.stuck ? `<figcaption class="warn">${esc(d.stuck)}</figcaption>` : `<figcaption class="muted">Running as it should.</figcaption>`}</figure>`;
+  if (rest.length) {
+    const top = outTop + outs.length * ROW, yc = top + 9;
+    const lx = outLanes[outs.length]!, w = outWidths[outs.length]!;
+    p.push(band(`M ${lx} ${plantTop + PH} L ${lx} ${yc - 6} Q ${lx} ${yc} ${lx + 6} ${yc} L ${X - 6} ${yc}`, w, "var(--goods)", 0.4));
+    p.push(`<text x="${X}" y="${yc + 4}" class="t m">and ${rest.length} more towns</text>`);
+  }
+  if (!outs.length) p.push(`<text x="${X}" y="${outTop + 12}" class="t m">Nowhere yet</text>`);
+  const H = outTop + Math.max(1, outs.length) * ROW + (rest.length ? 20 : 0) + 4;
+  return `<figure class="seethrough"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="How this site is working">${p.join("")}</svg>${caption(d)}</figure>`;
 }

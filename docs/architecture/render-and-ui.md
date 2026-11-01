@@ -250,6 +250,18 @@ waiting at the source's yard, on the way and where (`goodsOnTheWay`), or the gap
 (`haulBreak`); then what it makes against capacity, and how much gets away. The map says where, the
 card says why.
 
+**The site see-through, redrawn (2026-11-01; seethrough.ts `siteFigure`).** The first drawing (an
+isometric box, pipes and lanes in a 360-wide view squeezed to the panel, its words ~9 px) "looked
+like shit"; of three redrawings in a lab -- flow bands (a Sankey), the process column, a transit line
+-- you liked the first two, and this is them together. Read down the panel as the goods move: each
+input a bar filled to what arrives of what the plant could use, flowing down into the plant as a band
+as thick as it arrives; the plant a dial (amber when an input or the shift holds it back, green at
+capacity), its tonnes against capacity, its shift; a trunk out of the plant and a branch to each
+town as thick as its share of the tonnes sent (up to five, then "and N more"), each running on along
+its town's row as far as it's carried, the rest a track -- amber where it waits for hauliers, red and
+dotted where no road or tanker reaches. One SVG at the panel's width (290 units), so the words are
+the page's own sizes. Same `FigureData` from screen.ts; `kind` no longer drawn.
+
 ## 6. Ambient traffic rendering
 
 `network.ts` draws instanced cars **from** the published `ambientLoads` number (see
