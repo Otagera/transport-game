@@ -585,6 +585,32 @@ export function motorPark(kit: Kit, rand: Rand, ry: number): void {
   k.box(3, 1.4, 0.2, paint("--paint-green-24"), 14, 9, 5);
   kit.place(k.merged(), 0, 0, 0, ry);
 }
+/** A bus stop: a shelter (a roof on two posts, a back, a bench) and its sign in `sign`; its front toward +z. */
+export function busShelter(kit: Kit, ry: number, sign: string): void {
+  const k = new Kit();
+  k.box(4.2, 0.15, 1.8, paint("--paint-grey-6"), 0, 0, 2.5);
+  for (const x of [-1.9, 1.9]) k.box(0.12, 2.5, 0.12, paint("--paint-grey-20"), x, 0.7);
+  k.box(4, 1.6, 0.08, paint("--paint-grey-1"), 0, -0.8, 0.6);
+  k.box(3, 0.1, 0.45, paint("--paint-earth-52"), 0, -0.45, 0.5);
+  k.box(0.1, 3.2, 0.1, paint("--paint-grey-20"), 2.7, 0.9);
+  k.box(0.9, 0.9, 0.06, sign, 2.7, 0.9, 2.7);
+  kit.place(k.merged(), 0, 0, 0, ry);
+}
+/**
+ * A person, standing, life size, in two parts drawn as two instanced meshes with the same matrices:
+ * `clothes` (white, so each instance's colour tints it) and `rest` (legs and head, as they are).
+ */
+export function personGeometry(): { clothes: THREE.BufferGeometry; rest: THREE.BufferGeometry } {
+  const clothes = new Kit();
+  clothes.box(0.44, 0.7, 0.28, paint("--paint-light-1"), 0, 0, 0.78);
+  const rest = new Kit();
+  for (const x of [-0.1, 0.1]) rest.box(0.14, 0.8, 0.18, DARK, x, 0);
+  rest.add(new THREE.IcosahedronGeometry(0.16, 0), paint("--paint-earth-63"), { x: 0, y: 1.66, z: 0 });
+  return { clothes: clothes.merged(), rest: rest.merged() };
+}
+/** What people wear, read from afar: bright prints and whites. */
+export const CLOTHES = ["--paint-red-3", "--paint-blue-12", "--paint-earth-49", "--paint-green-24", "--paint-earth-45", "--paint-light-1", "--paint-earth-52", "--paint-blue-9"];
+
 /** A haulage yard: a fenced gravel lot, lorries, stacked goods, a gantry. */
 export function haulageYard(kit: Kit, rand: Rand, ry: number): void {
   const k = new Kit();

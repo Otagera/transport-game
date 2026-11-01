@@ -706,6 +706,20 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   ground behind, clear of other towns and the old roads. The city's houses, streets and markets
   keep off it (`onQuay`, beside the four checks that keep them off sites), so it reads as the
   city's port district rather than a slab dropped on its outskirts.
+- **People** (2026-11-01, the fidelity list's "people who show the game"; `syncPeople`). Riders at
+  each of your road routes' stops: a shelter (`busShelter`, its sign in your colour) beside the
+  road the route takes out of the town, 8 m off its middle on the near side (the far side where a
+  railway runs along it), and in front of it a figure for every six `waitingAt` the town (up to 30,
+  shared between its stops), spilling along the road as the wait grows. At your motor parks,
+  passengers under the union's shelter by the informal pool waiting there (`parsePoolKey`'s `at`)
+  and three touts working the rows. At each town's markets (recorded by `townKit`), shoppers by
+  its size, a third more while it grows. People are one pair of instanced meshes (clothes tinted
+  from `CLOTHES`, the rest as is; 3,000 at most, 1.3× life to be seen at the closest zoom), each
+  moving on the graphics card by its `aWander` (a shift of the weight at a stop, a slow loop round
+  the stalls); the matrices are written only when a crowd's size changes. Your motor parks,
+  yards and metro entrances (`standAt`) now keep clear of the town's buildings (`builtAt`, every
+  house and market `townKit` placed) as well as the quay, stepping outward till they are -- a
+  town's outskirts run past its reach, and parks were landing on compounds.
 
 **Kept from the old map, in the lab's style** (the lab had no need to show them): the build
 preview and its price label, the fix tool's road, strike and TAKEN/LOST tags, wardens, the

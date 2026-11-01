@@ -8,7 +8,9 @@
 // Draw calls kept low: the land one mesh, the water one, each road one (its colour changes),
 // each town one merged mesh, and each kind of vehicle one InstancedMesh.
 import * as THREE from "three";
-import { SITE_LIFE, cargoShip } from "./shapes3d";
+import { CLOTHES, SITE_LIFE, busShelter, cargoShip, personGeometry } from "./shapes3d";
+import { waitingAt } from "@engine/game/world";
+import { parsePoolKey } from "@engine/game/tick";
 import { siteProduction } from "@engine/game/production";
 import { goodsFlows } from "@engine/game/goods";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -1300,9 +1302,15 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   /** A piece of a town's own street, in its town's frame: one plot long, laid along `ry`. */
   interface Street { x: number; y: number; z: number; long: number; wide: number; ry: number; colour: number }
   let streets: Street[] = [];
+  /** A town's markets, in its town's frame (metres): where its shoppers are (syncPeople). */
+  let markets: Array<{ x: number; z: number; big: boolean }> = [];
+  /** And everything it built, in its frame (metres, each with its radius): what you build there keeps clear. */
+  let footprint: Array<{ x: number; z: number; r: number }> = [];
   function townKit(town: GameTown, tier: Tier, boom = false): Kit {
     fabric = [];
     streets = [];
+    markets = [];
+    footprint = [];
     const rand = seeded(town.id);
     const kit = new Kit();
     const base = elevationAt(town.x, town.y) * HEIGHT;
@@ -1350,7 +1358,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     };
     // The centre first (the big things), then the rest outwards.
     if (tier !== "village") {
-      put(14, 0.35, (k, rr) => market(k, rr, 0, 0, tier === "town" ? 6 : 12));
+      if (put(14, 0.35, (k, rr) => market(k, rr, 0, 0, tier === "town" ? 6 : 12))) markets.push({ ...placed[placed.length - 1]!, big: true });
       put(12, 0.6, (k, rr) => (rand() < 0.5 ? mosque(k, rr, 0, 0, tier === "city" ? 1.4 : 1) : church(k, rr, 0, 0, tier === "city" ? 1.3 : 1)));
       if (tier !== "town") put(12, 0.6, (k, rr) => (rand() < 0.5 ? church(k, rr, 0, 0) : mosque(k, rr, 0, 0)));
     }
@@ -1557,8 +1565,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     // umbrellas and stalls through its streets. Placed last, so the rest of it stays put.
     if (boom && tier !== "village") {
       const extra = tier === "city" ? 10 : tier === "regional" ? 7 : 4;
-      for (let i = 0; i < extra; i += 1) put(7, 0.75, (k, rr) => market(k, rr, 0, 0, 2 + Math.floor(rr() * 3)));
+      for (let i = 0; i < extra; i += 1) if (put(7, 0.75, (k, rr) => market(k, rr, 0, 0, 2 + Math.floor(rr() * 3)))) markets.push({ ...placed[placed.length - 1]!, big: false });
     }
+    footprint = placed.map((b) => ({ ...b }));
     return kit;
   }
   function siteKit(town: GameTown): { kit: Kit; x: number; z: number; clear: (x: number, z: number, r: number) => boolean } {
@@ -1882,8 +1891,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     scene.add(ship);
     harbourParts.push(ship);
     for (let i = 0; i < 1 + level; i += 1) {
-      const centre = at(18 + i * 9, (i % 2 ? -1 : 1) * 6);
-      const r = 7 + i * 2;
+      // Out in the roads, its nearest pass well clear of the jetty and the ship at it.
+      const centre = at(27 + i * 10, (i % 2 ? -1 : 1) * 8);
+      const r = 6 + i * 2;
       // Only where its circle is all sea.
       let open = true;
       for (let a = 0; a < 12 && open; a += 1) {
@@ -1903,6 +1913,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   let lifeAt = performance.now();
   function animateSiteLife(seconds: number): void {
     puffMaterial.uniforms.uTime!.value = seconds;
+    peopleTime.value = seconds;
     puffMaterial.uniforms.uHalfH!.value = (innerHeight * Math.min(2, devicePixelRatio)) / 2;
     const dt = Math.min(0.1, (performance.now() - lifeAt) / 1000);
     lifeAt = performance.now();
@@ -2041,6 +2052,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const mesh = new THREE.Mesh(kit.merged(), material);
         mesh.position.copy(ground(town.x, town.y)).add(new THREE.Vector3(x, 0, z));
         if (!town.industry && fabric.length) mesh.add(...houses(fabric));
+        if (!town.industry) {
+          marketsAt.set(town.id, markets.map((m) => ({ x: mesh.position.x + m.x, z: mesh.position.z + m.z, big: m.big })));
+          builtAt.set(town.id, footprint.map((b) => ({ x: mesh.position.x + b.x, z: mesh.position.z + b.z, r: b.r })));
+        }
         if (!town.industry && streets.length) mesh.add(streetMesh(streets));
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -2536,22 +2551,31 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     if (builds) { scene.remove(builds); builds.geometry.dispose(); builds = null; }
     const kit = new Kit();
     const cleared: number[] = [];
-    const standAt = (town: GameTown, angle: number, make: (k: Kit, ry: number) => void) => {
-      const r = (town.industry ? 2.5 : reachCells.get(town.id) ?? 3) + 1.6;
-      // Round the town from its own side until a dry, roadless spot.
-      for (let k = 0; k < 16; k += 1) {
-        const a = angle + k * 0.4 * (k % 2 ? 1 : -1);
+    parkAt.clear();
+    // `size`: its half-width in metres -- it keeps that clear of the town's buildings (a town's
+    // outskirts run past its reach), stepping outward till it is.
+    const standAt = (town: GameTown, angle: number, make: (k: Kit, ry: number) => void, size = 16): { x: number; y: number; z: number; ry: number } | null => {
+      const houses = builtAt.get(town.id) ?? [];
+      for (let k = 0; k < 48; k += 1) {
+        const r = (town.industry ? 2.5 : reachCells.get(town.id) ?? 3) + 1.6 + Math.floor(k / 16) * 2.5;
+        const a = angle + (k % 16) * 0.4 * (k % 2 ? 1 : -1);
         const cx = town.x + Math.cos(a) * r, cy = town.y + Math.sin(a) * r;
+        if (houses.some((h) => Math.hypot(h.x - cx * M, h.z - cy * M) < h.r + size)) continue;
         const cell = Math.round(cy) * W + Math.round(cx);
-        if (cx < 2 || cy < 2 || cx > W - 3 || cy > H - 3 || terrain.water[cell] === 1 || occupied[cell] === ROAD || occupied[cell] === WET) continue;
+        if (cx < 2 || cy < 2 || cx > W - 3 || cy > H - 3 || terrain.water[cell] === 1 || occupied[cell] === ROAD || occupied[cell] === WET || onQuay(cx, cy, 2.5)) continue;
         const one = new Kit();
         make(one, a + Math.PI / 2);
         kit.place(one.merged(), cx * M, elevationAt(cx, cy) * HEIGHT - 0.15, cy * M);
         for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) cleared.push(cell + dy * W + dx);
-        return;
+        return { x: cx * M, y: elevationAt(cx, cy) * HEIGHT, z: cy * M, ry: a + Math.PI / 2 };
       }
+      return null;
     };
-    for (const id of w.parks) { const t = w.towns.get(id); if (t) standAt(t, 0.3, (k, ry) => motorPark(k, seeded(`park-${id}`), ry)); }
+    for (const id of w.parks) {
+      const t = w.towns.get(id);
+      const at = t && standAt(t, 0.3, (k, ry) => motorPark(k, seeded(`park-${id}`), ry));
+      if (at) parkAt.set(id, at);
+    }
     for (const id of w.yards) { const t = w.towns.get(id); if (t) standAt(t, 2.4, (k, ry) => haulageYard(k, seeded(`yard-${id}`), ry)); }
     for (const id of stations) {
       const t = w.towns.get(id);
@@ -2570,7 +2594,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     for (const [id, lines] of w.metros) {
       const t = w.towns.get(id);
-      for (let n = 0; t && n < lines; n += 1) standAt(t, 4.2 + n * 1.3, (k, ry) => metroEntrance(k, ry));
+      for (let n = 0; t && n < lines; n += 1) standAt(t, 4.2 + n * 1.3, (k, ry) => metroEntrance(k, ry), 4);
     }
     if (kit.empty) return;
     builds = new THREE.Mesh(kit.merged(), material);
@@ -2593,6 +2617,164 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
       if (changed) mesh.instanceMatrix.needsUpdate = true;
     }
+  }
+
+  // --- People (the fidelity list, 2026-11-01: "people who show the game") ----------------------
+  // Riders at your stops, as many as wait there (waitingAt: a figure for every six, up to 30, shared
+  // between a town's stops); passengers and touts at your motor parks, by the riders who gave up on
+  // you waiting there for a danfo to fill (the informal pool); shoppers at a town's markets, by its
+  // size, more while it grows. One instanced mesh for their clothes (each tinted), one for the
+  // rest, the same matrices; each shuffles where it stands, or wanders (aWander, metres), on the
+  // graphics card. Rebuilt only when a crowd's size changes.
+  const marketsAt = new Map<string, Array<{ x: number; z: number; big: boolean }>>();
+  const builtAt = new Map<string, Array<{ x: number; z: number; r: number }>>();
+  const parkAt = new Map<string, { x: number; y: number; z: number; ry: number }>();
+  const PEOPLE = 3000, PERSON_SCALE = 1.3;
+  const personShape = personGeometry();
+  const wander = new THREE.InstancedBufferAttribute(new Float32Array(PEOPLE), 1);
+  const peopleTime = { value: 0 };
+  const peopleMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  peopleMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = peopleTime;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute float aWander;\nuniform float uTime;")
+      .replace("#include <begin_vertex>", /* glsl */ `#include <begin_vertex>
+        // A slow loop about where it stands (as far as aWander), a little bob in the step; standing
+        // still, a shift of the weight.
+        float id = float(gl_InstanceID);
+        float a = uTime * (0.18 + fract(id * 0.618) * 0.2) + id * 2.39;
+        float reach = max(aWander, 0.12);
+        transformed.x += sin(a) * reach / ${PERSON_SCALE.toFixed(2)};
+        transformed.z += cos(a * 0.83) * reach / ${PERSON_SCALE.toFixed(2)};
+        transformed.y += step(0.5, aWander) * abs(sin(uTime * 4.0 + id)) * 0.05;`);
+  };
+  const crowdOf = (geometry: THREE.BufferGeometry, tinted: boolean) => {
+    const g = own(geometry);
+    g.setAttribute("aWander", wander);
+    const mesh = new THREE.InstancedMesh(g, peopleMaterial, PEOPLE);
+    if (tinted) mesh.setColorAt(0, new THREE.Color());
+    mesh.count = 0;
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    return mesh;
+  };
+  const clothes = crowdOf(personShape.clothes, true), bodies = crowdOf(personShape.rest, false);
+  const clothesColours = CLOTHES.map((name) => new THREE.Color(paintHex(name)));
+  // Each of your stops: beside the road the route takes out of the town, on its near side, a shelter.
+  const stopSpots = new Map<string, { x: number; y: number; z: number; ry: number } | null>();
+  let stops: THREE.Mesh | null = null;
+  let stopsKey = "";
+  function stopSpot(w: GameWorld, at: GameTown, toward: GameTown): { x: number; y: number; z: number; ry: number } | null {
+    const key = `${at.id}>${toward.id}`;
+    if (stopSpots.has(key)) return stopSpots.get(key)!;
+    const want = Math.atan2(toward.y - at.y, toward.x - at.x);
+    let best: { line: Point[]; off: number } | null = null;
+    for (const seg of w.simulation.map.segments) {
+      if (seg.type !== "road" || seg.retiredAt !== undefined || (seg.fromNodeId !== at.id && seg.toNodeId !== at.id)) continue;
+      const line = segmentPolyline(w.simulation.map, seg);
+      const out = seg.fromNodeId === at.id ? line : [...line].reverse();
+      const [, rest] = splitPolyline(out, Math.min(polylineLength(out) * 0.5, 3));
+      const p = rest[0] ?? out[out.length - 1]!;
+      const off = Math.abs(Math.atan2(Math.sin(Math.atan2(p.y - at.y, p.x - at.x) - want), Math.cos(Math.atan2(p.y - at.y, p.x - at.x) - want)));
+      if (!best || off < best.off) best = { line: out, off };
+    }
+    let spot: { x: number; y: number; z: number; ry: number } | null = null;
+    if (best) {
+      const [, rest] = splitPolyline(best.line, Math.min(polylineLength(best.line) * 0.4, Math.max(1.4, (reachCells.get(at.id) ?? 3) * 0.3)));
+      const p = rest[0]!, q = rest[1] ?? best.line[best.line.length - 1]!;
+      // On the near side of the road -- or the far side, where a railway runs along the near one.
+      const rails = w.simulation.map.segments.filter((sg) => sg.type === "rail" && sg.retiredAt === undefined).map((sg) => segmentPolyline(w.simulation.map, sg)).filter((line) => line.some((r) => Math.hypot(r.x - p.x, r.y - p.y) < 8));
+      const railAt = (x: number, y: number) => rails.some((line) => line.some((r, k) => k > 0 && distToSegment(x, y, line[k - 1]!, r) < 2.2));
+      let dir = Math.atan2(q.y - p.y, q.x - p.x);
+      if (railAt(p.x - Math.sin(dir) * (8 / M), p.y + Math.cos(dir) * (8 / M))) dir += Math.PI;
+      const sx = p.x - Math.sin(dir) * (8 / M), sy = p.y + Math.cos(dir) * (8 / M);
+      spot = { x: sx * M, y: elevationAt(sx, sy) * HEIGHT, z: sy * M, ry: Math.PI - dir };
+    }
+    stopSpots.set(key, spot);
+    return spot;
+  }
+  let crowdKey = "";
+  function syncPeople(w: GameWorld): void {
+    // Where your road routes stop (both ends), and which way each leaves.
+    const served = new Map<string, Array<{ x: number; y: number; z: number; ry: number }>>();
+    for (const route of w.routes) {
+      const v = w.simulation.vehicles.find((x) => x.id === route.vehicleIds[0]);
+      if (!v || v.carries === "goods" || w.railVehicles.has(v.id)) continue;
+      for (const [from, to] of [[route.a, route.b], [route.b, route.a]] as const) {
+        const a = w.towns.get(from), b = w.towns.get(to);
+        if (!a || !b || a.industry) continue;
+        const spot = stopSpot(w, a, b);
+        if (!spot) continue;
+        const list = served.get(from) ?? served.set(from, []).get(from)!;
+        if (!list.some((s) => Math.hypot(s.x - spot.x, s.z - spot.z) < 6)) list.push(spot);
+      }
+    }
+    const shelterKey = [...served].map(([id, list]) => `${id}:${list.length}`).sort().join("|");
+    if (shelterKey !== stopsKey) {
+      stopsKey = shelterKey;
+      if (stops) { scene.remove(stops); stops.geometry.dispose(); stops = null; }
+      const kit = new Kit();
+      for (const list of served.values()) for (const spot of list) {
+        const one = new Kit();
+        busShelter(one, spot.ry, tokenPaint("--you"));
+        kit.place(one.merged(), spot.x, spot.y - 0.1, spot.z);
+      }
+      if (!kit.empty) {
+        stops = new THREE.Mesh(kit.merged(), material);
+        stops.castShadow = true;
+        stops.receiveShadow = true;
+        scene.add(stops);
+      }
+    }
+    // The crowds: where, how many, how they stand.
+    type Crowd = { key: string; n: number; at: { x: number; z: number; ry: number }; place: (rand: () => number, i: number) => [number, number, number] };
+    const crowds: Crowd[] = [];
+    for (const [id, list] of served) {
+      const n = Math.max(1, Math.min(30, Math.round(waitingAt(w, id) / 6 / list.length)));
+      // In front of the shelter, between it and the kerb; a long wait spills along the road.
+      list.forEach((spot, k) => crowds.push({ key: `stop:${id}:${k}`, n, at: spot, place: (r, i) => [(r() - 0.5) * Math.min(18, 3.5 + i * 0.55), 0.6 + r() * 1.9, 0.12] }));
+    }
+    const pooled = new Map<string, number>();
+    for (const pool of [w.informal.pool, w.informal.smallPool]) for (const [key, amount] of pool) {
+      const { at } = parsePoolKey(key);
+      if (parkAt.has(at)) pooled.set(at, (pooled.get(at) ?? 0) + amount);
+    }
+    for (const [id, park] of parkAt) {
+      // Passengers under the union's shelter; touts working the rows of danfos.
+      crowds.push({ key: `park:${id}`, n: Math.min(30, 2 + Math.round((pooled.get(id) ?? 0) / 8)), at: park, place: (r) => [(r() - 0.5) * 11, 7 + r() * 3, 0.15] });
+      crowds.push({ key: `touts:${id}`, n: 3, at: park, place: (r) => [(r() - 0.5) * 22, (r() - 0.5) * 2, 3] });
+    }
+    for (const [id, list] of marketsAt) {
+      const town = w.towns.get(id);
+      if (!town) continue;
+      const busy = growthTrend(w, id) === "growing" ? 1.3 : 1;
+      list.forEach((m, k) => crowds.push({ key: `market:${id}:${k}`, n: Math.round((m.big ? Math.min(24, 5 + Math.sqrt(town.population) * 1.4) : 3) * busy), at: { x: m.x, z: m.z, ry: 0 }, place: (r) => [(r() - 0.5) * 14, (r() - 0.5) * 9, 2] }));
+    }
+    const key = crowds.map((c) => `${c.key}=${c.n}`).join(",");
+    if (key === crowdKey) return;
+    crowdKey = key;
+    let i = 0;
+    const where = new THREE.Vector3(), turned = new THREE.Quaternion(), size = new THREE.Vector3().setScalar(PERSON_SCALE), m = new THREE.Matrix4(), colour = new THREE.Color();
+    for (const crowd of crowds) {
+      const rand = seeded(`crowd-${crowd.key}`);
+      const cos = Math.cos(crowd.at.ry), sin = Math.sin(crowd.at.ry);
+      for (let k = 0; k < crowd.n && i < PEOPLE; k += 1) {
+        const [lx, lz, roam] = crowd.place(rand, k);
+        const x = crowd.at.x + lx * cos + lz * sin, z = crowd.at.z - lx * sin + lz * cos;
+        // Facing the road (or the stalls, give or take), clothes from the town's prints.
+        turned.setFromAxisAngle(up, crowd.at.ry + (rand() - 0.5) * (roam > 1 ? 6 : 1.2));
+        m.compose(where.set(x, elevationAt(x / M, z / M) * HEIGHT, z), turned, size);
+        clothes.setMatrixAt(i, m);
+        bodies.setMatrixAt(i, m);
+        clothes.setColorAt(i, colour.copy(clothesColours[Math.floor(rand() * clothesColours.length)]!));
+        wander.setX(i, roam);
+        i += 1;
+      }
+    }
+    clothes.count = bodies.count = i;
+    clothes.instanceMatrix.needsUpdate = bodies.instanceMatrix.needsUpdate = true;
+    if (clothes.instanceColor) clothes.instanceColor.needsUpdate = true;
+    wander.needsUpdate = true;
   }
 
   // --- Frame the home cluster's biggest town ------------------------------------------------
@@ -2863,6 +3045,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (planted) syncHarbour(w);
         syncRain(w);
         if (planted) syncBuilds(w);
+        if (planted) syncPeople(w);
         if (!planted) {
           plant(w);
           buildRoadside(w);
