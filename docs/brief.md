@@ -1231,6 +1231,91 @@ His letter becomes the term's full screen, ahead of the revenue screen; `termVer
 | C30 | Geography is a decision | In your playtest you can name a crossing or a route round the hills you chose, and why |
 | C31 | The far clusters pull | By the end of term 2, you've connected at least one far cluster because it had something you wanted (not because the map was there) |
 
+## Dev tools: the console and the what-if (proposed 2026-11-01, for your marks)
+
+For you, building and tuning, never the player: it extends Revision 5's **design console**
+(On screen, "A design console", behind `?dev=1`), which today has three buttons in the term
+stat (end the term, ₦100k, rains now), each a `console` action recorded in the run file.
+Your ask: "a console, development graph so see how changing nodes might change things".
+Your worry: the forecaster making the machine hot and slow.
+
+### What it's for
+
+Two questions you can't answer today without a script and a long wait:
+- **"What if I did this here?"** -- a road, a yard, a bus, a pledge -- on the game in front of
+  you, and what it moves over the next days, beyond the one receipt a preview gives.
+- **"What if this number were different?"** -- a tuning key (a yard's reach, a term's length,
+  a bus's cost) -- on the same game.
+
+### Part 1: the console (cheap, nothing runs in the background)
+
+A dev drawer (a key, `` ` ``) in place of the three buttons, every move a `console` action
+in the run file, so a run with console moves still replays:
+- what's there now: end the term, set money, rains now;
+- from the design console's list, not yet built: **offer a pledge now** (any the term could
+  offer), **change a number live** (any tuning key, its default beside it), **fork the save
+  from day N** (replayRun to day N into a new save, the original kept);
+- for the remit: **open a cluster now**;
+- **inspect**: click a town, site or road and see its plain data (the panel's numbers
+  and the raw ones behind them), copy as JSON for a script or a bug.
+
+### Part 2: the what-if (on demand, one worker)
+
+Pick a change -- a move, as the toolbar already previews it, or a number from the console --
+and a horizon (10 days by default, 30 at most). It plays the live world forward twice, without
+and with the change, and shows the difference:
+- **The headline:** net a day, people, trips carried, goods delivered, funds, each as a
+  line over the horizon, without and with.
+- **The graph:** the map's places as nodes and what flows between them (trips, goods by kind)
+  as edges, each drawn by how much it changed: grew green, shrank red, faint where it
+  didn't move. A yard at Bayaji lights the limestone legs it shortened, the cement towns
+  it fed, and the corridor its trucks now jam. Click a node for its numbers before and after.
+
+**Heat (your question).** Nothing runs unless you ask: the what-if is a button, not a
+background job, and `?moves=1`'s best-moves workers stay separate and off.
+- **One worker, one run at a time.** The map keeps its frame rate (the worker isn't the
+  main thread); one core works while a what-if runs, then stops.
+- **Cost:** about 1.5 s of one core a game day (900 ticks at ~1.5 ms), so ~15 s for 10
+  days, plus the baseline's 15 s the first time.
+- **The baseline is reused:** every what-if from the same day and the same world shares one
+  run without the change, so the second question costs half the first.
+- **A progress bar and Cancel;** a new question cancels the old one; the game paused while
+  it runs is an option, not a rule.
+
+### Not in it
+
+- A map or engine editor.
+- Sweeps over many seeds and numbers: the gym and the strategist do that offline, where heat
+  doesn't matter (`GAME_TUNING=... bun scripts/game-strategist.ts`). Later, perhaps, a page
+  that reads their results.
+- Anything in the production bundle: `verify:bundle` checks it's gone.
+
+### The order
+
+1. The console drawer: what's there, then pledge now, open now, a number live, inspect.
+2. Fork from day N.
+3. The what-if's engine: the worker, the baseline cache, the headline lines (a table first).
+4. The graph view.
+
+### Checks
+
+| # | Check | How |
+|---|---|---|
+| D1 | Quiet unless asked | `?dev=1` with no what-if asked: no worker running, CPU as without dev |
+| D2 | A what-if is the game | The same what-if twice gives the same numbers; its "with" run matches a replay of the run file with that move added |
+| D3 | Console moves replay | A run with every console move replays to the same world |
+| D4 | Gone in production | `verify:bundle` finds none of it |
+
+### Open for you
+
+1. **"Nodes" -- which did you mean?** (a) the map's places and flows, as above; or (b) the
+   game's systems -- a tuning number, the mechanism it feeds, the measure it moves
+   (yard reach -> legs -> cement served -> growth), drawn as a chain. (a) shows one game's
+   consequences; (b) explains the model and needs a hand-kept map of what feeds what.
+   I'd build (a) and name (b) in each node's numbers.
+2. **Pause while it runs?** Default off: the game keeps going, and the what-if answers for
+   the day you asked.
+
 ## Pass/fail checks: when slice zero is done
 
 **Slice zero is done when every check below passes; until then nothing new gets built and nothing moves to the full game.** Measured checks run in the probe (`scripts/game-probe.ts`) and become tests where they can. Played checks come from your sessions; AI checks from the harness (see Playtest protocol).
