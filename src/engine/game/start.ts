@@ -6,6 +6,7 @@ import { startFloods } from "./floods";
 import { placeCrossings, placeRidgeField } from "./crossings";
 import { placeClusterOffers } from "./clusters";
 import { startTerms } from "./term";
+import { startRemit } from "./remit";
 import type { GameMapDef, GameTuning, GameWorld } from "./types";
 import { placeFuelSites } from "./fuel";
 import { inheritedRoad, placeCementWorks } from "./cement";
@@ -95,6 +96,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   world.sweep = createSweepState(world.economy.elapsedSeconds, tuning.sweepPeriodDays ?? 60);
   // The first term opens as you arrive (term.ts), its opening grant on top of the starting money.
   startTerms(world);
+  // And your remit: the home cluster's land (remit.ts).
+  startRemit(world);
   // And a chairman for each cluster's union (union.ts).
   startUnions(world);
   // And the old roads' fords, and when the first rains come (floods.ts).

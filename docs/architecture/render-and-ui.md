@@ -746,6 +746,23 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   moment by moment, they read "75% supplied (86% imported)". Numbers that move because the
   game is moving (a worn road's repair price climbing) are left alone: steady swings, not trends.
 
+### Your remit on the screen (2026-10-31; engine.md, Your remit)
+
+- **The map:** land outside your remit under a veil -- the ground's colour at half, a shade of ink
+  -- with its edge drawn where closed land meets open (`closedCanvas`, render.ts: two pixels a cell,
+  drawn over the terrain, redrawn only when a cluster opens). A first cut faded only the water;
+  the land read the same either side, so the shade and the edge were added.
+- **Before the click:** every preview that carries a forecast (`withForecast`) asks
+  `remitRefusal`, so a bus or yard aimed into a closed cluster shows its reason as the ghost's
+  label, not after.
+- **A closed town's card** says so as its problem line, with no button; the towns table gives it no
+  ⚠ and Waiting on you counts only your remit's towns -- a shortage you can't answer isn't waiting
+  on you.
+- **An opening** is a Waiting on you item (weight just under the union's demands): each cluster on
+  offer as a button, "Open X's cluster", with what it brings (`clusterBrings`: its towns, its
+  limestone field or farm belt, the seaport's city, the old railway's far end); the log says
+  the verdict granted it.
+
 ### The start (2026-10-28: "it loads and shows the game but for a few seconds nothing happens")
 
 Between the loading card going and the term's pledge card the page froze 7.1 s (map 2418). Two

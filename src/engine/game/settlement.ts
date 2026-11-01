@@ -57,6 +57,8 @@ export type GameEvent =
   | { kind: "pledge-kept"; number: number; text: string; townId: string }
   | { kind: "term-ended"; number: number; kept: string[]; missed: string[]; peopleFrom: number; peopleTo: number; failed?: boolean; grant?: number; failedInRow?: number }
   | { kind: "replaced"; number: number; terms: number }
+  // Your remit (remit.ts): a verdict granted an opening, and the clusters it offers.
+  | { kind: "remit-offered"; number: number; hubs: string[] }
   // The union (union.ts): a demand on the table, your answer (or ignoring it), his stance crossing a line.
   | { kind: "union-demand"; union: string; chairman: string; text: string; deadlineAt: number }
   | { kind: "union-answered"; union: string; chairman: string; answer: "pay" | "concede" | "coop" | "refuse" | "ignored" }

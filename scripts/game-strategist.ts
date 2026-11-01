@@ -25,6 +25,8 @@
 import { GAME_MAP } from "../src/game/map";
 import { startRun } from "../src/engine/game/runlog";
 import { applyAction, type ActionSpec } from "../src/engine/game/actions";
+import { remitOffers } from "../src/engine/game/remit";
+import { MAX_COMMITTED, pledgeMove, pledgeProgress } from "../src/engine/game/term";
 import { gameTick } from "../src/engine/game/tick";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY as D } from "../src/engine/economy/state";
@@ -53,6 +55,12 @@ const SEEDS = (process.env.SEEDS ?? "0,543,2411").split(",").map(Number);
 const DAYS = Number(process.env.DAYS ?? 250);
 const OVERRIDES = JSON.parse(process.env.GAME_TUNING ?? "{}");
 const LOG = !!process.env.LOG;
+/** The strategist as it played before the remit: no pledges (and so no openings). */
+const NO_PLEDGES = !!process.env.NO_PLEDGES;
+/** Pledges made but not chased: the strategist before 2026-11-01. */
+const CHASE_OFF = !!process.env.CHASE_OFF;
+/** The far clusters opened, and the day, this map (remit.ts). */
+const openings: string[] = [];
 /** Kept back for running costs and a bad week: no move spends below it. */
 const RESERVE = 2500;
 /** A lorry is bought where the hint says one more earns this much over its cost. */
@@ -109,6 +117,7 @@ function act(world: GameWorld, day: number, action: ActionSpec, why: string): bo
     made.set(action.kind, (made.get(action.kind) ?? 0) + 1);
     if (!["lorry", "sell", "fix"].includes(action.kind)) buildsToday += 1;
   }
+  if (result.ok && action.kind === "open") openings.push(`${world.towns.get(action.hub)?.name} day ${day}`);
   if (result.ok && LOG) console.log(`  day ${day}: ${why} -- ${JSON.stringify(action)}`);
   return result.ok;
 }
@@ -118,6 +127,31 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   let moves = 0;
   let waiting = false;
   const did = (ok: boolean) => (ok ? (moves += 1, true) : false);
+
+  // The term's pledges, as a player who reads the strip and means to keep them: those with a move
+  // to name first, the nearest done next (pledgeMove, pledgeProgress); then, each day, the named
+  // move of each pledge not yet kept, bought when the money's there. Pledged blind, it kept term 1
+  // and missed every term after on five maps (2026-10-31), and the remit never opened again.
+  const term = world.term;
+  if (term && LOG && world.economy.elapsedSeconds + D >= term.endsAtSeconds) for (const p of term.pledges.filter((x) => x.committed && !x.kept)) console.log(`  day ${day}: term ${term.number} ends; "${p.text}" at ${Math.round(pledgeProgress(world, p) * 100)}%, move ${pledgeMove(world, p)?.label ?? "none"}`);
+  if (term && !NO_PLEDGES) {
+    const left = MAX_COMMITTED - term.pledges.filter((p) => p.committed).length;
+    const ranked = term.pledges
+      .filter((p) => !p.committed)
+      .map((p) => ({ p, move: pledgeMove(world, p) !== null, done: pledgeProgress(world, p) }))
+      .sort((x, y) => Number(y.move) - Number(x.move) || y.done - x.done);
+    for (const { p } of ranked.slice(0, Math.max(0, left))) act(world, day, { kind: "pledge", id: p.id }, `pledge: ${p.text}`);
+    if (!CHASE_OFF) {
+      for (const p of term.pledges) {
+        if (!p.committed || p.kept) continue;
+        const move = pledgeMove(world, p);
+        if (move && spend(world, move.price)) did(act(world, day, move.action, `keep the pledge "${p.text}": ${move.label}`));
+      }
+    }
+  }
+  // An opening of the remit (remit.ts), spent on the nearest cluster offered.
+  const offer = remitOffers(world)[0];
+  if (offer) act(world, day, { kind: "open", hub: offer.hub }, `the remit opens: ${world.towns.get(offer.hub)!.name}'s cluster`);
 
   // Prune: a route a week in the red, past its first fortnight (riders take days to find a
   // new one), loses a vehicle -- unless its card says it's short of vehicles, not riders.
@@ -431,7 +465,7 @@ for (const seed of SEEDS) {
   };
   console.log(`\nmap ${seed} (${((performance.now() - started) / 1000).toFixed(0)} s)`);
   console.log("  day   funds    net/day  trips  people  goods share  moves (last 50 days)");
-  for (const day of [60, 100, 150, 200, 250, 300].filter((d) => d <= DAYS)) {
+  for (const day of [60, 100, 150, 200, 250, 300, 350, 400].filter((d) => d <= DAYS)) {
     const d = at(day);
     console.log(`  ${String(day).padStart(3)}  ${k(d.funds).padStart(7)}  ${String(Math.round(d.net)).padStart(7)}  ${String(Math.round(d.trips)).padStart(5)}  ${String(Math.round(d.people)).padStart(5)}k  ${String(Math.round(share(day - 20, day) * 100)).padStart(9)}%  ${window(day - 50, day).reduce((s, x) => s + x.moves, 0)}`);
   }
@@ -453,6 +487,9 @@ for (const seed of SEEDS) {
   console.log(`  C2 days 20-60 waiting on money for a rung: ${waited} of 40 (wanted >= 10)`);
   console.log(`  rungs (road pieces): ${[...rungs].map(([r, n]) => `${r} ${n}`).join(", ")} | most money held ${k(Math.max(...days.map((d) => d.funds)))}`);
   console.log(`  moves: ${[...made].sort((x, y) => y[1] - x[1]).map(([kind, n]) => `${kind} ${n}`).join(", ")}`);
+  console.log(`  remit (remit.ts): ${world.remit ? `opened ${openings.join(", ") || "none"}; terms kept ${world.term?.history.filter((t) => t.kept.length > 0 && !t.failed).length ?? 0} of ${world.term?.history.length ?? 0}` : "off"}`);
+  for (const t of world.term?.history ?? []) console.log(`    term ${t.number}: kept ${t.kept.join("; ") || "none"} | missed ${t.missed.join("; ") || "none"}`);
+  openings.length = 0;
   made.clear();
   sold.clear();
   const short = [...world.basePopulation.keys()].map((id) => ({ id, g: townGrowth(world, id) })).filter((x) => x.g && x.g.expected > 0);

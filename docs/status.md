@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**734 tests passing** across the files (`bun test`). Typecheck / test / build /
+**753 tests passing** across the files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Next: a game around the simulation (2026-10-24)
@@ -50,7 +50,7 @@ land** at a share its trunk's prices allow (roads between home towns ~16% dearer
 **Version 11, old roads by the land** (planned again over the
 relief, their corners eased); **version 12, hamlets** between the towns (drawn, not simulated); towns
 ribboning out along their roads in 3D. **Weather in 3D** (B5): cloud shadows, the north's harmattan
-haze, rain over a flooded ford. Next in the scope: a frame-time check on your Mac (B6). **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
+haze, rain over a flooded ford. Next in the scope: a frame-time check on your Mac (B6). **The remit opens** (remit.ts, brief, Chains: convergent, built 2026-11-01): you start with the home cluster's land, a kept term's verdict opens one of the two nearest closed clusters (your choice, in Waiting on you), closed land veiled on the map; pledges made keepable (the worst seat pair cut by a third; a pledge with no move in your remit not offered). Measured to day 400 on three maps: terms kept 8 of 9, 2-3 clusters opened, people within 3% of an all-open twin but net 31-51% lower -- C36 fails (engine.md, Your remit). **Open for you:** a softer pace (openings sooner, or the strategist chasing new land) before C36 is judged. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

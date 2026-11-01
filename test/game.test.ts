@@ -8,6 +8,7 @@ import { builtUp, homeBox } from "@engine/game/fuel";
 import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
+import { inRemit, landOf, remitOffers } from "@engine/game/remit";
 import { privateLoad, townCars, updatePrivateTraffic } from "@engine/game/private";
 import { fuelReach, fuelSupply } from "@engine/game/fuel";
 import type { GameEvent } from "@engine/game/settlement";
@@ -4418,7 +4419,7 @@ describe("the far clusters' offers (clusters.ts; brief, Revision 5: a reason for
   }, 60_000);
 
   test("a farm belt's towns grow twice the staple; term 2 asks you to bring an offer home", () => {
-    const w = start(2418, { termDays: 3 });
+    const w = start(2418, { termDays: 3, remitOpens: false }); // every cluster yours: the remit's own test opens one
     const belt = w.clusters!.find((c) => c.offer === "farm")!;
     const town = w.towns.get(belt.towns[1] ?? belt.towns[0]!)!;
     const land = farmland(w, town);
@@ -4428,6 +4429,88 @@ describe("the far clusters' offers (clusters.ts; brief, Revision 5: a reason for
     for (let i = 0; i < 4 * SECONDS_PER_GAME_DAY * 30; i += 1) gameTick(w, SIM_DT);
     expect(w.term!.number).toBe(2);
     expect(w.term!.pledges.some((p) => p.kind === "reach")).toBe(true);
+  }, 60_000);
+});
+
+describe("your remit (remit.ts; brief, The remit opens, agreed 2026-10-31)", () => {
+  const start = (overrides: Partial<GameTuning> = {}) => {
+    const w = startRun(GAME_MAP, 2418, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, warmUpDays: 1, mandateEnabled: false, ...overrides });
+    w.economy.funds = 1e7;
+    return w;
+  };
+  const day = (w: GameWorld) => { for (let i = 0; i < SECONDS_PER_GAME_DAY / SIM_DT; i += 1) gameTick(w, SIM_DT); };
+  /** Keep a pledge and end the term now: the verdict. */
+  const keepTerm = (w: GameWorld) => {
+    const pledge = w.term!.pledges[0]!;
+    expect(applyAction(w, { kind: "pledge", id: pledge.id })).toMatchObject({ ok: true });
+    pledge.kept = true;
+    expect(applyAction(w, { kind: "console", op: "end-term" })).toMatchObject({ ok: true });
+    day(w);
+  };
+  const remitWhy = /outside your remit/;
+
+  test("you start with the home cluster: a far cluster's towns run, but a line, a yard or a road inside it is refused, saying why", () => {
+    const w = start();
+    expect(w.remit).toEqual({ open: [], toOpen: 0 });
+    const cluster = w.clusters![0]!;
+    const [hub, other] = [cluster.hub, cluster.towns[1]!];
+    expect(inRemit(w, hub)).toBe(false);
+    expect(landOf(w, w.towns.get(hub)!)).toBe(cluster);
+    for (const action of [{ kind: "bus", a: hub, b: other }, { kind: "yard", townId: hub }, { kind: "road", a: hub, b: other, alignment: "cheapest" }, { kind: "pave", a: hub, b: other }] as const) {
+      const r = applyAction(w, action);
+      expect(r.ok).toBe(false);
+      expect(r.reason).toMatch(remitWhy);
+    }
+    // The home cluster's towns are yours; the seaport and the border post always are.
+    for (const t of w.towns.values()) if (!t.industry && landOf(w, t) === undefined) expect(inRemit(w, t.id)).toBe(true);
+    if (w.seaport) expect(inRemit(w, w.seaport)).toBe(true);
+    for (const t of w.towns.values()) if (t.industry === "border") expect(inRemit(w, t.id)).toBe(true);
+  }, 60_000);
+
+  test("a road from your remit to a closed cluster's town is yours to lay: the corridor waits at its door", () => {
+    const w = start();
+    const hub = w.clusters![0]!.hub;
+    const home = [...w.towns.values()].find((t) => !t.industry && inRemit(w, t.id) && landOf(w, t) === undefined)!;
+    const r = applyAction(w, { kind: "road", a: home.id, b: hub, alignment: "cheapest" });
+    expect(r.reason ?? "").not.toMatch(remitWhy);
+  }, 60_000);
+
+  test("a kept term's verdict offers the nearest closed clusters; you open one, and it's yours to build in", () => {
+    const w = start();
+    expect(remitOffers(w)).toEqual([]);
+    expect(applyAction(w, { kind: "open", hub: w.clusters![0]!.hub }).ok).toBe(false);
+    keepTerm(w);
+    expect(w.term!.number).toBe(2);
+    expect(w.term!.history[0]!.opened).toBe(true);
+    expect(w.remit!.toOpen).toBe(1);
+    const offers = remitOffers(w);
+    expect(offers.length).toBeGreaterThanOrEqual(1);
+    expect(offers.length).toBeLessThanOrEqual(2);
+    const chosen = offers.at(-1)!;
+    expect(applyAction(w, { kind: "open", hub: chosen.hub })).toMatchObject({ ok: true });
+    expect(w.remit).toEqual({ open: [chosen.hub], toOpen: 0 });
+    expect(remitOffers(w)).toEqual([]);
+    const r = applyAction(w, { kind: "bus", a: chosen.hub, b: chosen.towns[1]! });
+    expect(r.reason ?? "").not.toMatch(remitWhy);
+    // The others stay closed.
+    for (const c of w.clusters!) if (c !== chosen) expect(inRemit(w, c.hub)).toBe(false);
+  }, 60_000);
+
+  test("a term with no pledge kept opens nothing", () => {
+    const w = start();
+    expect(applyAction(w, { kind: "console", op: "end-term" })).toMatchObject({ ok: true });
+    day(w);
+    expect(w.term!.number).toBe(2);
+    expect(w.remit!.toOpen).toBe(0);
+  }, 60_000);
+
+  test("off in a run from before it: no remit, the whole region yours", () => {
+    const w = start({ remitOpens: undefined });
+    expect(w.remit).toBeUndefined();
+    const cluster = w.clusters![0]!;
+    expect(inRemit(w, cluster.hub)).toBe(true);
+    const r = applyAction(w, { kind: "yard", townId: cluster.hub });
+    expect(r.reason ?? "").not.toMatch(remitWhy);
   }, 60_000);
 });
 

@@ -22,6 +22,8 @@ import { setFreightRate } from "./freightrates";
 import { issueBond, type BondPurpose } from "./bonds";
 import { bridgeFord } from "./floods";
 import { setLabel } from "./labels";
+import { openCluster, remitRefusal } from "./remit";
+export { remitRefusal } from "./remit";
 
 // Every player action as plain data. Data, not a closure, so it can be
 // sent to a worker and replayed there: the forecast (forecast.ts) runs an
@@ -56,7 +58,8 @@ export type ActionSpec =
   | { kind: "console"; op: "end-term" | "funds" | "rains"; amount?: number }
   | { kind: "union"; unionId: string; answer: "pay" | "concede" | "coop" | "refuse" }
   | { kind: "bridgeFord"; fordId: string }
-  | { kind: "label"; key: string; name?: string; colour?: string };
+  | { kind: "label"; key: string; name?: string; colour?: string }
+  | { kind: "open"; hub: string };
 
 /** `amount`: money charged (a repair) or returned (a sale), where the caller wants to say it. */
 export interface ActionOutcome {
@@ -67,7 +70,8 @@ export interface ActionOutcome {
 
 export function applyAction(world: GameWorld, spec: ActionSpec): ActionOutcome {
   nextEpoch(world); // the world as it was before the action is read again after it (epoch.ts)
-  const outcome = apply(world, spec);
+  const closed = remitRefusal(world, spec);
+  const outcome = closed ? { ok: false, reason: closed } : apply(world, spec);
   // A build starts its week, to say what it did (term.ts).
   if (outcome.ok) {
     noteAction(world, spec);
@@ -78,6 +82,8 @@ export function applyAction(world: GameWorld, spec: ActionSpec): ActionOutcome {
 
 function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
   switch (spec.kind) {
+    case "open":
+      return openCluster(world, spec.hub);
     case "pledge":
       return commitPledge(world, spec.id);
     case "console":

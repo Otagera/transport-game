@@ -1,3 +1,4 @@
+import { isClosed, landOf, remitOn } from "@engine/game/remit";
 import { privateLoad } from "@engine/game/private";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
 import type { GameTown, GameWorld } from "@engine/game/types";
@@ -476,7 +477,44 @@ function drawGround(ctx: CanvasRenderingContext2D, world: GameWorld, view: View)
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(terrainCanvas(world), tl.x, tl.y, world.width * view.scale, world.height * view.scale);
+  const closed = closedCanvas(world);
+  if (closed) ctx.drawImage(closed, tl.x, tl.y, world.width * view.scale, world.height * view.scale);
   ctx.restore();
+}
+
+// Land outside your remit (remit.ts) under a veil of the ground's own colour: there and running,
+// not yet yours to build in. Redrawn only when a cluster opens.
+const CLOSED_PX = 2;
+let closedImage: { world: GameWorld; key: string; canvas: HTMLCanvasElement | null } | null = null;
+function closedCanvas(world: GameWorld): HTMLCanvasElement | null {
+  const key = remitOn(world) ? world.remit!.open.join("|") : "off";
+  if (closedImage?.world === world && closedImage.key === key) return closedImage.canvas;
+  let canvas: HTMLCanvasElement | null = null;
+  if (remitOn(world)) {
+    const c = document.createElement("canvas");
+    c.width = world.width * CLOSED_PX;
+    c.height = world.height * CLOSED_PX;
+    const g = c.getContext("2d")!;
+    const closed = (x: number, y: number) => isClosed(world, landOf(world, { x, y }));
+    const shut: boolean[][] = [];
+    for (let y = 0; y < world.height; y += 1) shut.push(Array.from({ length: world.width }, (_, x) => closed(x, y)));
+    // The land faded and a shade darker, so the open land reads as the lit part of the map.
+    for (const fill of [withAlpha(COLORS.ground, 0.5), withAlpha(COLORS.ink, 0.07)]) {
+      g.fillStyle = fill;
+      for (let y = 0; y < world.height; y += 1) for (let x = 0; x < world.width; x += 1) if (shut[y]![x]) g.fillRect(x * CLOSED_PX, y * CLOSED_PX, CLOSED_PX, CLOSED_PX);
+    }
+    // And its edge: a closed cell beside an open one.
+    g.fillStyle = withAlpha(COLORS.ink2, 0.45);
+    for (let y = 0; y < world.height; y += 1) {
+      for (let x = 0; x < world.width; x += 1) {
+        if (!shut[y]![x]) continue;
+        if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => shut[y + dy!]?.[x + dx!] === false)) g.fillRect(x * CLOSED_PX, y * CLOSED_PX, CLOSED_PX, CLOSED_PX);
+      }
+    }
+    canvas = c;
+  }
+  closedImage = { world, key, canvas };
+  return canvas;
 }
 
 // --- Roads: traffic, the other side, your service -------------------------------------------

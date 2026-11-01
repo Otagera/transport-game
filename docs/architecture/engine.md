@@ -1389,6 +1389,45 @@ home cluster's second town, on an inherited road to it, kind `assembly`, `jobsAs
 - On a new game it starts steel-starved (1-11% by day 40 on five maps): the terminal is by the port,
   50-97 cells away, and the hauliers' legs are slow; bringing it steel is the first decision.
 
+### Your remit (2026-10-31; brief, Chains: convergent, The remit opens)
+
+`remit.ts`, behind `remitOpens` (absent in older runs: off, the whole region yours) and only with
+`pledgesEnabled` and clusters. The far clusters run from day 1 as before; what's closed is what you
+may build there. `world.remit` is plain data -- `open` (regional towns, in the order opened) and
+`toOpen` (openings granted, not yet chosen) -- changed only at a verdict and by the `open` action.
+- **Land** (`landOf`): inside the home box is home; outside, the nearest of the home box (by distance
+  to its edge) and each far cluster's regional town. A town in a `ClusterDef` is that cluster's
+  whatever its cell says; a site goes by its cell. The seaport, border posts and the coast road's
+  gateway are always yours.
+- **The gate is one place:** `remitRefusal` in actions.ts, checked before every action applies, and
+  by the screen's previews (`withForecast`), so a refusal shows before the click. A line or a place
+  (vehicles, lanes, enforcement, strikes, projects, halts, yards, parks, metros, expansions,
+  restores) needs every end in your remit; a link (road, track, paving, upkeep, retire, restore a
+  piece, a ford's bridge) needs one -- so a corridor can be laid to a closed cluster's door.
+- **Openings** (`verdictOpening`, from `updateTerm`): a verdict with a pledge kept and not a failed
+  term adds one to `toOpen` while a cluster is still closed, recorded as `TermRecord.opened`, with a
+  `remit-offered` event. `remitOffers` is derived, not stored: the two closed clusters nearest any
+  town in your remit. Unspent openings wait.
+- **Pledges** come only from towns in your remit, and a far cluster's `reach` pledge only once it's
+  open -- a pledge you can't act on would be a script, not a problem (principles §2).
+- No cost to the tick: nothing simulated reads the remit.
+- **Pledges you can keep** (`pledgesKeepable`, absent in older runs): the gate made two old pledges
+  matter, because an unkept term opens nothing. "Halve those without a seat at X" summed every
+  pair (412/day over 26 pairs on map 2411); a bus carries ~6/day on one pair and halving it needs
+  buses `seatMove` refuses to lose money on, so it was never kept. It's now the worst single pair
+  (`with`), cut by a third, offered only at ≥30/day, its move that pair's `seatMove`. A reach
+  pledge names its next move (`reachMove`: a road if cut off, a yard, freight track beyond
+  `legReach`, then a freight train). A pledge whose move is missing or outside your remit
+  (`remitRefusal`) isn't offered: the cement pledge had named a yard in a closed cluster.
+- **Measured** (strategist, maps 2411/3218/949 to day 400, on vs a twin with everything open):
+  terms kept 3/3, 2/3, 3/3, opening 3, 2 and 3 clusters (before the
+  pledge fixes it was 1 of 3 kept everywhere). People within 3% (817k/798k, 971k/993k, 910k/916k),
+  but net/day 31-51% lower (3656/5317, 4388/8879, 4160/7971): C36 fails. The gap is yards and
+  freight -- 12/6/24 yards against 36/37/33, since a yard in a closed cluster waits for its opening
+  and the strategist doesn't rush the new land when it opens (C35, a build there within 20 days, not yet
+  read out). Unresolved: whether that's the
+  strategist or the gate's pace (a third opening only at day 362).
+
 ### Stations on the old line (2026-10-30; brief, Revision 5, Stations on the old line)
 
 `stations.ts`, behind `railStations` (absent in older runs: the line as it was, one piece).

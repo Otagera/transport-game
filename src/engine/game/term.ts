@@ -6,12 +6,16 @@ import type { ActionSpec } from "./actions";
 import { SECONDS_PER_GAME_DAY as D } from "../economy/state";
 import { isCutOff, pairKey } from "./world";
 import { townGrowth } from "./growth";
-import { serviceMove, townNoSeat, type NamedMove } from "./problems";
+import { noSeatPairs, seatMove, serviceMove, townNoSeat, type NamedMove } from "./problems";
+import { goodsFlows, flowKey } from "./goods";
+import { haulDistance, legReach } from "./haulage";
+import { railPath, trackCost } from "./rail";
 import { cementBreak, cementServed } from "./cement";
 import { fuelPlanned, fuelReachable, fuelSupply, inHome } from "./fuel";
 import { cheapestRoadFrom } from "./moves";
 import { fieldId } from "./clusters";
 import { segmentLength } from "./roads";
+import { inRemit, remitOffers, remitOn, remitRefusal, verdictOpening } from "./remit";
 
 // Terms and pledges (docs/brief.md, Revision 5, step 2: the probe). Play runs in terms
 // of `termDays`; at each term's start the state offers three pledges, each made from a
@@ -46,6 +50,8 @@ export interface Pledge {
   from: number;
   target: number;
   committed: boolean;
+  /** A seats pledge's other towns (pledgesKeepable): the pairs it's measured on. Absent: the whole town. */
+  with?: string[];
   /** Set the day a committed pledge is met, and at the term's end for the rest. */
   kept: boolean | null;
 }
@@ -72,6 +78,8 @@ export interface TermRecord {
   fromSeconds?: number;
   toSeconds?: number;
   pavedCells?: number;
+  /** The verdict granted an opening of your remit (remit.ts). */
+  opened?: boolean;
 }
 
 export interface TermState {
@@ -104,7 +112,7 @@ export function pledgeValue(world: GameWorld, pledge: Pledge): number {
     case "connect": return isCutOff(world, pledge.townId) ? 0 : 1;
     case "cement": return cementServed(world, pledge.townId);
     case "fuel": return fuelSupply(world, pledge.townId)?.supplied ?? 1;
-    case "seats": return townNoSeat(world, pledge.townId)?.perDay ?? 0;
+    case "seats": return pledge.with ? pairsNoSeat(world, pledge.townId, pledge.with) : townNoSeat(world, pledge.townId)?.perDay ?? 0;
     case "service": return townGrowth(world, pledge.townId)?.playerShare ?? 0;
     case "grow": return world.towns.get(pledge.townId)?.population ?? 0;
     case "reach": {
@@ -174,16 +182,79 @@ export function pledgeMove(world: GameWorld, pledge: Pledge): NamedMove | null {
       if (!fuel.restored) return { action: { kind: "restoreRefinery" }, price: t.refineryRestoreCost, label: "Restore the refinery" };
       return yard(fuel.sourceId) ?? yard(fuel.refineryId);
     }
-    case "seats": return finite(townNoSeat(world, pledge.townId)?.move);
+    case "seats": {
+      if (!pledge.with) return finite(townNoSeat(world, pledge.townId)?.move);
+      const worst = noSeatPairs(world).find((p) => [p.a, p.b].includes(pledge.townId) && pledge.with!.includes(p.a === pledge.townId ? p.b : p.a));
+      return worst ? finite(seatMove(world, worst.a, worst.b)) : null;
+    }
     case "service": case "grow": return finite(serviceMove(world, pledge.townId));
     case "reach": {
       const cluster = clusterOf(world, pledge.townId);
       if (!cluster) return null;
+      if (t.pledgesKeepable) return reachMove(world, cluster, road, yard);
       // Limestone comes from the field on the ridge, a farm belt's staple from its towns.
       const from = cluster.offer === "limestone" ? fieldId(cluster) : cluster.hub;
       return isCutOff(world, from) ? road(from) : yard(from);
     }
   }
+}
+
+/**
+ * A pledge you could act on (pledgesKeepable): one that needs a move names one, and inside your
+ * remit. Map 2411's "Cement to Doni" named a yard at a limestone field in a closed cluster -- a
+ * move you weren't allowed -- and was missed every term it was offered. A town to grow or carry
+ * more of needs no single move: your service already does it.
+ */
+function hasMove(world: GameWorld, pledge: Omit<Pledge, "id" | "committed" | "kept">): boolean {
+  if (pledge.kind === "service" || pledge.kind === "grow") return true;
+  const move = pledgeMove(world, { ...pledge, id: "", committed: false, kept: null });
+  return !!move && remitRefusal(world, move.action) === null;
+}
+
+/** No seat a day between a town and the named others, both ways. */
+function pairsNoSeat(world: GameWorld, townId: string, others: string[]): number {
+  return noSeatPairs(world).filter((p) => [p.a, p.b].includes(townId) && others.includes(p.a === townId ? p.b : p.a)).reduce((sum, p) => sum + p.perDay, 0);
+}
+
+/**
+ * A far cluster's offer, its next move (pledgesKeepable): of its sources not yet arriving, the
+ * biggest -- a road where none joins it, a yard where it has none, then freight track and a train
+ * where the site is past a yard's reach. Map 3218's farm-belt pledge named no move at all: the
+ * yard was at its regional town, and its farm towns' staple spoiled on the way.
+ */
+function reachMove(world: GameWorld, cluster: NonNullable<ReturnType<typeof clusterOf>>, road: (id: string) => NamedMove | null, yard: (id: string) => NamedMove | null): NamedMove | null {
+  const offer = clusterOfferShare(world, cluster);
+  if (!offer) return null;
+  const kind = cluster.offer === "limestone" ? "supplies" : "produce";
+  const sources = cluster.offer === "limestone" ? [fieldId(cluster)] : cluster.towns;
+  const short = goodsFlows(world)
+    .filter((f) => f.kind === kind && f.to === offer.to && sources.includes(f.from))
+    .map((f) => {
+      const o = world.goods.outcomes.get(flowKey(f));
+      return { from: f.from, missing: f.rate - ((o?.delivered ?? 0) + (o?.trucked ?? 0)) };
+    })
+    .filter((x) => x.missing > 0)
+    .sort((p, q) => q.missing - p.missing || (p.from < q.from ? -1 : 1));
+  for (const { from } of short) {
+    if (isCutOff(world, from) || !Number.isFinite(haulDistance(world, from, offer.to))) {
+      const move = road(from);
+      if (move) return move;
+      continue;
+    }
+    const move = yard(from);
+    if (move) return move;
+    if (haulDistance(world, from, offer.to) < legReach(world, from, kind)) continue; // hauliers reach it: on its way
+    const name = `${nameOf(world, from)}–${nameOf(world, offer.to)}`;
+    if (!railPath(world, from, offer.to)) {
+      const price = trackCost(world, from, offer.to);
+      if (Number.isFinite(price)) return { action: { kind: "track", a: from, b: offer.to, alignment: "cheapest" }, price, label: `Freight track ${name} (K)` };
+      continue;
+    }
+    if (!world.lorryRoutes.some((r) => r.id.startsWith("freight:") && [r.a, r.b].includes(from) && [r.a, r.b].includes(offer.to))) {
+      return { action: { kind: "freight", a: from, b: offer.to }, price: world.tuning.freightPurchaseCost, label: `A freight train ${name} (G)` };
+    }
+  }
+  return null;
 }
 
 /** How far along, 0..1. */
@@ -200,7 +271,7 @@ export function pledgeProgress(world: GameWorld, pledge: Pledge): number {
 function offerPledges(world: GameWorld, number: number, missedLast: Set<string>): Pledge[] {
   const towns = [...world.basePopulation.keys()]
     .map((id) => world.towns.get(id)!)
-    .filter((town) => town && !town.industry && (number > 1 || inHome(world, town)));
+    .filter((town) => town && !town.industry && (number > 1 || inHome(world, town)) && inRemit(world, town.id));
   const candidates: Array<{ pledge: Omit<Pledge, "id" | "committed" | "kept">; weight: number }> = [];
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   for (const town of towns) {
@@ -225,7 +296,18 @@ function offerPledges(world: GameWorld, number: number, missedLast: Set<string>)
       if (!world.tuning.fuelPledgeNeedsMove || pledgeMove(world, { ...pledge, id: "", committed: false, kept: null })) candidates.push({ pledge, weight: town.population * (1 - fuel) });
     }
     const seat = townNoSeat(world, town.id);
-    if (seat && seat.perDay >= 40) {
+    // On its worst pair, by a third (pledgesKeepable): halving a town's whole no seat, spread over
+    // 26 pairs, was a network's work, not a term's -- seven minibuses took Fawami's 412 a day to 389
+    // in 20 days (map 2411). Halving its three worst pairs failed six times in seven: a bus there
+    // carries ~6 a day, so halving Nushako-Fawami's 53 took five buses, and they lose money.
+    if (seat && world.tuning.pledgesKeepable) {
+      const worst = noSeatPairs(world).find((p) => [p.a, p.b].includes(town.id));
+      if (worst && worst.perDay >= 30) {
+        const other = worst.a === town.id ? worst.b : worst.a;
+        const target = worst.perDay * (2 / 3);
+        candidates.push({ pledge: { kind: "seats", townId: town.id, with: [other], text: `Cut those left without a seat between ${name} and ${nameOf(world, other)} by a third: ${Math.round(worst.perDay)} a day to ${Math.round(target)}`, from: worst.perDay, target }, weight: seat.perDay / 4 });
+      }
+    } else if (seat && seat.perDay >= 40) {
       candidates.push({ pledge: { kind: "seats", townId: town.id, text: `Halve those left without a seat at ${name}: ${Math.round(seat.perDay)} a day to ${Math.round(seat.perDay / 2)}`, from: seat.perDay, target: seat.perDay / 2 }, weight: seat.perDay / 4 });
     }
     if (growth && growth.expected > 0 && growth.playerShare < growth.expected) {
@@ -240,6 +322,8 @@ function offerPledges(world: GameWorld, number: number, missedLast: Set<string>)
   // it's the reason to go out to the region.
   if (number > 1) {
     for (const cluster of world.clusters ?? []) {
+      // Under the remit, only an open cluster's: one you can build out to.
+      if (remitOn(world) && !inRemit(world, cluster.hub)) continue;
       const offer = clusterOfferShare(world, cluster);
       const hub = world.towns.get(cluster.hub);
       if (!offer || !hub || offer.share >= 0.5) continue;
@@ -257,6 +341,7 @@ function offerPledges(world: GameWorld, number: number, missedLast: Set<string>)
   for (const { pledge } of candidates) {
     if (offered.length >= OFFERED) break;
     if (kinds.has(pledge.kind) || placesUsed.has(pledge.townId) || missedLast.has(`${pledge.kind}:${pledge.townId}`)) continue;
+    if (world.tuning.pledgesKeepable && !hasMove(world, pledge)) continue;
     kinds.add(pledge.kind);
     placesUsed.add(pledge.townId);
     offered.push({ ...pledge, id: `${number}:${pledge.kind}:${pledge.townId}`, committed: false, kept: null });
@@ -326,6 +411,11 @@ export function updateTerm(world: GameWorld): GameEvent[] {
       failedInRow = record.failed ? (term.failedInRow ?? 0) + 1 : 0;
     }
     events.push({ kind: "term-ended", number: record.number, kept: record.kept, missed: record.missed, peopleFrom: record.peopleFrom, peopleTo: record.peopleTo, ...(record.failed !== undefined ? { failed: record.failed, grant: record.grant!, failedInRow } : {}) });
+    // Your remit (remit.ts): a kept term opens a far cluster, yours to choose.
+    if (verdictOpening(world, kept.length, record.failed)) {
+      record.opened = true;
+      events.push({ kind: "remit-offered", number: record.number, hubs: remitOffers(world).map((c) => c.hub) });
+    }
     if (world.tuning.mandateEnabled && failedInRow >= 2 && replacedAtSeconds === undefined) {
       replacedAtSeconds = now;
       events.push({ kind: "replaced", number: record.number, terms: [...term.history, record].length });

@@ -260,6 +260,10 @@ export interface GameTuning {
   unionPriceBase?: number;
   unionPricePerThousand?: number;
   unionMemoryDays?: number;
+  /** Your remit opens a far cluster at a time, at a kept term's verdict (remit.ts): on. Absent in older runs: off, the whole region yours. */
+  remitOpens?: boolean;
+  /** Pledges you can keep in a term (term.ts): a seats pledge on a town's worst pair, by a third, a far cluster's naming its next move. Absent in older runs: off, offered as they were. */
+  pledgesKeepable?: boolean;
   /** The far clusters' offers (clusters.ts): on; a limestone field's output against a quarry's; a farm belt's staple against a farm town's. Absent in older runs: off. */
   clusterOffersEnabled?: boolean;
   /** The rains (floods.ts, Revision 5, step 6): on; the first rains between these days; then every so many days; named this many days ahead; lasting; fords a season; how fast a flooded road runs; an all-weather bridge's price a cell of water. Absent in older runs: off. */
@@ -848,6 +852,8 @@ export interface GameWorld {
   sweep: SweepState;
   /** The term, its pledges and the record of terms past (term.ts); absent when pledges are off. */
   term?: TermState;
+  /** The far clusters opened to you and openings to choose (remit.ts); absent when the remit is off. */
+  remit?: import("./remit").RemitState;
   /** Towns and sites with a haulage yard (yards.ts). */
   yards: Set<string>;
   /** Towns with a motor park (parks.ts). */

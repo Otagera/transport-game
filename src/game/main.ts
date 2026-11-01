@@ -48,7 +48,7 @@ import type { GameEvent } from "@engine/game/settlement";
 import { GAME_MAP } from "./map";
 import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 import type { ForecastLine } from "./render";
-import { applyAction, type ActionOutcome, type ActionSpec } from "@engine/game/actions";
+import { applyAction, remitRefusal, type ActionOutcome, type ActionSpec } from "@engine/game/actions";
 import { createRunRecorder, recordAction, recordTick, runFile, startRunSteps, type RunSwitches } from "@engine/game/runlog";
 import { vehicleMoves } from "@engine/game/moves";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/game/upkeep";
@@ -626,6 +626,9 @@ function bestMovesHtml(): string {
 
 /** A preview with its forecast, when the action could be done (developer view only). */
 function withForecast(ghost: Ghost, action: ActionSpec, spec: ReceiptSpec): Ghost {
+  // Outside your remit (remit.ts): said before the click, not after.
+  const closed = remitRefusal(world, action);
+  if (closed) return { ...ghost, ok: false, label: closed };
   return ghost.ok && dev ? { ...ghost, forecast: forecastLine(action, spec) } : ghost;
 }
 
@@ -765,6 +768,8 @@ function announce(event: GameEvent): void {
     screen.openVerdict("replaced");
     paused = true;
     renderToolbar();
+  } else if (event.kind === "remit-offered") {
+    say(`For keeping term ${event.number}'s pledges, the state extends your remit: choose ${event.hubs.map((h) => `${townName(h)}'s cluster`).join(" or ")}. It's in Waiting on you.`, false, 14);
   } else if (event.kind === "a-week-on") {
     say(`${aWeekOnText(world, event)}.`, false, 8);
   } else if (event.kind === "founded") {
@@ -2991,6 +2996,13 @@ function onPanelClick(event: MouseEvent): void {
     const [routeId, rate] = target.dataset.freightRate.split("|") as [string, FreightRate];
     const result = act({ label: `freight at the ${rate} rate`, towns: [], routeId }, { kind: "freightRate", routeId, rate });
     say(result.ok ? `Freight on that line now at the ${rate} rate${rate === "dear" ? ": more a tonne, and hauliers will take more of its goods by road" : rate === "cheap" ? ": less a tonne, more of its goods by your trains, fewer trucks on the roads" : ""}.` : `Can't set the rate: ${result.reason}`, !result.ok, 7);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.openCluster) {
+    const hub = target.dataset.openCluster;
+    const result = act({ label: "your remit", towns: [hub] }, { kind: "open", hub });
+    say(result.ok ? `${townName(hub)}'s cluster is yours to build in now: its towns, its sites, its roads.` : `Can't: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

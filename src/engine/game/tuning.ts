@@ -231,6 +231,12 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   privateReachCells: 8,
   pledgesEnabled: true,
   termDays: 120,
+  // Your remit (remit.ts; brief, The remit opens, agreed 2026-10-31): the home cluster to start, a
+  // far cluster of your choosing at each kept term's verdict.
+  remitOpens: true,
+  // Pledges you can keep in a term (term.ts, 2026-11-01): seats on a town's worst pair, by a third; a
+  // far cluster's offer naming its next move.
+  pledgesKeepable: true,
   // The mandate (Revision 5, step 3; agreed 2026-10-24: "120 days is fine, sacking too"): a
   // term's verdict sets the next one's capital grant; two failed terms and you're replaced.
   mandateEnabled: true,

@@ -3,6 +3,7 @@ import { fordBridgeCost, fordById } from "@engine/game/floods";
 import { LINE_COLOURS, labelOf, roadLabelKeyOf, routeLabelKey } from "@engine/game/labels";
 import { clusterOf, clusterOfferShare } from "@engine/game/clusters";
 import { privateLoad } from "@engine/game/private";
+import { closedClusterOf, clusterBrings, inRemit, remitOffers } from "@engine/game/remit";
 import { aWeekOnText, termVerdictText, pledgeMove, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
 import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
 import type { GameWorld } from "@engine/game/types";
@@ -306,7 +307,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   function waitingOnYou(): Waiting[] {
     const items: Waiting[] = [];
-    const towns = homeTowns();
+    // Only towns in your remit (remit.ts): a closed cluster's shortages aren't yours to answer yet.
+    const towns = homeTowns().filter((t) => inRemit(world, t.id));
     const held = (by: (t: Town) => number) => {
       const hit = towns.filter((t) => by(t) >= Math.max(5, 0.05 * t.population));
       return { towns: hit, people: hit.reduce((sum, t) => sum + by(t), 0) };
@@ -386,6 +388,13 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         items.push({ text: `${ford.name} ${when}: everything on ${road} waits at the bank`, button: `<button data-ford="${ford.id}">Raise a bridge · ${nairaK(fordBridgeCost(world, ford))}</button>`, at: [ford.a, ford.b], weight: 8e7 });
       }
     }
+    // Your remit (remit.ts): a verdict's opening, the clusters on offer, each with what it brings.
+    const offers = remitOffers(world);
+    if (offers.length > 0) {
+      const buttons = offers.map((c) => `<button data-open-cluster="${esc(c.hub)}" title="${esc(clusterBrings(world, c).join(", "))}">Open ${esc(nameOf(c.hub))}'s cluster</button>`).join("");
+      const what = offers.map((c) => `${nameOf(c.hub)}'s brings ${clusterBrings(world, c).join(", ")}`).join("; ");
+      items.push({ text: `The state extends your remit: choose a cluster to open. ${what}`, button: buttons, at: offers.map((c) => c.hub), weight: 9.5e7 });
+    }
     // The unions' demands (union.ts): who's asking, how he stands, his words, the deadline, and your answers.
     for (const union of world.unions ?? []) {
       const d = union.demand;
@@ -431,6 +440,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   }
 
   function townProblem(t: Town): Problem {
+    // Outside your remit (remit.ts): running without you until a verdict opens its cluster.
+    const closed = closedClusterOf(world, t.id);
+    if (closed) return { text: `Outside your remit: ${nameOf(closed.hub)}'s cluster opens at a term's verdict that keeps its pledges`, button: "" };
     if (t.industry) return null;
     if (t.roadFull && !t.roadFull.thin) {
       const next = t.roadFull.next;
@@ -700,7 +712,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const base = (t: Town) => t.base ?? t.population;
     const growth = (t: Town) => (t.population - base(t)) / Math.max(1, base(t));
     const rows = sortRows(towns, "towns", { name: (t) => t.name, pop: (t) => t.population, growth, you: (t) => t.share.you });
-    const problems = new Map(towns.map((t) => [t.id, townProblem(t)]));
+    // A closed cluster's towns (remit.ts) carry no ⚠: nothing there is yours to answer yet.
+    const problems = new Map(towns.map((t) => [t.id, inRemit(world, t.id) ? townProblem(t) : null]));
     return `<h2>Towns · ${[...problems.values()].filter(Boolean).length} with a problem</h2>
       <table><thead><tr>${th("towns", "name", "Town")}${th("towns", "pop", "People")}${th("towns", "growth", "Since day 1")}${th("towns", "you", "You carry")}</tr></thead><tbody>
       ${rows.map((t) => `<tr class="row" data-pick="town|${t.id}"><td>${problems.get(t.id) ? "⚠ " : ""}${esc(t.name)}</td><td>${int(t.population)}k</td><td class="${growth(t) >= 0 ? "up" : "down"}">${t.base === null ? "new" : `${growth(t) >= 0 ? "+" : ""}${pct(growth(t))}`}</td><td>${pct(t.share.you)}</td></tr>`).join("")}
