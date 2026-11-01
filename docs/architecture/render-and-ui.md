@@ -685,6 +685,27 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
 - **A booming town.** A town `growthTrend` calls growing gets extra market umbrellas through its
   streets (more in a city). They're placed after everything else in `townKit`, so a town switching in
   or out of growth doesn't reshuffle its houses.
+- **A site at work** (2026-11-01, the fidelity list's "sites that show their state"). What a site
+  gives off is a table in its kit's frame (`shapes3d.ts SITE_LIFE`): a works' stack smokes, a
+  steelworks' smokes black, a refinery burns its flare (its furnace stack steams), a mill or
+  flour mill steams over its silos, a silo and a quarry raise dust, an oilfield's pump jacks nod.
+  Each runs as hard as `siteProduction` says the site works (made over capacity, checked twice a
+  second, `goodsFlows` once for all) and stills when it stands idle: a refinery waiting to be
+  restored has no flare. The smoke, steam and dust are one `THREE.Points` for the map (2,400
+  puffs), moved on the graphics card; only each puff's on/off is written. Two lessons: a point's
+  size must go through the projection (`projectionMatrix[1][1]` times half the drawing's height,
+  over depth, as three's own points do) or it shrinks to nothing at the camera's 40° lens; and
+  `smoothstep(1.0, 0.2, r)` (edges reversed) is undefined in GLSL -- ANGLE on Metal gave near-zero,
+  which made the first smoke invisible. Grey on pale savanna barely shows: the puffs are near-
+  opaque by the stack, lit from above (bright tops, shaded undersides).
+- **The seaport's harbour.** At the seaport city (`w.seaport`; a coast-road gateway has none) a
+  jetty on piles, an apron of container stacks, gantry cranes whose booms swing, a ship moored
+  alongside and more standing off on slow circles in open sea; a crane and a ship more per rung of
+  `portLevel`, rebuilt when it grows. The quay is chosen once, before any town is drawn
+  (`quaySpot`): the nearest coast past 0.8 of the city's reach with open sea off it and dry
+  ground behind, clear of other towns and the old roads. The city's houses, streets and markets
+  keep off it (`onQuay`, beside the four checks that keep them off sites), so it reads as the
+  city's port district rather than a slab dropped on its outskirts.
 
 **Kept from the old map, in the lab's style** (the lab had no need to show them): the build
 preview and its price label, the fix tool's road, strike and TAKEN/LOST tags, wardens, the

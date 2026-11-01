@@ -202,10 +202,8 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
       kit.cylinder(1.1, 16, paint("--paint-grey-2"), 20, 4, 0, 8);
       kit.box(10, 6, 8, paint("--paint-grey-6"), 18, 14);
     }
-    if (kind === "oilfield") for (let i = 0; i < 4; i += 1) {
-      kit.box(1, 4, 1, paint("--paint-grey-23"), -10 + i * 7, (i % 2) * 8);
-      kit.box(5, 0.6, 0.6, paint("--paint-red-3"), -10 + i * 7, (i % 2) * 8, 4);
-    }
+    // The pump jacks' posts; their beams nod, drawn by view3d.ts (SITE_LIFE) so they move.
+    if (kind === "oilfield") for (let i = 0; i < 4; i += 1) kit.box(1, 4, 1, paint("--paint-grey-23"), -10 + i * 7, (i % 2) * 8);
     return;
   }
   // A station on the old line (stations.ts): a long low building, its platform and canopy, a water tower.
@@ -246,6 +244,46 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
   else kit.cylinder(1.6, 24, paint("--paint-grey-5"), 14, 8, 0, 10);
   if (kind === "steelworks" || kind === "steelport") kit.box(14, 10, 10, paint("--paint-grey-16"), -16, 10);
 }
+
+/**
+ * What a working site gives off, in its kit's own frame (site() above): where, and what -- a stack's
+ * smoke, a refinery's flare, a mill's steam, a quarry's dust, a pump jack's nodding beam. view3d.ts
+ * runs them while the site works and stills them when it stands idle.
+ */
+export type SiteEffect = "smoke" | "darkSmoke" | "flare" | "steam" | "dust" | "pumpjack";
+export const SITE_LIFE: Record<string, Array<{ x: number; z: number; y: number; what: SiteEffect }>> = {
+  refinery: [{ x: 16, z: -4, y: 22.5, what: "flare" }, { x: 20, z: 4, y: 16.5, what: "steam" }],
+  newrefinery: [{ x: 16, z: -4, y: 22.5, what: "flare" }, { x: 20, z: 4, y: 16.5, what: "steam" }],
+  oilfield: [0, 1, 2, 3].map((i) => ({ x: -10 + i * 7, z: (i % 2) * 8, y: 4.2, what: "pumpjack" as const })),
+  works: [{ x: 14, z: 8, y: 24.5, what: "smoke" }],
+  assembly: [{ x: 14, z: 8, y: 24.5, what: "steam" }],
+  steelworks: [{ x: 14, z: 8, y: 24.5, what: "darkSmoke" }, { x: -16, z: 10, y: 10.5, what: "smoke" }],
+  mill: [{ x: -1, z: 12, y: 14.5, what: "steam" }],
+  flourmill: [{ x: -1, z: 12, y: 14.5, what: "steam" }],
+  silo: [{ x: -1, z: 12, y: 14.5, what: "dust" }],
+  quarry: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 4, z: 0, y: 2, what: "dust" }],
+  ironmine: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 4, z: 0, y: 2, what: "dust" }],
+};
+
+/** A cargo ship, facing +x, its waterline at y = 0: hull, containers on deck, the bridge aft, its funnel. */
+export function cargoShip(rand: Rand): THREE.BufferGeometry {
+  const kit = new Kit();
+  const hull = pick(rand, [paint("--paint-red-6"), paint("--paint-blue-20"), paint("--paint-dark-5")]);
+  rounded(kit, 70, 7, 12, 2.5, hull, 0, 0, -3);
+  kit.box(68, 0.4, 11.6, paint("--paint-grey-21"), 0, 0, 4);
+  // The bow drawn in: a wedge forward.
+  kit.add(new THREE.ConeGeometry(6, 10, 4).rotateZ(-Math.PI / 2).scale(1, 0.7, 1), hull, { x: 38, y: 0.5, ry: Math.PI / 4 });
+  const boxes = [paint("--paint-red-3"), paint("--paint-blue-12"), paint("--paint-earth-52"), paint("--paint-green-24"), paint("--paint-grey-4"), paint("--paint-earth-47")];
+  for (let i = 0; i < 7; i += 1) for (let j = 0; j < 3; j += 1) {
+    const tiers = 1 + Math.floor(rand() * 3);
+    for (let k = 0; k < tiers; k += 1) kit.box(6, 2.4, 3.2, pick(rand, boxes), -14 + i * 6.6, -3.4 + j * 3.4, 4.4 + k * 2.5);
+  }
+  kit.box(9, 9, 11, paint("--paint-light-4"), -28, 0, 4.4);
+  kit.box(9.4, 1.2, 11.4, PANE_DARK, -28, 0, 11);
+  kit.cylinder(1.4, 5, pick(rand, boxes), -31, 0, 13.4, 10);
+  return kit.merged();
+}
+const PANE_DARK = paint("--paint-grey-18");
 
 // --- Vehicles: each facing +x, standing on y = 0, a little larger than life ---------------
 
