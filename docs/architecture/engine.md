@@ -711,6 +711,18 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   `runFile(recorder)` as JSON. `replayRun(base, file, untilTick)` rebuilds the world at any
   tick: the sim is deterministic (the seed is its only randomness), and a test pins that a
   saved run replays to the same funds, headline and towns. `scripts/game-run.ts` reads one.
+  `replayRunSteps` is the same replay a step at a time, for a loading card (a saved game opened
+  by another build, below).
+- **`snapshot.ts`** — a saved game's world (2026-11-01; the page's saves.ts keeps it in IndexedDB).
+  The world is plain data, structured-cloneable (the receipts' and forecasts' copies already
+  relied on it), and the caches keyed on a world refill the same; one thing kept off it isn't a
+  cache: when the corridors are next judged (`corridors.ts corridorsDueAt`). A plain copy judged
+  them at once and then a fraction of a tick later each day than the run it came from -- its
+  corridors parted from the original's, and a run file saved after a load stopped replaying as
+  played. `snapshotOf` carries it, `restoreSnapshot` sets it back; `test/snapshot.test.ts` pins a
+  restored copy running on equal to the original through a judging, and `replayRunSteps` equal to
+  `replayRun`. **Anything else the simulation reads off the world, kept in a module, belongs in the
+  snapshot too.**
   **Reading the world must never change it** (`epoch.ts`; 2026-10-30). The page reads the world
   between ticks for the panels, the map and the cards; a replay doesn't. A cache that holds a
   reading "once a tick" keyed on the game clock alone (`gateways.ts seaportLink`,

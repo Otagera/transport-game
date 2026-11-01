@@ -49,7 +49,10 @@ import { GAME_MAP } from "./map";
 import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 import type { ForecastLine } from "./render";
 import { applyAction, type ActionOutcome, type ActionSpec } from "@engine/game/actions";
-import { createRunRecorder, recordAction, recordTick, runFile, startRunSteps, type RunSwitches } from "@engine/game/runlog";
+import { createRunRecorder, recordAction, recordTick, replayRunSteps, runFile, startRunSteps, type RunRecorder, type RunSwitches } from "@engine/game/runlog";
+import { restoreSnapshot, snapshotOf } from "@engine/game/snapshot";
+import type { GameTown, GameWorld } from "@engine/game/types";
+import { ago, listSaves, loadSave, writeSave, type SavedGame } from "./saves";
 import { vehicleMoves } from "@engine/game/moves";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/game/upkeep";
 import { isDirt } from "@engine/game/congestion";
@@ -129,10 +132,37 @@ document.body.dataset.dev = String(dev);
 // ladder's playtest, 5): a new game draws a seed, kept in the address so a
 // reload plays the same map; ?seed=0 is the hand-made map itself.
 const seedParam = Number(params.get("seed"));
-const seed = params.has("seed") && Number.isInteger(seedParam) && seedParam >= 0 ? seedParam : 1 + Math.floor(Math.random() * 9999);
-if (!params.has("seed")) {
+const asked = params.has("seed") && Number.isInteger(seedParam) && seedParam >= 0 ? seedParam : null;
+const BUILD = String(import.meta.env.VITE_GAME_BUILD ?? "unknown");
+// A game to come back to (saves.ts), offered on the loading card before a new one is drawn: this
+// address's map, if you've a save of it, or with no map asked for, your recent games.
+// "New map" in the strip (?new=1) means a new map: no offer.
+const saved = params.has("new") ? null : await chooseStart(asked);
+params.delete("new");
+const seed = saved?.summary.seed ?? asked ?? 1 + Math.floor(Math.random() * 9999);
+if (params.get("seed") !== String(seed) || new URLSearchParams(location.search).has("new")) {
   params.set("seed", String(seed));
   history.replaceState(null, "", `${location.pathname}?${params}`);
+}
+async function chooseStart(map: number | null): Promise<SavedGame | null> {
+  const saves = (await listSaves()).filter((s) => map === null || s.seed === map);
+  if (!saves.length) return null;
+  const box = document.querySelector<HTMLElement>("#loading .box")!;
+  const list = document.createElement("div");
+  list.className = "saves";
+  const line = (s: (typeof saves)[number]) => `${s.term ? `Term ${s.term}, ` : ""}day ${s.day} · ${Math.round(s.people).toLocaleString()}k people · ₦${Math.round(s.funds).toLocaleString()} · saved ${ago(s.savedAt)}`;
+  list.innerHTML = `<div class="k">${map === null ? "Continue a game" : `You've a game on map ${map}`}</div>
+    ${saves.map((s) => `<button data-seed="${s.seed}"><b>${s.city.replace(/[&<>"]/g, "")} · map ${s.seed}</b><span>${line(s)}</span></button>`).join("")}
+    <button class="quiet" data-fresh="1">${map === null ? "Start a new map" : "Start this map again (it replaces the save)"}</button>`;
+  box.classList.add("choosing");
+  box.insertBefore(list, box.querySelector(".bar"));
+  const picked = await new Promise<number | null>((resolve) => list.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
+    if (button) resolve(button.dataset.seed ? Number(button.dataset.seed) : null);
+  }));
+  list.remove();
+  box.classList.remove("choosing");
+  return picked === null ? null : loadSave(picked);
 }
 // The world has already run five days when you arrive (start.ts).
 const switches: RunSwitches = { all: allSystems, goodsOff: switchedOff.includes("goods"), wearOff: switchedOff.includes("wear") };
@@ -145,7 +175,7 @@ const devFunds = dev && params.has("funds") && Number.isFinite(fundsParam) ? fun
 // The world runs its week before you arrive (start.ts) -- on a region, seconds of work: a
 // loading screen says so and shows how far it's got, the warm-up run a slice at a time
 // between frames (startRunSteps: the same world, tick for tick).
-const world = await (async () => {
+const opened = await (async (): Promise<{ world: GameWorld; recorder: RunRecorder | null }> => {
   const loading = document.querySelector<HTMLElement>("#loading")!;
   loading.querySelector<HTMLElement>(".map")!.textContent = `Map ${seed}`;
   const bar = loading.querySelector<HTMLElement>(".bar i")!;
@@ -160,31 +190,63 @@ const world = await (async () => {
   loading.querySelector<HTMLElement>(".bar")!.classList.toggle("rail", ride === "train");
   if (ride === "danfo") bar.style.background = "var(--informal)";
   const label = loading.querySelector<HTMLElement>(".progress")!;
-  const days = DEFAULT_GAME_TUNING.warmUpDays;
-  const steps = startRunSteps(GAME_MAP, seed, switches, devFunds);
+  // The card lifts away and the map settles in under it (fullscreen.css), rather than the
+  // page switching under you; gone once it has faded.
+  const arrive = () => {
+    bar.style.width = "100%";
+    rider.style.left = "100%";
+    loading.classList.add("done");
+    document.body.classList.add("arriving");
+    setTimeout(() => { loading.remove(); document.body.classList.remove("arriving"); }, 1200);
+  };
+  // A saved game this build saved: the world as it was, at once.
+  if (saved && saved.summary.build === BUILD) {
+    arrive();
+    return { world: restoreSnapshot(saved.snapshot), recorder: saved.recorder };
+  }
+  // Saved by another build: its run replayed from the start (a run file replays as played),
+  // counted here; else a new game's week before you arrive.
+  const days = saved ? saved.summary.day : DEFAULT_GAME_TUNING.warmUpDays;
+  const steps = saved ? replayRunSteps(GAME_MAP, saved.recorder.file, saved.recorder.ticks) : startRunSteps(GAME_MAP, seed, switches, devFunds);
+  if (saved) loading.querySelector<HTMLElement>("p")!.textContent = "The game has changed since you saved, so your game is played through again from its first day: every move you made, at the moment you made it.";
   let since = performance.now();
   for (;;) {
     const step = steps.next();
     if (step.done) {
-      // The card lifts away and the map settles in under it (fullscreen.css), rather than the
-      // page switching under you; gone once it has faded.
-      bar.style.width = "100%";
-      rider.style.left = "100%";
-      loading.classList.add("done");
-      document.body.classList.add("arriving");
-      setTimeout(() => { loading.remove(); document.body.classList.remove("arriving"); }, 1200);
-      return step.value;
+      arrive();
+      return { world: step.value, recorder: saved ? saved.recorder : null };
     }
     if (performance.now() - since > 40) {
       bar.style.width = `${Math.round(step.value * 100)}%`;
       rider.style.left = `${step.value * 100}%`;
-      label.textContent = `Day ${Math.min(days, 1 + Math.floor(step.value * days))} of ${days} before you arrive`;
+      label.textContent = saved
+        ? `Catching up: day ${Math.min(days, 1 + Math.floor(step.value * days))} of ${days}`
+        : `Day ${Math.min(days, 1 + Math.floor(step.value * days))} of ${days} before you arrive`;
       await new Promise((resolve) => requestAnimationFrame(resolve));
       since = performance.now();
     }
   }
 })();
-const recorder = createRunRecorder(world, seed, switches, devFunds, String(import.meta.env.VITE_GAME_BUILD ?? "unknown"));
+const world = opened.world;
+const recorder = opened.recorder ?? createRunRecorder(world, seed, switches, devFunds, BUILD);
+// Kept as you play (saves.ts): each game day, when you pause, when you leave the tab -- one save a
+// map, so a new game on this map replaces it once it's run a day.
+let savedDay = gameDay(world);
+let keeping = false;
+async function keep(): Promise<void> {
+  if (keeping) return;
+  keeping = true;
+  const towns = [...world.towns.values()].filter((t) => !t.industry);
+  const city = towns.reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.name ?? "";
+  await writeSave({
+    summary: { seed, savedAt: Date.now(), day: gameDay(world), term: world.term?.number ?? null, people: towns.reduce((sum, t) => sum + t.population, 0), funds: world.economy.funds, city, build: BUILD },
+    snapshot: snapshotOf(world),
+    recorder,
+  });
+  keeping = false;
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") void keep(); });
+window.addEventListener("pagehide", () => void keep());
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
 // The old cards render into these, off the page: the screen (screen.ts, the information
@@ -218,6 +280,7 @@ let mapLine = "";
 {
   const fresh = new URLSearchParams(params);
   fresh.delete("seed");
+  fresh.set("new", "1");
   const query = fresh.toString();
   // A new map keeps the switches: the next game of a playtest runs the same systems.
   const off = switchedOff.map((system) => ` · ${system} off`).join("");
@@ -3293,6 +3356,7 @@ function townsWithProblems(now: number): Set<string> {
 }
 
 let revenueTimer = 0;
+let wasPaused = paused;
 function frame(now: number): void {
   if (!askedFirstPledges && world.term) {
     askedFirstPledges = true;
@@ -3313,6 +3377,14 @@ function frame(now: number): void {
   }
   const elapsed = (now - last) / 1000;
   last = now;
+  if (paused !== wasPaused) {
+    wasPaused = paused;
+    if (paused) void keep();
+  }
+  if (gameDay(world) !== savedDay) {
+    savedDay = gameDay(world);
+    void keep();
+  }
   if (!paused) {
     // Each speed step runs its own bounded advance, so 4x stays 4x rather
     // than being clipped by the accumulator's per-frame catch-up cap.
@@ -3374,4 +3446,10 @@ renderPanel();
 screen.renderLog(true);
 // The hints take the start from here (hint 1); the developer view keeps the old line.
 if (dev) say("Danfos, kekes and okadas are already carrying your passengers. Click a town, then another, to run a bus.");
+// Back to a saved game: paused, where you left it.
+if (opened.recorder) {
+  paused = true;
+  renderToolbar();
+  say(`Welcome back to map ${seed}: day ${gameDay(world)}${world.term ? `, term ${world.term.number}` : ""}. Paused where you left it; it saves itself as you play.`, false, 7);
+}
 requestAnimationFrame(frame);

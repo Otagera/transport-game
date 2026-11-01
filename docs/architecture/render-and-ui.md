@@ -818,6 +818,18 @@ letter narrow, the pledges wider, the verdict widest), and a new page's content 
 at a time (`.enter`, for 0.7 s only, so a redraw within a page -- a pledge made -- doesn't replay
 it). `prefers-reduced-motion` turns the movement off.
 
+**Saved games (2026-11-01, "people might not play all at once"; `saves.ts`, main.ts `chooseStart`,
+`keep`).** The game saves itself -- each game day, when you pause, when you leave the tab -- one
+save a map (a new game on the same map replaces it once it has run a day), the five most recent
+kept, in this browser's IndexedDB: the world (engine `snapshot.ts`) and the run's recorder (what
+"Save run" writes, and the days the charts read), with a summary the card lists without opening
+the world (~0.9 MB a world, ~6 ms to copy). Opening the game with a save of the address's map, or
+with no map asked for and any saves, the loading card offers them first ("Term 1, day 45 · 812k
+people · ₦34,000 · saved 2 hours ago") or a new map; "New map" in the strip (`?new=1`) skips the
+offer. A save from this build resumes at once; from another, its run replays from day one with the
+card counting ("Catching up: day 12 of 45") -- a run file replays as played. You come back paused,
+told where. Storage refused (a private window): nothing is kept, nothing breaks.
+
 ### Styles and tokens (2026-10-28)
 
 The page's CSS is in `src/game/styles/`, linked from `index.html` (not imported from

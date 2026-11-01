@@ -188,6 +188,25 @@ export function daySummary(world: GameWorld, day: number, events: GameEvent[]): 
  * to look along the way; `overrides` replays the same actions under other
  * tuning (what-if: an action the other numbers refuse is simply refused).
  */
+/**
+ * replayRun a little at a time, for a loading screen (a saved game opened by another build replays
+ * its run, saves.ts): yields how far it's got, 0..1, and returns the same world.
+ */
+export function* replayRunSteps(base: GameMapDef, file: RunFile, untilTick = file.ticks): Generator<number, GameWorld, void> {
+  const world = startRunWith(base, file.seed, file.tuning ?? { ...runTuning(file.switches), regionEnabled: false }, file.devFunds);
+  let next = 0;
+  for (let tick = 0; ; tick += 1) {
+    while (next < file.actions.length && file.actions[next]!.tick === tick) {
+      applyAction(world, file.actions[next]!.action);
+      next += 1;
+    }
+    if (tick >= untilTick) break;
+    gameTick(world, SIM_DT);
+    if (tick % 300 === 0) yield tick / Math.max(1, untilTick);
+  }
+  return world;
+}
+
 export function replayRun(
   base: GameMapDef,
   file: RunFile,
