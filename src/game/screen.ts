@@ -989,9 +989,23 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `<div class="letter">${letter.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}<p class="sig">${esc(letter.from)}<span>Permanent Secretary, Ministry of Transportation</span></p></div>`;
   }
   let verdictMode: VerdictMode = "term";
+  let enterTimer = 0;
   function openVerdict(mode: VerdictMode | null): void {
+    const fresh = mode !== null && (!verdictOpen() || mode !== verdictMode);
     verdictEl.classList.toggle("open", mode !== null);
-    if (mode) renderVerdict((verdictMode = mode));
+    if (!mode) return;
+    verdictEl.dataset.mode = mode;
+    renderVerdict((verdictMode = mode));
+    // Opened, or a new page of it: its content lifts in (fullscreen.css), for a moment only, so a
+    // redraw within the page doesn't replay it.
+    if (fresh) {
+      verdictEl.classList.remove("enter");
+      void verdictEl.offsetWidth;
+      verdictEl.classList.add("enter");
+      clearTimeout(enterTimer);
+      enterTimer = window.setTimeout(() => verdictEl.classList.remove("enter"), 700);
+      verdictEl.scrollTop = 0;
+    }
   }
   /** The term's pledges on offer, each with its Pledge button while you've pledges left. */
   function pledgeChoices(): string {

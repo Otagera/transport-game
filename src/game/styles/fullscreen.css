@@ -3,8 +3,29 @@
   position: fixed; inset: 0; background: var(--bg); z-index: 10; display: none; overflow-y: auto; padding: var(--sp-4) var(--sp-6) calc(var(--sp-1) * 10); font-size: var(--fs-body);
 }
 #revenue.open { display: block; }
-#verdict { position: fixed; inset: 0; background: var(--bg); z-index: 11; display: none; overflow-y: auto; padding: var(--sp-4) var(--sp-6) calc(var(--sp-1) * 10); font-size: var(--fs-body); }
-#verdict.open { display: block; }
+/* The verdict, the handover note and the pledges (2026-11-01, "better transitions"): a card over
+   the map you're about to run, dimmed behind it, not a blank page. It rises in and fades away
+   (display and all, allow-discrete); its width follows what's in it (screen.ts sets data-mode);
+   a change of mode lifts the new content in, a step at a time (.enter, for a moment only, so a
+   redraw within a mode -- a pledge made -- doesn't replay it). */
+#verdict {
+  position: fixed; inset: var(--sp-6) 0 auto; margin: 0 auto; width: min(900px, calc(100% - 2 * var(--sp-4))); max-height: calc(100% - 2 * var(--sp-6));
+  background: var(--bg); border-radius: var(--radius); z-index: 11; display: none; overflow-y: auto; padding: var(--sp-5) var(--sp-6) var(--sp-6); font-size: var(--fs-body);
+  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--ink) 40%, transparent), 0 24px 64px var(--shadow);
+  opacity: 0; translate: 0 18px;
+  transition: opacity 0.38s ease, translate 0.38s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.38s ease, display 0.38s allow-discrete;
+}
+#verdict.open { display: block; opacity: 1; translate: 0 0; }
+/* While it's open, the dimmed page behind it takes no clicks, as the full page it was didn't. */
+body:has(#verdict.open) > :not(#verdict) { pointer-events: none; }
+@starting-style { #verdict.open { opacity: 0; translate: 0 18px; } }
+#verdict[data-mode="handover"] { width: min(660px, calc(100% - 2 * var(--sp-4))); }
+#verdict[data-mode="pledges"] { width: min(780px, calc(100% - 2 * var(--sp-4))); }
+#verdict.enter > * { animation: verdict-step 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+#verdict.enter > :nth-child(2) { animation-delay: 0.06s; }
+#verdict.enter > :nth-child(3) { animation-delay: 0.12s; }
+#verdict.enter > :nth-child(n + 4) { animation-delay: 0.18s; }
+@keyframes verdict-step { from { opacity: 0; translate: 0 10px; } }
 #verdict .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); gap: var(--sp-3); }
 #verdict .top .title { font-size: var(--fs-headline); font-weight: 700; }
 #verdict .lede { font-size: var(--fs-body); margin: 0 0 var(--sp-4); max-width: 760px; }
@@ -40,8 +61,19 @@
 .card.treasury .tcol h3 { margin: var(--sp-2) 0 var(--sp-1); font: 600 var(--fs-caption) var(--label-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 @media (max-width: 1100px) { .card.treasury .tgrid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 900px) { :root { --right: 300px; } .heroes, .cards { grid-template-columns: 1fr; } }
-#loading { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: var(--bg); }
-#loading .box { width: min(420px, calc(100% - 32px)); background: var(--surface); border-radius: var(--radius); padding: var(--sp-6) var(--sp-6); box-shadow: 0 6px 24px var(--shadow); }
+#loading { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: var(--bg); transition: opacity 0.6s ease 0.1s; }
+#loading .box { width: min(420px, calc(100% - 32px)); background: var(--surface); border-radius: var(--radius); padding: var(--sp-6) var(--sp-6); box-shadow: 0 6px 24px var(--shadow); animation: loading-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; transition: translate 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease; }
+@keyframes loading-in { from { opacity: 0; translate: 0 12px; } }
+/* Done (main.ts): the card lifts away and the page under it, the map, shows through. */
+#loading.done { opacity: 0; pointer-events: none; }
+#loading.done .box { translate: 0 -16px; opacity: 0; }
+/* The map, arriving: it settles in from a touch nearer as the card goes. */
+body.arriving #map { animation: map-arrive 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes map-arrive { from { opacity: 0; scale: 1.035; } }
+@media (prefers-reduced-motion: reduce) {
+  #verdict, #loading, #loading .box { transition: none; }
+  #verdict.enter > *, #loading .box, body.arriving #map { animation: none; }
+}
 #loading .title { font-size: var(--fs-headline); font-weight: 700; }
 #loading .map { font-size: var(--fs-body); margin-bottom: var(--sp-2); }
 #loading p { margin: 0 0 var(--sp-4); font-size: var(--fs-body); color: var(--ink-2); line-height: 1.45; }

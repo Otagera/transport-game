@@ -166,7 +166,13 @@ const world = await (async () => {
   for (;;) {
     const step = steps.next();
     if (step.done) {
-      loading.remove();
+      // The card lifts away and the map settles in under it (fullscreen.css), rather than the
+      // page switching under you; gone once it has faded.
+      bar.style.width = "100%";
+      rider.style.left = "100%";
+      loading.classList.add("done");
+      document.body.classList.add("arriving");
+      setTimeout(() => { loading.remove(); document.body.classList.remove("arriving"); }, 1200);
       return step.value;
     }
     if (performance.now() - since > 40) {

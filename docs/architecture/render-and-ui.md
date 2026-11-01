@@ -805,6 +805,19 @@ seeds: identical; 178 s of plans -> 0.15 s). And the 2D map's first frame paints
 (`terrainCanvas`): three arrays made a pixel to write four bytes, ~1 s; written straight in.
 After: the card opens ~0.35 s after the game shows, 5.2 s from the page opening (12.8 before).
 
+**The arrival, as one movement (2026-11-01, "onboarding/the loading screen ... better
+transition").** It had been three page switches: the loading card on a blank page, gone in a
+frame; then the handover note, then the pledges, each a blank full page with no map in sight. Now
+the loading card rises in, and when the week has run it lifts away (`#loading.done`, removed once
+faded) while the map settles in under it (`body.arriving`, a touch nearer to where it rests). The
+verdict screen -- the handover note, the pledges, a term's verdict, your record -- is a card over
+the map you're about to run, the page behind it dimmed (a spread shadow) and taking no clicks
+(`body:has(#verdict.open)`). It rises in and fades away (`transition-behavior: allow-discrete` on
+`display`, `@starting-style`); its width follows its page (`data-mode`, set by `openVerdict`: the
+letter narrow, the pledges wider, the verdict widest), and a new page's content lifts in a step
+at a time (`.enter`, for 0.7 s only, so a redraw within a page -- a pledge made -- doesn't replay
+it). `prefers-reduced-motion` turns the movement off.
+
 ### Styles and tokens (2026-10-28)
 
 The page's CSS is in `src/game/styles/`, linked from `index.html` (not imported from
