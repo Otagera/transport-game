@@ -11,6 +11,8 @@ import type { Selection } from "./screen";
 import type { WhatIfChange, WhatIfDay, WhatIfRun } from "@engine/game/whatif";
 import type { WhatIfReply, WhatIfRequest } from "./whatif.worker";
 import { graphEdges, moved, mountMapGraph, type GraphLayer, type MapGraph } from "./whatifgraph";
+import { moveNode, placeOf } from "./systems";
+import { systemsSvg } from "./systemsgraph";
 
 // The design console's drawer (docs/brief.md, Dev tools: the console and the what-if, step 1).
 // Dev only: main.ts imports it on demand behind ?dev=1, so a player's page never loads it. Every
@@ -33,6 +35,9 @@ export interface ConsoleHooks {
   lastMove(): { action: ActionSpec; label: string } | null;
   /** A map cell to the page's pixels, as the map draws it now: where the map graph draws. */
   project(x: number, y: number): { x: number; y: number };
+  /** The two-day forecasts on a previewed move and the receipts after one: off unless turned on. */
+  forecasts(): boolean;
+  setForecasts(on: boolean): void;
 }
 
 const MARK = "transport-game: console drawer";
@@ -102,12 +107,40 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
   let worker: Worker | null = null;
   let taken: number | null = null;
   let asked = 0;
-  let asking: { id: number; label: string; days: number; done: number; of: number } | null = null;
-  let answer: { label: string; days: number; base: WhatIfRun; with: WhatIfRun } | null = null;
+  let asking: { id: number; label: string; change: WhatIfChange; days: number; done: number; of: number } | null = null;
+  let answer: { label: string; change: WhatIfChange; days: number; base: WhatIfRun; with: WhatIfRun } | null = null;
   let failed = "";
   // The map graph (step 4): off until asked for, an answer's trips or goods.
   let graph: MapGraph | null = null;
   let layer: GraphLayer | "off" = "off";
+  // The systems graph (step 5): the model's chain for an answer, in its own panel over the plate.
+  let modelShown = false;
+  let modelEl: HTMLElement | null = null;
+  function showModel(): void {
+    if (!modelShown || !answer || !answer.with.ok) {
+      if (modelEl) modelEl.hidden = true;
+      return;
+    }
+    if (!modelEl) {
+      modelEl = document.createElement("div");
+      modelEl.id = "whatif-model";
+      document.querySelector("#plate-overlay")!.append(modelEl);
+      modelEl.addEventListener("click", (event) => {
+        if (!(event.target as HTMLElement).closest("[data-model-close]")) return;
+        modelShown = false;
+        showModel();
+        const box = el.querySelector<HTMLInputElement>("[data-model]");
+        if (box) box.checked = false;
+      });
+    }
+    const c = answer.change;
+    const node = c.kind === "tune" ? (() => { const p = placeOf(c.key); return p && "node" in p ? p.node : null; })() : moveNode(c.action);
+    const where = node ? "" : `<div class="muted">The graph doesn't place this change: ${c.kind === "tune" ? esc(String((placeOf(c.key) as { notDrawn?: string } | null)?.notDrawn ?? "not in systems.ts")) : "a move it has no node for"}.</div>`;
+    modelEl.innerHTML = `<div class="top"><b>The model</b> <span class="muted">${esc(answer.label)}, from day ${answer.base.from}, ${answer.days} days on · lit: what the change entered and what that feeds · systems.ts</span><button class="quiet" data-model-close>Close</button></div>${where}
+      ${systemsSvg(answer.base.end.measured ?? {}, answer.with.end.measured ?? {}, { label: answer.label, node })}`;
+    modelEl.hidden = false;
+  }
+
   function showGraph(): void {
     if (layer === "off" || !answer || !answer.with.ok) return graph?.hide();
     graph ??= mountMapGraph(world, hooks.project);
@@ -122,10 +155,11 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
         if (!asking || reply.id !== asking.id) return;
         if (reply.type === "progress") Object.assign(asking, { done: reply.done, of: reply.of });
         else if (reply.type === "answer") {
-          answer = { label: asking.label, days: reply.with.days.length || reply.base.days.length, base: reply.base, with: reply.with };
+          answer = { label: asking.label, change: asking.change, days: reply.with.days.length || reply.base.days.length, base: reply.base, with: reply.with };
           failed = reply.with.ok ? "" : `it can't be done: ${reply.with.reason}`;
           asking = null;
           showGraph();
+          showModel();
         } else asking = null;
         showWhatIf();
       };
@@ -134,6 +168,7 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
     taken = hooks.day();
     answer = null;
     graph?.hide();
+    showModel();
   }
 
   const move = (op: ConsoleOp, extra: { amount?: number; key?: string; value?: number | boolean }, done: string): void => {
@@ -208,6 +243,7 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
       <table class="whatif"><tr><th></th><th>without</th><th>with</th><th>difference</th></tr>
       ${rows.map(([name, a, b, f]) => `<tr><td>${name}</td><td>${f(a)}</td><td>${f(b)}</td>${diff(a, b, f)}</tr>`).join("")}</table>
       <div class="moves">On the map: ${(["off", "trips", "goods"] as const).map((l) => `<label><input type="radio" name="wi-graph" value="${l}" ${layer === l ? "checked" : ""} /> ${l === "off" ? "off" : l === "trips" ? "trips between towns" : "goods between places"}</label>`).join(" ")}</div>
+      <div class="moves"><label><input type="checkbox" data-model ${modelShown ? "checked" : ""} /> the model: what it entered and what it moved</label></div>
       <div data-whatif-node>${picked()}</div>
       <details><summary>Day by day</summary><table class="whatif"><tr><th>day</th><th>net without</th><th>with</th><th>people without</th><th>with</th><th>your riders without</th><th>with</th></tr>${daily.join("")}</table></details>`;
   }
@@ -257,6 +293,7 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
         <span class="money">day <input type="number" data-fork-day min="1" max="${hooks.day()}" value="${Math.max(1, hooks.day() - 10)}" /> <button class="quiet" data-fork>Fork from this day</button></span>
       </div>
       <div class="muted">A fork keeps this game and opens a new save of it from that day's start, replayed to there.</div>
+      <div><label><input type="checkbox" data-forecasts ${hooks.forecasts() ? "checked" : ""} /> Forecasts and receipts: two days ahead on a previewed move (a worker), and a receipt two days after one (a copy of the world run beside it). Off: nothing runs that you didn't ask for.</label></div>
       <details open><summary>Numbers (${KEYS.length})</summary>
         <input type="search" data-filter placeholder="filter: yard, term, cost…" value="${esc(filter)}" />
         <div data-numbers>${numbers()}</div>
@@ -301,7 +338,7 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
       const days = Math.max(1, Math.min(30, Math.round(Number(el.querySelector<HTMLInputElement>("[data-wi-days]")!.value) || 10)));
       if (taken === null) take();
       asked += 1;
-      asking = { id: asked, label: picked.label, days, done: 0, of: 0 };
+      asking = { id: asked, label: picked.label, change: picked.change, days, done: 0, of: 0 };
       failed = "";
       send({ type: "ask", id: asked, change: picked.change, days });
       showWhatIf();
@@ -324,6 +361,16 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
   // A number is set when it's left or Enter is pressed; a switch when it's ticked.
   el.addEventListener("change", (event) => {
     const field = event.target as HTMLInputElement;
+    if (field.dataset.forecasts !== undefined) {
+      hooks.setForecasts(field.checked);
+      hooks.say(field.checked ? "Console: forecasts and receipts on." : "Console: forecasts and receipts off.", false, 3);
+      return;
+    }
+    if (field.dataset.model !== undefined) {
+      modelShown = field.checked;
+      showModel();
+      return;
+    }
     if (field.name === "wi-graph") {
       layer = field.value as GraphLayer | "off";
       showGraph();

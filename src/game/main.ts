@@ -127,6 +127,18 @@ const dev = params.get("dev") === "1";
 // playtest's machine at 285% CPU, 2026-10-24). Asked for apart from dev (?moves=1), so the
 // design console doesn't bring them.
 const forecasting = dev && params.get("moves") === "1";
+// The two-day forecasts on a previewed move and the receipt after one (dev only) are a switch in
+// the design console, off unless you turn it on (brief, Dev tools, D1: ?dev=1 runs nothing you
+// didn't ask for). Each costs: a forecast plays two days in a worker, a receipt steps a shadow
+// copy of the world beside the real one on the frame for two days. Remembered in this browser.
+const FORECASTS_KEY = "dev:forecasts";
+let forecastsOn = dev && (() => {
+  try {
+    return localStorage.getItem(FORECASTS_KEY) === "1";
+  } catch {
+    return false;
+  }
+})();
 document.body.dataset.dev = String(dev);
 // Each game is a generated map (generate.ts; the brief's P8, After the
 // ladder's playtest, 5): a new game draws a seed, kept in the address so a
@@ -524,7 +536,7 @@ function act(spec: ReceiptSpec, action: ActionSpec): ActionOutcome {
   actionVersion += 1; // every forecast was of the world before this
   // As data, never a closure: what the run file records is exactly what ran.
   let result: ActionOutcome;
-  if (!dev) result = applyAction(world, action);
+  if (!forecastsOn) result = applyAction(world, action);
   else {
     let real: ActionOutcome | undefined;
     perform(world, book, (w) => {
@@ -544,7 +556,8 @@ function act(spec: ReceiptSpec, action: ActionSpec): ActionOutcome {
 // action, game day and how many actions you've taken, so a forecast is
 // redone once the world it described has moved on.
 
-const forecaster = dev ? new Worker(new URL("./forecast.worker.ts", import.meta.url), { type: "module" }) : null;
+// Made the first time a forecast is asked for, never before (forecastsOn).
+let forecaster: Worker | null = null;
 let actionVersion = 0;
 const forecasts = new Map<string, Receipt | null | "pending">();
 let inFlight = false;
@@ -552,10 +565,17 @@ let queued: { key: string; action: ActionSpec; spec: ReceiptSpec } | null = null
 
 function sendForecast(key: string, action: ActionSpec, spec: ReceiptSpec): void {
   inFlight = true;
-  forecaster?.postMessage({ key, world, action, spec });
+  forecasterWorker().postMessage({ key, world, action, spec });
 }
 
-if (forecaster) forecaster.onmessage = (event: MessageEvent<{ key: string; receipt: Receipt | null }>) => {
+function forecasterWorker(): Worker {
+  if (forecaster) return forecaster;
+  forecaster = new Worker(new URL("./forecast.worker.ts", import.meta.url), { type: "module" });
+  forecaster.onmessage = onForecast;
+  return forecaster;
+}
+
+function onForecast(event: MessageEvent<{ key: string; receipt: Receipt | null }>): void {
   forecasts.set(event.data.key, event.data.receipt);
   inFlight = false;
   if (queued) {
@@ -563,7 +583,7 @@ if (forecaster) forecaster.onmessage = (event: MessageEvent<{ key: string; recei
     queued = null;
     sendForecast(next.key, next.action, next.spec);
   }
-};
+}
 
 function forecastLine(action: ActionSpec, spec: ReceiptSpec): ForecastLine {
   const day = Math.floor(world.economy.elapsedSeconds / SECONDS_PER_GAME_DAY);
@@ -737,7 +757,7 @@ function withForecast(ghost: Ghost, action: ActionSpec, spec: ReceiptSpec): Ghos
   const closed = remitRefusal(world, action);
   if (closed) return { ...ghost, ok: false, label: closed };
   if (dev && ghost.ok) lastPreview = { action, label: ghost.label };
-  return ghost.ok && dev ? { ...ghost, forecast: forecastLine(action, spec) } : ghost;
+  return ghost.ok && forecastsOn ? { ...ghost, forecast: forecastLine(action, spec) } : ghost;
 }
 
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
@@ -749,7 +769,7 @@ function addLabel(vehicle: string, count: number, a: string, b: string): string 
 }
 
 /** Toasts promise a receipt only where there are receipts. */
-const later = dev ? " Result in two days." : "";
+let later = forecastsOn ? " Result in two days." : "";
 
 // Pause on a strike at 4x (a player option, P; remembered): at 4x a strike's
 // two days pass in 15 seconds (playtest: "did a strike land? I couldn't tell").
@@ -1058,7 +1078,7 @@ canvas.addEventListener("click", (event) => {
   const intended = actionFor(tool, from, town);
   const known = intended ? knownForecast(intended) : undefined;
   const confirmAs = intended ? JSON.stringify(intended) : null;
-  if (dev && known && known.moneyPerDay < -5 && confirming !== confirmAs) {
+  if (forecastsOn && known && known.moneyPerDay < -5 && confirming !== confirmAs) {
     confirming = confirmAs;
     say(`Forecast: this loses ${naira(-known.moneyPerDay)}/day. Click ${townName(town)} again to do it anyway.`, true, 5);
     return;
@@ -1157,6 +1177,24 @@ if (dev) {
       day: () => gameDay(world),
       lastMove: () => lastPreview,
       project: (x, y) => toScreen(view, x, y),
+      forecasts: () => forecastsOn,
+      setForecasts: (on) => {
+        forecastsOn = on;
+        later = on ? " Result in two days." : "";
+        try {
+          localStorage.setItem(FORECASTS_KEY, on ? "1" : "0");
+        } catch {
+          // Kept for this page only.
+        }
+        // Off: the worker goes, and nothing waits on it.
+        if (!on && forecaster) {
+          forecaster.terminate();
+          forecaster = null;
+          forecasts.clear();
+          inFlight = false;
+          queued = null;
+        }
+      },
       fork: forkFrom,
       changed: () => {
         screen.refreshVerdict();
@@ -1276,7 +1314,7 @@ function roadHover(): { segmentId: string; at: { x: number; y: number }; label: 
     : `${roadName(id)} · ${state}${costing} · maintain for ~${upkeep}/day${total}`;
   const ends = chainOf(world, id);
   const towns = ends ? [ends.a, ends.b] : [worst.fromNodeId, worst.toNodeId];
-  const forecast = dev ? forecastLine({ kind: "fix", segmentId: id, on: !world.maintained.has(id) }, { label: "maintaining", towns }) : undefined;
+  const forecast = forecastsOn ? forecastLine({ kind: "fix", segmentId: id, on: !world.maintained.has(id) }, { label: "maintaining", towns }) : undefined;
   return { segmentId: id, at: mouse, label, forecast };
 }
 
@@ -3464,7 +3502,7 @@ function frame(now: number): void {
         const events = gameTick(world, dt);
         recordTick(recorder, world, events);
         for (const event of events) announce(event);
-        if (dev) for (const receipt of tickReceipts(world, book, dt)) say(receiptLine(receipt), receipt.moneyPerDay < -5, 8);
+        if (book.pending.length) for (const receipt of tickReceipts(world, book, dt)) say(receiptLine(receipt), receipt.moneyPerDay < -5, 8);
       });
     }
   }

@@ -828,6 +828,14 @@ opens it at the plate's top right, as `#plate-overlay`'s child (nothing fixed ov
   Copy JSON for a script or a bug. Only reads. The rest of the drawer redraws only on a move, so a
   field being typed in keeps its focus.
 - The term stat's three buttons it replaced now just name the key.
+- **Forecasts and receipts** are a switch in the drawer, off unless turned on (D1: `?dev=1` alone
+  runs nothing you didn't ask for), remembered in this browser (`dev:forecasts`). On: a move the
+  toolbar previews gets a two-day forecast from a worker made at the first one, a move that would
+  lose money takes a second click, and a move made gets a receipt two days on -- a shadow copy of
+  the world stepped beside the real one on the frame (receipts.ts `perform`). Before 2026-11-02
+  `?dev=1` did both always: a worker on load, and a shadow world per move for two days (up to
+  `MAX_PENDING`), each roughly doubling the tick while it lasted. Off again: the worker is ended;
+  receipts already running finish.
 - **Fork from day N** (step 2): this game kept as it is, and a new save cut at the start of day
   N (runlog.ts `forkRun`: the actions before that tick, the days ended before it) opened at once
   at `?game=<id>`, replaying to there as a save from another build does. The cut tick is the
@@ -854,6 +862,20 @@ opens it at the plate's top right, as `#plate-overlay`'s child (nothing fixed ov
   map gets its people before and after and its six most changed links in the drawer. Read from the
   what-if's `end` (people by town, goods by flow, trips by pair), so nothing more is run. The 2D
   map only: in 3D it draws over nothing meaningful.
+- **The systems graph** (step 5, `systems.ts`, `systemsgraph.ts`): under an answer, "the model"
+  opens a panel across the plate (Close, or untick). `systems.ts` is the hand-kept chain: 15 nodes
+  in columns, cause to outcome -- trips wanted, road speed, sites making goods, budget; your
+  vehicles, danfos, hauliers; no seat, cement, fuel, steel, markets fed; town growth, your money;
+  people -- each with what it feeds, the tuning numbers that enter there (name patterns; first
+  match, NOT_DRAWN checked first) and, for most, a measure read from a world. The worker passes
+  `measureSystems` to `playAhead`, which calls it on each run's last day (`end.measured`; the
+  engine never imports the dev code). The change's box at the left feeds the node it enters (a
+  number by `placeOf`, a move by `moveNode`); that node and all it feeds are drawn lit, the rest
+  faint -- but every measured node shows without → with and the change, lit or not, so an effect
+  the table doesn't link (relay off: trips wanted -1.8% though only hauliers is lit) still shows.
+  D5 (test/whatif-graph.test.ts): every number in tuning.ts is placed or named as not drawn; a new
+  one fails until it is. The table can still be wrong about what feeds what: it's a reading
+  aid, not the engine.
 
 ### The start (2026-10-28: "it loads and shows the game but for a few seconds nothing happens")
 

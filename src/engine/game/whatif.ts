@@ -40,6 +40,8 @@ export interface WhatIfEnd {
   flows: Record<string, number>;
   /** Trips made a day by town pair (pairOutcomes' key). */
   trips: Record<string, number>;
+  /** Whatever the caller measured at the end (`playAhead`'s `measureEnd`): the systems graph's nodes. */
+  measured?: Record<string, number>;
 }
 
 export interface WhatIfRun {
@@ -82,7 +84,12 @@ function makeChange(world: GameWorld, change: WhatIfChange | null): { ok: boolea
  * Play a copy of `world` on to the end of `days` more days, with the change (null: as it is).
  * Generator: yields after each day (the worker reports progress and can stop between days).
  */
-export function* playAhead(world: GameWorld, change: WhatIfChange | null, days: number): Generator<WhatIfDay, WhatIfRun, void> {
+export function* playAhead(
+  world: GameWorld,
+  change: WhatIfChange | null,
+  days: number,
+  measureEnd?: (world: GameWorld) => Record<string, number>,
+): Generator<WhatIfDay, WhatIfRun, void> {
   const copy = structuredClone(world);
   const from = gameDay(copy);
   const made = makeChange(copy, change);
@@ -97,7 +104,7 @@ export function* playAhead(world: GameWorld, change: WhatIfChange | null, days: 
     run.days.push(row);
     yield row;
   }
-  run.end = endOf(copy);
+  run.end = { ...endOf(copy), ...(measureEnd ? { measured: measureEnd(copy) } : {}) };
   return run;
 }
 

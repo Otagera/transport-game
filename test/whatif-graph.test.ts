@@ -20,3 +20,31 @@ describe("the what-if's map graph (whatifgraph.ts)", () => {
     expect(moved(1000, 1025)).toBe(true);
   });
 });
+
+// The systems graph (brief, Dev tools, step 5; D5): the chain table is hand-kept, so it's held to
+// the tuning -- a number added without a place in it fails here until it's placed.
+import { DEFAULT_GAME_TUNING } from "../src/engine/game/tuning";
+import { SYSTEM_NODES, chainFrom, moveNode, placeOf } from "../src/game/systems";
+
+describe("the systems graph (systems.ts)", () => {
+  test("D5: every tuning number lands on a node or is named as not drawn", () => {
+    const keys = Object.keys(DEFAULT_GAME_TUNING).filter((k) => ["number", "boolean"].includes(typeof (DEFAULT_GAME_TUNING as unknown as Record<string, unknown>)[k]));
+    expect(keys.filter((k) => !placeOf(k))).toEqual([]);
+    // Spot checks: a vehicle's capacity is its carrier's, a road's the road's, the map's not drawn.
+    expect(placeOf("busCapacity")).toEqual({ node: "service" });
+    expect(placeOf("danfoCapacity")).toEqual({ node: "informal" });
+    expect(placeOf("dirtRoadCapacity")).toEqual({ node: "roads" });
+    expect(placeOf("mapVersion")).toHaveProperty("notDrawn");
+  });
+
+  test("the chain is whole: every node fed is a node, and every chain ends in people or money", () => {
+    const ids = new Set(SYSTEM_NODES.map((n) => n.id));
+    for (const node of SYSTEM_NODES) for (const next of node.feeds) expect(ids.has(next)).toBe(true);
+    for (const node of SYSTEM_NODES) {
+      const chain = chainFrom(node.id);
+      expect(chain.has("people") || chain.has("money")).toBe(true);
+    }
+    expect(moveNode({ kind: "yard", townId: "x" })).toBe("hauliers");
+    expect(moveNode({ kind: "console", op: "tune", key: "fare", value: 5 })).toBe("service");
+  });
+});

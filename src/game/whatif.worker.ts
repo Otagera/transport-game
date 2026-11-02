@@ -1,5 +1,6 @@
 import { playAhead, type WhatIfChange, type WhatIfRun } from "@engine/game/whatif";
 import type { GameWorld } from "@engine/game/types";
+import { measureSystems } from "./systems";
 
 // The what-if, off the frame (whatif.ts; brief, Dev tools, step 3). One worker, made when you
 // first ask and doing nothing between questions. It keeps the world as you took it and the run
@@ -26,7 +27,8 @@ const nextTurn = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Run one to its end, reporting each day; null if it was overtaken. */
 async function run(id: number, change: WhatIfChange | null, days: number, done: number, of: number): Promise<WhatIfRun | null> {
-  const steps = playAhead(taken!, change, days);
+  // At the last day, the systems graph's measures too (systems.ts).
+  const steps = playAhead(taken!, change, days, measureSystems);
   for (let d = 0; ; d += 1) {
     const step = steps.next();
     if (step.done) return step.value;
