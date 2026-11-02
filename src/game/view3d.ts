@@ -1091,9 +1091,13 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         }
       }
     }
-    const verts: number[] = [];
+    const verts: number[] = [], across: number[] = [], along: number[] = [];
+    let run = 0;
     for (let i = 0; i < steps.length; i += 1) {
       const p = steps[i]!, q = steps[Math.min(steps.length - 1, i + 1)]!, o = steps[Math.max(0, i - 1)]!;
+      if (i > 0) run += Math.hypot(p.x - steps[i - 1]!.x, p.y - steps[i - 1]!.y) * M;
+      across.push(-1, 1);
+      along.push(run, run);
       const dx = q.x - o.x, dy = q.y - o.y, len = Math.hypot(dx, dy) || 1;
       const nx = (-dy / len) * (p.w / M / 2), ny = (dx / len) * (p.w / M / 2);
       const l = ground(p.x + nx, p.y + ny, lift), r = ground(p.x - nx, p.y - ny, lift);
@@ -1114,6 +1118,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     for (let i = 0; i < steps.length - 1; i += 1) index.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+    // Where across it (-1 its left edge, 1 its right) and how far along (metres) each point is: the
+    // road's surface is painted from them (roadSurface).
+    geo.setAttribute("aRoadAcross", new THREE.Float32BufferAttribute(across, 1));
+    geo.setAttribute("aRoadAlong", new THREE.Float32BufferAttribute(along, 1));
     geo.setIndex(index);
     geo.computeVertexNormals();
     return geo;
@@ -1214,8 +1222,24 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   /** `line`, `lift`: where it runs and how high, for its focus line (drawn the first time it's lit). */
   const roads = new Map<string, { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial; retired: boolean; rail: boolean; base: number; look: string; line: Point[]; lift: number; focusLine?: THREE.Mesh }>();
   const focusLineMaterial = own(new THREE.MeshBasicMaterial({ color: FOCUS_COLOUR, side: THREE.DoubleSide }));
-  const railMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-25"), side: THREE.DoubleSide }));
-  const sleeperMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-earth-55"), side: THREE.DoubleSide }));
+  // Track in its parts (2026-11-02, your word: "since the vehicles look better we could improve the
+  // roads/rails"): sleepers across the ballast, two steel rails on them -- rust on a line out of
+  // service, grass through its ballast -- telegraph poles along it, barriers where a road crosses.
+  const railMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-4"), side: THREE.DoubleSide }));
+  const rustMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-earth-51"), side: THREE.DoubleSide }));
+  const sleeperShape = own(new THREE.BoxGeometry(2.6, 0.2, 0.34));
+  const sleeperMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-earth-55") }));
+  const oldSleeperMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-11") }));
+  const tuftShape = own(new THREE.ConeGeometry(0.45, 0.7, 5).translate(0, 0.35, 0));
+  const tuftMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-green-13") }));
+  const poleShape = own((() => {
+    const k = new Kit();
+    k.cylinder(0.13, 7, paintHex("--paint-earth-57"), 0, 0, 0, 6);
+    k.box(1.8, 0.15, 0.15, paintHex("--paint-earth-57"), 0, 0, 6.3);
+    for (const x of [-0.7, 0, 0.7]) k.box(0.1, 0.25, 0.1, paintHex("--paint-light-4"), x, 0, 6.45);
+    return k.merged();
+  })());
+  const poleMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
   // Every line a road runs (for keeping buildings off them).
   let roadLines: Point[][] = [];
   const pierMaterial = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -1233,17 +1257,91 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     });
   }
   const laneMaterial = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-red-1"), side: THREE.DoubleSide }));
-  const lineMaterial = own(new THREE.MeshBasicMaterial({ color: paintHex("--paint-light-4"), side: THREE.DoubleSide }));
+  // A road's surface, painted in its shader from where across and how far along it is (2026-11-02):
+  // a dirt road's laterite grain, the two ruts its wheels wear, its ragged dusty edge; a paved
+  // road's asphalt, its shoulders, white edge lines and dashed centre; a retired road going back
+  // to grass; a track's ballast. Its wear (the condition the game keeps) breaks it up: potholes,
+  // and patching on asphalt. The traffic tint (colourRoad) is its colour underneath, as before.
+  const ROAD_KIND = { dirt: 0, paved: 1, retired: 2, ballast: 3 };
+  function roadSurface(material: THREE.MeshLambertMaterial, kind: number, width: number): THREE.MeshLambertMaterial {
+    const u = { uRoadKind: { value: kind }, uRoadWear: { value: 0 }, uRoadWidth: { value: width }, uRoadPaint: { value: new THREE.Color(paintHex("--paint-light-4")) }, uRoadVerge: { value: new THREE.Color(paintHex("--paint-earth-31")) }, uRoadGrass: { value: new THREE.Color(paintHex("--paint-green-12")) } };
+    material.userData.road = u;
+    const before = material.onBeforeCompile;
+    material.onBeforeCompile = (shader, renderer) => {
+      before.call(material, shader, renderer);
+      Object.assign(shader.uniforms, u);
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute float aRoadAcross;\nattribute float aRoadAlong;\nvarying float vRoadAcross;\nvarying float vRoadAlong;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvRoadAcross = aRoadAcross;\nvRoadAlong = aRoadAlong;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", /* glsl */ `#include <common>
+          varying float vRoadAcross;
+          varying float vRoadAlong;
+          uniform float uRoadKind, uRoadWear, uRoadWidth;
+          uniform vec3 uRoadPaint, uRoadVerge, uRoadGrass;
+          float rHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float rNoise(vec2 p) {
+            vec2 i = floor(p), f = fract(p);
+            vec2 w = f * f * (3.0 - 2.0 * f);
+            return mix(mix(rHash(i), rHash(i + vec2(1.0, 0.0)), w.x), mix(rHash(i + vec2(0.0, 1.0)), rHash(i + vec2(1.0, 1.0)), w.x), w.y);
+          }`)
+        .replace("#include <color_fragment>", /* glsl */ `#include <color_fragment>
+          {
+            float a = vRoadAcross, s = vRoadAlong, x = a * uRoadWidth * 0.5;
+            vec2 p = vec2(s, x);
+            float grain = rHash(floor(p * 4.0)) * 0.5 + rNoise(p * 0.8) * 0.5;
+            vec3 col = diffuseColor.rgb;
+            if (uRoadKind < 0.5) {
+              // Laterite: grain, two ruts where the wheels run, a dusty ragged edge.
+              float rut = exp(-pow((abs(x) - uRoadWidth * 0.22) / 0.5, 2.0));
+              col *= 0.88 + grain * 0.2 - rut * 0.18;
+              float edge = abs(a) + (rNoise(vec2(s * 0.3, a * 9.0)) - 0.5) * 0.22;
+              if (edge > 0.98) discard;
+              col = mix(col, col * 1.15, smoothstep(0.72, 0.96, edge));
+            } else if (uRoadKind < 1.5) {
+              // Asphalt: its grain, the shoulders, a white line each edge, the centre dashed.
+              col *= 0.92 + grain * 0.12;
+              col = mix(col, uRoadVerge, smoothstep(0.86, 0.9, abs(a)));
+              float edgeLine = 1.0 - smoothstep(0.012, 0.03, abs(abs(a) - 0.8));
+              float dash = (1.0 - smoothstep(0.1, 0.16, abs(x))) * step(fract(s / 9.0), 0.36);
+              col = mix(col, uRoadPaint, max(edgeLine, dash) * (0.9 - uRoadWear * 0.55));
+            } else if (uRoadKind < 2.5) {
+              // Retired: the grass coming back through it.
+              float back = smoothstep(0.4, 0.75, rNoise(p * 0.35) + abs(a) * 0.35);
+              col = mix(col * (0.9 + grain * 0.15), uRoadGrass, back * 0.8);
+            } else {
+              // Ballast: stones, darker down its shoulders.
+              float stones = rHash(floor(p * 7.0));
+              col *= (0.78 + stones * 0.32) * (1.0 - smoothstep(0.55, 1.0, abs(a)) * 0.22);
+            }
+            if (uRoadWear > 0.05 && uRoadKind < 1.5) {
+              // Worn: potholes, and on asphalt the patches over the old ones.
+              float hole = smoothstep(1.0 - uRoadWear * 0.2, 1.0 - uRoadWear * 0.16, rNoise(p * 0.5 + 17.0)) * (1.0 - step(0.78, abs(a)));
+              if (uRoadKind > 0.5) {
+                float patchy = step(1.0 - uRoadWear * 0.3, rHash(floor(vec2(s / 3.5, x / 2.2) + 31.0))) * (1.0 - step(0.76, abs(a)));
+                col = mix(col, col * 0.7, patchy);
+              }
+              col = mix(col, col * 0.42, hole);
+            }
+            diffuseColor.rgb = col;
+          }`);
+    };
+    return material;
+  }
   /** What a road is drawn as: rebuilt when it changes -- paved, laned, retired (what you've done to it shows). */
   const roadLook = (segment: { retiredAt?: number; surface?: string; busLane?: boolean; type: string }) => `${segment.type}:${segment.retiredAt !== undefined}:${segment.surface ?? ""}:${!!segment.busLane}`;
   function syncRoads(w: GameWorld): void {
     const segments = w.simulation.map.segments;
     const seen = new Set<string>();
+    // Track's parts once the roads are known: no sleepers where a road runs over the track.
+    const pendingTracks: Array<{ mesh: THREE.Mesh; line: Point[]; lift: number; disused: boolean }> = [];
     for (const segment of segments) {
       seen.add(segment.id);
       const retired = segment.retiredAt !== undefined;
       const known = roads.get(segment.id);
-      if (known && known.look === roadLook(segment)) continue;
+      const disused = segment.type === "rail" && w.railOutOfService.has(segment.id);
+      const look = `${roadLook(segment)}:${disused}`;
+      if (known && known.look === look) continue;
       if (known) {
         drop(known.mesh);
         known.material.dispose();
@@ -1255,19 +1353,16 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       // a red band down its side. What you've paved and laned reads from the air.
       const paved = segment.surface === "paved";
       const base = rail ? paintHex("--paint-grey-9") : retired ? ROAD_COLOURS.retired : paved ? ROAD_COLOURS.paved : ROAD_COLOURS.dirt;
-      const material = withClouds(new THREE.MeshLambertMaterial({ color: base, side: THREE.DoubleSide }));
+      const width = rail ? 4.6 : retired ? 5 : paved ? 10 : 7.5;
+      const material = roadSurface(withClouds(new THREE.MeshLambertMaterial({ color: base, side: THREE.DoubleSide })), rail ? ROAD_KIND.ballast : retired ? ROAD_KIND.retired : paved ? ROAD_KIND.paved : ROAD_KIND.dirt, width);
       // Each a hair above the last: two roads on one line don't flicker through each other.
       const piers = new Kit();
       const lift = 0.35 + (roads.size % 6) * 0.04;
-      const mesh = new THREE.Mesh(ribbonGeometry(line, rail ? 4.6 : retired ? 5 : paved ? 10 : 7.5, lift, piers), material);
+      const mesh = new THREE.Mesh(ribbonGeometry(line, width, lift, piers), material);
       mesh.receiveShadow = true;
-      // Track by its own width and surface, never hue (look.md §8.5): a narrow ballast bed, the
-      // sleepers' timber band, and two thin dark rails on it -- against a road's one wide surface.
-      if (rail) {
-        mesh.add(new THREE.Mesh(ribbonGeometry(line, 2.8, lift + 0.18), sleeperMaterial));
-        for (const side of [1, -1]) mesh.add(new THREE.Mesh(ribbonGeometry(offsetLine(line, (side * 0.75) / M), 0.28, lift + 0.32), railMaterial));
-      }
-      if (!rail && !retired && paved) mesh.add(new THREE.Mesh(ribbonGeometry(line, 0.35, lift + 0.08), lineMaterial));
+      // Track by its own width and surface, never hue (look.md §8.5): a narrow ballast bed, sleepers
+      // across it, two steel rails on them -- against a road's one wide surface.
+      if (rail) pendingTracks.push({ mesh, line, lift, disused });
       if (!rail && !retired && segment.busLane) for (const side of [1, -1]) mesh.add(new THREE.Mesh(ribbonGeometry(offsetLine(line, (side * 3.4) / M), 2.4, lift + 0.06), laneMaterial));
       if (!piers.empty) {
         const legs = new THREE.Mesh(piers.merged(), pierMaterial);
@@ -1275,7 +1370,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         mesh.add(legs);
       }
       scene.add(mesh);
-      roads.set(segment.id, { mesh, material, retired, rail, base, look: roadLook(segment), line, lift });
+      roads.set(segment.id, { mesh, material, retired, rail, base, look, line, lift });
+      crossingsKey = "";
     }
     for (const [id, road] of roads) {
       if (seen.has(id)) continue;
@@ -1284,6 +1380,117 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       roads.delete(id);
     }
     roadLines = segments.filter((s) => s.retiredAt === undefined).map((s) => segmentPolyline(w.simulation.map, s));
+    if (pendingTracks.length) {
+      const ways = segments.filter((s) => s.type === "road" && s.retiredAt === undefined).map((s) => segmentPolyline(w.simulation.map, s));
+      for (const t of pendingTracks) trackParts(t.mesh, t.line, t.lift, t.disused, ways);
+    }
+    if (!crossingsKey) buildCrossings();
+  }
+  /** Points every `spacing` metres along a line (cells), with its heading there. */
+  function along(line: Point[], spacing: number, from = spacing / 2): Array<{ x: number; y: number; heading: number }> {
+    const out: Array<{ x: number; y: number; heading: number }> = [];
+    let next = from, run = 0;
+    for (let k = 1; k < line.length; k += 1) {
+      const a = line[k - 1]!, b = line[k]!, len = Math.hypot(b.x - a.x, b.y - a.y) * M;
+      while (next <= run + len) {
+        const t = (next - run) / len;
+        out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, heading: Math.atan2(b.y - a.y, b.x - a.x) });
+        next += spacing;
+      }
+      run += len;
+    }
+    return out;
+  }
+  /** The ground (or the deck it's on) under a point, in metres. */
+  const floorAt = (x: number, y: number) => {
+    const deck = decks.get(cellKey(x, y));
+    return Math.max(elevationAt(x, y) * HEIGHT, deck === undefined ? -Infinity : deck);
+  };
+  const up3 = new THREE.Vector3(0, 1, 0);
+  /** A line of track's parts on its ballast: sleepers, rails, poles beside it; grass where it's out of service. */
+  function trackParts(mesh: THREE.Mesh, line: Point[], lift: number, disused: boolean, ways: Point[][]): void {
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), at = new THREE.Vector3();
+    const near = ways.filter((way) => way.some((p) => line.some((r) => Math.hypot(p.x - r.x, p.y - r.y) < 12)));
+    const underRoad = (x: number, y: number) => near.some((way) => way.some((p, k) => k > 0 && distToSegment(x, y, way[k - 1]!, p) < 5.6 / M));
+    const sleepers = along(line, 1.4).filter((p) => !underRoad(p.x, p.y));
+    const ties = new THREE.InstancedMesh(sleeperShape, disused ? oldSleeperMaterial : sleeperMaterial, Math.max(1, sleepers.length));
+    sleepers.forEach((p, i) => {
+      q.setFromAxisAngle(up3, -p.heading + Math.PI / 2);
+      ties.setMatrixAt(i, m.compose(at.set(p.x * M, floorAt(p.x, p.y) + lift + 0.12, p.y * M), q, one));
+    });
+    ties.count = sleepers.length;
+    ties.receiveShadow = true;
+    mesh.add(ties);
+    for (const side of [1, -1]) mesh.add(new THREE.Mesh(ribbonGeometry(offsetLine(line, (side * 0.75) / M), 0.22, lift + 0.42), disused ? rustMaterial : railMaterial));
+    // Telegraph poles along the line, a few metres off it, not in the water.
+    const poles = along(line, 46, 20).filter((p) => !wetNear(p.x - Math.sin(p.heading) * 0.6, p.y + Math.cos(p.heading) * 0.6));
+    if (poles.length) {
+      const posts = new THREE.InstancedMesh(poleShape, poleMaterial, poles.length);
+      poles.forEach((p, i) => {
+        const x = p.x - Math.sin(p.heading) * 0.6, y = p.y + Math.cos(p.heading) * 0.6;
+        q.setFromAxisAngle(up3, -p.heading);
+        posts.setMatrixAt(i, m.compose(at.set(x * M, elevationAt(x, y) * HEIGHT - 0.2, y * M), q, one));
+      });
+      posts.castShadow = true;
+      mesh.add(posts);
+    }
+    // Out of service: grass in tufts through the ballast.
+    if (disused) {
+      const tufts = along(line, 2.2, 1).filter((p) => !underRoad(p.x, p.y));
+      const grass = new THREE.InstancedMesh(tuftShape, tuftMaterial, Math.max(1, tufts.length));
+      const rand = seeded(`tufts-${line[0]!.x},${line[0]!.y}`);
+      tufts.forEach((p, i) => {
+        const off = (rand() - 0.5) * 3.6;
+        const x = p.x - Math.sin(p.heading) * (off / M), y = p.y + Math.cos(p.heading) * (off / M);
+        q.setFromAxisAngle(up3, rand() * 6);
+        grass.setMatrixAt(i, m.compose(at.set(x * M, floorAt(x, y) + lift + 0.1, y * M), q, one.clone().setScalar(0.6 + rand() * 0.8)));
+      });
+      grass.count = tufts.length;
+      mesh.add(grass);
+    }
+  }
+  // Level crossings: where a road crosses the track between towns, its boards, a barrier each side
+  // and the cross-buck signs. One mesh for all, rebuilt when the network changes.
+  let crossings: THREE.Mesh | null = null;
+  let crossingsKey = "";
+  function buildCrossings(): void {
+    crossingsKey = "built";
+    if (crossings) { scene.remove(crossings); crossings.geometry.dispose(); crossings = null; }
+    const tracks = [...roads.values()].filter((r) => r.rail).map((r) => r.line);
+    const ways = [...roads.values()].filter((r) => !r.rail && !r.retired).map((r) => r.line);
+    const kit = new Kit();
+    for (const way of ways) for (const track of tracks) for (let i = 1; i < way.length; i += 1) for (let j = 1; j < track.length; j += 1) {
+      const a = way[i - 1]!, b = way[i]!, c = track[j - 1]!, d = track[j]!;
+      const den = (b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x);
+      if (Math.abs(den) < 1e-9) continue;
+      const t = ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / den, u = ((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)) / den;
+      if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+      const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+      // Not at a town or station, where they meet anyway; not on a bridge.
+      const ends = [way[0]!, way[way.length - 1]!, track[0]!, track[track.length - 1]!];
+      if (ends.some((e) => Math.hypot(e.x - x, e.y - y) < 2) || decks.has(cellKey(x, y))) continue;
+      const roadDir = Math.atan2(b.y - a.y, b.x - a.x), railDir = Math.atan2(d.y - c.y, d.x - c.x);
+      const floor = elevationAt(x, y) * HEIGHT;
+      const one = new Kit();
+      one.box(5.2, 0.12, 9, paintHex("--paint-earth-57"), 0, 0, 0.5);
+      kit.place(one.merged(), x * M, floor, y * M, -railDir);
+      // A barrier on the road each side of the track, on its right, its boom lowered across.
+      for (const side of [1, -1]) {
+        const bx = x + Math.cos(roadDir) * side * (7 / M) + Math.sin(roadDir) * side * (5.5 / M), by = y + Math.sin(roadDir) * side * (7 / M) - Math.cos(roadDir) * side * (5.5 / M);
+        const post = new Kit();
+        post.box(0.5, 1.3, 0.5, paintHex("--paint-grey-20"), 0, 0);
+        post.box(0.18, 0.18, 7, paintHex("--paint-light-1"), 0, 3.4, 1.1);
+        for (let k = 0; k < 3; k += 1) post.box(0.2, 0.2, 0.9, paintHex("--paint-red-3"), 0, 1.4 + k * 2, 1.1);
+        post.cylinder(0.08, 3.2, paintHex("--paint-grey-20"), 0, -1.2, 0, 4);
+        post.box(1.8, 0.18, 0.06, paintHex("--paint-light-1"), 0, -1.2, 2.9, Math.PI / 4);
+        post.box(1.8, 0.18, 0.06, paintHex("--paint-light-1"), 0, -1.2, 2.9, -Math.PI / 4);
+        kit.place(post.merged(), bx * M, elevationAt(bx, by) * HEIGHT, by * M, -roadDir + (side > 0 ? Math.PI : 0));
+      }
+    }
+    if (kit.empty) return;
+    crossings = new THREE.Mesh(kit.merged(), material);
+    crossings.castShadow = true;
+    scene.add(crossings);
   }
   let focused: Focus | null = null;
   let selectedId: string | null = null;
@@ -1296,9 +1503,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   ring.renderOrder = 2;
   scene.add(ring);
   function colourRoads(w: GameWorld): void {
+    const byId = new Map(w.simulation.map.segments.map((s) => [s.id, s]));
     for (const [id, road] of roads) {
       if (road.retired) continue;
       colourRoad(w, id, road);
+      // Its wear, as the game keeps it (wear.ts: the condition, toward its floor): potholes and patches.
+      const surface = road.material.userData.road as { uRoadWear: { value: number } } | undefined;
+      const segment = byId.get(id);
+      if (surface && segment && !road.rail) surface.uRoadWear.value = Math.max(0, Math.min(1, (1 - segment.condition) / (1 - MIN_CONDITION)));
       // A selected town's or route's roads carry a line in your colour down their middle; the
       // rest fade a little (outside review, 2026-10-26: selecting a place should show what it's
       // connected to, or 3D is scenery). The line, not the road: recoloured whole, 7.5-10 m of
@@ -3376,7 +3588,6 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       sun.color.setHex(dark ? paintHex("--paint-blue-3") : paintHex("--paint-light-5"));
       sun.intensity = dark ? 0.5 : 2.5;
       setWaterNight(waterMaterial, dark);
-      lineMaterial.color.setHex(dark ? paintHex("--paint-grey-15") : paintHex("--paint-light-4"));
       edgeMaterial.color.setScalar(dark ? 0.3 : 1);
       recolourSkirt(dark ? paintHex("--paint-blue-21") : HORIZON);
       windowMaterial.emissive.setHex(dark ? paintHex("--paint-earth-20") : paintHex("--paint-dark-6"));

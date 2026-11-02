@@ -710,6 +710,19 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   `smoothstep(1.0, 0.2, r)` (edges reversed) is undefined in GLSL -- ANGLE on Metal gave near-zero,
   which made the first smoke invisible. Grey on pale savanna barely shows: the puffs are near-
   opaque by the stack, lit from above (bright tops, shaded undersides).
+- **Roads and track in their parts** (2026-11-02, your word: "since the vehicles look better we
+  could improve the roads/rails"). A road's surface is painted in its shader (`roadSurface`, a patch
+  on its material, so the traffic tint, the cloud shadows and the focus line work as before) from
+  where across and how far along each point of its ribbon is (`aRoadAcross`, `aRoadAlong`): dirt is
+  laterite with grain, two ruts where the wheels run and a ragged, dusty edge; paved is asphalt
+  with shoulders, a white line each edge and a dashed centre (the old centre-line ribbon gone); a
+  retired road goes back to grass. Its wear, the condition the game keeps, breaks it up as it
+  falls: potholes, and patching on asphalt. Track (`trackParts`) is its ballast (stones, darker
+  down its shoulders), sleepers across it every 1.4 m and two steel rails on them; out of service,
+  the rails are rust, the sleepers grey and grass grows through the ballast in tufts. Telegraph
+  poles run beside it every 46 m. Where a road crosses the track away from a town, a level
+  crossing: boards over the rails, a barrier each side with its boom down, cross-buck signs. The
+  track is laid after the roads, and leaves out its sleepers and grass where a road runs over it.
 - **The sites in their parts** (2026-11-02, your look: "the effort put into the harbour, if you
   extend it to the rest of things they will come out better"; shapes3d.ts `site`). Each kind as the
   thing it is, in a fenced yard (light posts and rails in 6 m runs, a gatehouse and barrier): a
