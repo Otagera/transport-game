@@ -8,7 +8,7 @@
 // Draw calls kept low: the land one mesh, the water one, each road one (its colour changes),
 // each town one merged mesh, and each kind of vehicle one InstancedMesh.
 import * as THREE from "three";
-import { CLOTHES, SITE_LIFE, busShelter, canoe, cargoShip, fishingJetty, personGeometry, reedClump, tugBoat } from "./shapes3d";
+import { CLOTHES, SITE_BAY, SITE_LIFE, SITE_STOCK, SITE_YARD, busShelter, excavator, canoe, cargoShip, fishingJetty, personGeometry, reedClump, tugBoat } from "./shapes3d";
 import { waitingAt } from "@engine/game/world";
 import { parsePoolKey } from "@engine/game/tick";
 import { siteProduction } from "@engine/game/production";
@@ -1341,7 +1341,19 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     return (x, y, pad) => isWater(terrain, Math.round(x), Math.round(y)) || banks.some((s) => distToSegment(x, y, s.a, s.b) < s.half + pad);
   }
   /** Where each site's buildings stand (cells), once it's been set beside its roads. */
-  const siteAt = new Map<string, { x: number; y: number }>();
+  /** Where each site is drawn (cells) and which way it's turned (siteKit). */
+  const siteAt = new Map<string, { x: number; y: number; ry: number }>();
+  /** Within `pad` metres of this site's yard (SITE_YARD, turned as it's drawn). */
+  function yardHas(site: GameTown, cx: number, cy: number, pad: number): boolean {
+    const at = siteAt.get(site.id) ?? { x: site.x, y: site.y, ry: 0 };
+    const yard = SITE_YARD[site.industry ?? ""] ?? { w: 40, d: 30 };
+    const wx = (cx - at.x) * M, wz = (cy - at.y) * M, c = Math.cos(at.ry), sn = Math.sin(at.ry);
+    return Math.abs(wx * c - wz * sn) < yard.w / 2 + pad && Math.abs(wx * sn + wz * c) < yard.d / 2 + pad;
+  }
+  /** Within `pad` metres of any site's yard: the towns build round them. */
+  function inYard(cx: number, cy: number, pad: number): boolean {
+    return sites.some((s) => yardHas(s, cx, cy, pad));
+  }
   let sites: GameTown[] = [];
   let people: GameTown[] = [];
   /** A house of a town's fabric, in its town's frame: drawn as instances, walls and roof apart. */
@@ -1391,10 +1403,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + r)) continue;
         if (wet(cx, cy, (r + 2) / M) || nearRoad(cx, cy, (r + 6) / M)) continue;
         // Clear of the sites: a tank farm isn't in anyone's back yard.
-        if (sites.some((s) => {
-          const at = siteAt.get(s.id) ?? s;
-          return Math.hypot(at.x - cx, at.y - cy) < (r + 24) / M;
-        }) || onQuay(cx, cy, (r + 4) / M)) continue;
+        if (inYard(cx, cy, r + 4) || onQuay(cx, cy, (r + 4) / M)) continue;
         placed.push({ x, z, r });
         const one = new Kit();
         make(one, rand, facing + (rand() < 0.8 ? 0 : Math.PI / 2));
@@ -1438,7 +1447,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const cx = town.x + x / M, cy = town.y + z / M, r = 3.6;
         if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + r)) continue;
         if (wet(cx, cy, (r + 1) / M) || nearRoad(cx, cy, (r + 4) / M)) continue;
-        if (sites.some((s) => { const at = siteAt.get(s.id) ?? s; return Math.hypot(at.x - cx, at.y - cy) < (r + 22) / M; }) || onQuay(cx, cy, (r + 4) / M)) continue;
+        if (inYard(cx, cy, r + 3) || onQuay(cx, cy, (r + 4) / M)) continue;
         placed.push({ x, z, r: 3.2 });
         built.add(`${i},${j}`);
         const y = Math.min(elevationAt(cx - 0.4, cy), elevationAt(cx + 0.4, cy), elevationAt(cx, cy - 0.4), elevationAt(cx, cy + 0.4)) * HEIGHT - base - 0.2;
@@ -1515,7 +1524,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const x = lx * cos - lz * sin, z = lx * sin + lz * cos;
         const cx = town.x + x / M, cy = town.y + z / M;
         if (wet(cx, cy, 0.3)) return;
-        if (sites.some((s) => { const at = siteAt.get(s.id) ?? s; return Math.hypot(at.x - cx, at.y - cy) < 18 / M; }) || onQuay(cx, cy, 0.5)) return;
+        if (inYard(cx, cy, 0) || onQuay(cx, cy, 0.5)) return;
         const paved = tier !== "town" && Math.hypot(x, z) / radius < core;
         streets.push({
           x, z, y: elevationAt(cx, cy) * HEIGHT - base + 0.15, long: spacing + 0.4, wide: paved ? 4.6 : 4,
@@ -1595,7 +1604,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
                 const x = (cx - town.x) * M, z = (cy - town.y) * M;
                 if (placed.some((q) => Math.hypot(q.x - x, q.z - z) < q.r + 3.2)) continue;
                 if (wet(cx, cy, 4.2 / M) || nearRoad(cx, cy, 7.5 / M)) continue;
-                if (sites.some((st) => { const at = siteAt.get(st.id) ?? st; return Math.hypot(at.x - cx, at.y - cy) < 25 / M; }) || onQuay(cx, cy, 1)) continue;
+                if (inYard(cx, cy, 4) || onQuay(cx, cy, 1)) continue;
                 placed.push({ x, z, r: 3.2 });
                 const y = Math.min(elevationAt(cx - 0.4, cy), elevationAt(cx + 0.4, cy), elevationAt(cx, cy - 0.4), elevationAt(cx, cy + 0.4)) * HEIGHT - base - 0.2;
                 const flat = rr() < 0.3;
@@ -1619,32 +1628,74 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     footprint = placed.map((b) => ({ ...b }));
     return kit;
   }
-  function siteKit(town: GameTown): { kit: Kit; x: number; z: number; clear: (x: number, z: number, r: number) => boolean } {
-    // The roads into it run to its middle: it's set to one side of them (whichever side keeps
-    // most of it), and any piece still on a road is left out.
+  // Where a site goes (your look, 2026-11-02: a quarry left as two strips of wall, a road through its
+  // pit). The roads into it run to its middle; its yard is set beside them, turned whichever of four
+  // ways and moved up to 46 m, to lose the least to roads and water (each piece left out counts by
+  // its size) with its gate toward where the road ends. Its pieces are surveyed once, dry, and
+  // tried at each place against a map of how far the roads are; the kit is built once, at the best.
+  function siteKit(town: GameTown): { kit: Kit; x: number; z: number; ry: number; floor: number; clear: (x: number, z: number, r: number) => boolean } {
     const local = roadLines.filter((line) => line.some((p) => Math.hypot(p.x - town.x, p.y - town.y) < 30));
     const wet = wetAround(town, 40);
-    const kitAt = (ox: number, oz: number) => {
-      const clear = (x: number, z: number, r: number) => {
-        const cx = town.x + (x + ox) / M, cy = town.y + (z + oz) / M;
-        return !wet(cx, cy, r / M) && !local.some((line) => line.some((p, k) => k > 0 && distToSegment(cx, cy, line[k - 1]!, p) < (r + 5) / M));
-      };
-      const kit = new ClearKit(clear);
-      site(kit, seeded(town.id), town.industry!);
-      return { kit, ox, oz, clear };
+    const STEP = 2, HALF = 48, SIDE = HALF * 2 + 1;
+    const roadDist = new Float32Array(SIDE * SIDE);
+    for (let gy = 0; gy < SIDE; gy += 1) for (let gx = 0; gx < SIDE; gx += 1) {
+      const x = town.x + ((gx - HALF) * STEP) / M, y = town.y + ((gy - HALF) * STEP) / M;
+      let d = Infinity;
+      for (const line of local) for (let k = 1; k < line.length; k += 1) d = Math.min(d, distToSegment(x, y, line[k - 1]!, line[k]!));
+      roadDist[gy * SIDE + gx] = d * M;
+    }
+    // And the yards already placed near it (sites are placed one by one): a neighbour's is taken ground.
+    const neighbours = sites.filter((s) => s.id !== town.id && siteAt.has(s.id) && Math.hypot(siteAt.get(s.id)!.x - town.x, siteAt.get(s.id)!.y - town.y) < 20);
+    /** Clear to stand a piece of radius r at (wx, wz) metres from the site's point. */
+    const clearAt = (wx: number, wz: number, r: number) => {
+      const gx = Math.round(wx / STEP) + HALF, gy = Math.round(wz / STEP) + HALF;
+      const road = gx >= 0 && gy >= 0 && gx < SIDE && gy < SIDE ? roadDist[gy * SIDE + gx]! : Infinity;
+      if (road < r + 5) return false;
+      const cx = town.x + wx / M, cy = town.y + wz / M;
+      return !wet(cx, cy, r / M) && !neighbours.some((s) => yardHas(s, cx, cy, r + 2));
     };
-    let best = kitAt(0, 0);
-    if (best.kit.dropped > 0) {
-      for (let k = 0; k < 8 && best.kit.dropped > 0; k += 1) {
-        const a = (k / 8) * Math.PI * 2;
-        for (const reach of [16, 26]) {
-          const next = kitAt(Math.cos(a) * reach, Math.sin(a) * reach);
-          if (next.kit.dropped < best.kit.dropped) best = next;
-        }
+    const placed = (ox: number, oz: number, ry: number) => {
+      const c = Math.cos(ry), sn = Math.sin(ry);
+      return (x: number, z: number, r: number) => clearAt(ox + x * c + z * sn, oz - x * sn + z * c, r);
+    };
+    const survey = new SurveyKit();
+    site(survey, seeded(town.id), town.industry!);
+    const yard = SITE_YARD[town.industry!] ?? { w: 40, d: 30, gate: 0 };
+    // The ground under the yard, in metres: 5 by 5 points over it. Set at their mean, and a site
+    // on a slope half buried, so flat ground counts in the choosing (2026-11-02: a quarry moved up
+    // a hillside sank its crusher and dump truck into it).
+    const groundUnder = (ox: number, oz: number, ry: number) => {
+      const c = Math.cos(ry), sn = Math.sin(ry);
+      let low = Infinity, high = -Infinity, sum = 0;
+      for (let i = 0; i <= 4; i += 1) for (let j = 0; j <= 4; j += 1) {
+        const x = (i / 4 - 0.5) * yard.w, z = (j / 4 - 0.5) * yard.d;
+        const h = elevationAt(town.x + (ox + x * c + z * sn) / M, town.y + (oz - x * sn + z * c) / M) * HEIGHT;
+        low = Math.min(low, h);
+        high = Math.max(high, h);
+        sum += h;
+      }
+      return { mean: sum / 25, rise: high - low };
+    };
+    let best = { ox: 0, oz: 0, ry: 0, score: Infinity };
+    const offsets: Array<[number, number]> = [[0, 0]];
+    for (const reach of [12, 22, 34, 46]) for (let k = 0; k < 12; k += 1) offsets.push([Math.cos((k / 12) * Math.PI * 2) * reach, Math.sin((k / 12) * Math.PI * 2) * reach]);
+    for (const ry of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
+      const c = Math.cos(ry), sn = Math.sin(ry);
+      for (const [ox, oz] of offsets) {
+        const clear = placed(ox, oz, ry);
+        let lost = 0;
+        for (const [x, z, r] of survey.pieces) if (!clear(x, z, r)) lost += 1 + r;
+        const gx = ox + yard.gate * c + (yard.d / 2) * sn, gz = oz - yard.gate * sn + (yard.d / 2) * c;
+        const score = lost + Math.hypot(gx, gz) * 0.08 + groundUnder(ox, oz, ry).rise * 2;
+        if (score < best.score) best = { ox, oz, ry, score };
       }
     }
-    siteAt.set(town.id, { x: town.x + best.ox / M, y: town.y + best.oz / M });
-    return { kit: best.kit, x: best.ox, z: best.oz, clear: best.clear };
+    const clear = placed(best.ox, best.oz, best.ry);
+    const kit = new ClearKit(clear);
+    site(kit, seeded(town.id), town.industry!);
+    const floor = groundUnder(best.ox, best.oz, best.ry).mean - 0.1;
+    siteAt.set(town.id, { x: town.x + best.ox / M, y: town.y + best.oz / M, ry: best.ry });
+    return { kit, x: best.ox, z: best.oz, ry: best.ry, floor, clear };
   }
   // --- A site at work (the fidelity list, 2026-11-01: "sites that show their state") --------------
   // What a working site gives off (shapes3d.ts SITE_LIFE): a stack's smoke, a refinery's flare, a
@@ -1717,7 +1768,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (soft <= 0.01) discard;
         vec3 c = vKind < 0.5 ? uSmoke : vKind < 1.5 ? uDark : vKind < 2.5 ? uSteam : uDust;
         c *= mix(1.1, 0.5, gl_PointCoord.y);
-        gl_FragColor = vec4(c, soft * min(1.0, vAlpha * 1.6) * (vKind < 1.5 ? 0.95 : vKind < 2.5 ? 0.85 : 0.7));
+        // Smoke and steam thick by the stack; dust a thin haze -- it hung over a quarry's crusher and
+        // its lorries like a wall.
+        gl_FragColor = vec4(c, soft * (vKind < 2.5 ? min(1.0, vAlpha * 1.6) * (vKind < 1.5 ? 0.95 : 0.85) : vAlpha * 0.3));
         #include <colorspace_fragment>
         #include <fog_fragment>
       }
@@ -1743,13 +1796,70 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     k.box(0.9, 1.4, 0.9, paintHex("--paint-grey-23"), 2.8, 0, -1.2);
     beamShape.copy(k.merged());
   }
-  interface SiteLife { id: string; puffs: Array<[number, number]>; flares: THREE.Mesh[]; jacks: THREE.Mesh[]; share: number; angle: number }
+  interface SiteLife {
+    id: string; puffs: Array<[number, number]>; flares: THREE.Mesh[]; jacks: THREE.Mesh[]; diggers: THREE.Object3D[]; share: number; angle: number;
+    /** What it can't get away, piled in its yard: one mesh, drawn as far as `ends[k]` for k items. */
+    stock: { mesh: THREE.Mesh; ends: number[] } | null;
+    /** Its lorries at the loading bay: one mesh, drawn as far as `ends[k]` for k of them. */
+    bay: { mesh: THREE.Mesh; ends: number[] } | null;
+  }
+  const diggerShape = (() => { const e = excavator(); return { base: own(e.base), upper: own(e.upper) }; })();
+  /** Pieces built one after another into one mesh, and where each ends, so it can be drawn up to any of them. */
+  function pieces(count: number, make: (kit: Kit, i: number) => void): { geo: THREE.BufferGeometry; ends: number[] } | null {
+    const parts: THREE.BufferGeometry[] = [], ends: number[] = [0];
+    for (let i = 0; i < count; i += 1) {
+      const kit = new Kit();
+      make(kit, i);
+      if (kit.empty) continue;
+      const geo = kit.merged();
+      parts.push(geo);
+      ends.push(ends[ends.length - 1]! + geo.attributes.position!.count);
+    }
+    if (!parts.length) return null;
+    const geo = mergeGeometries(parts, false)!;
+    for (const part of parts) part.dispose();
+    geo.setDrawRange(0, 0);
+    return { geo, ends };
+  }
   const lives = new Map<string, SiteLife>();
   function addSiteLife(town: GameTown, mesh: THREE.Mesh, clear: (x: number, z: number, r: number) => boolean): void {
-    const plan = SITE_LIFE[town.industry!];
-    if (!plan) return;
-    const life: SiteLife = { id: town.id, puffs: [], flares: [], jacks: [], share: 0, angle: 0 };
+    const plan = SITE_LIFE[town.industry!] ?? [];
+    const life: SiteLife = { id: town.id, puffs: [], flares: [], jacks: [], diggers: [], share: 0, angle: 0, stock: null, bay: null };
     const rand = seeded(`life-${town.id}`);
+    const kind = town.industry!;
+    // Its stock pile, and its lorries at the bay: each a mesh of pieces, drawn as far as needed.
+    // Where its kind keeps it (laid out clear of its buildings: shapes3d.ts); on a road, it goes without.
+    const room = (x: number, z: number, r: number): [number, number] | undefined => (clear(x, z, r) ? [x, z] : undefined);
+    const store = SITE_STOCK[kind];
+    const storeAt = store && room(store.x, store.z, 4);
+    if (store && storeAt) {
+      const built = pieces(store.n, (kit, i) => store.item(kit, rand, i));
+      if (built) {
+        const pile = new THREE.Mesh(own(built.geo), material);
+        pile.position.set(storeAt[0], 0, storeAt[1]);
+        pile.castShadow = true;
+        pile.receiveShadow = true;
+        mesh.add(pile);
+        life.stock = { mesh: pile, ends: built.ends };
+      }
+    }
+    const bay = SITE_BAY[kind];
+    const bayAt = bay && room(bay.x, bay.z, 5);
+    if (bay && bayAt) {
+      const lorry = vehicleGeometry(bay.vehicle);
+      // Side by side across the bay, scaled as the vehicles on the roads are.
+      const built = pieces(3, (kit, i) => kit.place(lorry, (i - 1) * 3.4, 0.35 / VEHICLE_SCALE, 0, Math.PI / 2));
+      lorry.dispose();
+      if (built) {
+        built.geo.scale(VEHICLE_SCALE, VEHICLE_SCALE, VEHICLE_SCALE);
+        const lorries = new THREE.Mesh(own(built.geo), material);
+        lorries.position.set(bayAt[0], 0, bayAt[1]);
+        lorries.rotation.y = bay.ry;
+        lorries.castShadow = true;
+        mesh.add(lorries);
+        life.bay = { mesh: lorries, ends: built.ends };
+      }
+    }
     for (const e of plan) {
       // Not where its piece was left out (on a road, in the water): nothing to come out of.
       if (!clear(e.x, e.z, 1.5)) continue;
@@ -1759,6 +1869,19 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         flare.visible = false;
         mesh.add(flare);
         life.flares.push(flare);
+      } else if (e.what === "digger") {
+        if (!clear(e.x, e.z, 6)) continue;
+        const digger = new THREE.Group();
+        const base = new THREE.Mesh(diggerShape.base, material);
+        const upper = new THREE.Mesh(diggerShape.upper, material);
+        base.castShadow = upper.castShadow = true;
+        upper.position.y = 1.4;
+        digger.add(base, upper);
+        digger.position.set(e.x, e.y, e.z);
+        digger.scale.setScalar(VEHICLE_SCALE);
+        digger.rotation.y = rand() * Math.PI * 2;
+        mesh.add(digger);
+        life.diggers.push(upper);
       } else if (e.what === "pumpjack") {
         const beam = new THREE.Mesh(beamShape, material);
         beam.position.set(e.x, e.y, e.z);
@@ -1769,9 +1892,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const n = e.what === "dust" ? 18 : e.what === "steam" ? 14 : 26;
         if (puffsUsed + n > PUFFS) continue;
         const kind = e.what === "smoke" ? 0 : e.what === "darkSmoke" ? 1 : e.what === "steam" ? 2 : 3;
+        const c = Math.cos(mesh.rotation.y), sn = Math.sin(mesh.rotation.y);
+        const ex = e.x * c + e.z * sn, ez = -e.x * sn + e.z * c;
         for (let i = 0; i < n; i += 1) {
           const k = puffsUsed + i;
-          puffBase.set([mesh.position.x + e.x + (rand() - 0.5) * (kind === 3 ? 8 : 1), mesh.position.y + e.y, mesh.position.z + e.z + (rand() - 0.5) * (kind === 3 ? 8 : 1)], k * 3);
+          puffBase.set([mesh.position.x + ex + (rand() - 0.5) * (kind === 3 ? 8 : 1), mesh.position.y + e.y, mesh.position.z + ez + (rand() - 0.5) * (kind === 3 ? 8 : 1)], k * 3);
           puffPhase[k] = i / n + rand() * 0.02;
           puffKind[k] = kind;
           puffOn[k] = 0;
@@ -1800,6 +1925,13 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       life.share = p && p.capacity > 0 ? Math.min(1, p.made / p.capacity) : 0;
       for (const [from, n] of life.puffs) puffOn.fill(life.share > 0.02 ? 0.45 + 0.55 * life.share : 0, from, from + n);
       for (const f of life.flares) f.visible = life.share > 0.05;
+      // The stock it can't get away: as much as waits (made, not carried); none while it's idle.
+      // Its lorries loading: as many as it ships, one at least while it's working.
+      const made = p ? Math.min(1, p.made / Math.max(1e-9, p.capacity)) : 0;
+      const waiting = made > 0.02 ? Math.min(1, 0.15 + (1 - (p?.shipped ?? 1)) * 1.1) : 0;
+      if (life.stock) life.stock.mesh.geometry.setDrawRange(0, life.stock.ends[Math.round(waiting * (life.stock.ends.length - 1))]!);
+      const loading = made > 0.02 ? Math.max(1, Math.min(3, Math.round((p?.shipped ?? 0) * 3 + 0.3))) : 0;
+      if (life.bay) life.bay.mesh.geometry.setDrawRange(0, life.bay.ends[Math.min(loading, life.bay.ends.length - 1)]!);
     }
     puffGeo.attributes.aOn!.needsUpdate = true;
   }
@@ -2117,6 +2249,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
       life.angle += dt * 1.8 * life.share;
       life.jacks.forEach((jack, i) => (jack.rotation.z = Math.sin(life.angle + i * 1.3) * 0.32));
+      // The excavator swings between the face and the truck, as fast as the site works.
+      life.diggers.forEach((upper, i) => (upper.rotation.y = Math.sin(life.angle * 0.6 + i) * 1.1));
     }
     harbourCranes.forEach((boom, i) => (boom.rotation.y = Math.sin(seconds * 0.25 + i * 1.7) * 0.6));
     for (const [i, tug] of harbourTugs.entries()) {
@@ -2250,10 +2384,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         towns.delete(town.id);
       }
       if (!towns.has(town.id)) {
-        const built = town.industry ? siteKit(town) : { kit: townKit(town, tier, boom), x: 0, z: 0, clear: null };
+        const built = town.industry ? siteKit(town) : { kit: townKit(town, tier, boom), x: 0, z: 0, ry: 0, floor: null, clear: null };
         const { kit, x, z } = built;
         const mesh = new THREE.Mesh(kit.merged(), material);
         mesh.position.copy(ground(town.x, town.y)).add(new THREE.Vector3(x, 0, z));
+        mesh.rotation.y = built.ry;
+        if (built.floor !== null) mesh.position.y = built.floor;
         if (!town.industry && fabric.length) mesh.add(...houses(fabric));
         if (!town.industry) {
           marketsAt.set(town.id, markets.map((m) => ({ x: mesh.position.x + m.x, z: mesh.position.z + m.z, big: m.big })));
@@ -2417,6 +2553,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     for (let i = 0; i < W * H; i += 1) if (terrain.water[i] === 1 || bankDist[i]! < 0.6) occupied[i] = WET;
     markRoads(roadLines);
     for (const t of [...w.towns.values()]) {
+      // A site's yard, where it's drawn (siteAt: set to one side of its roads), kept clear whole.
+      const at = t.industry ? siteAt.get(t.id) : undefined;
+      if (at) {
+        for (let y = Math.max(0, Math.floor(at.y - 4.5)); y <= Math.min(H - 1, Math.ceil(at.y + 4.5)); y += 1)
+          for (let x = Math.max(0, Math.floor(at.x - 4.5)); x <= Math.min(W - 1, Math.ceil(at.x + 4.5)); x += 1)
+            if ((occupied[y * W + x] === FREE || occupied[y * W + x] === TOWN) && yardHas(t, x, y, 4)) occupied[y * W + x] = QUAY;
+        continue;
+      }
       const r = t.industry ? 3 : reachCells.get(t.id) ?? 3;
       for (let y = Math.max(0, Math.floor(t.y - r)); y <= Math.min(H - 1, Math.ceil(t.y + r)); y += 1)
         for (let x = Math.max(0, Math.floor(t.x - r)); x <= Math.min(W - 1, Math.ceil(t.x + r)); x += 1)
@@ -3378,6 +3522,27 @@ function distToSegment(x: number, y: number, a: Point, b: Point): number {
 }
 
 /** A kit that leaves out any piece whose footprint `clear` refuses (shapes3d's sites, round a road). */
+/** A site's kit, dry: where each piece would stand and how big, without building it -- to choose where the site goes. */
+class SurveyKit extends Kit {
+  pieces: Array<[number, number, number]> = [];
+  override add(): void {}
+  override box(w: number, _h: number, d: number, _c: string | number, x = 0, z = 0): void {
+    this.pieces.push([x, z, Math.max(w, d) / 2]);
+  }
+  override cylinder(r: number, _h: number, _c: string | number, x = 0, z = 0): void {
+    this.pieces.push([x, z, r]);
+  }
+  override cone(r: number, _h: number, _c: string | number, x = 0, z = 0): void {
+    this.pieces.push([x, z, r]);
+  }
+  override gable(w: number, d: number, _h: number, _c: string | number, x = 0, z = 0): void {
+    this.pieces.push([x, z, Math.max(w, d) / 2]);
+  }
+  override fits(x: number, z: number, r: number): boolean {
+    this.pieces.push([x, z, r]);
+    return true;
+  }
+}
 class ClearKit extends Kit {
   dropped = 0;
   constructor(private ok: (x: number, z: number, r: number) => boolean) {
@@ -3399,5 +3564,8 @@ class ClearKit extends Kit {
   }
   override gable(w: number, d: number, h: number, colour: string | number, x = 0, z = 0, y = 0, ry = 0): void {
     if (this.clear(x, z, Math.max(w, d) / 2)) super.gable(w, d, h, colour, x, z, y, ry);
+  }
+  override fits(x: number, z: number, r: number): boolean {
+    return this.clear(x, z, r);
   }
 }

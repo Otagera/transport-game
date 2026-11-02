@@ -710,6 +710,37 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   `smoothstep(1.0, 0.2, r)` (edges reversed) is undefined in GLSL -- ANGLE on Metal gave near-zero,
   which made the first smoke invisible. Grey on pale savanna barely shows: the puffs are near-
   opaque by the stack, lit from above (bright tops, shaded undersides).
+- **The sites in their parts** (2026-11-02, your look: "the effort put into the harbour, if you
+  extend it to the rest of things they will come out better"; shapes3d.ts `site`). Each kind as the
+  thing it is, in a fenced yard (light posts and rails in 6 m runs, a gatehouse and barrier): a
+  refinery's tank farm in its bund, its ringed columns, flare stack, heater, pipe racks and loading
+  gantry; a terminal's or depot's tanks, rack and gantry; an oilfield's pump jacks on pads,
+  flowlines, separator and tanks; a quarry's or iron mine's pit (floor, two benches, spoil), its
+  crusher and conveyor up to the stockpile, a dump truck and an excavator; a cement works'
+  stockpile, conveyor, preheater tower, kiln on its piers, clinker shed and silos; a steelworks'
+  blast furnace and stoves, ore heaps, steel shop, rolling mill and slag tip; the steel terminal's
+  overhead crane and shed; a mill's silos, elevator and gallery, mill house and bagging shed; the
+  motor plant's sawtooth hall, office and boiler house. What changes with how it's doing: **its
+  stock** (`SITE_STOCK`: sacks, a heap, steel coils, finished cars) piles up as much as it makes and
+  can't get away -- `siteProduction`'s shipped share -- none while it's idle; **its lorries at the
+  bay** (`SITE_BAY`: tankers or trucks), one to three as much as it ships; **the excavator** swings
+  as fast as the site works. Stock and lorries are each one mesh of pieces built in order, drawn up
+  to the piece wanted (`setDrawRange`), so nothing is rebuilt as they change.
+  **Where a site goes** (`siteKit`; your look at the quarry: two strips of pit wall, its lorries in
+  a jam). The roads into a site run to its middle, and a road through its yard drops what's on it.
+  Seventeen spots within 26 m, all facing one way, rarely cleared a 54 by 42 m yard; now its pieces
+  are surveyed once, dry (`SurveyKit`), and tried at 49 spots up to 46 m off, turned four ways,
+  against a map of how far the roads are (2 m squares): each piece lost counts by its size, the gate
+  is drawn toward where the road ends, flat ground is preferred, and the yards of sites already
+  placed nearby are taken ground. The kit is built once, at the best, turned as chosen
+  (`SITE_YARD`; the smoke turned with it). It's set at the mean height of the ground under its yard,
+  not its town point's: moved up a hillside, a quarry had sunk its crusher and dump truck. On map
+  2418 every site loses nothing to roads but the hemmed-in cement works and steel terminal. A
+  compound piece -- a tank, a tower, a shed -- is kept whole or left out whole (`fits`), not a stack
+  without its tower. Big pieces (the pit's floor and benches, the kiln) are built in lengths. Each
+  kind's stock and bay are laid out clear of its buildings; on a road, it goes without. The towns
+  build round the whole yard (`inYard`), the yard grows no trees, and its dust is a thin haze (it
+  had hung over a quarry's crusher like a wall).
 - **The seaport's harbour.** At the seaport city (`w.seaport`; a coast-road gateway has none) a
   jetty on piles, an apron of container stacks, gantry cranes whose booms swing, a ship moored
   alongside and more standing off on slow circles in open sea; a crane and a ship more per rung of
