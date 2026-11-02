@@ -11,6 +11,7 @@ import { ALL_SYSTEMS_ON, DEFAULT_GAME_TUNING } from "./tuning";
 import type { GameMapDef, GameTuning, GameWorld } from "./types";
 import { diagnoseRoute, gameDay, routeSummaries } from "./world";
 import { SIM_DT } from "../loop";
+import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 // A run file: one played game, saved from the page ("Save run") so it can
 // be read by hand or by a script (scripts/game-run.ts) when answering a
@@ -46,6 +47,8 @@ export interface RunAction {
 
 export interface RunDay {
   day: number;
+  /** The tick the day ended on, which began the next (absent in older files): where a fork cuts. */
+  endTick?: number;
   funds: number;
   /** The strip's numbers: net and the headline are 5-day averages, a day. */
   netPerDay: number;
@@ -146,9 +149,33 @@ export function recordTick(recorder: RunRecorder, world: GameWorld, events: Game
   recorder.pending.push(...events);
   const day = gameDay(world);
   if (day === recorder.lastDay) return;
-  recorder.file.days.push(daySummary(world, recorder.lastDay, recorder.pending));
+  recorder.file.days.push({ ...daySummary(world, recorder.lastDay, recorder.pending), endTick: recorder.ticks });
   recorder.pending = [];
   recorder.lastDay = day;
+}
+
+/**
+ * The run cut at the start of a day (the design console's fork; brief, Dev tools, step 2): the
+ * same start, the actions made before that day began, the days ended before it. Replayed to its
+ * `ticks`, it's this game as that day began, to play on another way; the original is untouched.
+ * The tick is found from where the world stands now, so it's exact for this recorder.
+ */
+export function forkRun(recorder: RunRecorder, world: GameWorld, day: number): RunRecorder | null {
+  const now = gameDay(world);
+  if (!Number.isInteger(day) || day < 1 || day > now) return null;
+  // Exact from the row of the day before (the tick it ended on, which began this one); in a file
+  // recorded before rows kept it, from the seconds -- a tick out, either way, at worst.
+  const before = recorder.file.days.find((d) => d.day === day - 1)?.endTick;
+  const dayStart = world.startSeconds + (day - 1) * SECONDS_PER_GAME_DAY;
+  const ticks = before ?? recorder.ticks - Math.round((world.economy.elapsedSeconds - dayStart) / SIM_DT);
+  if (ticks < 0) return null;
+  const file: RunFile = {
+    ...structuredClone(recorder.file),
+    actions: structuredClone(recorder.file.actions.filter((a) => a.tick < ticks)),
+    days: structuredClone(recorder.file.days.filter((d) => d.day < day)),
+    ticks,
+  };
+  return { file, ticks, pending: [], lastDay: day };
 }
 
 /** The file to save: everything so far, stamped. */

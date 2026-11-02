@@ -1295,7 +1295,7 @@ background job, and `?moves=1`'s best-moves workers stay separate and off.
 - Sweeps over many seeds and numbers: the gym and the strategist do that offline, where heat
   doesn't matter (`GAME_TUNING=... bun scripts/game-strategist.ts`). Later, perhaps, a page
   that reads their results.
-- Anything in the production bundle: `verify:bundle` checks it's gone.
+- Anything a player downloads: the dev code loads on demand with `?dev=1` (D4).
 
 ### The order
 
@@ -1312,7 +1312,7 @@ background job, and `?moves=1`'s best-moves workers stay separate and off.
 | D1 | Quiet unless asked | `?dev=1` with no what-if asked: no worker running, CPU as without dev |
 | D2 | A what-if is the game | The same what-if twice gives the same numbers; its "with" run matches a replay of the run file with that move added |
 | D3 | Console moves replay | A run with every console move replays to the same world |
-| D4 | Gone in production | `verify:bundle` finds none of it |
+| D4 | Not in a player's download | `verify:bundle`: the drawer is its own chunk, loaded only with `?dev=1`, never in the entry script (so `?dev=1` still works on the deployed game) |
 | D5 | The systems graph covers the tuning | A test: every key in tuning.ts is in the chain table or named there as not drawn; a new key fails it until placed |
 
 ### Your answers (2026-11-02)

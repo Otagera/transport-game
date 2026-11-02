@@ -1459,6 +1459,18 @@ may build there. `world.remit` is plain data -- `open` (regional towns, in the o
   cluster opened (12 yards against 36). Filtering each choice by `remitRefusal`/`inRemit` first
   closed the gap. Any automated player (the forecaster's moves, a bot) must do the same.
 
+### The what-if (2026-11-02; brief, Dev tools, step 3)
+
+`whatif.ts`: `playAhead(world, change, days)` structuredClones the world, makes the change -- a
+move through `applyAction`, or a tuning number as the console's `tune` sets it (so the remit and
+every check refuse it as they would you) -- and ticks to each day's end, yielding a row: funds,
+net that day (the change of funds, so a purchase lands on its day), people, trips and your
+riders (`headline`), goods arriving (yours and the hauliers'). At the end, by place: people by
+town, goods by flow, trips by pair, for the map graph. The world given is never touched, and
+the sim is deterministic, so a question asked twice gives the same numbers (D2, a test), and
+with a change it matches playing that change. Dev only, in a worker (render-and-ui.md, The
+design console's drawer); `whatIf` runs it through for a script.
+
 ### Stations on the old line (2026-10-30; brief, Revision 5, Stations on the old line)
 
 `stations.ts`, behind `railStations` (absent in older runs: the line as it was, one piece).

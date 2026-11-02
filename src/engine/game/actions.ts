@@ -1,7 +1,7 @@
 import { answerDemand, unionAfterAction } from "./union";
 import { nextEpoch } from "./epoch";
 import { upgradePort } from "./gateways";
-import { commitPledge, consoleMove, noteAction } from "./term";
+import { commitPledge, consoleMove, noteAction, type ConsoleOp } from "./term";
 import type { GameWorld } from "./types";
 import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
@@ -55,7 +55,7 @@ export type ActionSpec =
   | { kind: "bond"; purpose: BondPurpose }
   | { kind: "sell"; routeId: string }
   | { kind: "pledge"; id: string }
-  | { kind: "console"; op: "end-term" | "funds" | "rains"; amount?: number }
+  | { kind: "console"; op: ConsoleOp; amount?: number; key?: string; value?: number | boolean }
   | { kind: "union"; unionId: string; answer: "pay" | "concede" | "coop" | "refuse" }
   | { kind: "bridgeFord"; fordId: string }
   | { kind: "label"; key: string; name?: string; colour?: string }
@@ -87,7 +87,7 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
     case "pledge":
       return commitPledge(world, spec.id);
     case "console":
-      return consoleMove(world, spec.op, spec.amount);
+      return consoleMove(world, spec.op, spec.amount, spec.key, spec.value);
     case "union":
       return answerDemand(world, spec.unionId, spec.answer);
     case "label":

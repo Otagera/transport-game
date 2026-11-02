@@ -11,6 +11,10 @@ import type { Snapshot } from "@engine/game/snapshot";
 /** What the loading card lists, without opening the world. */
 export interface SaveSummary {
   seed: number;
+  /** Its key when it isn't the map's own game: a fork (the design console's, brief, Dev tools). Absent: the seed. */
+  id?: string;
+  /** A fork: of this map's game, from the start of this day. */
+  forkOf?: { day: number };
   /** Date.now() when kept. */
   savedAt: number;
   day: number;
@@ -26,7 +30,8 @@ export interface SaveSummary {
 
 export interface SavedGame {
   summary: SaveSummary;
-  snapshot: Snapshot;
+  /** The world as it stands; absent in a fork, which replays its run to where it was cut. */
+  snapshot?: Snapshot;
   recorder: RunRecorder;
 }
 
@@ -75,11 +80,15 @@ export async function listSaves(): Promise<SaveSummary[]> {
   }
 }
 
-export async function loadSave(seed: number): Promise<SavedGame | null> {
+/** A save's key: the seed for a map's own game, else its id (a fork). */
+export type SaveKey = number | string;
+export const saveKey = (summary: SaveSummary): SaveKey => summary.id ?? summary.seed;
+
+export async function loadSave(key: SaveKey): Promise<SavedGame | null> {
   const base = await db();
   if (!base) return null;
   try {
-    return await read(base.transaction(GAMES).objectStore(GAMES).get(seed) as IDBRequest<SavedGame>);
+    return await read(base.transaction(GAMES).objectStore(GAMES).get(key) as IDBRequest<SavedGame>);
   } catch {
     return null;
   }
@@ -91,24 +100,24 @@ export async function writeSave(game: SavedGame): Promise<boolean> {
   if (!base) return false;
   try {
     const tx = base.transaction([GAMES, SUMMARIES], "readwrite");
-    tx.objectStore(GAMES).put(game, game.summary.seed);
-    tx.objectStore(SUMMARIES).put(game.summary, game.summary.seed);
+    tx.objectStore(GAMES).put(game, saveKey(game.summary));
+    tx.objectStore(SUMMARIES).put(game.summary, saveKey(game.summary));
     if (!(await done(tx))) return false;
     const old = (await listSaves()).slice(KEEP);
-    for (const summary of old) await deleteSave(summary.seed);
+    for (const summary of old) await deleteSave(saveKey(summary));
     return true;
   } catch {
     return false;
   }
 }
 
-export async function deleteSave(seed: number): Promise<void> {
+export async function deleteSave(key: SaveKey): Promise<void> {
   const base = await db();
   if (!base) return;
   try {
     const tx = base.transaction([GAMES, SUMMARIES], "readwrite");
-    tx.objectStore(GAMES).delete(seed);
-    tx.objectStore(SUMMARIES).delete(seed);
+    tx.objectStore(GAMES).delete(key);
+    tx.objectStore(SUMMARIES).delete(key);
     await done(tx);
   } catch {
     // Nothing to do: it stays, and the next save may drop it.

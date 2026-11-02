@@ -1,0 +1,24 @@
+/* The design console's drawer (devconsole.ts; brief, Dev tools): dev only, over the plate's top
+   right as #plate-overlay's child, so it never takes a region of the page. */
+#dev-console {
+  position: absolute; top: var(--sp-3); right: var(--sp-3); width: min(460px, calc(100% - 2 * var(--sp-3))); max-height: calc(100% - 2 * var(--sp-3));
+  overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 6px 20px var(--shadow); padding: var(--sp-3); font-size: var(--fs-dense); color: var(--ink);
+}
+#dev-console[hidden] { display: none; }
+#dev-console .top { margin-bottom: var(--sp-2); }
+#dev-console .moves { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-2); }
+#dev-console .money { display: inline-flex; align-items: center; gap: var(--sp-1); }
+#dev-console .money input { width: 7em; }
+#dev-console details { border-top: 1px solid var(--line); padding-top: var(--sp-2); margin-top: var(--sp-2); }
+#dev-console summary { cursor: pointer; font-weight: 600; color: var(--ink-2); margin-bottom: var(--sp-1); }
+#dev-console input[type="search"] { width: 100%; margin-bottom: var(--sp-1); }
+#dev-console table { border-collapse: collapse; width: 100%; }
+#dev-console td { padding: var(--sp-1) var(--sp-2) var(--sp-1) 0; border-bottom: 1px solid var(--line); font-family: var(--label-font); }
+#dev-console td input[type="number"] { width: 7em; }
+#dev-console tr.changed td:first-child { color: var(--you); font-weight: 600; }
+#dev-console pre { white-space: pre-wrap; word-break: break-all; max-height: 40vh; overflow: auto; background: var(--surface-2); padding: var(--sp-2); border-radius: var(--radius-control); margin: var(--sp-1) 0 0; }
+#dev-console [data-numbers] { max-height: 32vh; overflow-y: auto; }
+#dev-console table.whatif th { text-align: left; font-weight: 600; color: var(--ink-2); padding: var(--sp-1) var(--sp-2) var(--sp-1) 0; }
+#dev-console .good { color: var(--good); }
+#dev-console .bad { color: var(--bad); }

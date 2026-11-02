@@ -63,7 +63,7 @@ export interface ScreenHooks {
   treasuryMore(): string;
   /** A bond for a restore, when you can't pay for it (main.ts bondButton); "" when none's on offer. */
   bond(purpose: "works" | "refinery" | "steel"): string;
-  /** The page is in dev mode (?dev=1): the design console's buttons show. */
+  /** The page is in dev mode (?dev=1): the term stat names the design console's key. */
   dev: boolean;
 }
 
@@ -609,7 +609,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const termDay = Math.min(length, Math.floor((world.economy.elapsedSeconds - term.startedAtSeconds) / D) + 1);
     const committed = term.pledges.filter((p) => p.committed).length;
     const standing = term.replacedAtSeconds !== undefined ? ` · <b class="down">replaced</b>` : (term.failedInRow ?? 0) > 0 ? ` · <span class="down">a failed term behind you</span>` : "";
-    const console = hooks.dev ? `<div class="d">Console: <button data-console="end-term">End the term</button> <button data-console="funds">₦100k</button> <button data-console="rains">Rains now</button></div>` : "";
+    // The design console's moves are in its drawer (devconsole.ts), opened with the ` key.
+    const console = hooks.dev ? `<div class="d muted">Console: <kbd>\`</kbd></div>` : "";
     // The pledges themselves are in the panel (look.md §6: the strip cut them at thirty characters).
     return `<div class="stat term"><div class="k">Term ${term.number}${standing}</div><div class="v num">Day ${termDay} of ${length}</div><div class="d muted">Day ${day}${committed < MAX_COMMITTED ? ` · ${MAX_COMMITTED - committed} to pledge` : ""} · ${mapLine}</div>${console}</div>`;
   }

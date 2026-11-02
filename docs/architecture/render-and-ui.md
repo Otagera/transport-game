@@ -810,6 +810,42 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   limestone field or farm belt, the seaport's city, the old railway's far end); the log says
   the verdict granted it.
 
+### The design console's drawer (2026-11-02; brief, Dev tools, step 1)
+
+`src/game/devconsole.ts` and `styles/dev.css`, with `?dev=1` only: main.ts `import()`s it on
+demand, so it's its own chunk and never in the entry script a player downloads
+(`verify:bundle` checks both, D4) -- `?dev=1` still works on the deployed game. The `` ` `` key
+opens it at the plate's top right, as `#plate-overlay`'s child (nothing fixed over the plate).
+- **Moves**, each a `console` action (term.ts `consoleMove`) recorded in the run file, so a run
+  with them replays (D3): end the term, rains now, offer pledges now (the uncommitted ones
+  redrawn from today's problems), open a cluster now (remit.ts `grantOpening`: an opening that
+  waits, chosen on Waiting on you as a verdict's is), set money.
+- **Numbers:** every number or switch in `DEFAULT_GAME_TUNING`, filtered by name, the ones changed
+  listed first with their default beside them; set on Enter or leaving the field. Some are read
+  only at the start (the map, the clusters): setting them later changes nothing.
+- **Inspect:** the panel's pick (town, site, route, road) as its raw data and what the engine
+  derives from it (growth, fuel, production, cluster, remit), redrawn each second while open,
+  Copy JSON for a script or a bug. Only reads. The rest of the drawer redraws only on a move, so a
+  field being typed in keeps its focus.
+- The term stat's three buttons it replaced now just name the key.
+- **Fork from day N** (step 2): this game kept as it is, and a new save cut at the start of day
+  N (runlog.ts `forkRun`: the actions before that tick, the days ended before it) opened at once
+  at `?game=<id>`, replaying to there as a save from another build does. The cut tick is the
+  `endTick` the day before's row keeps -- exact; worked out from the seconds it came out a tick
+  short of the day, as time adds up a tick at a time. saves.ts keys a map's own game by its seed
+  (as before) and a fork by its id (`saveKey`), "fork from day N" on the chooser; a fork has no
+  snapshot until it's first kept.
+- **What if** (step 3): "Take the game now" sends the world to a worker (`whatif.worker.ts`, made
+  on the first question, never before) which keeps that copy; Ask names a change -- a tuning
+  number and value, or the move the toolbar last previewed (main.ts `lastPreview`, set in
+  `withForecast`) -- and a horizon, 1-30 days, 10 by default. The worker plays the copy on without
+  and with it (engine.md, The what-if) and answers with a table: money at the end, net over the
+  days and on the last, people, trips, your riders, goods arriving; the difference coloured;
+  day by day under a fold. The run without is kept per horizon until the game is taken again, so
+  a second question costs half (measured on map 2418 from day 1: 6.4 s for 3 days, then 2.4 s).
+  It yields between days: a new question or Cancel ends the old at the next day. The game runs
+  on meanwhile; the answer names the day it was asked about.
+
 ### The start (2026-10-28: "it loads and shows the game but for a few seconds nothing happens")
 
 Between the loading card going and the term's pledge card the page froze 7.1 s (map 2418). Two

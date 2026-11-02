@@ -46,6 +46,30 @@ for (const file of files) {
   }
 }
 
+// The design console's drawer (src/game/devconsole.ts; brief, Dev tools, D4) ships, so ?dev=1
+// works on the deployed game, but only as its own chunk, loaded on demand: never in the page's
+// entry script, which every player downloads.
+const lazyOnly = ["transport-game: console drawer"];
+const html = readFileSync(join(process.cwd(), "dist", "index.html"), "utf8");
+const entries = [...html.matchAll(/<script[^>]+src="\/?assets\/([^"]+\.js)"/g)].map((m) => m[1]);
+if (entries.length === 0) {
+  console.error("No entry script found in dist/index.html");
+  failed = true;
+}
+for (const file of entries) {
+  const content = readFileSync(join(distAssets, file), "utf8");
+  for (const term of lazyOnly) {
+    if (content.includes(term)) {
+      console.error(`FAIL: "${term}" found in the entry script ${file} -- the console drawer must load on demand`);
+      failed = true;
+    }
+  }
+}
+if (!files.some((file) => lazyOnly.every((term) => readFileSync(join(distAssets, file), "utf8").includes(term)))) {
+  console.error("FAIL: the console drawer's chunk wasn't found -- did its marker change?");
+  failed = true;
+}
+
 if (failed) {
   process.exit(1);
 }

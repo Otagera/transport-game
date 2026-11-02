@@ -79,7 +79,8 @@ import { buildGameTerrain } from "@engine/game/terrain";
 import { GAME_MAP } from "../src/game/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
 import { applyAction } from "@engine/game/actions";
-import { createRunRecorder, recordAction, recordTick, replayRun, runFile, startRun, startRunSteps, type RunFile } from "@engine/game/runlog";
+import { whatIf } from "@engine/game/whatif";
+import { createRunRecorder, forkRun, recordAction, recordTick, replayRun, runFile, startRun, startRunSteps, type RunFile } from "@engine/game/runlog";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/game/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/game/settlement";
@@ -4512,6 +4513,110 @@ describe("your remit (remit.ts; brief, The remit opens, agreed 2026-10-31)", () 
     const r = applyAction(w, { kind: "yard", townId: cluster.hub });
     expect(r.reason ?? "").not.toMatch(remitWhy);
   }, 60_000);
+});
+
+describe("the design console's moves (brief, Dev tools: the console and the what-if, step 1)", () => {
+  const sw = { all: false, goodsOff: false, wearOff: false };
+  const start = () => startRun(GAME_MAP, 2418, sw, null, { maxEmergentTowns: 0, warmUpDays: 1, mandateEnabled: false });
+
+  test("a number set live: only a key the defaults have, of the same type", () => {
+    const w = start();
+    expect(applyAction(w, { kind: "console", op: "tune", key: "yardCost", value: 1234 })).toMatchObject({ ok: true });
+    expect(w.tuning.yardCost).toBe(1234);
+    expect(applyAction(w, { kind: "console", op: "tune", key: "remitOpens", value: false })).toMatchObject({ ok: true });
+    expect(w.tuning.remitOpens).toBe(false);
+    expect(applyAction(w, { kind: "console", op: "tune", key: "yardCost", value: true }).ok).toBe(false);
+    expect(applyAction(w, { kind: "console", op: "tune", key: "yardCost", value: Number.NaN }).ok).toBe(false);
+    expect(applyAction(w, { kind: "console", op: "tune", key: "noSuchNumber", value: 1 }).ok).toBe(false);
+  }, 60_000);
+
+  test("open a cluster now: an opening waits, offered as a verdict's is; not past the clusters still closed", () => {
+    const w = start();
+    expect(remitOffers(w)).toEqual([]);
+    expect(applyAction(w, { kind: "console", op: "open" })).toMatchObject({ ok: true });
+    expect(w.remit!.toOpen).toBe(1);
+    expect(remitOffers(w).length).toBeGreaterThan(0);
+    for (let i = 1; i < w.clusters!.length; i += 1) expect(applyAction(w, { kind: "console", op: "open" }).ok).toBe(true);
+    expect(applyAction(w, { kind: "console", op: "open" }).ok).toBe(false);
+  }, 60_000);
+
+  test("offer pledges now: those you've pledged stay, the rest come from today's problems", () => {
+    const w = start();
+    const first = w.term!.pledges[0]!;
+    expect(applyAction(w, { kind: "pledge", id: first.id })).toMatchObject({ ok: true });
+    expect(applyAction(w, { kind: "console", op: "pledges" })).toMatchObject({ ok: true });
+    expect(w.term!.pledges.filter((p) => p.committed).map((p) => p.id)).toEqual([first.id]);
+    expect(new Set(w.term!.pledges.map((p) => p.id)).size).toBe(w.term!.pledges.length);
+  }, 60_000);
+
+  test("fork from day N: the run cut where that day began replays to the original's world there, on day N, without the moves made after", () => {
+    const world = start();
+    const recorder = createRunRecorder(world, 2418, sw, null);
+    const act = (action: Parameters<typeof applyAction>[1]) => { if (applyAction(world, action).ok) recordAction(recorder, world, action); };
+    const run = (days: number) => { for (let i = 0; i < days * SECONDS_PER_GAME_DAY / SIM_DT; i += 1) recordTick(recorder, world, gameTick(world, SIM_DT)); };
+    run(0.5);
+    act({ kind: "console", op: "funds", amount: 300000 });
+    act({ kind: "console", op: "tune", key: "yardCost", value: 777 });
+    const n = gameDay(world) + 1; // the day after those moves
+    run(1.5);
+    act({ kind: "console", op: "tune", key: "yardCost", value: 555 }); // made on day n: the fork drops it
+    expect(gameDay(world)).toBe(n);
+    run(1);
+    const today = gameDay(world);
+    const cut = forkRun(recorder, world, n)!;
+    expect(cut.lastDay).toBe(n);
+    expect(cut.file.days.every((d) => d.day < n)).toBe(true);
+    expect(cut.file.actions.every((a) => a.tick < cut.ticks)).toBe(true);
+    const forked = replayRun(GAME_MAP, JSON.parse(JSON.stringify(cut.file)) as RunFile, cut.ticks);
+    expect(gameDay(forked)).toBe(n);
+    expect(gameDay(forked, forked.economy.elapsedSeconds - SIM_DT)).toBe(n - 1);
+    const original = replayRun(GAME_MAP, JSON.parse(JSON.stringify(runFile(recorder))) as RunFile, cut.ticks);
+    expect(forked.economy.funds).toBe(original.economy.funds);
+    expect(forked.economy.funds).toBeGreaterThan(250000);
+    expect(forked.tuning.yardCost).toBe(777);
+    expect(original.tuning.yardCost).toBe(777);
+    // Today and after: nothing to fork from.
+    expect(forkRun(recorder, world, today + 1)).toBeNull();
+    expect(forkRun(recorder, world, 0)).toBeNull();
+  }, 180_000);
+
+  test("the what-if (D2): the same question twice, the same numbers; the world asked about untouched; with a change, as playing it", () => {
+    const w = start();
+    const before = JSON.stringify([w.economy.funds, w.economy.elapsedSeconds, w.tuning.yardCost]);
+    const a = whatIf(w, null, 2);
+    const b = whatIf(w, null, 2);
+    expect(a.days).toEqual(b.days);
+    expect(a.days.map((d) => d.day)).toEqual([gameDay(w), gameDay(w) + 1]);
+    expect(JSON.stringify([w.economy.funds, w.economy.elapsedSeconds, w.tuning.yardCost])).toBe(before);
+    const change = { kind: "console" as const, op: "funds" as const, amount: 500000 };
+    const withIt = whatIf(w, { kind: "move", action: change, label: "money" }, 2);
+    const played = structuredClone(w);
+    applyAction(played, change);
+    while (gameDay(played) < gameDay(w) + 2) gameTick(played, SIM_DT);
+    expect(withIt.days.at(-1)!.funds).toBe(played.economy.funds);
+    expect(withIt.days[0]!.net).toBeGreaterThan(400000); // the move lands on its day
+    const refused = whatIf(w, { kind: "tune", key: "noSuchNumber", value: 1 }, 2);
+    expect(refused.ok).toBe(false);
+    expect(refused.days).toEqual([]);
+  }, 180_000);
+
+  test("a run with console moves replays to the same world (D3)", () => {
+    const world = start();
+    const recorder = createRunRecorder(world, 2418, sw, null);
+    const act = (action: Parameters<typeof applyAction>[1]) => { if (applyAction(world, action).ok) recordAction(recorder, world, action); };
+    act({ kind: "console", op: "funds", amount: 250000 });
+    act({ kind: "console", op: "tune", key: "yardCost", value: 999 });
+    act({ kind: "console", op: "open" });
+    act({ kind: "console", op: "pledges" });
+    for (let i = 0; i < 30; i += 1) recordTick(recorder, world, gameTick(world, SIM_DT));
+    act({ kind: "console", op: "end-term" });
+    for (let i = 0; i < 30; i += 1) recordTick(recorder, world, gameTick(world, SIM_DT));
+    const replayed = replayRun(GAME_MAP, JSON.parse(JSON.stringify(runFile(recorder))) as RunFile);
+    expect(replayed.tuning.yardCost).toBe(999);
+    expect(replayed.remit).toEqual(world.remit);
+    expect(replayed.term?.pledges).toEqual(world.term?.pledges);
+    expect(replayed.economy.funds).toBe(world.economy.funds);
+  }, 120_000);
 });
 
 describe("the union as a party (union.ts; brief, Revision 5: the union, agreed 2026-10-25)", () => {

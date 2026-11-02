@@ -139,6 +139,15 @@ export function verdictOpening(world: GameWorld, kept: number, failed: boolean |
   return true;
 }
 
+/** The design console's "open a cluster now": an opening as a kept verdict grants it, chosen as one is. */
+export function grantOpening(world: GameWorld): { ok: boolean; reason?: string } {
+  if (!remitOn(world)) return { ok: false, reason: "your remit is the whole region" };
+  const closed = (world.clusters ?? []).filter((c) => isClosed(world, c)).length;
+  if (world.remit!.toOpen >= closed) return { ok: false, reason: "every closed cluster already has an opening waiting" };
+  world.remit!.toOpen += 1;
+  return { ok: true };
+}
+
 /** The `open` action: spend an opening on one of the clusters offered. */
 export function openCluster(world: GameWorld, hub: string): { ok: boolean; reason?: string } {
   if (!remitOn(world)) return { ok: false, reason: "your remit is the whole region" };

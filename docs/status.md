@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**753 tests passing** across the files (`bun test`). Typecheck / test / build /
+**770 tests passing** across the files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Next: a game around the simulation (2026-10-24)
@@ -60,7 +60,7 @@ at your stops by who's waiting, passengers and touts at your motor parks, shoppe
 **the site see-through redrawn** (of three tried, you liked flow bands and the process column: both
 together); **the arrival as one movement** (the loading card lifting away, the letter, pledges and
 verdict as a card over the dimmed map); and **saved games** (it saves itself; the loading card offers
-your games; engine.md, snapshot.ts). The remit in 3D is next. **The remit opens** (remit.ts, brief, Chains: convergent, built 2026-11-01): you start with the home cluster's land, a kept term's verdict opens one of the two nearest closed clusters (your choice, in Waiting on you), closed land veiled on the map; pledges made keepable (the worst seat pair cut by a third; a pledge with no move in your remit not offered). Measured to day 400 on three maps against an all-open twin: terms kept 7 of 9, 2-3 clusters opened, C35 (something built in a newly opened cluster the day it opens) and C36 (net -9% to +27%, people within 5%) hold, once the strategist chose only among places its remit allowed (engine.md, Your remit). **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
+your games; engine.md, snapshot.ts). The remit in 3D is next. **The remit opens** (remit.ts, brief, Chains: convergent, built 2026-11-01): you start with the home cluster's land, a kept term's verdict opens one of the two nearest closed clusters (your choice, in Waiting on you), closed land veiled on the map; pledges made keepable (the worst seat pair cut by a third; a pledge with no move in your remit not offered). Measured to day 400 on three maps against an all-open twin: terms kept 7 of 9, 2-3 clusters opened, C35 (something built in a newly opened cluster the day it opens) and C36 (net -9% to +27%, people within 5%) hold, once the strategist chose only among places its remit allowed (engine.md, Your remit). **Dev tools** (brief, Dev tools: the console and the what-if, agreed 2026-11-02): step 1, the console drawer, built -- the `` ` `` key with `?dev=1`: end the term, rains, pledges now, a cluster opened now, money, any tuning number live, and Inspect on the panel's pick, every move in the run file (render-and-ui.md, The design console's drawer); step 2, fork from day N, built (a new save cut at that day's start, replayed to there, the original kept); step 3, the what-if's engine and its table, built (whatif.ts in a worker: a number or the last previewed move, without and with, 1-30 days on; the run without kept, so a second question costs half). Next: the map graph, then the systems graph. **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

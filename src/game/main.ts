@@ -49,10 +49,10 @@ import { GAME_MAP } from "./map";
 import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 import type { ForecastLine } from "./render";
 import { applyAction, remitRefusal, type ActionOutcome, type ActionSpec } from "@engine/game/actions";
-import { createRunRecorder, recordAction, recordTick, replayRunSteps, runFile, startRunSteps, type RunRecorder, type RunSwitches } from "@engine/game/runlog";
+import { createRunRecorder, forkRun, recordAction, recordTick, replayRunSteps, runFile, startRunSteps, type RunRecorder, type RunSwitches } from "@engine/game/runlog";
 import { restoreSnapshot, snapshotOf } from "@engine/game/snapshot";
 import type { GameTown, GameWorld } from "@engine/game/types";
-import { ago, listSaves, loadSave, writeSave, type SavedGame } from "./saves";
+import { ago, listSaves, loadSave, saveKey, writeSave, type SaveKey, type SavedGame } from "./saves";
 import { vehicleMoves } from "@engine/game/moves";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/game/upkeep";
 import { isDirt } from "@engine/game/congestion";
@@ -137,7 +137,10 @@ const BUILD = String(import.meta.env.VITE_GAME_BUILD ?? "unknown");
 // A game to come back to (saves.ts), offered on the loading card before a new one is drawn: this
 // address's map, if you've a save of it, or with no map asked for, your recent games.
 // "New map" in the strip (?new=1) means a new map: no offer.
-const saved = params.has("new") ? null : await chooseStart(asked);
+// ?game=: a fork the design console made (brief, Dev tools, step 2), opened straight away.
+const gameParam = params.get("game");
+const saved = params.has("new") ? null : gameParam ? await loadSave(gameParam) : await chooseStart(asked);
+if (gameParam && !saved) params.delete("game");
 params.delete("new");
 const seed = saved?.summary.seed ?? asked ?? 1 + Math.floor(Math.random() * 9999);
 if (params.get("seed") !== String(seed) || new URLSearchParams(location.search).has("new")) {
@@ -152,13 +155,15 @@ async function chooseStart(map: number | null): Promise<SavedGame | null> {
   list.className = "saves";
   const line = (s: (typeof saves)[number]) => `${s.term ? `Term ${s.term}, ` : ""}day ${s.day} · ${Math.round(s.people).toLocaleString()}k people · ₦${Math.round(s.funds).toLocaleString()} · saved ${ago(s.savedAt)}`;
   list.innerHTML = `<div class="k">${map === null ? "Continue a game" : `You've a game on map ${map}`}</div>
-    ${saves.map((s) => `<button data-seed="${s.seed}"><b>${s.city.replace(/[&<>"]/g, "")} · map ${s.seed}</b><span>${line(s)}</span></button>`).join("")}
+    ${saves.map((s) => `<button data-key="${String(saveKey(s)).replace(/[&<>"]/g, "")}"><b>${s.city.replace(/[&<>"]/g, "")} · map ${s.seed}${s.forkOf ? ` · fork from day ${s.forkOf.day}` : ""}</b><span>${line(s)}</span></button>`).join("")}
     <button class="quiet" data-fresh="1">${map === null ? "Start a new map" : "Start this map again (it replaces the save)"}</button>`;
   box.classList.add("choosing");
   box.insertBefore(list, box.querySelector(".bar"));
-  const picked = await new Promise<number | null>((resolve) => list.addEventListener("click", (event) => {
+  const picked = await new Promise<SaveKey | null>((resolve) => list.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
-    if (button) resolve(button.dataset.seed ? Number(button.dataset.seed) : null);
+    const key = button?.dataset.key;
+    // A map's own game is kept under its seed, a fork under its id.
+    if (button) resolve(key ? (/^\d+$/.test(key) ? Number(key) : key) : null);
   }));
   list.remove();
   box.classList.remove("choosing");
@@ -200,7 +205,7 @@ const opened = await (async (): Promise<{ world: GameWorld; recorder: RunRecorde
     setTimeout(() => { loading.remove(); document.body.classList.remove("arriving"); }, 1200);
   };
   // A saved game this build saved: the world as it was, at once.
-  if (saved && saved.summary.build === BUILD) {
+  if (saved?.snapshot && saved.summary.build === BUILD) {
     arrive();
     return { world: restoreSnapshot(saved.snapshot), recorder: saved.recorder };
   }
@@ -208,12 +213,19 @@ const opened = await (async (): Promise<{ world: GameWorld; recorder: RunRecorde
   // counted here; else a new game's week before you arrive.
   const days = saved ? saved.summary.day : DEFAULT_GAME_TUNING.warmUpDays;
   const steps = saved ? replayRunSteps(GAME_MAP, saved.recorder.file, saved.recorder.ticks) : startRunSteps(GAME_MAP, seed, switches, devFunds);
-  if (saved) loading.querySelector<HTMLElement>("p")!.textContent = "The game has changed since you saved, so your game is played through again from its first day: every move you made, at the moment you made it.";
+  if (saved) loading.querySelector<HTMLElement>("p")!.textContent = !saved.snapshot && saved.summary.forkOf
+    ? `A fork of this map's game from day ${saved.summary.forkOf.day}: played through to there, every move made before it, at the moment it was made.`
+    : "The game has changed since you saved, so your game is played through again from its first day: every move you made, at the moment you made it.";
   let since = performance.now();
   for (;;) {
     const step = steps.next();
     if (step.done) {
       arrive();
+      // A fork's days run on from the day it was cut at, as the world replayed it.
+      if (saved && !saved.snapshot) {
+        saved.recorder.lastDay = gameDay(step.value);
+        saved.recorder.file.days = saved.recorder.file.days.filter((d) => d.day < saved.recorder.lastDay);
+      }
       return { world: step.value, recorder: saved ? saved.recorder : null };
     }
     if (performance.now() - since > 40) {
@@ -239,13 +251,31 @@ async function keep(): Promise<void> {
   const towns = [...world.towns.values()].filter((t) => !t.industry);
   const city = towns.reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.name ?? "";
   await writeSave({
-    summary: { seed, savedAt: Date.now(), day: gameDay(world), term: world.term?.number ?? null, people: towns.reduce((sum, t) => sum + t.population, 0), funds: world.economy.funds, city, build: BUILD },
+    summary: { seed, ...(saved?.summary.id ? { id: saved.summary.id, forkOf: saved.summary.forkOf } : {}), savedAt: Date.now(), day: gameDay(world), term: world.term?.number ?? null, people: towns.reduce((sum, t) => sum + t.population, 0), funds: world.economy.funds, city, build: BUILD },
     snapshot: snapshotOf(world),
     recorder,
   });
   keeping = false;
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") void keep(); });
+// The design console's fork (brief, Dev tools, step 2): this game kept as it is, and a new save of
+// it cut at the start of a day, opened at once -- replayed to there, then yours to play another way.
+async function forkFrom(day: number): Promise<string | null> {
+  const cut = forkRun(recorder, world, day);
+  if (!cut) return `no day ${day} to fork from: 1 to ${gameDay(world)}`;
+  await keep();
+  const last = cut.file.days.at(-1);
+  const id = `${seed}~day${day}~${Date.now().toString(36)}`;
+  const city = [...world.towns.values()].filter((t) => !t.industry).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.name ?? "";
+  const ok = await writeSave({
+    summary: { seed, id, forkOf: { day }, savedAt: Date.now(), day, term: null, people: last?.people ?? 0, funds: last?.funds ?? 0, city, build: BUILD },
+    recorder: cut,
+  });
+  if (!ok) return "this browser won't keep saves (a private window?)";
+  params.set("game", id);
+  location.search = params.toString();
+  return null;
+}
 window.addEventListener("pagehide", () => void keep());
 const canvas = document.querySelector<HTMLCanvasElement>("#map")!;
 const ctx = canvas.getContext("2d")!;
@@ -694,10 +724,14 @@ function bestMovesHtml(): string {
 }
 
 /** A preview with its forecast, when the action could be done (developer view only). */
+/** The last move the toolbar previewed that could be made: what the console's what-if can try (dev only). */
+let lastPreview: { action: ActionSpec; label: string } | null = null;
+
 function withForecast(ghost: Ghost, action: ActionSpec, spec: ReceiptSpec): Ghost {
   // Outside your remit (remit.ts): said before the click, not after.
   const closed = remitRefusal(world, action);
   if (closed) return { ...ghost, ok: false, label: closed };
+  if (dev && ghost.ok) lastPreview = { action, label: ghost.label };
   return ghost.ok && dev ? { ...ghost, forecast: forecastLine(action, spec) } : ghost;
 }
 
@@ -1106,7 +1140,31 @@ canvas.addEventListener("click", (event) => {
   renderPanel();
 });
 
+// The design console's drawer (devconsole.ts; brief, Dev tools), loaded only in dev, on the ` key.
+let devConsole: { toggle(): void } | null = null;
+if (dev) {
+  void import("./devconsole").then(({ mountConsole }) => {
+    devConsole = mountConsole({
+      world,
+      act: (action) => act({ label: "a console move", towns: [] }, action),
+      say,
+      selected: () => screen.selected,
+      day: () => gameDay(world),
+      lastMove: () => lastPreview,
+      fork: forkFrom,
+      changed: () => {
+        screen.refreshVerdict();
+        renderPanel();
+      },
+    });
+  });
+}
+
 window.addEventListener("keydown", (event) => {
+  if (event.key === "`" && devConsole) {
+    devConsole.toggle();
+    return;
+  }
   // Typing a name (labels.ts): Enter keeps it, Esc drops it; no key is a tool's while you type.
   const field = event.target as HTMLElement;
   if (field instanceof HTMLInputElement) {
@@ -3097,13 +3155,6 @@ function onPanelClick(event: MouseEvent): void {
     const chairman = world.unions?.find((u) => u.id === unionId)?.chairman ?? "The chairman";
     say(result.ok ? `${chairman}: ${{ pay: `you paid his members ${naira(result.amount ?? 0)}. He'll remember it.`, concede: "you eased the lane. His danfos are back in it, and he'll remember it.", coop: "you handed him the route: his cooperative runs it now, the fares are his. He won't forget it.", refuse: "you refused him. Expect a strike." }[answer]}` : `Can't: ${result.reason}`, !result.ok || answer === "refuse", 9);
     renderPanel();
-    return;
-  }
-  if (target.dataset.console) {
-    // The design console (dev only): recorded in the run file as console moves.
-    const op = target.dataset.console as "end-term" | "funds" | "rains";
-    const result = act({ label: "a console move", towns: [] }, op === "funds" ? { kind: "console", op, amount: 100000 } : { kind: "console", op });
-    say(result.ok ? (op === "funds" ? "Console: money set to ₦100,000." : op === "rains" ? "Console: the rains are named now." : "Console: the term ends at the next day's check.") : `Console: ${result.reason}`, !result.ok, 5);
     return;
   }
   if (target.dataset.pledge) {

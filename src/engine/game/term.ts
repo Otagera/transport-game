@@ -15,7 +15,8 @@ import { fuelPlanned, fuelReachable, fuelSupply, inHome } from "./fuel";
 import { cheapestRoadFrom } from "./moves";
 import { fieldId } from "./clusters";
 import { segmentLength } from "./roads";
-import { inRemit, remitOffers, remitOn, remitRefusal, verdictOpening } from "./remit";
+import { grantOpening, inRemit, remitOffers, remitOn, remitRefusal, verdictOpening } from "./remit";
+import { DEFAULT_GAME_TUNING } from "./tuning";
 
 // Terms and pledges (docs/brief.md, Revision 5, step 2: the probe). Play runs in terms
 // of `termDays`; at each term's start the state offers three pledges, each made from a
@@ -476,8 +477,26 @@ export function noteAction(world: GameWorld, spec: ActionSpec): void {
  * The design console's moves (behind ?dev=1 on the page; brief, Revision 5): end the term
  * now, or set the money. Actions like any other, so a run file records them as such.
  */
-export function consoleMove(world: GameWorld, op: "end-term" | "funds" | "rains", amount = 0): { ok: boolean; reason?: string } {
+/**
+ * The design console's moves (brief, Dev tools; dev only, each recorded in the run file so a run
+ * with them replays): end the term, set money, rains now; offer the term's pledges again from
+ * today's problems; grant the remit an opening; set a tuning number.
+ */
+export type ConsoleOp = "end-term" | "funds" | "rains" | "pledges" | "open" | "tune";
+
+export function consoleMove(world: GameWorld, op: ConsoleOp, amount = 0, key?: string, value?: number | boolean): { ok: boolean; reason?: string } {
   if (op === "rains") return rainsNow(world);
+  if (op === "open") return grantOpening(world);
+  if (op === "tune") return setTuning(world, key, value);
+  if (op === "pledges") {
+    const term = world.term;
+    if (!term) return { ok: false, reason: "no term running" };
+    // Those you've pledged stay; the rest are offered again, as a term's start would offer them now.
+    const kept = term.pledges.filter((p) => p.committed);
+    const fresh = offerPledges(world, term.number, new Set()).filter((p) => !kept.some((k) => k.id === p.id));
+    term.pledges = [...kept, ...fresh];
+    return fresh.length ? { ok: true } : { ok: false, reason: "no pledge on offer from today's problems" };
+  }
   if (op === "funds") {
     world.economy.funds = amount;
     return { ok: true };
@@ -486,6 +505,15 @@ export function consoleMove(world: GameWorld, op: "end-term" | "funds" | "rains"
   if (!term) return { ok: false, reason: "no term running" };
   term.endsAtSeconds = world.economy.elapsedSeconds;
   term.nextCheckAtSeconds = world.economy.elapsedSeconds;
+  return { ok: true };
+}
+
+/** A tuning number set from the console: only a key the defaults have, and of the same type. */
+function setTuning(world: GameWorld, key: string | undefined, value: number | boolean | undefined): { ok: boolean; reason?: string } {
+  if (!key || !(key in DEFAULT_GAME_TUNING)) return { ok: false, reason: `no tuning number "${key}"` };
+  const was = (DEFAULT_GAME_TUNING as unknown as Record<string, unknown>)[key];
+  if (typeof value !== typeof was || (typeof value === "number" && !Number.isFinite(value))) return { ok: false, reason: `${key} takes a ${typeof was}` };
+  (world.tuning as unknown as Record<string, unknown>)[key] = value;
   return { ok: true };
 }
 
