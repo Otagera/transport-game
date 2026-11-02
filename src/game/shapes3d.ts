@@ -299,6 +299,18 @@ export function fishingJetty(kit: Kit, rand: Rand, length: number): void {
   for (let i = 0; i < 3; i += 1) kit.box(0.05, 1.1, 1.8, paint("--paint-earth-36"), -1.4, -2 + i * 0.7);
 }
 
+/** A harbour tug: a stubby hull ringed with tyre fenders, a tall wheelhouse, a funnel; bow toward +x. */
+export function tugBoat(): THREE.BufferGeometry {
+  const kit = new Kit();
+  rounded(kit, 13, 2.6, 5, 1.2, paint("--paint-red-6"), 0, 0, -1);
+  kit.box(12.4, 0.2, 4.6, paint("--paint-grey-21"), 0, 0, 1.6);
+  kit.box(4.2, 3.2, 3.4, paint("--paint-light-4"), 0.5, 0, 1.8);
+  kit.box(4.4, 0.8, 3.6, PANE_DARK, 0.5, 0, 4.2);
+  kit.cylinder(0.55, 2.4, paint("--paint-earth-49"), -2.6, 0, 1.8, 8);
+  for (let x = -5; x <= 5; x += 2.5) for (const z of [-2.55, 2.55]) kit.add(new THREE.TorusGeometry(0.45, 0.18, 5, 8), TYRE, { x, y: 0.9, z });
+  return kit.merged();
+}
+
 export function cargoShip(rand: Rand): THREE.BufferGeometry {
   const kit = new Kit();
   const hull = pick(rand, [paint("--paint-red-6"), paint("--paint-blue-20"), paint("--paint-dark-5")]);

@@ -8,7 +8,7 @@
 // Draw calls kept low: the land one mesh, the water one, each road one (its colour changes),
 // each town one merged mesh, and each kind of vehicle one InstancedMesh.
 import * as THREE from "three";
-import { CLOTHES, SITE_LIFE, busShelter, canoe, cargoShip, fishingJetty, personGeometry, reedClump } from "./shapes3d";
+import { CLOTHES, SITE_LIFE, busShelter, canoe, cargoShip, fishingJetty, personGeometry, reedClump, tugBoat } from "./shapes3d";
 import { waitingAt } from "@engine/game/world";
 import { parsePoolKey } from "@engine/game/tick";
 import { siteProduction } from "@engine/game/production";
@@ -1807,6 +1807,32 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   // jetty into the sea, an apron of containers, gantry cranes swinging, a ship moored alongside and
   // more out in the roads; a crane and a ship more for each rung the port has grown (upgradePort).
   const harbourCranes: THREE.Object3D[] = [];
+  const harbourTugs: Array<{ mesh: THREE.Mesh; x: number; z: number; ux: number; uz: number }> = [];
+  // A ship's wake: a V of foam spreading behind her, fading -- painted once, laid flat behind each.
+  const wakeShape = own(new THREE.PlaneGeometry(80, 34).rotateX(-Math.PI / 2));
+  const wakeMaterial = own(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, map: own((() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 128;
+    const g = canvas.getContext("2d")!;
+    for (let i = 0; i < 26; i += 1) {
+      const t = i / 26;
+      g.strokeStyle = paintAlpha("--paint-light-1", 0.8 * (1 - t) ** 1.2);
+      g.lineWidth = 4 + t * 7;
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(256 - t * 256, 64 + side * (8 + t * 54));
+        g.lineTo(256 - (t + 0.05) * 256, 64 + side * (8 + (t + 0.05) * 54));
+        g.stroke();
+      }
+      // The churned water right behind her: broad and white, thinning back.
+      g.fillStyle = paintAlpha("--paint-light-1", 0.6 * (1 - t) ** 2.5);
+      g.fillRect(256 - (t + 0.04) * 256, 64 - 9 - t * 12, 0.04 * 256 + 1, 18 + t * 24);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  })()) }));
   const harbourShips: Array<{ mesh: THREE.Mesh; cx: number; cz: number; r: number; speed: number; phase: number }> = [];
   const harbourParts: THREE.Object3D[] = [];
   let harbourLevel = -1;
@@ -1868,6 +1894,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     harbourCranes.length = 0;
     harbourShips.length = 0;
+    harbourTugs.length = 0;
     harbourLevel = w.portLevel ?? 0;
     buildHarbour(w);
   }
@@ -1900,6 +1927,26 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     for (let y = Math.floor(cy - 8); y <= Math.ceil(cy + 8); y += 1) for (let x = Math.floor(cx - 8); x <= Math.ceil(cx + 8); x += 1) {
       const along = (x - cx) * ux + (y - cy) * uy, across = (x - cx) * px + (y - cy) * py;
       if (along >= -6 && along <= 1 && Math.abs(across) <= 5.5 && x >= 0 && y >= 0 && x < W && y < H && (occupied[y * W + x] === FREE || occupied[y * W + x] === TOWN)) occupied[y * W + x] = QUAY;
+    }
+    // A shed across the back of the apron, where cargo waits for its lorries; lorries queued along
+    // its side for the next load.
+    const shed = at(-4.4, 0);
+    kit.add(new THREE.BoxGeometry(9, 7, 7 * M), paintHex("--paint-grey-6"), { x: shed.x, y: top + 3.5, z: shed.z, ry: turn });
+    kit.gable(7 * M, 10, 2.4, paintHex("--paint-grey-13"), shed.x, shed.z, top + 7, turn + Math.PI / 2);
+    for (let i = 0; i < 2 + level; i += 1) {
+      const bay = at(-3.6 + i * 1.3, 4.6);
+      kit.place(vehicleGeometry("truck").clone().scale(VEHICLE_SCALE, VEHICLE_SCALE, VEHICLE_SCALE), bay.x, top + 0.4, bay.z, turn);
+    }
+    // A breakwater on the open side: a rubble arm out from the coast, its end hooked round to
+    // shelter the jetty -- stones only where there's sea under them.
+    const arm: Array<[number, number]> = [];
+    for (let a = 1; a <= 13; a += 0.32) arm.push([a, -5.5]);
+    for (let k = 1; k <= 8; k += 1) arm.push([13 + Math.sin((k / 8) * Math.PI / 2) * 2.2, -5.5 + (1 - Math.cos((k / 8) * Math.PI / 2)) * 3.6]);
+    for (const [along, across] of arm) {
+      const stone = at(along + (rand() - 0.5) * 0.25, across + (rand() - 0.5) * 0.35);
+      const cell = Math.round(stone.z / M) * W + Math.round(stone.x / M);
+      if (terrain.water[cell] !== 1) continue;
+      kit.add(new THREE.DodecahedronGeometry(1.7 + rand() * 1.1, 0), rand() < 0.5 ? paintHex("--paint-grey-14") : paintHex("--paint-grey-12"), { x: stone.x, y: 0.7 + rand() * 0.6, z: stone.z, rx: rand() * 3, ry: rand() * 3 });
     }
     const harbour = new THREE.Mesh(kit.merged(), material);
     harbour.castShadow = true;
@@ -1939,19 +1986,45 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     ship.castShadow = true;
     scene.add(ship);
     harbourParts.push(ship);
+    // A tug at her bow, nudging.
+    const tugAt = at(9.6, 2.9);
+    const tug = new THREE.Mesh(own(tugBoat()), material);
+    tug.castShadow = true;
+    tug.position.set(tugAt.x, 0.6, tugAt.z);
+    tug.rotation.y = turn + Math.PI / 2;
+    scene.add(tug);
+    harbourParts.push(tug);
+    harbourTugs.push({ mesh: tug, x: tugAt.x, z: tugAt.z, ux, uz: uy });
+    const taken: Array<{ x: number; z: number; r: number }> = [];
     for (let i = 0; i < 1 + level; i += 1) {
-      // Out in the roads, its nearest pass well clear of the jetty and the ship at it.
-      const centre = at(27 + i * 10, (i % 2 ? -1 : 1) * 8);
+      // Out in the roads, the nearest place whose whole circle is open sea, clear of the jetty, its
+      // ship and the others. Where the map's sea is a coastal strip (the open water past its edge),
+      // the circle may run out over the sea beyond -- where the edge is sea, never over land.
       const r = 6 + i * 2;
-      // Only where its circle is all sea.
-      let open = true;
-      for (let a = 0; a < 12 && open; a += 1) {
-        const x = Math.round(centre.x / M + Math.cos((a / 12) * Math.PI * 2) * r), y = Math.round(centre.z / M + Math.sin((a / 12) * Math.PI * 2) * r);
-        open = x > 0 && y > 0 && x < W - 1 && y < H - 1 ? terrain.water[y * W + x] === 1 && toLand[y * W + x]! >= 3 : true;
+      const seaAt = (x: number, y: number) => {
+        if (x >= 1 && y >= 1 && x <= W - 2 && y <= H - 2) return terrain.water[y * W + x] === 1 && toLand[y * W + x]! >= 3;
+        const ex = Math.max(1, Math.min(W - 2, x)), ey = Math.max(1, Math.min(H - 2, y));
+        return terrain.water[ey * W + ex] === 1;
+      };
+      let centre: { x: number; z: number } | null = null, best = Infinity;
+      for (let along = 14; along <= 48; along += 2) for (let across = -30; across <= 30; across += 3) {
+        const c = at(along, across);
+        const d = Math.hypot(along, across);
+        if (d >= best) continue;
+        let open = true;
+        for (let a = 0; a < 20 && open; a += 1) open = seaAt(Math.round(c.x / M + Math.cos((a / 20) * Math.PI * 2) * r), Math.round(c.z / M + Math.sin((a / 20) * Math.PI * 2) * r));
+        if (!open || taken.some((t) => Math.hypot(t.x - c.x, t.z - c.z) < (t.r + r * M) * 1.2)) continue;
+        best = d;
+        centre = c;
       }
-      if (!open) continue;
+      if (!centre) continue;
+      taken.push({ ...centre, r: r * M });
       const sailing = new THREE.Mesh(cargoShip(rand), material);
       sailing.castShadow = true;
+      // Her wake, fanning out behind the stern.
+      const wake = new THREE.Mesh(wakeShape, wakeMaterial);
+      wake.position.set(-33 - 40, 0.15, 0);
+      sailing.add(wake);
       scene.add(sailing);
       harbourParts.push(sailing);
       harbourShips.push({ mesh: sailing, cx: centre.x, cz: centre.z, r: r * M, speed: 0.012 + rand() * 0.01, phase: rand() * Math.PI * 2 });
@@ -2046,6 +2119,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       life.jacks.forEach((jack, i) => (jack.rotation.z = Math.sin(life.angle + i * 1.3) * 0.32));
     }
     harbourCranes.forEach((boom, i) => (boom.rotation.y = Math.sin(seconds * 0.25 + i * 1.7) * 0.6));
+    for (const [i, tug] of harbourTugs.entries()) {
+      const push = Math.sin(seconds * 0.35 + i) * 2.5;
+      tug.mesh.position.set(tug.x + tug.ux * push, 0.6 + Math.sin(seconds * 1.1 + i) * 0.08, tug.z + tug.uz * push);
+    }
     for (const boat of driftBoats) {
       const a = seconds * boat.speed + boat.phase;
       boat.mesh.position.set(boat.cx + Math.cos(a) * boat.r, boat.y + Math.sin(seconds * 1.3 + boat.phase) * 0.05, boat.cz + Math.sin(a) * boat.r);
@@ -2054,7 +2131,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     for (const ship of harbourShips) {
       const a = seconds * ship.speed + ship.phase;
       ship.mesh.position.set(ship.cx + Math.cos(a) * ship.r, 0.6, ship.cz + Math.sin(a) * ship.r);
-      ship.mesh.rotation.y = -a - Math.PI;
+      // Bow along her way round (local +x along the circle's tangent).
+      ship.mesh.rotation.y = -(a + Math.PI / 2);
     }
   }
 

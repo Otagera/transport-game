@@ -717,7 +717,14 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   (`quaySpot`): the nearest coast past 0.8 of the city's reach with open sea off it and dry
   ground behind, clear of other towns and the old roads. The city's houses, streets and markets
   keep off it (`onQuay`, beside the four checks that keep them off sites), so it reads as the
-  city's port district rather than a slab dropped on its outskirts.
+  city's port district rather than a slab dropped on its outskirts. Then (2026-11-02, your look:
+  "the little crane detail is good. It could be better"): a shed across the back of the apron and
+  lorries queued at it (one more a rung), a rubble breakwater hooked round the jetty's open side
+  (stones only where there's sea), a tug at the moored ship's bow nudging, and a wake behind each
+  ship under way. A ship under way circles the nearest open sea that holds her whole circle; where
+  the map's own sea is a coastal strip that may run out over the sea past its edge (the skirt) --
+  only where the edge is sea -- so she's seen from the harbour looking out though the camera can't
+  centre on her there. Her bow now leads along her circle (it had been crabbing).
 - **Lakes, deep and to scale** (2026-11-02, your look: "cool pond ... the scale makes it hard to
   tell"; it read pale as ice). Water deepens over its own distance from the shore (`aDeep`): a
   river a third of its width, the sea ninety metres, a lake its own size -- at the sea's ninety a
