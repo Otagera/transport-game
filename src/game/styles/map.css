@@ -21,6 +21,8 @@ body.in3d #overlays, body.in3d #overlay-caption, body.in3d #hint, body.in3d #key
 .label3d.city { font-size: var(--fs-body); }
 .label3d.village { font-weight: 500; font-size: var(--fs-caption); opacity: 0.85; }
 .label3d.site { font-weight: 500; font-size: var(--fs-caption); color: var(--goods-ink); }
+/* Outside your remit (view3d.ts syncVeil): named, there and running, quieter until it opens. */
+.label3d.closed { color: var(--muted); background: color-mix(in srgb, var(--surface) 60%, transparent); }
 #toolbar {
   /* Docked under the plate, a rule above it (look.md §6): not floating. */
   position: fixed; left: var(--left); right: var(--right); bottom: 0; z-index: 5;

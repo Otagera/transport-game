@@ -710,6 +710,50 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   `smoothstep(1.0, 0.2, r)` (edges reversed) is undefined in GLSL -- ANGLE on Metal gave near-zero,
   which made the first smoke invisible. Grey on pale savanna barely shows: the puffs are near-
   opaque by the stack, lit from above (bright tops, shaded undersides).
+- **Roads and track in their parts** (2026-11-02, your word: "since the vehicles look better we
+  could improve the roads/rails"). A road's surface is painted in its shader (`roadSurface`, a patch
+  on its material, so the traffic tint, the cloud shadows and the focus line work as before) from
+  where across and how far along each point of its ribbon is (`aRoadAcross`, `aRoadAlong`): dirt is
+  laterite with grain, two ruts where the wheels run and a ragged, dusty edge; paved is asphalt
+  with shoulders, a white line each edge and a dashed centre (the old centre-line ribbon gone); a
+  retired road goes back to grass. Its wear, the condition the game keeps, breaks it up as it
+  falls: potholes, and patching on asphalt. Track (`trackParts`) is its ballast (stones, darker
+  down its shoulders), sleepers across it every 1.4 m and two steel rails on them; out of service,
+  the rails are rust, the sleepers grey and grass grows through the ballast in tufts. Telegraph
+  poles run beside it every 46 m. Where a road crosses the track away from a town, a level
+  crossing: boards over the rails, a barrier each side with its boom down, cross-buck signs. The
+  track is laid after the roads, and leaves out its sleepers and grass where a road runs over it.
+- **The sites in their parts** (2026-11-02, your look: "the effort put into the harbour, if you
+  extend it to the rest of things they will come out better"; shapes3d.ts `site`). Each kind as the
+  thing it is, in a fenced yard (light posts and rails in 6 m runs, a gatehouse and barrier): a
+  refinery's tank farm in its bund, its ringed columns, flare stack, heater, pipe racks and loading
+  gantry; a terminal's or depot's tanks, rack and gantry; an oilfield's pump jacks on pads,
+  flowlines, separator and tanks; a quarry's or iron mine's pit (floor, two benches, spoil), its
+  crusher and conveyor up to the stockpile, a dump truck and an excavator; a cement works'
+  stockpile, conveyor, preheater tower, kiln on its piers, clinker shed and silos; a steelworks'
+  blast furnace and stoves, ore heaps, steel shop, rolling mill and slag tip; the steel terminal's
+  overhead crane and shed; a mill's silos, elevator and gallery, mill house and bagging shed; the
+  motor plant's sawtooth hall, office and boiler house. What changes with how it's doing: **its
+  stock** (`SITE_STOCK`: sacks, a heap, steel coils, finished cars) piles up as much as it makes and
+  can't get away -- `siteProduction`'s shipped share -- none while it's idle; **its lorries at the
+  bay** (`SITE_BAY`: tankers or trucks), one to three as much as it ships; **the excavator** swings
+  as fast as the site works. Stock and lorries are each one mesh of pieces built in order, drawn up
+  to the piece wanted (`setDrawRange`), so nothing is rebuilt as they change.
+  **Where a site goes** (`siteKit`; your look at the quarry: two strips of pit wall, its lorries in
+  a jam). The roads into a site run to its middle, and a road through its yard drops what's on it.
+  Seventeen spots within 26 m, all facing one way, rarely cleared a 54 by 42 m yard; now its pieces
+  are surveyed once, dry (`SurveyKit`), and tried at 49 spots up to 46 m off, turned four ways,
+  against a map of how far the roads are (2 m squares): each piece lost counts by its size, the gate
+  is drawn toward where the road ends, flat ground is preferred, and the yards of sites already
+  placed nearby are taken ground. The kit is built once, at the best, turned as chosen
+  (`SITE_YARD`; the smoke turned with it). It's set at the mean height of the ground under its yard,
+  not its town point's: moved up a hillside, a quarry had sunk its crusher and dump truck. On map
+  2418 every site loses nothing to roads but the hemmed-in cement works and steel terminal. A
+  compound piece -- a tank, a tower, a shed -- is kept whole or left out whole (`fits`), not a stack
+  without its tower. Big pieces (the pit's floor and benches, the kiln) are built in lengths. Each
+  kind's stock and bay are laid out clear of its buildings; on a road, it goes without. The towns
+  build round the whole yard (`inYard`), the yard grows no trees, and its dust is a thin haze (it
+  had hung over a quarry's crusher like a wall).
 - **The seaport's harbour.** At the seaport city (`w.seaport`; a coast-road gateway has none) a
   jetty on piles, an apron of container stacks, gantry cranes whose booms swing, a ship moored
   alongside and more standing off on slow circles in open sea; a crane and a ship more per rung of
@@ -717,7 +761,31 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   (`quaySpot`): the nearest coast past 0.8 of the city's reach with open sea off it and dry
   ground behind, clear of other towns and the old roads. The city's houses, streets and markets
   keep off it (`onQuay`, beside the four checks that keep them off sites), so it reads as the
-  city's port district rather than a slab dropped on its outskirts.
+  city's port district rather than a slab dropped on its outskirts. Then (2026-11-02, your look:
+  "the little crane detail is good. It could be better"): a shed across the back of the apron and
+  lorries queued at it (one more a rung), a rubble breakwater hooked round the jetty's open side
+  (stones only where there's sea), a tug at the moored ship's bow nudging, and a wake behind each
+  ship under way. A ship under way circles the nearest open sea that holds her whole circle; where
+  the map's own sea is a coastal strip that may run out over the sea past its edge (the skirt) --
+  only where the edge is sea -- so she's seen from the harbour looking out though the camera can't
+  centre on her there. Her bow now leads along her circle (it had been crabbing).
+- **Lakes, deep and to scale** (2026-11-02, your look: "cool pond ... the scale makes it hard to
+  tell"; it read pale as ice). Water deepens over its own distance from the shore (`aDeep`): a
+  river a third of its width, the sea ninety metres, a lake its own size -- at the sea's ninety a
+  lake a few cells across never got past its shallows. And things whose size you know
+  (`buildLakes`, shapes3d.ts): reeds in stands on the wet bank, a fishing jetty on stilts from the
+  shore nearest a town or hamlet with its thatched hut and drying racks, a dugout or two with a
+  fisherman drifting on the open water.
+- **Your remit, veiled** (2026-11-02; remit.ts, as the 2D map's `closedCanvas`). Land outside your
+  remit is faded toward the haze and drawn out of colour -- there and running, not yours to build in
+  yet -- with a fine dashed line on the ground where your remit ends; its towns, sites and roads
+  stay sharp (they run, and the inherited roads are yours to use), its towns' names quieter
+  (`.label3d.closed`). A mask the map wide (two texels a cell, softened so the line runs smooth),
+  sampled in the cloud patch (`withClouds`) by the materials marked `veiled` (the land and its
+  line, the skirt, the trees): red the veil as it stands, green where it settles (the line, drawn
+  a couple of pixels wide at any zoom by `fwidth`). When a cluster opens its veil lifts over two
+  seconds. The key that says it changed is prefixed (`open:`): no clusters open is `""`, the same
+  as never worked out, and the first veil never drew.
 - **People** (2026-11-01, the fidelity list's "people who show the game"; `syncPeople`). Riders at
   each of your road routes' stops: a shelter (`busShelter`, its sign in your colour) beside the
   road the route takes out of the town, 8 m off its middle on the near side (the far side where a

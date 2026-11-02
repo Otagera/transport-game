@@ -69,6 +69,10 @@ export class Kit {
   get empty(): boolean {
     return this.parts.length === 0;
   }
+  /** Whether a piece of radius r may stand at (x, z): always, here; a site's kit (view3d.ts ClearKit) keeps off roads and water. */
+  fits(_x: number, _z: number, _r: number): boolean {
+    return true;
+  }
   merged(): THREE.BufferGeometry {
     const geo = this.parts.length ? mergeGeometries(this.parts, false)! : new THREE.BufferGeometry();
     geo.computeVertexNormals();
@@ -192,18 +196,149 @@ export function hut(kit: Kit, rand: Rand, x: number, z: number): void {
   kit.box(0.9, 1.7, 0.1, PANE, x, z + r + 0.02); // its doorway
 }
 
-/** An industrial site: a refinery's tanks and columns, a quarry's pit and heaps, a works' sheds and stack. */
+// --- The sites, in their parts (2026-11-02, your look: "the effort put into the harbour, if you
+// extend it to the rest of things they will come out better") ------------------------------------
+// Each kind as the thing it is, in a fenced yard: a refinery's tank farm in its bund, its columns
+// and pipe rack and loading gantry; a cement works' stockpile, conveyor, preheater tower and kiln;
+// a steelworks' blast furnace and stoves; a mill's silos, elevator and bagging shed; a quarry's
+// benches, crusher and conveyor. What changes with how it's doing is drawn by view3d.ts from the
+// tables below: the stock it can't get away (SITE_STOCK), the lorries loading (SITE_BAY), what
+// moves (SITE_LIFE). All in the site's own frame, metres, the yard about 50 by 38.
+
+const STEEL = paint("--paint-grey-16"), PIPE = paint("--paint-grey-6"), RUST = paint("--paint-earth-51"), CONCRETE_PAD = paint("--paint-grey-8"), TANK = paint("--paint-earth-1");
+
+/** A fence round the yard: posts and two rails, light, in 6 m runs (a road through it leaves a gap), a gatehouse and barrier at its front. */
+function yard(kit: Kit, w: number, d: number, gateX = 0): void {
+  const wire = paint("--paint-grey-3");
+  const run = (x: number, z: number, along: "x" | "z") => {
+    for (const y of [0.85, 1.7]) kit.box(along === "x" ? 6 : 0.08, 0.08, along === "x" ? 0.08 : 6, wire, x, z, y);
+    kit.box(0.14, 1.9, 0.14, paint("--paint-grey-13"), along === "x" ? x - 3 : x, along === "x" ? z : z - 3);
+  };
+  for (let x = -w / 2; x < w / 2; x += 6) for (const z of [-d / 2, d / 2]) {
+    if (z > 0 && Math.abs(x + 3 - gateX) < 5) continue;
+    run(x + 3, z, "x");
+  }
+  for (let z = -d / 2; z < d / 2; z += 6) for (const x of [-w / 2, w / 2]) run(x, z + 3, "z");
+  kit.box(3, 2.8, 3, paint("--paint-earth-7"), gateX - 6, d / 2 - 2);
+  kit.box(3.4, 0.3, 3.4, paint("--paint-red-6"), gateX - 6, d / 2 - 2, 2.8);
+  kit.box(6, 0.2, 0.2, paint("--paint-red-3"), gateX - 1, d / 2, 1.1);
+}
+/** A storage tank: its shell, a low roof, a ladder up the side, a band round its top. */
+function tank(kit: Kit, x: number, z: number, r: number, h: number, colour = TANK): void {
+  if (!kit.fits(x, z, r + 0.5)) return;
+  kit.cylinder(r, h, colour, x, z, 0, 16);
+  kit.cylinder(r + 0.15, 0.35, paint("--paint-grey-4"), x, z, h - 0.35, 16);
+  kit.cone(r, 0.9, colour, x, z, h, 16, 0);
+  kit.box(0.5, h, 0.15, STEEL, x + r * 0.7, z + r * 0.7, 0, Math.PI / 4);
+}
+/** A pipe rack from (x0, z0) to (x1, z1): portals every 5 m, three pipes along it at `y`. */
+function pipeRack(kit: Kit, x0: number, z0: number, x1: number, z1: number, y = 4): void {
+  const len = Math.hypot(x1 - x0, z1 - z0), ry = -Math.atan2(z1 - z0, x1 - x0), n = Math.max(1, Math.round(len / 5));
+  for (let k = 0; k <= n; k += 1) {
+    const x = x0 + ((x1 - x0) * k) / n, z = z0 + ((z1 - z0) * k) / n;
+    kit.box(0.3, y, 0.3, STEEL, x - Math.sin(ry) * 1.1, z - Math.cos(ry) * 1.1);
+    kit.box(0.3, y, 0.3, STEEL, x + Math.sin(ry) * 1.1, z + Math.cos(ry) * 1.1);
+  }
+  for (let k = 0; k < n; k += 1) {
+    const x = x0 + ((x1 - x0) * (k + 0.5)) / n, z = z0 + ((z1 - z0) * (k + 0.5)) / n;
+    for (const [off, colour] of [[-0.6, PIPE], [0, paint("--paint-earth-47")], [0.6, PIPE]] as const)
+      kit.box(len / n, 0.45, 0.45, colour, x - Math.sin(ry) * off, z - Math.cos(ry) * off, y, ry);
+  }
+}
+/** A lattice tower or column stage: a platform ring at `y`. */
+function ring(kit: Kit, x: number, z: number, r: number, y: number): void {
+  kit.cylinder(r + 0.7, 0.25, STEEL, x, z, y, 12);
+}
+/** A conveyor from (x0, z0, y0) up to (x1, z1, y1): its belt on trestles. */
+function conveyor(kit: Kit, x0: number, z0: number, y0: number, x1: number, z1: number, y1: number): void {
+  const len = Math.hypot(x1 - x0, z1 - z0), run = Math.hypot(len, y1 - y0);
+  const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+  if (kit.fits(mx, mz, len / 2)) {
+    const ry = -Math.atan2(z1 - z0, x1 - x0), tilt = Math.atan2(y1 - y0, len);
+    const belt = new THREE.BoxGeometry(run, 0.6, 1.4).rotateZ(tilt).rotateY(ry);
+    kit.add(belt, paint("--paint-grey-14"), { x: mx, y: (y0 + y1) / 2 + 0.3, z: mz });
+    const roof = new THREE.BoxGeometry(run, 0.15, 1.8).rotateZ(tilt).rotateY(ry);
+    kit.add(roof, paint("--paint-grey-4"), { x: mx, y: (y0 + y1) / 2 + 1.4, z: mz });
+  }
+  for (let k = 1; k < Math.max(2, Math.round(len / 6)); k += 1) {
+    const t = k / Math.max(2, Math.round(len / 6));
+    kit.box(0.4, y0 + (y1 - y0) * t, 0.4, STEEL, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t);
+  }
+}
+/** A loading gantry: a canopy on legs over a lane, with its arms. */
+function gantry(kit: Kit, x: number, z: number, length: number): void {
+  for (const dx of [-length / 2, length / 2]) for (const dz of [-2.4, 2.4]) kit.box(0.4, 6, 0.4, STEEL, x + dx, z + dz);
+  kit.box(length + 1, 0.4, 6, paint("--paint-grey-4"), x, z, 6);
+  for (let k = 0; k < 3; k += 1) kit.box(0.25, 1.6, 0.25, paint("--paint-earth-47"), x - length / 3 + (k * length) / 3, z - 1, 4.4);
+}
+
+/** Each kind's yard: its size (metres, along x and z) and where its gate is along the front (+z). */
+export const SITE_YARD: Record<string, { w: number; d: number; gate: number }> = {
+  refinery: { w: 54, d: 40, gate: 4 }, newrefinery: { w: 54, d: 40, gate: 4 },
+  terminal: { w: 50, d: 38, gate: 6 }, depot: { w: 50, d: 38, gate: 6 },
+  oilfield: { w: 46, d: 32, gate: 10 },
+  quarry: { w: 54, d: 42, gate: 14 }, ironmine: { w: 54, d: 42, gate: 14 },
+  works: { w: 56, d: 48, gate: -2 }, assembly: { w: 56, d: 42, gate: 8 },
+  steelworks: { w: 56, d: 42, gate: 0 }, steelport: { w: 54, d: 40, gate: 6 },
+  mill: { w: 50, d: 40, gate: 6 }, flourmill: { w: 50, d: 40, gate: 6 }, silo: { w: 50, d: 40, gate: 6 },
+  station: { w: 30, d: 22, gate: 0 }, border: { w: 36, d: 30, gate: 0 }, gateway: { w: 36, d: 30, gate: 0 },
+};
+const yardOf = (kind: string, kit: Kit) => {
+  const y = SITE_YARD[kind]!;
+  yard(kit, y.w, y.d, y.gate);
+};
+
+/** An industrial site, drawn as the thing it is. */
 export function site(kit: Kit, rand: Rand, kind: string): void {
-  if (kind === "refinery" || kind === "newrefinery" || kind === "terminal" || kind === "depot" || kind === "oilfield") {
-    const tanks = kind === "oilfield" ? 0 : kind === "depot" ? 3 : 6;
-    for (let i = 0; i < tanks; i += 1) kit.cylinder(4.5, 5, paint("--paint-earth-1"), -12 + (i % 3) * 11, -6 + Math.floor(i / 3) * 12, 0, 14);
-    if (kind.includes("refinery")) {
-      kit.cylinder(1.4, 22, paint("--paint-grey-2"), 16, -4, 0, 8);
-      kit.cylinder(1.1, 16, paint("--paint-grey-2"), 20, 4, 0, 8);
-      kit.box(10, 6, 8, paint("--paint-grey-6"), 18, 14);
+  if (kind === "refinery" || kind === "newrefinery") {
+    yardOf(kind, kit);
+    // The tank farm in its bund.
+    for (let i = 0; i < 6; i += 1) tank(kit, -19 + (i % 3) * 9, -10 + Math.floor(i / 3) * 10, 3.8, 6);
+    for (const [w, d, x, z] of [[30, 0.6, -10, -15.5], [30, 0.6, -10, 5.5], [0.6, 21, -25, -5], [0.6, 21, 5, -5]] as const) kit.box(w, 1, d, paint("--paint-grey-11"), x, z);
+    // Its columns: the tall crude tower and its sisters, ringed with platforms.
+    for (const [x, z, r, h] of [[11, -6, 1.9, 19], [14, 4, 1.1, 16], [20, 4, 1.1, 16], [8, 2, 1.3, 13]] as const) {
+      if (!kit.fits(x, z, r + 0.7)) continue;
+      kit.cylinder(r, h, paint("--paint-grey-2"), x, z, 0, 12);
+      for (let y = 5; y < h; y += 5) ring(kit, x, z, r, y);
     }
-    // The pump jacks' posts; their beams nod, drawn by view3d.ts (SITE_LIFE) so they move.
-    if (kind === "oilfield") for (let i = 0; i < 4; i += 1) kit.box(1, 4, 1, paint("--paint-grey-23"), -10 + i * 7, (i % 2) * 8);
+    // The flare stack, apart (SITE_LIFE burns at its top).
+    kit.cylinder(0.55, 22.5, paint("--paint-grey-21"), 16, -4, 0, 8);
+    for (let y = 6; y < 22; y += 8) kit.cylinder(1, 0.2, STEEL, 16, -4, y, 8);
+    // The heater, its short stack; the pipe rack between the units and the tanks; the gantry.
+    kit.box(10, 6, 7, paint("--paint-grey-6"), 18, 13);
+    kit.cylinder(0.8, 12, paint("--paint-grey-21"), 22, 13, 0, 8);
+    pipeRack(kit, 6, -1, -4, -1);
+    pipeRack(kit, 6, -1, 6, 12);
+    gantry(kit, 0, 13, 12);
+    return;
+  }
+  if (kind === "terminal" || kind === "depot") {
+    yardOf(kind, kit);
+    const n = kind === "depot" ? 4 : 6;
+    for (let i = 0; i < n; i += 1) tank(kit, -16 + (i % 3) * 11, -9 + Math.floor(i / 3) * 11, 4.4, 7);
+    for (const [w, d, x, z] of [[34, 0.6, -5, -15], [34, 0.6, -5, 7], [0.6, 22, -22, -4], [0.6, 22, 12, -4]] as const) kit.box(w, 1, d, paint("--paint-grey-11"), x, z);
+    pipeRack(kit, 13, -4, 19, -4, 3.5);
+    pipeRack(kit, 19, -4, 19, 10, 3.5);
+    gantry(kit, 6, 13, 14);
+    kit.box(6, 3, 5, paint("--paint-earth-7"), 19, -12);
+    return;
+  }
+  if (kind === "oilfield") {
+    // Pump jacks on their pads (their beams nod: view3d.ts, SITE_LIFE), flowlines to a manifold, a
+    // separator and two tanks.
+    for (let i = 0; i < 4; i += 1) {
+      const x = -10 + i * 7, z = (i % 2) * 8;
+      kit.box(5, 0.3, 3, CONCRETE_PAD, x, z);
+      kit.box(1, 4, 1, paint("--paint-grey-23"), x, z);
+      kit.box(1.4, 1.2, 1.4, paint("--paint-red-3"), x - 2.2, z);
+      kit.cylinder(0.25, 1.4, STEEL, x + 2.6, z, 0, 6);
+      kit.box(Math.abs(18 - x), 0.25, 0.25, PIPE, (x + 18) / 2, z, 0.3);
+    }
+    kit.box(0.3, 0.25, 10, PIPE, 18, 4, 0.3);
+    if (kit.fits(20, -6, 4)) kit.add(new THREE.CylinderGeometry(1.4, 1.4, 7, 12).rotateZ(Math.PI / 2), paint("--paint-earth-49"), { x: 20, y: 2, z: -6 });
+    for (const z of [-6, -2]) kit.box(0.5, 1.4, 0.5, STEEL, 18, z);
+    tank(kit, 24, 4, 3, 5, TANK);
+    tank(kit, 24, 12, 3, 5, TANK);
     return;
   }
   // A station on the old line (stations.ts): a long low building, its platform and canopy, a water tower.
@@ -231,18 +366,199 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     return;
   }
   if (kind === "quarry" || kind === "ironmine") {
-    const heap = kind === "quarry" ? paint("--paint-earth-12") : paint("--paint-red-5");
-    for (let i = 0; i < 4; i += 1) kit.cone(4 + rand() * 3, 4 + rand() * 3, heap, -10 + i * 7, (rand() - 0.5) * 12, 0, 7, rand());
-    kit.box(8, 3, 5, paint("--paint-earth-52"), 12, 6);
-    kit.box(1, 10, 1, paint("--paint-grey-20"), 16, -6);
+    // The pit: its floor, benches stepping up round it, spoil on the rim; the crusher, its conveyor
+    // up to the stockpile (SITE_STOCK grows it), a dump truck on the haul road. The excavator in
+    // the pit swings as it digs (SITE_LIFE).
+    const rock = kind === "quarry" ? paint("--paint-earth-12") : paint("--paint-red-5");
+    const face = kind === "quarry" ? paint("--paint-earth-41") : paint("--paint-earth-51");
+    // In 6 m pieces, so a road across it takes only what's on it.
+    for (let x = -18; x < 6; x += 6) for (let z = -9; z < 9; z += 6) kit.box(6, 0.12, 6, kind === "quarry" ? paint("--paint-earth-26") : paint("--paint-earth-60"), x + 3, z + 3);
+    for (const [step, h] of [[0, 2.2], [1, 4.2]] as const) {
+      const w = 28 + step * 4, d = 20 + step * 4;
+      for (let k = 0; k < w / 4; k += 1) for (const z of [-d / 2, d / 2]) kit.box(4, h, 2, face, -6 - w / 2 + 2 + k * 4, z);
+      for (let k = 0; k < d / 4; k += 1) for (const x of [-6 - w / 2, -6 + w / 2]) kit.box(2, h, 4, face, x, -d / 2 + 2 + k * 4);
+    }
+    for (let i = 0; i < 5; i += 1) kit.cone(3 + rand() * 2, 2.5 + rand() * 2, rock, -22 + i * 8, -16 - rand() * 2, 0, 7, rand());
+    if (kit.fits(14, 4, 4)) {
+      kit.box(7, 5, 6, paint("--paint-earth-52"), 14, 4);
+      kit.cone(3, 3, STEEL, 14, 4, 5, 4);
+    }
+    conveyor(kit, 16, 1, 3, 21, -9, 9);
+    // A dump truck on its way down.
+    if (kit.fits(3, 8, 3.5)) {
+      kit.box(3, 2.4, 6.5, paint("--paint-earth-49"), 3, 8, 0.8);
+      kit.box(3.2, 1.8, 3.6, rock, 3, 9.2, 3);
+      for (const dz of [-2, 2]) for (const dx of [-1.6, 1.6]) kit.cylinder(0.9, 0.7, TYRE, 3 + dx, 8 + dz, 0.4, 8);
+    }
+    yardOf(kind, kit);
     return;
   }
-  // A works, mill or silo: long sheds, a stack or the silos' cylinders.
+  if (kind === "works") {
+    // A cement works: the limestone stockpile, a conveyor up to the preheater tower (its stack: SITE_LIFE),
+    // the kiln on its piers, the clinker shed, the cement silos and their lorry lane.
+    yardOf(kind, kit);
+    for (let i = 0; i < 4; i += 1) kit.cone(4 + rand() * 1.5, 4 + rand() * 1.5, paint("--paint-earth-12"), -22 + i * 5, -11, 0, 8, rand());
+    conveyor(kit, -14, -8, 2, 10, 4, 14);
+    if (kit.fits(14, 8, 4)) {
+      kit.box(7, 20, 7, paint("--paint-grey-4"), 14, 8);
+      for (let y = 5; y < 20; y += 5) kit.box(7.8, 0.3, 7.8, STEEL, 14, 8, y);
+      kit.cylinder(1.4, 24, paint("--paint-grey-5"), 14, 8, 0, 10);
+    }
+    // The kiln: a long drum, sloping down from the tower, banded where its tyres ride.
+    for (const x of [-13, -3, 7]) {
+      if (!kit.fits(x, 8, 5)) continue;
+      kit.add(new THREE.CylinderGeometry(1.8, 1.8, 10.2, 14).rotateZ(Math.PI / 2 - 0.04), paint("--paint-earth-58"), { x, y: 4 + x * 0.04, z: 8 });
+      kit.add(new THREE.CylinderGeometry(2.1, 2.1, 0.8, 14).rotateZ(Math.PI / 2), STEEL, { x: x - 1, y: 4 + (x - 1) * 0.04, z: 8 });
+    }
+    for (const x of [-14, -3, 8]) kit.box(2, 3, 4, CONCRETE_PAD, x, 8);
+    if (kit.fits(-10, -2, 9)) {
+      kit.box(18, 7, 9, paint("--paint-earth-14"), -10, -2);
+      kit.gable(18, 9, 2.5, paint("--paint-grey-6"), -10, -2, 7);
+    }
+    for (let i = 0; i < 3; i += 1) tank(kit, 20, -12 + i * 6, 2.4, 15, paint("--paint-earth-1"));
+    return;
+  }
+  if (kind === "assembly") {
+    // The assembly plant: a long hall with a sawtooth roof, the office at its front, the boiler house
+    // and its stack (SITE_LIFE), finished cars parked in rows (SITE_STOCK).
+    yardOf(kind, kit);
+    kit.box(38, 8, 16, paint("--paint-light-6"), -2, -8);
+    for (let i = 0; i < 6; i += 1) kit.gable(16, 6.4, 2.6, paint("--paint-grey-4"), -16.8 + i * 6.3, -8, 8, Math.PI / 2);
+    kit.box(10, 6, 5, paint("--paint-blue-11"), -10, 3);
+    kit.box(10.4, 0.6, 1, PANE, -10, 5.6, 3);
+    kit.box(6, 5, 6, paint("--paint-earth-14"), 20, 12);
+    kit.cylinder(0.9, 12, paint("--paint-grey-21"), 20, 12, 0, 8);
+    return;
+  }
+  if (kind === "steelworks") {
+    // The steelworks: the blast furnace (its top: SITE_LIFE's dark smoke) and its three stoves, the
+    // ore heap, the steel shop, the rolling mill's long shed, the slag tip.
+    yardOf(kind, kit);
+    if (kit.fits(14, 8, 4)) {
+      kit.cylinder(3.4, 12, paint("--paint-earth-58"), 14, 8, 0, 14);
+      kit.cylinder(2.4, 8, RUST, 14, 8, 12, 12);
+      kit.cylinder(1.2, 4.5, paint("--paint-grey-21"), 14, 8, 20, 8);
+      for (let y = 6; y < 20; y += 6) ring(kit, 14, 8, 3, y);
+    }
+    for (let i = 0; i < 3; i += 1) {
+      if (!kit.fits(22, -1 + i * 5.5, 2)) continue;
+      kit.cylinder(2, 15, paint("--paint-grey-6"), 22, -1 + i * 5.5, 0, 12);
+      kit.dome(2, paint("--paint-grey-6"), 22, -1 + i * 5.5, 15);
+    }
+    pipeRack(kit, 14, 3, 22, -6, 9);
+    for (let i = 0; i < 3; i += 1) kit.cone(4 + rand(), 3.5 + rand(), paint("--paint-red-5"), -2 + i * 5, 14, 0, 7, rand());
+    kit.box(14, 10, 10, paint("--paint-grey-16"), -16, 10);
+    if (kit.fits(-4, -12, 17)) {
+      kit.box(34, 6, 8, paint("--paint-earth-14"), -4, -12);
+      kit.gable(34, 8, 2.2, paint("--paint-grey-6"), -4, -12, 6);
+    }
+    kit.cone(5, 4, paint("--paint-grey-22"), -23, -4, 0, 7, 0.3);
+    return;
+  }
+  if (kind === "steelport") {
+    // Imported steel's terminal: a yard of coils and beams (SITE_STOCK), an overhead crane over it, the shed.
+    yardOf(kind, kit);
+    for (const x of [-20, 4]) for (const z of [-12, 4]) kit.box(0.8, 9, 0.8, paint("--paint-earth-52"), x, z);
+    for (const z of [-12, 4]) kit.box(25, 1, 1, paint("--paint-earth-52"), -8, z, 9);
+    kit.box(2, 1.2, 17, paint("--paint-earth-52"), -6, -4, 8.6);
+    kit.box(18, 7, 10, paint("--paint-grey-6"), 14, -8);
+    kit.gable(18, 10, 2.4, paint("--paint-grey-13"), 14, -8, 7);
+    return;
+  }
+  if (kind === "mill" || kind === "flourmill" || kind === "silo") {
+    // A mill (rice, garri, flour) or the cement terminal: its silos (SITE_LIFE steams or dusts over
+    // the middle one), the bucket elevator up to them, the mill house, the bagging shed, sacks
+    // stacked for the lorries (SITE_STOCK).
+    yardOf(kind, kit);
+    for (let i = 0; i < 3; i += 1) tank(kit, -8 + i * 7, 12, 3, 14, kind === "silo" ? paint("--paint-grey-2") : TANK);
+    kit.box(1.2, 17, 1.2, paint("--paint-grey-4"), 13, 12);
+    for (let k = 0; k < 3; k += 1) kit.box(6.4, 0.7, 0.9, paint("--paint-grey-2"), 9.6 - k * 6.6, 12, 16);
+    if (kind !== "silo" && kit.fits(-12, -6, 6)) {
+      kit.box(12, 12, 10, paint("--paint-earth-14"), -12, -6);
+      kit.gable(12, 10, 2.6, paint("--paint-grey-6"), -12, -6, 12);
+      for (let k = 0; k < 3; k += 1) kit.box(8, 0.8, 0.12, PANE, -12, -0.95, 3 + k * 3);
+    }
+    if (kit.fits(8, -8, 8)) {
+      kit.box(16, 6, 9, paint("--paint-earth-14"), 8, -8);
+      kit.gable(16, 9, 2.2, paint("--paint-grey-6"), 8, -8, 6);
+    }
+    return;
+  }
+  // Anything else: long sheds and a stack.
   kit.box(22, 7, 12, paint("--paint-earth-14"), 0, 0);
   kit.gable(22, 12, 3, paint("--paint-grey-6"), 0, 0, 7);
-  if (kind === "silo" || kind === "mill" || kind === "flourmill") for (let i = 0; i < 3; i += 1) kit.cylinder(3, 14, paint("--paint-earth-1"), -8 + i * 7, 12, 0, 12);
-  else kit.cylinder(1.6, 24, paint("--paint-grey-5"), 14, 8, 0, 10);
-  if (kind === "steelworks" || kind === "steelport") kit.box(14, 10, 10, paint("--paint-grey-16"), -16, 10);
+  kit.cylinder(1.6, 24, paint("--paint-grey-5"), 14, 8, 0, 10);
+}
+
+/**
+ * What a site can't get away, drawn as a pile in its yard (view3d.ts shows the first so many of
+ * these, as much as is waiting): its kind's stock and where it's kept. Built in order, so a pile
+ * grows by adding the next.
+ */
+export const SITE_STOCK: Record<string, { x: number; z: number; n: number; item: (kit: Kit, rand: Rand, i: number) => void }> = (() => {
+  const sacks = (colour: string) => (kit: Kit, rand: Rand, i: number) => {
+    const col = i % 4, row = Math.floor(i / 4) % 3, tier = Math.floor(i / 12);
+    kit.box(2.6, 1.1, 1.8, colour, col * 2.9, row * 2.1, tier * 1.15);
+    if (rand() < 0.5) kit.box(2.2, 0.15, 1.5, paint("--paint-earth-54"), col * 2.9, row * 2.1, tier * 1.15 + 1.1);
+  };
+  const heap = (colour: string) => (kit: Kit, rand: Rand, i: number) => {
+    const a = i * 2.4, d = Math.sqrt(i) * 1.8;
+    kit.cone(2.6 + rand() * 0.8, 2 + rand() * 1.2 + Math.max(0, 3 - d) * 0.6, colour, Math.cos(a) * d, Math.sin(a) * d, 0, 8, rand());
+  };
+  const coils = (kit: Kit, _rand: Rand, i: number) => {
+    const col = i % 6, row = Math.floor(i / 6) % 2, tier = Math.floor(i / 12);
+    if (kit.fits(col * 2.6, row * 2.8, 1.2)) kit.add(new THREE.CylinderGeometry(1.1, 1.1, 1.6, 12).rotateX(Math.PI / 2), tier ? paint("--paint-grey-13") : paint("--paint-grey-16"), { x: col * 2.6 + tier * 1.3, y: 1.1 + tier * 1.9, z: row * 2.8 });
+  };
+  const cars = (kit: Kit, rand: Rand, i: number) => {
+    const col = i % 8, row = Math.floor(i / 8);
+    const x = col * 3, z = row * 5.5;
+    const body = pick(rand, [paint("--paint-light-1"), paint("--paint-red-3"), paint("--paint-blue-12"), paint("--paint-grey-2"), paint("--paint-grey-23"), paint("--paint-earth-49")]);
+    kit.box(1.9, 1, 4.2, body, x, z, 0.35);
+    kit.box(1.7, 0.7, 2.2, PANE_DARK, x, z - 0.2, 1.35);
+  };
+  return {
+    quarry: { x: 22, z: -10, n: 14, item: heap(paint("--paint-earth-12")) },
+    ironmine: { x: 22, z: -10, n: 14, item: heap(paint("--paint-red-5")) },
+    works: { x: -26, z: 12, n: 24, item: sacks(paint("--paint-grey-1")) },
+    silo: { x: -20, z: -14, n: 24, item: sacks(paint("--paint-grey-1")) },
+    mill: { x: -22, z: 4, n: 24, item: sacks(paint("--paint-earth-5")) },
+    flourmill: { x: -22, z: 4, n: 24, item: sacks(paint("--paint-light-4")) },
+    steelworks: { x: -10, z: 2, n: 18, item: coils },
+    steelport: { x: -20, z: -6, n: 36, item: coils },
+    assembly: { x: -18, z: 9, n: 24, item: cars },
+  };
+})();
+
+/** Where a site's lorries load, which way they face (radians about y), and what they are. */
+export const SITE_BAY: Record<string, { x: number; z: number; ry: number; vehicle: VehicleKind3D }> = {
+  refinery: { x: -6, z: 13, ry: 0, vehicle: "tanker" },
+  newrefinery: { x: -6, z: 13, ry: 0, vehicle: "tanker" },
+  terminal: { x: -2, z: 13, ry: 0, vehicle: "tanker" },
+  depot: { x: -2, z: 13, ry: 0, vehicle: "tanker" },
+  oilfield: { x: 10, z: 16, ry: 0, vehicle: "tanker" },
+  quarry: { x: 19, z: 14.5, ry: 0, vehicle: "truck" },
+  ironmine: { x: 19, z: 14.5, ry: 0, vehicle: "truck" },
+  works: { x: 18, z: 17.5, ry: 0, vehicle: "truck" },
+  silo: { x: 6, z: 2, ry: 0, vehicle: "truck" },
+  mill: { x: 6, z: 2, ry: 0, vehicle: "truck" },
+  flourmill: { x: 6, z: 2, ry: 0, vehicle: "truck" },
+  steelworks: { x: 2, z: -2, ry: 0, vehicle: "truck" },
+  steelport: { x: 12, z: 6, ry: 0, vehicle: "truck" },
+  assembly: { x: 10, z: 14, ry: 0, vehicle: "truck" },
+};
+
+/** The excavator in a quarry's pit: tracks and body below, the house, boom and bucket that swing above. */
+export function excavator(): { base: THREE.BufferGeometry; upper: THREE.BufferGeometry } {
+  const base = new Kit();
+  for (const z of [-1.3, 1.3]) base.box(4.4, 0.9, 0.9, paint("--paint-grey-24"), 0, z);
+  base.box(2.4, 0.5, 2.4, paint("--paint-grey-21"), 0, 0, 0.9);
+  const upper = new Kit();
+  upper.box(3.2, 1.6, 2.6, paint("--paint-earth-49"), -0.4, 0, 0);
+  upper.box(1.3, 1.4, 1.2, PANE_DARK, 0.6, -0.6, 1.6);
+  upper.add(new THREE.BoxGeometry(4.6, 0.55, 0.55).rotateZ(0.5), paint("--paint-earth-49"), { x: 2.6, y: 2.2, z: 0.4 });
+  upper.add(new THREE.BoxGeometry(3, 0.45, 0.45).rotateZ(-1.0), paint("--paint-earth-49"), { x: 5.2, y: 2.2, z: 0.4 });
+  upper.box(1.2, 1, 1.3, paint("--paint-grey-23"), 6, 0.4, 0);
+  return { base: base.merged(), upper: upper.merged() };
 }
 
 /**
@@ -250,22 +566,67 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
  * smoke, a refinery's flare, a mill's steam, a quarry's dust, a pump jack's nodding beam. view3d.ts
  * runs them while the site works and stills them when it stands idle.
  */
-export type SiteEffect = "smoke" | "darkSmoke" | "flare" | "steam" | "dust" | "pumpjack";
+export type SiteEffect = "smoke" | "darkSmoke" | "flare" | "steam" | "dust" | "pumpjack" | "digger";
 export const SITE_LIFE: Record<string, Array<{ x: number; z: number; y: number; what: SiteEffect }>> = {
   refinery: [{ x: 16, z: -4, y: 22.5, what: "flare" }, { x: 20, z: 4, y: 16.5, what: "steam" }],
   newrefinery: [{ x: 16, z: -4, y: 22.5, what: "flare" }, { x: 20, z: 4, y: 16.5, what: "steam" }],
   oilfield: [0, 1, 2, 3].map((i) => ({ x: -10 + i * 7, z: (i % 2) * 8, y: 4.2, what: "pumpjack" as const })),
   works: [{ x: 14, z: 8, y: 24.5, what: "smoke" }],
-  assembly: [{ x: 14, z: 8, y: 24.5, what: "steam" }],
+  assembly: [{ x: 20, z: 12, y: 12.5, what: "steam" }],
   steelworks: [{ x: 14, z: 8, y: 24.5, what: "darkSmoke" }, { x: -16, z: 10, y: 10.5, what: "smoke" }],
   mill: [{ x: -1, z: 12, y: 14.5, what: "steam" }],
   flourmill: [{ x: -1, z: 12, y: 14.5, what: "steam" }],
   silo: [{ x: -1, z: 12, y: 14.5, what: "dust" }],
-  quarry: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 4, z: 0, y: 2, what: "dust" }],
-  ironmine: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 4, z: 0, y: 2, what: "dust" }],
+  quarry: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 14, z: 4, y: 6, what: "dust" }, { x: -8, z: -2, y: 0.2, what: "digger" }],
+  ironmine: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 14, z: 4, y: 6, what: "dust" }, { x: -8, z: -2, y: 0.2, what: "digger" }],
 };
 
 /** A cargo ship, facing +x, its waterline at y = 0: hull, containers on deck, the bridge aft, its funnel. */
+// --- At a lake (map version 13; your look, 2026-11-01: "the scale makes it hard to tell") -------
+// Things whose size you know, so the water's reads: reeds at its edge, a dugout on it, a jetty.
+
+/** Reeds at the water's edge: a stand of blades, green going to straw, a seed head on the tallest. */
+export function reedClump(kit: Kit, rand: Rand, x: number, z: number): void {
+  const n = 12 + Math.floor(rand() * 8);
+  for (let i = 0; i < n; i += 1) {
+    const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * 1.5, h = 1.6 + rand() * 1.4;
+    const bx = x + Math.cos(a) * d, bz = z + Math.sin(a) * d, rx = (rand() - 0.5) * 0.3, rz = (rand() - 0.5) * 0.3;
+    kit.add(new THREE.ConeGeometry(0.13, h, 3), pick(rand, [paint("--paint-green-5"), paint("--paint-green-8"), paint("--paint-green-3"), paint("--paint-green-15")]), { x: bx, y: h / 2, z: bz, rx, rz });
+    if (h > 2.5) kit.add(new THREE.CylinderGeometry(0.11, 0.11, 0.5, 4), paint("--paint-earth-36"), { x: bx + Math.sin(rz) * -h, y: h * 0.95, z: bz + Math.sin(rx) * h, rx, rz });
+  }
+}
+/** A dugout canoe, a fisherman in it with his paddle: along x, its waterline at y = 0. */
+export function canoe(rand: Rand): THREE.BufferGeometry {
+  const kit = new Kit();
+  const wood = pick(rand, [paint("--paint-earth-14"), paint("--paint-earth-46"), paint("--paint-grey-19")]);
+  rounded(kit, 5.2, 0.55, 0.85, 0.25, wood, 0, 0, -0.15);
+  kit.box(4.6, 0.08, 0.6, paint("--paint-grey-25"), 0, 0, 0.36);
+  for (const end of [-1, 1]) kit.add(new THREE.ConeGeometry(0.4, 0.8, 4), wood, { x: end * 2.85, y: 0.12, rz: end * -Math.PI / 2, ry: Math.PI / 4 });
+  person(kit, pick(rand, [paint("--paint-blue-12"), paint("--paint-light-1"), paint("--paint-red-3")]), 0.6, 0, 0.3, true);
+  kit.box(0.08, 0.08, 1.8, paint("--paint-earth-14"), 0.9, 0.3, 0.75);
+  return kit.merged();
+}
+/** A fishing jetty on stilts out from the shore along +x, a thatched hut behind it on the land (-x). */
+export function fishingJetty(kit: Kit, rand: Rand, length: number): void {
+  const plank = paint("--paint-earth-14");
+  kit.box(length, 0.18, 1.4, plank, length / 2, 0, 0.55);
+  for (let x = 0.6; x < length; x += 1.6) for (const z of [-0.6, 0.6]) kit.box(0.14, 1.6, 0.14, paint("--paint-grey-19"), x, z, -0.9);
+  hut(kit, rand, -4, 0);
+  for (let i = 0; i < 3; i += 1) kit.box(0.05, 1.1, 1.8, paint("--paint-earth-36"), -1.4, -2 + i * 0.7);
+}
+
+/** A harbour tug: a stubby hull ringed with tyre fenders, a tall wheelhouse, a funnel; bow toward +x. */
+export function tugBoat(): THREE.BufferGeometry {
+  const kit = new Kit();
+  rounded(kit, 13, 2.6, 5, 1.2, paint("--paint-red-6"), 0, 0, -1);
+  kit.box(12.4, 0.2, 4.6, paint("--paint-grey-21"), 0, 0, 1.6);
+  kit.box(4.2, 3.2, 3.4, paint("--paint-light-4"), 0.5, 0, 1.8);
+  kit.box(4.4, 0.8, 3.6, PANE_DARK, 0.5, 0, 4.2);
+  kit.cylinder(0.55, 2.4, paint("--paint-earth-49"), -2.6, 0, 1.8, 8);
+  for (let x = -5; x <= 5; x += 2.5) for (const z of [-2.55, 2.55]) kit.add(new THREE.TorusGeometry(0.45, 0.18, 5, 8), TYRE, { x, y: 0.9, z });
+  return kit.merged();
+}
+
 export function cargoShip(rand: Rand): THREE.BufferGeometry {
   const kit = new Kit();
   const hull = pick(rand, [paint("--paint-red-6"), paint("--paint-blue-20"), paint("--paint-dark-5")]);
