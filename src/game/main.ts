@@ -88,6 +88,7 @@ import { chipAt, draw, fitView, focusFor, overlayCaption, routeColor, toScreen, 
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { keepSteady, steadyFood, steadyFuel, steadyOver, steadyShortage, steadySite } from "./steady";
 import { createScreen } from "./screen";
+import { redrawSteadily } from "./patch";
 import { shortVerdict } from "./verdicts";
 import { waysFor } from "@engine/game/crossings";
 import { labelOf } from "@engine/game/labels";
@@ -734,13 +735,12 @@ function bestMovesHtml(): string {
   const rows = best
     .map((move) => {
       const r = move.receipt!;
-      const index = moves.list.indexOf(move);
       const money = `${r.moneyPerDay >= 0 ? "+" : "−"}₦${Math.abs(Math.round(r.moneyPerDay))}/day`;
       const back = r.paybackDays !== null ? `, pays back in ~${Math.ceil(r.paybackDays)} days` : r.moneyPerDay > 0 ? "" : ", loses money";
       const afford = world.economy.funds >= move.price;
       return `<li class="${r.moneyPerDay > 5 ? "good" : r.moneyPerDay < -5 ? "bad" : ""}">
         <span>${move.title} · ${naira(move.price)}<small>${money}${back}${Math.abs(r.you) >= 0.5 ? ` · your share ${pp(r.you)}` : ""}</small></span>
-        <button data-move="${index}" ${afford ? "" : "disabled title=\"Can't afford it yet\""}>Buy</button></li>`;
+        <button data-move="${encodeURIComponent(JSON.stringify(move.action))}" ${afford ? "" : "disabled title=\"Can't afford it yet\""}>Buy</button></li>`;
     })
     .join("");
   const status = waiting > 0 ? `<p class="hint">Checking ${waiting} more…</p>` : "";
@@ -3138,7 +3138,7 @@ function onPanelClick(event: MouseEvent): void {
   const target = (event.target as HTMLElement).closest<HTMLElement>("button, a, [data-select]") ?? (event.target as HTMLElement);
   // A problem line's move (screen.ts): the named move itself, bought.
   if (target.dataset.named !== undefined) {
-    const move = screen.namedMove(Number(target.dataset.named));
+    const move = screen.namedMove(target.dataset.named);
     if (!move) return;
     const towns = "a" in move.action && "b" in move.action ? [String(move.action.a), String(move.action.b)] : [];
     const result = act({ label: move.label, towns }, move.action);
@@ -3326,9 +3326,10 @@ function onPanelClick(event: MouseEvent): void {
     screen.select({ kind: world.towns.get(id)?.industry ? "site" : "town", id });
     return;
   }
-  const moveIndex = target.dataset.move;
-  if (moveIndex !== undefined) {
-    const move = moves.list[Number(moveIndex)];
+  // By its action, not its place in a list the forecasts remake: a held panel (patch.ts) shows an older one.
+  const moveKey = target.dataset.move;
+  if (moveKey !== undefined) {
+    const move = moves.list.find((m) => encodeURIComponent(JSON.stringify(m.action)) === moveKey);
     if (!move) return;
     const result = act(move.spec, move.action);
     if (result.ok) say(`${move.title}: bought for ${naira(move.price)}.${later}`);
@@ -3522,18 +3523,21 @@ function frame(now: number): void {
   if (panelTimer > 0.25) {
     panelTimer = 0;
     keepSteady(world);
-    renderStrip();
-    // Not while a button in a panel is pressed: redrawing replaces the button under
-    // the pointer, and a click needs the same one pressed and released (playtest:
-    // "Keep it up" took several clicks -- the panel redraws every quarter second).
-    // Nor while you type a name in it: a redraw would take the field from under you.
-    if (!panelPressed && !(document.activeElement instanceof HTMLInputElement)) {
-      renderPanel();
-      screen.renderLog();
-      // The revenue screen's charts are the days': once a second is plenty.
-      revenueTimer += 1;
-      if (screen.revenueOpen() && revenueTimer % 4 === 0) screen.renderRevenue();
-    }
+    // Under the pointer, only the figures change (patch.ts): the rest waits for it to leave.
+    redrawSteadily(() => {
+      renderStrip();
+      // Not while a button in a panel is pressed: redrawing replaces the button under
+      // the pointer, and a click needs the same one pressed and released (playtest:
+      // "Keep it up" took several clicks -- the panel redraws every quarter second).
+      // Nor while you type a name in it: a redraw would take the field from under you.
+      if (!panelPressed && !(document.activeElement instanceof HTMLInputElement)) {
+        renderPanel();
+        screen.renderLog();
+        // The revenue screen's charts are the days': once a second is plenty.
+        revenueTimer += 1;
+        if (screen.revenueOpen() && revenueTimer % 4 === 0) screen.renderRevenue();
+      }
+    });
   }
   // Every frame: a hint pinned to a town follows it, and hovering dismisses hint 1 at once.
   renderHint();

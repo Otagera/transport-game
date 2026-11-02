@@ -97,8 +97,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   let range = 0; // the revenue screen: 0 = all days
   /** Which "More" folds are open, by key: kept across the panel's redraws. */
   const openFolds = new Set<string>();
-  /** The moves the panel's problem lines offer, by index: a click does the one it names. */
-  let named: NamedMove[] = [];
+  /**
+   * The moves the panel's problem lines offer, by their action: a click does the one it names.
+   * Not by position in a list remade each redraw: a panel held under the pointer (patch.ts)
+   * shows the last redraw's buttons, and the one pressed must still buy what it says.
+   */
+  const named = new Map<string, NamedMove>();
 
   const days = (): RunDay[] => recorder.file.days;
   const nameOf = (id: string) => world.towns.get(id)?.name ?? world.ruins.get(id)?.name ?? id;
@@ -240,8 +244,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   /** A real move (problems.ts) as a button the panel's click handler does. */
   const moveButton = (move: NamedMove | undefined, fallback: string): string => {
     if (!move) return fallback;
-    named.push(move);
-    return `<button data-named="${named.length - 1}" title="${esc(move.label)}">${esc(move.label.replace(/\s*\([^)]*\)$/, ""))} · ${nairaK(move.price)}</button>`;
+    const key = JSON.stringify(move.action);
+    named.delete(key);
+    named.set(key, move);
+    if (named.size > 200) named.delete(named.keys().next().value!);
+    return `<button data-named="${esc(key)}" title="${esc(move.label)}">${esc(move.label.replace(/\s*\([^)]*\)$/, ""))} · ${nairaK(move.price)}</button>`;
   };
   /** A tool's button; `at`, the places it's about, which the map frames and rings when it's pressed (main.ts pointAt). */
   // Its key in a <kbd> (look.md §5), the rest of the label escaped.
@@ -303,7 +310,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   // works, its restore under More) went unseen for 482 days. Pledges and the union's demands
   // join this list (steps 2 and 5).
 
-  type Waiting = { text: string; button: string; at: string[]; weight: number };
+  /** `id`: what it is about, kept as its words and numbers move ("cement", "union:home"). */
+  type Waiting = { id: string; text: string; button: string; at: string[]; weight: number };
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   function waitingOnYou(): Waiting[] {
     const items: Waiting[] = [];
@@ -317,11 +325,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (world.cement && cement.towns.length > 0) {
       const b = cementBreak(world);
       const who = `${int(cement.people)}k people held back in ${plural(cement.towns.length, "town")}`;
-      if (b?.kind === "idle") items.push({ text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
-      else if (b?.kind === "quarry") items.push({ text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`), at: [b.quarryId], weight: cement.people });
+      if (b?.kind === "idle") items.push({ id: "cement", text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
+      else if (b?.kind === "quarry") items.push({ id: "cement", text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`), at: [b.quarryId], weight: cement.people });
       else if (b?.kind === "carry") {
         const c = carryWhy("cement", world.cement.worksId, mostHeld(cement.towns, (t) => t.cementHeld).id);
-        items.push({ text: `Cement short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: cement.people });
+        items.push({ id: "cement", text: `Cement short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: cement.people });
       }
     }
     const steel = held((t) => t.steelHeld);
@@ -329,12 +337,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const b = steelBreak(world);
       const who = `${int(steel.people)}k people held back in ${plural(steel.towns.length, "town")}`;
       const works = world.steel.worksId ?? world.steel.terminalId;
-      if (b?.kind === "idle") items.push({ text: `The steel works is idle: ${who}`, button: restoreButton("steel"), at: works ? [works] : [], weight: steel.people });
-      else if (b?.kind === "ore") items.push({ text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} <kbd>Y</kbd>`), at: [b.mineId], weight: steel.people });
+      if (b?.kind === "idle") items.push({ id: "steel", text: `The steel works is idle: ${who}`, button: restoreButton("steel"), at: works ? [works] : [], weight: steel.people });
+      else if (b?.kind === "ore") items.push({ id: "steel", text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} <kbd>Y</kbd>`), at: [b.mineId], weight: steel.people });
       else if (b?.kind === "carry") {
         const port = steelPortShort();
         const c = carryWhy("steel", b.from, mostHeld(steel.towns, (t) => t.steelHeld).id);
-        items.push(port ? { text: `Steel short, ${who}: ${port.text}`, button: port.button, at: [b.from], weight: steel.people } : { text: `Steel short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: steel.people });
+        items.push(port ? { id: "steel", text: `Steel short, ${who}: ${port.text}`, button: port.button, at: [b.from], weight: steel.people } : { id: "steel", text: `Steel short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: steel.people });
       }
     }
     // Short by the network, not by this week's tankers (fuel.ts fuelPlanned): just after the
@@ -344,14 +352,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       // Weighed as the people living short of fuel, by how short.
       const weight = fuelShort.reduce((sum, t) => sum + t.population * (1 - (t.fuel ?? 0)), 0) * 0.3;
       const where = `${plural(fuelShort.length, "town")} short of fuel`;
-      if (!world.fuel.restored) items.push({ text: `${where}, and the refinery is idle`, button: restoreButton("refinery"), at: [world.fuel.refineryId], weight });
+      if (!world.fuel.restored) items.push({ id: "fuel", text: `${where}, and the refinery is idle`, button: restoreButton("refinery"), at: [world.fuel.refineryId], weight });
       else {
         // Restored but starved of crude: crude moves by road only from a source with a yard (truckers.ts).
         const refinery = site(world.fuel.refineryId);
         const source = world.fuel.sourceId;
         if (refinery.capacity > 0 && refinery.made < 0.6 * refinery.capacity && refinery.limit === "input" && !world.yards.has(source)) {
-          items.push({ text: `${where}: the refinery gets no crude from ${nameOf(source)}`, button: toolButton("yard", `Yard at ${nameOf(source)} <kbd>Y</kbd>`), at: [source], weight });
-        } else items.push({ text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>"), at: [world.fuel.depotId], weight });
+          items.push({ id: "fuel", text: `${where}: the refinery gets no crude from ${nameOf(source)}`, button: toolButton("yard", `Yard at ${nameOf(source)} <kbd>Y</kbd>`), at: [source], weight });
+        } else items.push({ id: "fuel", text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>"), at: [world.fuel.depotId], weight });
       }
     }
     // In debt, or losing money: what's draining it, by name (a game ran to −₦71k with 17 roads'
@@ -368,13 +376,13 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const where = world.economy.funds < 0 ? `In debt: ${nairaK(world.economy.funds)}` : "Losing money";
       const flow = net < 0 ? `, ${naira(-net)} a day more out than in` : "";
       const buttons = (losing.length ? `<button data-tab="routes" title="Your routes, the worst first">Losing routes</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep <kbd>F</kbd>") : "");
-      items.push({ text: `${where}${flow}${drains.length ? `. A day: ${drains.join(" · ")}` : ""}`, button: buttons, at: [], weight: world.economy.funds < 0 ? 1e8 : 1e6 });
+      items.push({ id: "money", text: `${where}${flow}${drains.length ? `. A day: ${drains.join(" · ")}` : ""}`, button: buttons, at: [], weight: world.economy.funds < 0 ? 1e8 : 1e6 });
     }
     // Pledges left to make this term: the strip alone was missed (a game ran 115 days with none).
     const term = world.term;
     const left = term ? MAX_COMMITTED - term.pledges.filter((p) => p.committed).length : 0;
     if (term && left > 0 && term.pledges.some((p) => !p.committed)) {
-      items.push({ text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button class="primary" data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
+      items.push({ id: "pledges", text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button class="primary" data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
     }
     // The rains (floods.ts): the fords named for this season, and those under water now.
     const floods = world.floods;
@@ -385,7 +393,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         const when = floods.phase === "warned" ? `floods on day ${gameDay(world, floods.riseAt) - 1}, for ${Math.round((floods.fallAt - floods.riseAt) / D)} days` : `is under water until day ${gameDay(world, floods.fallAt) - 1}`;
         const named = [ford.a, ford.b].find((id) => ford.name.startsWith(nameOf(id)));
         const road = named ? `the road to ${nameOf(named === ford.a ? ford.b : ford.a)}` : `the ${nameOf(ford.a)} – ${nameOf(ford.b)} road`;
-        items.push({ text: `${ford.name} ${when}: everything on ${road} waits at the bank`, button: `<button data-ford="${ford.id}">Raise a bridge · ${nairaK(fordBridgeCost(world, ford))}</button>`, at: [ford.a, ford.b], weight: 8e7 });
+        items.push({ id: `ford:${ford.id}`, text: `${ford.name} ${when}: everything on ${road} waits at the bank`, button: `<button data-ford="${ford.id}">Raise a bridge · ${nairaK(fordBridgeCost(world, ford))}</button>`, at: [ford.a, ford.b], weight: 8e7 });
       }
     }
     // Your remit (remit.ts): a verdict's opening, the clusters on offer, each with what it brings.
@@ -393,7 +401,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (offers.length > 0) {
       const buttons = offers.map((c) => `<button data-open-cluster="${esc(c.hub)}" title="${esc(clusterBrings(world, c).join(", "))}">Open ${esc(nameOf(c.hub))}'s cluster</button>`).join("");
       const what = offers.map((c) => `${nameOf(c.hub)}'s brings ${clusterBrings(world, c).join(", ")}`).join("; ");
-      items.push({ text: `The state extends your remit: choose a cluster to open. ${what}`, button: buttons, at: offers.map((c) => c.hub), weight: 9.5e7 });
+      items.push({ id: "remit", text: `The state extends your remit: choose a cluster to open. ${what}`, button: buttons, at: offers.map((c) => c.hub), weight: 9.5e7 });
     }
     // The unions' demands (union.ts): who's asking, how he stands, his words, the deadline, and your answers.
     for (const union of world.unions ?? []) {
@@ -406,7 +414,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         routeAlong(world, d.a, d.b) ? `<button data-union="${union.id}|coop">Hand him the route</button>` : "",
         `<button data-union="${union.id}|refuse">Refuse</button>`,
       ].join("");
-      items.push({ text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
+      items.push({ id: `union:${union.id}`, text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
     }
     // Your pledges this term, not yet kept: first, with the town (its panel has the move).
     for (const p of world.term?.pledges ?? []) {
@@ -416,24 +424,42 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const move = pledgeMove(world, p);
       const restore = move?.action.kind === "restoreRefinery" ? "refinery" : move?.action.kind === "restoreWorks" ? "works" : null;
       const bond = restore && move && world.economy.funds < move.price ? hooks.bond(restore) : "";
-      items.push({ text: `Your pledge: ${pledgeLine(p)} · ${pct(pledgeProgress(world, p))} of the way`, button: `${moveButton(move ?? undefined, "")}${bond}<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
+      items.push({ id: `pledge:${p.id}`, text: `Your pledge: ${pledgeLine(p)} · ${pct(pledgeProgress(world, p))} of the way`, button: `${moveButton(move ?? undefined, "")}${bond}<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
     }
-    return items.sort((p, q) => q.weight - p.weight).slice(0, 5);
+    return items.sort((p, q) => q.weight - p.weight);
   }
-  // When each waiting item was first seen, by what it's about (its text to the first colon,
-  // numbers left out: "Steel short, 45k people..." is one item as its numbers move). Map 949's
-  // steel card stood ~120 days and nothing said so. Dropped when it goes; back, it starts again.
+  // The five shown hold still through a game day. Ranked afresh every redraw, they swapped
+  // places and came and went as their weights crossed and their lines were crossed (2026-11-02,
+  // map 2418 at 4x: "Restore the refinery" in and out, everything under it moving with it). Now
+  // they're ranked as a day begins or when you make a move; between, each keeps its place with
+  // its words kept up to date, one gone stays till the next ranking, and a new one joins at the
+  // foot while there's room.
+  let waitingRanked = "";
+  let waitingShown: Waiting[] = [];
+  function steadyWaiting(): Waiting[] {
+    const all = waitingOnYou();
+    const at = `${gameDay(world)}|${recorder.file.actions.length}`;
+    if (at !== waitingRanked) {
+      waitingRanked = at;
+      return (waitingShown = all.slice(0, 5));
+    }
+    const now = new Map(all.map((item) => [item.id, item]));
+    const kept = waitingShown.map((item) => now.get(item.id) ?? item);
+    for (const item of all) if (kept.length < 5 && !kept.some((k) => k.id === item.id)) kept.push(item);
+    return (waitingShown = kept);
+  }
+  // When each waiting item was first seen, by what it's about. Map 949's steel card stood ~120
+  // days and nothing said so. Dropped when it goes; back, it starts again.
   const waitingSince = new Map<string, number>();
-  const waitingKey = (text: string) => text.split(":")[0]!.replace(/[\d.,₦]+k?/g, "#");
   function waitingHtml(): string {
-    const items = waitingOnYou();
+    const items = steadyWaiting();
     const today = gameDay(world);
-    const keys = new Set(items.map((item) => waitingKey(item.text)));
-    for (const key of [...waitingSince.keys()]) if (!keys.has(key)) waitingSince.delete(key);
-    for (const key of keys) if (!waitingSince.has(key)) waitingSince.set(key, today);
+    const ids = new Set(items.map((item) => item.id));
+    for (const id of [...waitingSince.keys()]) if (!ids.has(id)) waitingSince.delete(id);
+    for (const id of ids) if (!waitingSince.has(id)) waitingSince.set(id, today);
     if (items.length === 0) return "";
     const age = (item: Waiting) => {
-      const days = today - (waitingSince.get(waitingKey(item.text)) ?? today);
+      const days = today - (waitingSince.get(item.id) ?? today);
       return days >= 10 ? ` <span class="age">· ${days} days now</span>` : "";
     };
     return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"${item.at.length > 0 ? ` data-at="${esc(item.at.join(","))}"` : ""}><span>${esc(item.text)}${age(item)}</span>${item.button}</div>`).join("")}</div>`;
@@ -664,14 +690,28 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   // --- The side panel ----------------------------------------------------------------
 
-  function sortRows<T>(rows: T[], table: string, keys: Record<string, (row: T) => number | string>): T[] {
+  // A table's order is kept through a game day: ranked as the day begins, when you sort it, or
+  // when you make a move, and between, its figures move and its rows don't. Ranked afresh every
+  // redraw, two routes close in net swapped places four times a second (2026-11-02, map 2418 at
+  // 4x: the revenue screen's routes re-sorted under the pointer in 37 of 43 changes).
+  const ranked = new Map<string, { at: string; ids: string[] }>();
+  function sortRows<T extends { id: string }>(rows: T[], table: string, keys: Record<string, (row: T) => number | string>): T[] {
     const { key, dir } = sorts[table]!;
+    const at = `${gameDay(world)}|${recorder.file.actions.length}|${key}|${dir}`;
+    const was = ranked.get(table);
+    const place = new Map(was?.ids.map((id, i) => [id, i]));
+    // The same rows as when ranked: in that order.
+    if (was?.at === at && rows.length === was.ids.length && rows.every((r) => place.has(r.id))) {
+      return rows.slice().sort((x, y) => place.get(x.id)! - place.get(y.id)!);
+    }
     const get = keys[key]!;
-    return rows.slice().sort((x, y) => {
+    const sorted = rows.slice().sort((x, y) => {
       const a = get(x);
       const b = get(y);
       return (typeof a === "string" ? a.localeCompare(b as string) : (a as number) - (b as number)) * dir;
     });
+    ranked.set(table, { at, ids: sorted.map((r) => r.id) });
+    return sorted;
   }
   function th(table: string, key: string, label: string): string {
     const s = sorts[table]!;
@@ -679,7 +719,6 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   }
 
   function renderPanel(): void {
-    named = [];
     const scroll = panelEl.scrollTop;
     if (selected && !exists(selected)) selected = null;
     if (selected) {
@@ -985,11 +1024,15 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
     // Only when something new happened: a redraw under the pointer swallows a click.
     if (!force && entries.length === logSize) return;
-    logSize = entries.length;
     const groups: Array<[string, string]> = [["all", "All"], ["trouble", "Strikes"], ["sites", "Sites"], ["growth", "Growth"], ["corridors", "Corridors"], ["money", "Money"]];
-    logShown = entries.filter((e) => logFilter === "all" || e.group === logFilter).reverse();
-    patchHtml(logEl, `<h2>What happened</h2><div id="logfilter">${groups.map(([id, label]) => `<button data-log="${id}" class="${logFilter === id ? "on" : ""}">${label}</button>`).join("")}</div>
-      ${logShown.map((e, i) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}`);
+    // Each line by its place in the whole log, which only grows: a log held under the pointer
+    // (patch.ts) still opens the line clicked.
+    logShown = entries;
+    const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => logFilter === "all" || e.group === logFilter).reverse();
+    const drawn = patchHtml(logEl, `<h2>What happened</h2><div id="logfilter">${groups.map(([id, label]) => `<button data-log="${id}" class="${logFilter === id ? "on" : ""}">${label}</button>`).join("")}</div>
+      ${shown.map(({ e, i }) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}`);
+    // Held under the pointer, it's drawn again once the pointer leaves.
+    if (drawn) logSize = entries.length;
   }
 
   // --- The term's verdict and your record (brief, Revision 5, step 3) -----------------
@@ -1255,9 +1298,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     /** Naming done (kept or dropped): the field closes. */
     stopRenaming: () => { renaming = null; renderPanel(); },
     /** The named move a problem line's button offers. */
-    namedMove: (i: number): NamedMove | undefined => named[i],
+    namedMove: (key: string): NamedMove | undefined => named.get(key),
     /** The towns and sites on Waiting on you: the map marks these, and only these. */
-    waitingTargets: (): Set<string> => new Set(waitingOnYou().flatMap((item) => item.at)),
+    waitingTargets: (): Set<string> => new Set(waitingShown.flatMap((item) => item.at)),
     get selected() { return selected; },
     /** What the map focuses: a row hovered, else the thing picked. */
     get focus(): Selection { return hover ?? (selectedFromMap ? null : selected); },
