@@ -1712,7 +1712,9 @@ function growthText(townId: string, name: string): string {
   const min = world.tuning.growthMinPlayerShare;
   const why = isCutOff(world, townId)
     ? "No road reaches it, so nothing can grow it."
-    : growth.playerShare < min
+    // Past the floor, it stays past till your share falls a band under it (steady.ts): resting on
+    // the line, the sentence flipped between its two wordings with each redraw.
+    : !steadyOver(world, `growth-floor:${townId}`, growth.playerShare, min)
     ? `It only grows once you carry at least ${pct(min)} of its trips (now ${pct(growth.playerShare)}); danfos alone keep it as it is.`
     : `Service ${pct(growth.service)} (yours ${pct(growth.playerShare)}, plus informal at half). The better served, the bigger: up to ${k(growth.cap)}.`;
   // Shrinking, it says why and what would stop it (brief, Revision 2, step 1).
