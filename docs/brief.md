@@ -1231,7 +1231,7 @@ His letter becomes the term's full screen, ahead of the revenue screen; `termVer
 | C30 | Geography is a decision | In your playtest you can name a crossing or a route round the hills you chose, and why |
 | C31 | The far clusters pull | By the end of term 2, you've connected at least one far cluster because it had something you wanted (not because the map was there) |
 
-## Dev tools: the console and the what-if (proposed 2026-11-01, for your marks)
+## Dev tools: the console and the what-if (agreed 2026-11-02: "both", "leave running")
 
 For you, building and tuning, never the player: it extends Revision 5's **design console**
 (On screen, "A design console", behind `?dev=1`), which today has three buttons in the term
@@ -1266,10 +1266,18 @@ and a horizon (10 days by default, 30 at most). It plays the live world forward 
 and with the change, and shows the difference:
 - **The headline:** net a day, people, trips carried, goods delivered, funds, each as a
   line over the horizon, without and with.
-- **The graph:** the map's places as nodes and what flows between them (trips, goods by kind)
+- **The map graph:** the map's places as nodes and what flows between them (trips, goods by kind)
   as edges, each drawn by how much it changed: grew green, shrank red, faint where it
   didn't move. A yard at Bayaji lights the limestone legs it shortened, the cement towns
   it fed, and the corridor its trucks now jam. Click a node for its numbers before and after.
+- **The systems graph:** the same what-if read as the model's chain -- a tuning number, the
+  mechanisms it feeds, the measures they move (yard reach -> legs -> cement served -> growth ->
+  people), each node with its value without and with. A number changed in the console lights
+  its chain from the start; a move lights it from the mechanism it touches. The chain is a
+  hand-kept table in the dev code (what feeds what, and which measure reads each node), so it
+  can drift from the engine: D5 holds it to the tuning.
+- **The game keeps running** while a what-if plays; the answer is for the day you asked, and
+  says so.
 
 **Heat (your question).** Nothing runs unless you ask: the what-if is a button, not a
 background job, and `?moves=1`'s best-moves workers stay separate and off.
@@ -1279,8 +1287,7 @@ background job, and `?moves=1`'s best-moves workers stay separate and off.
   days, plus the baseline's 15 s the first time.
 - **The baseline is reused:** every what-if from the same day and the same world shares one
   run without the change, so the second question costs half the first.
-- **A progress bar and Cancel;** a new question cancels the old one; the game paused while
-  it runs is an option, not a rule.
+- **A progress bar and Cancel;** a new question cancels the old one.
 
 ### Not in it
 
@@ -1295,7 +1302,8 @@ background job, and `?moves=1`'s best-moves workers stay separate and off.
 1. The console drawer: what's there, then pledge now, open now, a number live, inspect.
 2. Fork from day N.
 3. The what-if's engine: the worker, the baseline cache, the headline lines (a table first).
-4. The graph view.
+4. The map graph.
+5. The systems graph.
 
 ### Checks
 
@@ -1305,16 +1313,13 @@ background job, and `?moves=1`'s best-moves workers stay separate and off.
 | D2 | A what-if is the game | The same what-if twice gives the same numbers; its "with" run matches a replay of the run file with that move added |
 | D3 | Console moves replay | A run with every console move replays to the same world |
 | D4 | Gone in production | `verify:bundle` finds none of it |
+| D5 | The systems graph covers the tuning | A test: every key in tuning.ts is in the chain table or named there as not drawn; a new key fails it until placed |
 
-### Open for you
+### Your answers (2026-11-02)
 
-1. **"Nodes" -- which did you mean?** (a) the map's places and flows, as above; or (b) the
-   game's systems -- a tuning number, the mechanism it feeds, the measure it moves
-   (yard reach -> legs -> cement served -> growth), drawn as a chain. (a) shows one game's
-   consequences; (b) explains the model and needs a hand-kept map of what feeds what.
-   I'd build (a) and name (b) in each node's numbers.
-2. **Pause while it runs?** Default off: the game keeps going, and the what-if answers for
-   the day you asked.
+1. Which nodes: **both** -- the map graph (one game's consequences) and the systems graph (the
+   model's chain), both read from the same what-if.
+2. Pause while it runs: **no**, the game keeps running.
 
 ## Pass/fail checks: when slice zero is done
 
