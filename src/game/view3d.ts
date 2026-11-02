@@ -35,6 +35,7 @@ import { treeGeometry, type TreeKind } from "./shapes3d";
 import { paint as tokenPaint, paintAlpha, paintHex } from "./palette3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
+import { clusterAt, isClosed, landOf, remitOn } from "@engine/game/remit";
 import { BLOCK_WALLS, CONCRETE, ROOFS, WALLS, WINDOWS, fillingStation, fuelSeller, haulageYard, kiosk, metroEntrance, motorPark, railStation } from "./shapes3d";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
@@ -80,12 +81,25 @@ const waterMaterials = new Set<THREE.ShaderMaterial>();
 // trees', the towns' and the roads' materials (not the water's: its own shader), one clock for all.
 const CLOUD = { uCloudTime: { value: 0 }, uCloudCover: { value: 0.5 } };
 const clouded = new WeakSet<THREE.Material>();
+// Your remit, veiled (remit.ts; 2026-11-02), as the 2D map shows it (render.ts closedCanvas): land
+// outside it faded toward the haze and drawn out of colour -- there and running, not yours to build
+// in yet -- with a fine dashed line on the ground where your remit ends. Its towns, sites and roads
+// stay sharp (they run; the inherited roads are yours to use). A mask the map wide, sampled where a
+// material asks for it (VEIL: the land, the skirt, the trees; VEIL_LINE: the land's line): red the
+// veil as it stands (lifting when a cluster opens), green where it settles, for the line.
+const VEIL = { uVeilMap: { value: null as THREE.Texture | null }, uVeilSize: { value: new THREE.Vector2(1, 1) }, uVeilTint: { value: new THREE.Color() }, uVeilLine: { value: new THREE.Color() } };
+/** Mark a material for the veil (and its line). */
+function veiled<T extends THREE.Material>(material: T, line = false): T {
+  material.defines = { ...(material.defines ?? {}), VEIL: "", ...(line ? { VEIL_LINE: "" } : {}) };
+  return material;
+}
 function withClouds<T extends THREE.Material>(material: T): T {
   if (clouded.has(material)) return material;
   clouded.add(material);
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uCloudTime = CLOUD.uCloudTime;
     shader.uniforms.uCloudCover = CLOUD.uCloudCover;
+    Object.assign(shader.uniforms, VEIL);
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", "varying vec2 vCloudXZ;\nvoid main() {")
       .replace("#include <project_vertex>", `#include <project_vertex>
@@ -98,6 +112,12 @@ function withClouds<T extends THREE.Material>(material: T): T {
       .replace("void main() {", `varying vec2 vCloudXZ;
         uniform float uCloudTime;
         uniform float uCloudCover;
+        #ifdef VEIL
+          uniform sampler2D uVeilMap;
+          uniform vec2 uVeilSize;
+          uniform vec3 uVeilTint;
+          uniform vec3 uVeilLine;
+        #endif
         float cloudHash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
         float cloudNoise(vec2 p) {
           vec2 i = floor(p), f = fract(p);
@@ -111,6 +131,19 @@ function withClouds<T extends THREE.Material>(material: T): T {
           float shade = smoothstep(1.0 - uCloudCover, 1.12 - uCloudCover, c);
           gl_FragColor.rgb *= 1.0 - 0.24 * shade;
         }
+        #ifdef VEIL
+        {
+          vec2 veil = texture2D(uVeilMap, vCloudXZ / uVeilSize).rg;
+          vec3 grey = vec3(dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114)));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(grey, uVeilTint, 0.5), veil.r * 0.62);
+          #ifdef VEIL_LINE
+            // Where it settles: a line a couple of pixels wide at any zoom, dashed by a checker.
+            float d = abs(veil.g - 0.5) / max(fwidth(veil.g), 1e-4);
+            float dash = abs(step(0.5, fract(vCloudXZ.x / 9.0)) - step(0.5, fract(vCloudXZ.y / 9.0)));
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, uVeilLine, (1.0 - smoothstep(0.6, 1.8, d)) * dash * 0.7);
+          #endif
+        }
+        #endif
         #include <fog_fragment>`);
   };
   return material;
@@ -855,7 +888,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const pos = geo.attributes.position!;
     for (let i = 0; i < pos.count; i += 1) pos.setY(i, elevationAt(pos.getX(i) / M, pos.getZ(i) / M) * HEIGHT);
     geo.computeVertexNormals();
-    const land = new THREE.Mesh(geo, own(withClouds(new THREE.MeshLambertMaterial({ map: groundTexture }))));
+    const land = new THREE.Mesh(geo, own(withClouds(veiled(new THREE.MeshLambertMaterial({ map: groundTexture }), true))));
     land.receiveShadow = true;
     scene.add(land);
     // Beyond the map's edge (your word, 2026-10-31: "land fades off", in place of the diorama's cut
@@ -946,7 +979,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     skirtGeo.setIndex(landIndex);
     skirtGeo.computeVertexNormals();
     paintSkirt(HORIZON);
-    const skirt = new THREE.Mesh(skirtGeo, own(withClouds(new THREE.MeshLambertMaterial({ vertexColors: true }))));
+    const skirt = new THREE.Mesh(skirtGeo, own(withClouds(veiled(new THREE.MeshLambertMaterial({ vertexColors: true })))));
     skirt.receiveShadow = true;
     scene.add(skirt);
     recolourSkirt = paintSkirt;
@@ -1914,6 +1947,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   function animateSiteLife(seconds: number): void {
     puffMaterial.uniforms.uTime!.value = seconds;
     peopleTime.value = seconds;
+    animateVeil();
     puffMaterial.uniforms.uHalfH!.value = (innerHeight * Math.min(2, devicePixelRatio)) / 2;
     const dt = Math.min(0.1, (performance.now() - lifeAt) / 1000);
     lifeAt = performance.now();
@@ -2203,7 +2237,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
   };
-  const treeMaterial = own(withClouds(new THREE.MeshLambertMaterial({ vertexColors: true })));
+  const treeMaterial = own(withClouds(veiled(new THREE.MeshLambertMaterial({ vertexColors: true }))));
   const trees: Array<{ kind: TreeKind; cell: number; at: THREE.Matrix4 }> = [];
   const groves = new Map<TreeKind, THREE.InstancedMesh>();
   let planted = false;
@@ -2617,6 +2651,73 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
       if (changed) mesh.instanceMatrix.needsUpdate = true;
     }
+  }
+
+  // --- Your remit's veil (VEIL above) ------------------------------------------------------------
+  // Two texels a cell, softened so its line runs smooth rather than stepping cell by cell; worked
+  // out again only when a cluster opens, and lifted over two seconds where it does.
+  const VR = 2, TW = (W - 1) * VR, TH = (H - 1) * VR;
+  const veilData = new Uint8Array(TW * TH * 4);
+  const veilTexture = own(new THREE.DataTexture(veilData, TW, TH));
+  veilTexture.magFilter = veilTexture.minFilter = THREE.LinearFilter;
+  veilTexture.needsUpdate = true;
+  VEIL.uVeilMap.value = veilTexture;
+  VEIL.uVeilSize.value.set((W - 1) * M, (H - 1) * M);
+  VEIL.uVeilLine.value.setHex(paintHex("--paint-grey-23"));
+  let veilKey = "";
+  let veilNow: Float32Array = new Float32Array(TW * TH), veilFrom: Float32Array | null = null, veilTo: Float32Array = new Float32Array(TW * TH), veilAt = 0;
+  const closedTowns = new Set<string>();
+  function closedMask(w: GameWorld): Float32Array {
+    let mask: Float32Array = new Float32Array(TW * TH);
+    if (!remitOn(w)) return mask;
+    for (let v = 0; v < TH; v += 1) for (let u = 0; u < TW; u += 1) mask[v * TW + u] = isClosed(w, landOf(w, { x: (u + 0.5) / VR, y: (v + 0.5) / VR })) ? 1 : 0;
+    for (let pass = 0; pass < 2; pass += 1) {
+      const next = new Float32Array(TW * TH);
+      for (let v = 0; v < TH; v += 1) for (let u = 0; u < TW; u += 1) {
+        let sum = 0, n = 0;
+        for (let dv = -1; dv <= 1; dv += 1) for (let du = -1; du <= 1; du += 1) {
+          const uu = u + du, vv = v + dv;
+          if (uu < 0 || vv < 0 || uu >= TW || vv >= TH) continue;
+          sum += mask[vv * TW + uu]!;
+          n += 1;
+        }
+        next[v * TW + u] = sum / n;
+      }
+      mask = next;
+    }
+    return mask;
+  }
+  function writeVeil(): void {
+    for (let i = 0; i < TW * TH; i += 1) {
+      veilData[i * 4] = Math.round(veilNow[i]! * 255);
+      veilData[i * 4 + 1] = Math.round(veilTo[i]! * 255);
+    }
+    veilTexture.needsUpdate = true;
+  }
+  /** Twice a second: a cluster opened (or the first look), and its closed towns' names dimmed. */
+  function syncVeil(w: GameWorld): void {
+    const key = remitOn(w) ? `open:${w.remit!.open.join("|")}` : "off";
+    if (key !== veilKey) {
+      const first = veilKey === "";
+      veilKey = key;
+      veilTo = closedMask(w);
+      if (first) veilNow = veilTo.slice();
+      else { veilFrom = veilNow.slice(); veilAt = performance.now(); }
+      writeVeil();
+      closedTowns.clear();
+      for (const t of w.towns.values()) if (isClosed(w, clusterAt(w, t.id))) closedTowns.add(t.id);
+    }
+    for (const [id, entry] of towns) entry.text.classList.toggle("closed", closedTowns.has(id));
+  }
+  /** Every frame: the veil lifting where a cluster opened; the tint the haze's. */
+  function animateVeil(): void {
+    VEIL.uVeilTint.value.copy((scene.fog as THREE.Fog).color);
+    if (!veilFrom) return;
+    const t = Math.min(1, (performance.now() - veilAt) / 2000);
+    const ease = t * t * (3 - 2 * t);
+    for (let i = 0; i < TW * TH; i += 1) veilNow[i] = veilFrom[i]! + (veilTo[i]! - veilFrom[i]!) * ease;
+    writeVeil();
+    if (t >= 1) veilFrom = null;
   }
 
   // --- People (the fidelity list, 2026-11-01: "people who show the game") ----------------------
@@ -3046,6 +3147,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         syncRain(w);
         if (planted) syncBuilds(w);
         if (planted) syncPeople(w);
+        syncVeil(w);
         if (!planted) {
           plant(w);
           buildRoadside(w);

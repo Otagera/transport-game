@@ -718,6 +718,16 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   ground behind, clear of other towns and the old roads. The city's houses, streets and markets
   keep off it (`onQuay`, beside the four checks that keep them off sites), so it reads as the
   city's port district rather than a slab dropped on its outskirts.
+- **Your remit, veiled** (2026-11-02; remit.ts, as the 2D map's `closedCanvas`). Land outside your
+  remit is faded toward the haze and drawn out of colour -- there and running, not yours to build in
+  yet -- with a fine dashed line on the ground where your remit ends; its towns, sites and roads
+  stay sharp (they run, and the inherited roads are yours to use), its towns' names quieter
+  (`.label3d.closed`). A mask the map wide (two texels a cell, softened so the line runs smooth),
+  sampled in the cloud patch (`withClouds`) by the materials marked `veiled` (the land and its
+  line, the skirt, the trees): red the veil as it stands, green where it settles (the line, drawn
+  a couple of pixels wide at any zoom by `fwidth`). When a cluster opens its veil lifts over two
+  seconds. The key that says it changed is prefixed (`open:`): no clusters open is `""`, the same
+  as never worked out, and the first veil never drew.
 - **People** (2026-11-01, the fidelity list's "people who show the game"; `syncPeople`). Riders at
   each of your road routes' stops: a shelter (`busShelter`, its sign in your colour) beside the
   road the route takes out of the town, 8 m off its middle on the near side (the far side where a
