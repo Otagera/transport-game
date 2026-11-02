@@ -10,6 +10,7 @@ import { clusterAt, inRemit } from "@engine/game/remit";
 import type { Selection } from "./screen";
 import type { WhatIfChange, WhatIfDay, WhatIfRun } from "@engine/game/whatif";
 import type { WhatIfReply, WhatIfRequest } from "./whatif.worker";
+import { graphEdges, moved, mountMapGraph, type GraphLayer, type MapGraph } from "./whatifgraph";
 
 // The design console's drawer (docs/brief.md, Dev tools: the console and the what-if, step 1).
 // Dev only: main.ts imports it on demand behind ?dev=1, so a player's page never loads it. Every
@@ -30,6 +31,8 @@ export interface ConsoleHooks {
   fork(day: number): Promise<string | null>;
   /** The last move the toolbar previewed that could be made, for the what-if. */
   lastMove(): { action: ActionSpec; label: string } | null;
+  /** A map cell to the page's pixels, as the map draws it now: where the map graph draws. */
+  project(x: number, y: number): { x: number; y: number };
 }
 
 const MARK = "transport-game: console drawer";
@@ -102,6 +105,14 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
   let asking: { id: number; label: string; days: number; done: number; of: number } | null = null;
   let answer: { label: string; days: number; base: WhatIfRun; with: WhatIfRun } | null = null;
   let failed = "";
+  // The map graph (step 4): off until asked for, an answer's trips or goods.
+  let graph: MapGraph | null = null;
+  let layer: GraphLayer | "off" = "off";
+  function showGraph(): void {
+    if (layer === "off" || !answer || !answer.with.ok) return graph?.hide();
+    graph ??= mountMapGraph(world, hooks.project);
+    graph.show(answer.base.end, answer.with.end, layer);
+  }
   const send = (message: WhatIfRequest) => worker!.postMessage(message);
   function take(): void {
     if (!worker) {
@@ -114,6 +125,7 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
           answer = { label: asking.label, days: reply.with.days.length || reply.base.days.length, base: reply.base, with: reply.with };
           failed = reply.with.ok ? "" : `it can't be done: ${reply.with.reason}`;
           asking = null;
+          showGraph();
         } else asking = null;
         showWhatIf();
       };
@@ -121,6 +133,7 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
     send({ type: "take", world });
     taken = hooks.day();
     answer = null;
+    graph?.hide();
   }
 
   const move = (op: ConsoleOp, extra: { amount?: number; key?: string; value?: number | boolean }, done: string): void => {
@@ -163,7 +176,7 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
 
   function whatIfOut(): string {
     const status = asking
-      ? `<div>Playing on: day ${asking.done} of ${asking.of}${asking.of === 2 * asking.days ? (asking.done <= asking.days ? " (without the change first)" : " (now with it)") : " (with it: the run without is kept from before)"} <button class="quiet" data-cancel>Cancel</button></div>`
+      ? `<div>${asking.of === 0 ? "Starting…" : `Playing on: day ${asking.done} of ${asking.of}${asking.of === 2 * asking.days ? (asking.done < asking.days ? " (without the change first)" : " (now with it)") : " (with it: the run without is kept from before)"}`} <button class="quiet" data-cancel>Cancel</button></div>`
       : "";
     if (failed) return `${status}<div class="bad">${esc(failed)}</div>`;
     if (!answer) return status || `<div class="muted">${taken === null ? "Take the game, then ask: it plays on in a worker, without and with the change." : `Asking about day ${taken} as it stood.`}</div>`;
@@ -194,7 +207,29 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
     return `${status}<div><b>${esc(answer.label)}</b>, from day ${base.from}${moved}, ${answer.days} days on:</div>
       <table class="whatif"><tr><th></th><th>without</th><th>with</th><th>difference</th></tr>
       ${rows.map(([name, a, b, f]) => `<tr><td>${name}</td><td>${f(a)}</td><td>${f(b)}</td>${diff(a, b, f)}</tr>`).join("")}</table>
+      <div class="moves">On the map: ${(["off", "trips", "goods"] as const).map((l) => `<label><input type="radio" name="wi-graph" value="${l}" ${layer === l ? "checked" : ""} /> ${l === "off" ? "off" : l === "trips" ? "trips between towns" : "goods between places"}</label>`).join(" ")}</div>
+      <div data-whatif-node>${picked()}</div>
       <details><summary>Day by day</summary><table class="whatif"><tr><th>day</th><th>net without</th><th>with</th><th>people without</th><th>with</th><th>your riders without</th><th>with</th></tr>${daily.join("")}</table></details>`;
+  }
+
+  /** The town picked on the map, by the answer: its people, and the edges at it that moved most. */
+  function picked(): string {
+    const sel = hooks.selected();
+    if (!answer || !answer.with.ok || layer === "off") return "";
+    if (!sel || (sel.kind !== "town" && sel.kind !== "site")) return `<div class="muted">Pick a town on the map for its numbers before and after.</div>`;
+    const name = (id: string) => world.towns.get(id)?.name ?? id;
+    const { end: a } = answer.base;
+    const { end: b } = answer.with;
+    const people = a.people[sel.id] !== undefined ? `people ${(a.people[sel.id] ?? 0).toFixed(1)}k → ${(b.people[sel.id] ?? 0).toFixed(1)}k` : "";
+    const unit = layer === "trips" ? "a day" : "t a day";
+    const edges = graphEdges(a, b, layer).filter((e) => e.a === sel.id || e.b === sel.id).sort((p, q) => Math.abs(q.with - q.base) - Math.abs(p.with - p.base)).slice(0, 6);
+    const rows = edges.map((e) => {
+      const other = e.a === sel.id ? e.b : e.a;
+      const d = e.with - e.base;
+      const tone = !moved(e.base, e.with) ? "muted" : d > 0 ? "good" : "bad";
+      return `<tr><td>${esc(name(other))}</td><td>${Math.round(e.base)}</td><td>${Math.round(e.with)}</td><td class="${tone}">${d > 0 ? "+" : d < 0 ? "−" : ""}${Math.round(Math.abs(d))}</td></tr>`;
+    });
+    return `<div><b>${esc(name(sel.id))}</b> ${people}</div>${rows.length ? `<table class="whatif"><tr><th>${layer} ${unit} with</th><th>without</th><th>with</th><th>difference</th></tr>${rows.join("")}</table>` : `<div class="muted">No ${layer} at it.</div>`}`;
   }
 
   function showWhatIf(): void {
@@ -266,7 +301,7 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
       const days = Math.max(1, Math.min(30, Math.round(Number(el.querySelector<HTMLInputElement>("[data-wi-days]")!.value) || 10)));
       if (taken === null) take();
       asked += 1;
-      asking = { id: asked, label: picked.label, days, done: 0, of: days };
+      asking = { id: asked, label: picked.label, days, done: 0, of: 0 };
       failed = "";
       send({ type: "ask", id: asked, change: picked.change, days });
       showWhatIf();
@@ -289,6 +324,13 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
   // A number is set when it's left or Enter is pressed; a switch when it's ticked.
   el.addEventListener("change", (event) => {
     const field = event.target as HTMLInputElement;
+    if (field.name === "wi-graph") {
+      layer = field.value as GraphLayer | "off";
+      showGraph();
+      const node = el.querySelector("[data-whatif-node]");
+      if (node) node.innerHTML = picked();
+      return;
+    }
     const key = field.dataset.tune;
     if (!key) return;
     const value = field.type === "checkbox" ? field.checked : Number(field.value);
@@ -309,6 +351,8 @@ export function mountConsole(hooks: ConsoleHooks): { toggle(): void } {
         if (pre) pre.innerHTML = inspected();
         const move = el.querySelector("[data-wi-move]");
         if (move) move.textContent = hooks.lastMove()?.label ?? "none yet: preview one with a tool";
+        const node = el.querySelector("[data-whatif-node]");
+        if (node) node.innerHTML = picked();
       }, 1000);
     },
   };

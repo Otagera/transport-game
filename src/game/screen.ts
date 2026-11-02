@@ -610,7 +610,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const committed = term.pledges.filter((p) => p.committed).length;
     const standing = term.replacedAtSeconds !== undefined ? ` · <b class="down">replaced</b>` : (term.failedInRow ?? 0) > 0 ? ` · <span class="down">a failed term behind you</span>` : "";
     // The design console's moves are in its drawer (devconsole.ts), opened with the ` key.
-    const console = hooks.dev ? `<div class="d muted">Console: <kbd>\`</kbd></div>` : "";
+    // A link as well as the key: on a layout where ` is a dead key, the key alone can't be relied on.
+    const console = hooks.dev ? `<div class="d muted"><a href="#" data-open-console>Console</a> <kbd>\`</kbd></div>` : "";
     // The pledges themselves are in the panel (look.md §6: the strip cut them at thirty characters).
     return `<div class="stat term"><div class="k">Term ${term.number}${standing}</div><div class="v num">Day ${termDay} of ${length}</div><div class="d muted">Day ${day}${committed < MAX_COMMITTED ? ` · ${MAX_COMMITTED - committed} to pledge` : ""} · ${mapLine}</div>${console}</div>`;
   }

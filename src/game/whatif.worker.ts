@@ -53,6 +53,7 @@ scope.onmessage = async (event) => {
   if (!taken) return;
   const cached = baselines.get(days);
   const of = cached ? days : 2 * days;
+  scope.postMessage({ type: "progress", id, done: 0, of });
   const base = cached ?? (await run(id, null, days, 0, of));
   if (!base) return scope.postMessage({ type: "stopped", id });
   baselines.set(days, base);

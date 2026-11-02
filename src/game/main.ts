@@ -320,6 +320,11 @@ let mapLine = "";
 // The run so far as a file (runlog.ts): what you did and what each day looked
 // like, for reading by hand or with scripts/game-run.ts.
 document.addEventListener("click", (event) => {
+  if ((event.target as HTMLElement).closest("[data-open-console]")) {
+    event.preventDefault();
+    devConsole?.toggle();
+    return;
+  }
   if (!(event.target as HTMLElement).closest("#save-run")) return;
   event.preventDefault();
   const file = runFile(recorder);
@@ -1151,6 +1156,7 @@ if (dev) {
       selected: () => screen.selected,
       day: () => gameDay(world),
       lastMove: () => lastPreview,
+      project: (x, y) => toScreen(view, x, y),
       fork: forkFrom,
       changed: () => {
         screen.refreshVerdict();
@@ -1161,7 +1167,9 @@ if (dev) {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "`" && devConsole) {
+  // By the key's place too: on a layout where ` is a dead key, event.key says "Dead".
+  if ((event.key === "`" || event.code === "Backquote") && devConsole) {
+    event.preventDefault();
     devConsole.toggle();
     return;
   }

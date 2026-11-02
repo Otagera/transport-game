@@ -22,3 +22,6 @@
 #dev-console table.whatif th { text-align: left; font-weight: 600; color: var(--ink-2); padding: var(--sp-1) var(--sp-2) var(--sp-1) 0; }
 #dev-console .good { color: var(--good); }
 #dev-console .bad { color: var(--bad); }
+/* The what-if's map graph (whatifgraph.ts): over the plate, under the drawer, taking no pointer. */
+#plate-overlay > #whatif-graph { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#whatif-graph[hidden] { display: none; }

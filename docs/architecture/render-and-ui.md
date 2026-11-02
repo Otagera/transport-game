@@ -845,6 +845,15 @@ opens it at the plate's top right, as `#plate-overlay`'s child (nothing fixed ov
   a second question costs half (measured on map 2418 from day 1: 6.4 s for 3 days, then 2.4 s).
   It yields between days: a new question or Cancel ends the old at the next day. The game runs
   on meanwhile; the answer names the day it was asked about.
+- **The map graph** (step 4, `whatifgraph.ts`): under an answer, "On the map: trips | goods". A
+  canvas in `#plate-overlay` (no pointer: the map under it still picks) draws over the live 2D map,
+  redrawn each frame while shown so it follows pan and zoom: a straight line between each pair of
+  places with a trip or a tonne a day, both directions and every kind of goods as one; green where
+  the change grew it, red where it shrank, width by the size of the change; faint where it moved
+  less than half a unit or 2% (`moved`). A ring at a town whose people moved. A town picked on the
+  map gets its people before and after and its six most changed links in the drawer. Read from the
+  what-if's `end` (people by town, goods by flow, trips by pair), so nothing more is run. The 2D
+  map only: in 3D it draws over nothing meaningful.
 
 ### The start (2026-10-28: "it loads and shows the game but for a few seconds nothing happens")
 
