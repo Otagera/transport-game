@@ -61,6 +61,17 @@ at your stops by who's waiting, passengers and touts at your motor parks, shoppe
 together); **the arrival as one movement** (the loading card lifting away, the letter, pledges and
 verdict as a card over the dimmed map); and **saved games** (it saves itself; the loading card offers
 your games; engine.md, snapshot.ts). The remit in 3D is next. **The remit opens** (remit.ts, brief, Chains: convergent, built 2026-11-01): you start with the home cluster's land, a kept term's verdict opens one of the two nearest closed clusters (your choice, in Waiting on you), closed land veiled on the map; pledges made keepable (the worst seat pair cut by a third; a pledge with no move in your remit not offered). Measured to day 400 on three maps against an all-open twin: terms kept 7 of 9, 2-3 clusters opened, C35 (something built in a newly opened cluster the day it opens) and C36 (net -9% to +27%, people within 5%) hold, once the strategist chose only among places its remit allowed (engine.md, Your remit). **Dev tools** (brief, Dev tools: the console and the what-if, agreed 2026-11-02): step 1, the console drawer, built -- the `` ` `` key with `?dev=1`: end the term, rains, pledges now, a cluster opened now, money, any tuning number live, and Inspect on the panel's pick, every move in the run file (render-and-ui.md, The design console's drawer); step 2, fork from day N, built (a new save cut at that day's start, replayed to there, the original kept); step 3, the what-if's engine and its table, built (whatif.ts in a worker: a number or the last previewed move, without and with, 1-30 days on; the run without kept, so a second question costs half). step 4, the map graph, built (an answer's trips or goods over the live map, green grew, red shrank, a picked town's links in the drawer). step 5, the systems graph, built (the model's chain, a change lighting what it enters and what that feeds, each node without and with; D5 holds the hand-kept table to the tuning). The dev tools' order is done; and `?dev=1` no longer forecasts every previewed move or runs a receipt's shadow world after every move unless the drawer's switch is on (D1). **Open for you:** the term-1 grant against the ₦45-80k restores (brief, same place).
+**The info layer, first pass** (2026-11-02, branch `info-layer`; render-and-ui.md, Held still while
+you aim and The network): from your "to click on some things are difficult ... between tick the
+information is changing" -- the presentation, not the engine: lists re-sorted four times a second,
+Waiting on you's lines came and went, nothing held still under the pointer. Now it does, measured
+(96-100% of aims land, from 76-88%). And everything you run is one kind of line on one kind of way:
+the Network tab (each road or stretch of track with its lines; lorries and freight trains with
+cards of their own; the corridors folded into the roads' rows and cards), and the revenue screen as
+a flow, a statement whose net is the strip's, and every line's money. Next there: the restore lines
+that still come and go at a day's turn (their shortages' lines want a band), and the train card's
+cars once the other session's carriages land.
+
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

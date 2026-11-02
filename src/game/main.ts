@@ -305,8 +305,10 @@ const screen = createScreen(world, recorder, {
     const summary = routeSummaries(world).find((s) => s.id === id);
     return summary ? routeCard(summary) : "";
   },
-  // Lorries and freight trains are lines in the list now, each with its card (lines.ts).
-  routesMore: () => (forecasting ? bestMovesHtml() + resultsHtml() : "") + corridorsHtml() + shareHtml(),
+  // Under the network (screen.ts), only the developer's forecasts now: lorries and freight trains
+  // are lines in it, each with its card; a corridor's share, levies, no seat and wear are its
+  // road's row and card; who carries trips heads it.
+  routesMore: () => (forecasting ? bestMovesHtml() + resultsHtml() : ""),
   goodsWhy: (id) => goodsWhy(id),
   bond: (purpose) => bondButton(purpose),
   dev,
