@@ -9,8 +9,8 @@ import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
 import type { GameWorld } from "@engine/game/types";
 import { diagnoseRoute, gameDay, roadPath, routeSummaries, townShare } from "@engine/game/world";
 import { growthTrend, roadFull, townGrowth } from "@engine/game/growth";
-import { averageHeadline, averageNet } from "@engine/game/history";
-import { goodsFlows, flowKey, lorrySummaries } from "@engine/game/goods";
+import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
+import { diagnoseLorryRoute, goodsFlows, flowKey } from "@engine/game/goods";
 import { corridorSummaries } from "@engine/game/corridors";
 import { cargoName, fuelPlanned, fuelReach, fuelReachable } from "@engine/game/fuel";
 import { hasYard } from "@engine/game/yards";
@@ -19,6 +19,7 @@ import { exportsBy, farmTowns } from "@engine/game/food";
 import { borderCountry } from "@engine/game/border";
 import { exportGateway, nextPortRung, portScale, seaportLink } from "@engine/game/gateways";
 import { patchHtml } from "./patch";
+import { GROUPS, KIND_NAME, VERDICT_WORDS, lines, ways, waysOf, type Line, type Way } from "./lines";
 import { steadyFuel, steadySite } from "./steady";
 import { cementBreak, cementServed } from "@engine/game/cement";
 import { steelBreak, steelDemand, steelImports, steelServed } from "@engine/game/steel";
@@ -55,8 +56,10 @@ export interface ScreenHooks {
   townMore(id: string): string;
   /** The old route card. */
   routeMore(id: string): string;
-  /** Under the routes list: lorries, corridors, your share (the old routes wing's rest). */
+  /** Under the lines list: corridors, your share (the old routes wing's rest). */
   routesMore(): string;
+  /** A goods line's reason and its freight rate, for its card. */
+  goodsWhy(id: string): string;
   /** The debt advice when you're in debt: shown over the routes list, not folded. */
   moneyNote(): string;
   /** The old Treasury drawer: bonds, chains, the named project, the budget lines. */
@@ -91,8 +94,29 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   let selectedFromMap = false;
   /** A row hovered in the panel or the log: the map fades the rest (focus). */
   let hover: Selection = null;
-  let tab: "routes" | "towns" | "sites" = "routes";
-  const sorts: Record<string, { key: string; dir: 1 | -1 }> = { routes: { key: "net", dir: 1 }, towns: { key: "growth", dir: -1 }, sites: { key: "use", dir: 1 }, revenue: { key: "net", dir: -1 } };
+  type Tab = "lines" | "ways" | "network" | "towns" | "sites";
+  let tab: Tab = "lines";
+  const sorts: Record<string, { key: string; dir: 1 | -1 }> = {
+    lines: { key: "net", dir: 1 }, "lines-b": { key: "net", dir: 1 }, ways: { key: "condition", dir: 1 }, network: { key: "net", dir: 1 },
+    towns: { key: "growth", dir: -1 }, sites: { key: "use", dir: 1 }, revenue: { key: "net", dir: -1 },
+  };
+  // The info layer's variants, to try as you play (?try=1): which lists, which revenue screen.
+  const trying = new URLSearchParams(location.search).has("try");
+  const TRY_KEY = "game:info-try";
+  let look: { lines: "a" | "b" | "c"; revenue: "a" | "b" } = { lines: "a", revenue: "a" };
+  try {
+    look = { ...look, ...JSON.parse(localStorage.getItem(TRY_KEY) ?? "{}") };
+  } catch {
+    // Storage refused: the first of each.
+  }
+  if (!trying) look = { lines: "a", revenue: "a" };
+  const tabsNow = (): Tab[] => (look.lines === "c" ? ["network", "towns", "sites"] : ["lines", "ways", "towns", "sites"]);
+  const TAB_NAME: Record<Tab, string> = { lines: "Lines", ways: "Roads & track", network: "Network", towns: "Towns", sites: "Sites" };
+  function tryBar(): string {
+    if (!trying) return "";
+    const b = (group: "lines" | "revenue", v: string, label: string) => `<button class="toggle${look[group] === v ? " on" : ""}" data-try="${group}|${v}">${label}</button>`;
+    return `<div class="trybar"><span class="muted">Try</span> Lists ${b("lines", "a", "A")}${b("lines", "b", "B")}${b("lines", "c", "C")} · Revenue ${b("revenue", "a", "A")}${b("revenue", "b", "B")}</div>`;
+  }
   let logFilter = "all";
   let range = 0; // the revenue screen: 0 = all days
   /** Which "More" folds are open, by key: kept across the panel's redraws. */
@@ -367,15 +391,16 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const net = averageNet(world);
     if (world.economy.funds < 0 || net < 0) {
       const last = (key: string) => dailyBudget(key).at(-1) ?? 0;
-      const losing = routes().filter((r) => r.netPerDay < 0);
+      // Every line losing money, goods lines too (lines.ts).
+      const losing = linesNow().filter((l) => l.netPerDay < 0);
       const drains = [
         last("upkeep") >= 1 ? `road upkeep ${naira(last("upkeep"))}` : "",
-        losing.length ? `${plural(losing.length, "route")} losing ${naira(-losing.reduce((sum, r) => sum + r.netPerDay, 0))}` : "",
+        losing.length ? `${plural(losing.length, "line")} losing ${naira(-losing.reduce((sum, l) => sum + l.netPerDay, 0))}` : "",
         last("bonds") >= 1 ? `bond repayments ${naira(last("bonds"))}` : "",
       ].filter(Boolean);
       const where = world.economy.funds < 0 ? `In debt: ${nairaK(world.economy.funds)}` : "Losing money";
       const flow = net < 0 ? `, ${naira(-net)} a day more out than in` : "";
-      const buttons = (losing.length ? `<button data-tab="routes" title="Your routes, the worst first">Losing routes</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep <kbd>F</kbd>") : "");
+      const buttons = (losing.length ? `<button data-tab="routes" title="Your lines, the worst first">Losing lines</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep <kbd>F</kbd>") : "");
       items.push({ id: "money", text: `${where}${flow}${drains.length ? `. A day: ${drains.join(" · ")}` : ""}`, button: buttons, at: [], weight: world.economy.funds < 0 ? 1e8 : 1e6 });
     }
     // Pledges left to make this term: the strip alone was missed (a game ran 115 days with none).
@@ -696,7 +721,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   // 4x: the revenue screen's routes re-sorted under the pointer in 37 of 43 changes).
   const ranked = new Map<string, { at: string; ids: string[] }>();
   function sortRows<T extends { id: string }>(rows: T[], table: string, keys: Record<string, (row: T) => number | string>): T[] {
-    const { key, dir } = sorts[table]!;
+    // A table with no sort of its own yet: by its first key, highest first.
+    const { key, dir } = (sorts[table] ??= { key: Object.keys(keys)[0]!, dir: -1 });
     const at = `${gameDay(world)}|${recorder.file.actions.length}|${key}|${dir}`;
     const was = ranked.get(table);
     const place = new Map(was?.ids.map((id, i) => [id, i]));
@@ -722,30 +748,142 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const scroll = panelEl.scrollTop;
     if (selected && !exists(selected)) selected = null;
     if (selected) {
-      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}<div class="pane"><button data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`);
+      patchHtml(panelEl, `${tryBar()}${waitingHtml()}${pledgesHtml()}<div class="pane"><button data-back="1">◂ All ${TAB_NAME[tab].toLowerCase()}</button>${detailHtml(selected)}</div>`);
     } else {
-      const tabs = `<div class="tabs">${(["routes", "towns", "sites"] as const).map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${t[0]!.toUpperCase()}${t.slice(1)}</button>`).join("")}</div>`;
-      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`);
+      if (!tabsNow().includes(tab)) tab = tabsNow()[0]!;
+      const tabs = `<div class="tabs">${tabsNow().map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${TAB_NAME[t]}</button>`).join("")}</div>`;
+      const list = tab === "lines" ? (look.lines === "b" ? linesGrouped() : linesTable()) : tab === "ways" ? waysTable() : tab === "network" ? networkList() : tab === "towns" ? townsTable() : sitesTable();
+      const more = tab === "lines" || tab === "network" ? fold("routes-more", "More: corridors, who carries trips", hooks.routesMore()) : "";
+      patchHtml(panelEl, `${tryBar()}${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${tab === "lines" || tab === "network" ? hooks.moneyNote() : ""}${list}${more}</div>`);
     }
     panelEl.scrollTop = scroll;
   }
   function exists(sel: NonNullable<Selection>): boolean {
     if (sel.kind === "town" || sel.kind === "site") return world.towns.has(sel.id);
-    if (sel.kind === "route") return world.routes.some((r) => r.id === sel.id);
+    if (sel.kind === "route") return world.routes.some((r) => r.id === sel.id) || world.lorryRoutes.some((r) => r.id === sel.id);
     return world.simulation.map.segments.some((s) => s.id === sel.id);
   }
 
-  function routesTable(): string {
-    const all = routes();
-    const rows = sortRows(all, "routes", { name: (r) => routeName(r), vehicles: (r) => r.vehicles, riders: (r) => r.ridersPerDay, load: (r) => r.loadFactor, net: (r) => r.netPerDay });
-    const losing = all.filter((r) => r.netPerDay < 0).length;
-    const lines = lorrySummaries(world);
-    return `${hooks.moneyNote()}<h2>Your routes · ${all.length}${all.length ? `, ${losing} losing money` : ""}</h2>
-      ${all.length ? `<table><thead><tr>${th("routes", "name", "Route")}${th("routes", "vehicles", "Veh.")}${th("routes", "riders", "Riders/day")}${th("routes", "load", "Full")}${th("routes", "net", "Net/day")}</tr></thead><tbody>
-      ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${r.vehicles}</td><td>${int(r.ridersPerDay)}</td><td>${pct(r.loadFactor)}</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("")}
-      </tbody></table>` : `<p class="muted">No routes yet. Pick the bus tool <kbd>B</kbd>, click a town, then another.</p>`}
-      ${lines.length ? `<h2>Freight lines and lorries</h2><table><tbody>${lines.map((g) => `<tr><td><span class="swatch" style="background:var(--goods)"></span>${esc(routeName(g))}</td><td>${g.lorries}</td><td class="${g.netPerDay < 0 ? "down" : ""}">${naira(g.netPerDay)}</td></tr>`).join("")}</tbody></table>` : ""}
-      ${fold("routes-more", "More: lorries, corridors, your share", hooks.routesMore())}`;
+  // --- Lines and ways (lines.ts): everything you run, and what it runs on ----------------
+  // Three ways of showing them, to try as you play (?try=1, the bar over the panel): A, one
+  // table of every line with chips to narrow it; B, lines in their four families, each a row
+  // with its trend; C, the network: each road or stretch of track with the lines on it.
+
+  let linesAt = "";
+  let linesCache: Line[] = [];
+  let waysCache: Way[] = [];
+  const freshAt = () => `${world.economy.elapsedSeconds}|${recorder.file.actions.length}`;
+  function linesNow(): Line[] {
+    if (linesAt !== freshAt()) {
+      linesAt = freshAt();
+      linesCache = lines(world);
+      waysCache = [];
+    }
+    return linesCache;
+  }
+  function waysNow(): Way[] {
+    linesNow();
+    if (waysCache.length === 0) waysCache = ways(world);
+    return waysCache;
+  }
+  const lineName = (l: Line) => routeName(l);
+  const lineSwatch = (l: Line) => (l.family === "goods" ? labelOf(world, routeLabelKey(l.id))?.colour ?? "var(--goods)" : swatchOf(l));
+  const carriedText = (l: Line) => (l.family === "goods" ? `${int(l.carried)} t` : int(l.carried));
+  const vehiclesText = (l: Line) => `${l.vehicles} ${l.vehicles === 1 ? KIND_NAME[l.kind].vehicle : KIND_NAME[l.kind].vehicles}`;
+  /** A line's net a day over the days recorded, the last `n`. */
+  const lineHistory = (l: Line, n = 21) => days().slice(-n).map((d) => (l.family === "goods" ? d.lorries : d.routes).find((x) => x.id === l.id)?.netPerDay ?? 0);
+  const filterOf = (l: Line, f: string) => f === "all" || l.family === f || l.mode === f;
+  let lineFilter = "all";
+  let wayFilter = "all";
+  const chips = (name: string, on: string, options: Array<[string, string, number]>) =>
+    `<div class="chips">${options.filter(([, , n], i) => i === 0 || n > 0).map(([id, label, n]) => `<button class="toggle${on === id ? " on" : ""}" data-chip="${name}|${id}">${label} <span class="muted">${n}</span></button>`).join("")}</div>`;
+  const verdictChip = (l: Line) => (l.verdict ? `<span class="verdict">${esc(VERDICT_WORDS[l.verdict] ?? l.verdict)}</span>` : "");
+  const lineKeys = { name: (l: Line) => lineName(l), vehicles: (l: Line) => l.vehicles, carried: (l: Line) => l.carried, full: (l: Line) => l.full, net: (l: Line) => l.netPerDay };
+
+  function noLines(): string {
+    return `<p class="muted">No lines yet. Pick the bus tool <kbd>B</kbd>, click a town, then another.</p>`;
+  }
+
+  /** A: every line in one table, narrowed by the chips. */
+  function linesTable(): string {
+    const all = linesNow();
+    if (all.length === 0) return noLines();
+    const shown = all.filter((l) => filterOf(l, lineFilter));
+    const rows = sortRows(shown, "lines", lineKeys);
+    const losing = all.filter((l) => l.netPerDay < 0).length;
+    const count = (f: string) => all.filter((l) => filterOf(l, f)).length;
+    const total = shown.reduce((sum, l) => sum + l.netPerDay, 0);
+    return `<h2>Your lines · ${all.length}${losing ? `, ${losing} losing money` : ""}</h2>
+      ${chips("lines", lineFilter, [["all", "All", all.length], ["people", "People", count("people")], ["goods", "Goods", count("goods")], ["road", "Road", count("road")], ["rail", "Rail", count("rail")]])}
+      <table><thead><tr>${th("lines", "name", "Line")}${th("lines", "vehicles", "Veh.")}${th("lines", "carried", "A day")}${th("lines", "full", "Full")}${th("lines", "net", "Net/day")}</tr></thead><tbody>
+      ${rows.map((l) => `<tr class="row" data-pick="route|${l.id}"><td><span class="swatch" style="background:${lineSwatch(l)}"></span>${esc(lineName(l))}<span class="kind">${KIND_NAME[l.kind].one}${l.verdict ? ` · <span class="warnword">${esc(VERDICT_WORDS[l.verdict] ?? l.verdict)}</span>` : ""}</span></td><td>${l.vehicles}</td><td>${carriedText(l)}</td><td>${pct(l.full)}</td><td class="${l.netPerDay < 0 ? "down" : ""}">${naira(l.netPerDay)}</td></tr>`).join("")}
+      </tbody><tfoot><tr><td>${rows.length} ${rows.length === 1 ? "line" : "lines"}</td><td>${rows.reduce((sum, l) => sum + l.vehicles, 0)}</td><td></td><td></td><td class="${total < 0 ? "down" : ""}">${naira(total)}</td></tr></tfoot></table>`;
+  }
+
+  /** B: the four families, each a block of rows with their trend. */
+  function linesGrouped(): string {
+    const all = linesNow();
+    if (all.length === 0) return noLines();
+    const ranked = sortRows(all, "lines-b", { net: (l: Line) => l.netPerDay });
+    return GROUPS.map((g) => {
+      const mine = ranked.filter((l) => l.family === g.family && l.mode === g.mode);
+      if (mine.length === 0) return "";
+      const net = mine.reduce((sum, l) => sum + l.netPerDay, 0);
+      const vehicles = mine.reduce((sum, l) => sum + l.vehicles, 0);
+      return `<div class="lgroup"><div class="ghead"><span class="gname">${g.name}</span><span class="muted">${mine.length} ${mine.length === 1 ? "line" : "lines"} · ${vehicles} vehicles</span><span class="num ${net < 0 ? "down" : "up"}">${naira(net)}</span></div>
+        ${mine.map((l) => `<div class="lrow" data-pick="route|${l.id}"><span class="swatch" style="background:${lineSwatch(l)}"></span><div class="lname">${esc(lineName(l))}<small>${vehiclesText(l)} · ${carriedText(l)}${l.family === "goods" ? "" : " riders"} · ${pct(l.full)} full</small></div>${sparkline(lineHistory(l), l.netPerDay < 0 ? css("--bad") : css("--ink-2"))}<span class="num lnet ${l.netPerDay < 0 ? "down" : ""}">${naira(l.netPerDay)}</span>${verdictChip(l)}</div>`).join("")}</div>`;
+    }).join("");
+  }
+
+  /** The ways in your remit: either end yours to answer for. */
+  const remitWays = () => waysNow().filter((w) => inRemit(world, w.a) || inRemit(world, w.b));
+  const wayKind = (w: Way) => (w.mode === "rail" ? (w.outOfService ? "Track · the old line, out of service" : "Track") : w.retired ? "Retired" : `${w.surface === "paved" ? "Paved" : w.surface === "mixed" ? "Part paved" : "Dirt"}${w.lane ? " · lane" : ""}`);
+  const wayTrouble = (w: Way) => (w.outOfService ? null : w.mode === "road" && w.load > 0.9 && w.speed < 0.7 ? "Jammed" : w.condition < 0.5 ? "Worn" : null);
+  const wayName = (w: Way) => {
+    const key = w.mode === "road" ? roadLabelKeyOf(world, w.id) : null;
+    return (key && labelOf(world, key)?.name) || `${nameOf(w.a)} – ${nameOf(w.b)}`;
+  };
+
+  /** A and B's second tab: every road and stretch of track, the same columns for each. */
+  function waysTable(): string {
+    const all = remitWays();
+    const on = waysOf(world, linesNow(), all);
+    const usedBy = new Map<string, number>();
+    for (const ids of on.values()) for (const id of ids) usedBy.set(id, (usedBy.get(id) ?? 0) + 1);
+    const filter = (w: Way, f: string) => f === "all" || (f === "road" && w.mode === "road") || (f === "rail" && w.mode === "rail") || (f === "trouble" && wayTrouble(w) !== null);
+    const shown = all.filter((w) => filter(w, wayFilter));
+    const rows = sortRows(shown, "ways", { name: wayName, condition: (w) => w.condition, load: (w) => w.load, lines: (w) => usedBy.get(w.id) ?? 0, upkeep: (w) => w.upkeepPerDay });
+    const count = (f: string) => all.filter((w) => filter(w, f)).length;
+    const upkeep = all.reduce((sum, w) => sum + w.upkeepPerDay, 0);
+    return `<h2>Your roads and track · ${all.length}${upkeep >= 1 ? `, upkeep ${naira(upkeep)} a day` : ""}</h2>
+      ${chips("ways", wayFilter, [["all", "All", all.length], ["road", "Roads", count("road")], ["rail", "Track", count("rail")], ["trouble", "Worn or jammed", count("trouble")]])}
+      <table><thead><tr>${th("ways", "name", "Way")}${th("ways", "condition", "Cond.")}${th("ways", "load", "Traffic")}${th("ways", "lines", "Lines")}${th("ways", "upkeep", "Upkeep")}</tr></thead><tbody>
+      ${rows.map((w) => `<tr class="row" data-pick="segment|${w.id}"><td>${wayTrouble(w) ? "⚠ " : ""}${esc(wayName(w))}<span class="kind">${wayKind(w)}${wayTrouble(w) ? ` · <span class="warnword">${wayTrouble(w)}</span>` : ""}${w.kept ? " · kept up" : ""}</span></td><td class="${w.condition < 0.5 ? "down" : ""}">${pct(w.condition)}</td><td class="${w.load > 0.9 ? "down" : ""}">${w.mode === "road" ? pct(w.load) : "—"}</td><td>${usedBy.get(w.id) ?? 0}</td><td>${w.upkeepPerDay >= 1 ? naira(w.upkeepPerDay) : "—"}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}
+      </tbody></table>`;
+  }
+
+  /** C: the network. Each way with the lines along it; the ways nothing of yours runs on, folded. */
+  function networkList(): string {
+    const all = remitWays();
+    const ls = linesNow();
+    const on = waysOf(world, ls, all);
+    const linesOn = new Map<string, Line[]>();
+    for (const l of ls) for (const id of on.get(l.id) ?? []) linesOn.set(id, [...(linesOn.get(id) ?? []), l]);
+    const corridors = corridorSummaries(world);
+    const corridorOf = (w: Way) => corridors.find((c) => (c.a === w.a && c.b === w.b) || (c.a === w.b && c.b === w.a));
+    const used = sortRows(all.filter((w) => linesOn.has(w.id)), "network", { net: (w: Way) => (linesOn.get(w.id) ?? []).reduce((sum, l) => sum + l.netPerDay, 0) });
+    const rest = all.filter((w) => !linesOn.has(w.id));
+    const wayHead = (w: Way) => {
+      const c = corridorOf(w);
+      const trouble = wayTrouble(w);
+      const share = c && w.mode === "road" ? ` · ${c.takenSince !== null ? "<b>taken</b>, " : ""}you carry ${pct(c.you)}` : "";
+      return `<div class="whead" data-pick="segment|${w.id}"><span class="wname">${trouble ? "⚠ " : ""}${esc(wayName(w))}</span><span class="kind">${wayKind(w)} · ${pct(w.condition)}${w.mode === "road" ? ` · traffic ${pct(w.load)}` : ""}${trouble ? ` · <span class="warnword">${trouble}</span>` : ""}${share}</span></div>`;
+    };
+    const lineRow = (l: Line) => `<div class="nrow" data-pick="route|${l.id}"><span class="swatch" style="background:${lineSwatch(l)}"></span><span class="lname">${esc(lineName(l))}<small>${vehiclesText(l)}${l.verdict ? ` · <span class="warnword">${esc(VERDICT_WORDS[l.verdict] ?? l.verdict)}</span>` : ""}</small></span><span class="num ${l.netPerDay < 0 ? "down" : ""}">${naira(l.netPerDay)}</span></div>`;
+    if (ls.length === 0 && all.length === 0) return noLines();
+    return `<h2>Your network · ${ls.length} lines on ${used.length} ways</h2>
+      ${used.map((w) => `<div class="way">${wayHead(w)}${(linesOn.get(w.id) ?? []).map(lineRow).join("")}</div>`).join("") || noLines()}
+      ${rest.length ? `<details class="more" data-fold="network-rest"${openFolds.has("network-rest") ? " open" : ""}><summary>Roads and track with nothing of yours on them · ${rest.length}</summary><div class="panel-body">${rest.map((w) => `<div class="way bare">${wayHead(w)}</div>`).join("")}</div></details>` : ""}`;
   }
 
   function townsTable(): string {
@@ -859,6 +997,27 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <h2>Your routes here · ${here.length}</h2>
         <table><tbody>${here.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
         ${fold("town", "More: its trips, parks, metro, strikes", hooks.townMore(t.id))}`;
+    }
+    if (sel.kind === "route" && world.lorryRoutes.some((x) => x.id === sel.id)) {
+      // A goods line: the same card as a passenger line's, its figures in tonnes.
+      const l = linesNow().find((x) => x.id === sel.id)!;
+      const ds = days();
+      const net = ds.map((d) => d.lorries.find((x) => x.id === l.id)?.netPerDay ?? 0);
+      const first = Math.max(0, ds.findIndex((d) => d.lorries.some((x) => x.id === l.id)));
+      const d = diagnoseLorryRoute(world, l.id);
+      const stops = (l.mode === "rail" ? railPath(world, l.a, l.b) : roadPath(world, l.a, l.b))?.nodeIds ?? [l.a, l.b];
+      return `<div class="kicker">${l.kind === "freight" ? "Freight trains" : "Lorries"}${l.verdict ? ` · ${esc(VERDICT_WORDS[l.verdict] ?? l.verdict)}` : ""}</div>
+        <div class="head"><div class="title">${esc(lineName(l))}</div><div class="num ${l.netPerDay < 0 ? "down" : "up"}">${naira(l.netPerDay)}/day</div></div>
+        ${hooks.goodsWhy(l.id)}
+        <div class="tiles">
+          ${tile("Carried a day", `${int(l.carried)} t`, d ? `${int(d.outbound)} t want to go out, ${int(d.inbound)} t back` : "")}
+          ${tile("How full", pct(l.full))}
+          ${tile(l.kind === "freight" ? "Freight trains" : "Lorries", `${l.vehicles} <button data-remove="${l.id}" title="Sell one">−</button> <button data-add="${l.id}" title="Add one">+</button>`)}
+          ${tile("In / cost a day", `${nairaK(l.incomePerDay)} / ${nairaK(l.costPerDay)}`)}
+        </div>
+        ${d ? `<div class="chart"><div class="t"><span>The goods along it</span><span>carried ${pct(d.delivered)} · spoiled ${pct(d.spoiled)}</span></div><div class="bar3"><i style="width:${pct(d.delivered)};background:var(--goods)"></i><i style="width:${pct(d.spoiled)};background:var(--home)"></i></div></div>` : ""}
+        <div class="chart"><div class="t"><span>Net a day</span><span>since day ${ds[first]?.day ?? gameDay(world)}</span></div>${chartSvg([{ name: "Net a day", color: css("--goods"), values: net }], { height: 90, format: nairaK, from: first, zeroLine: true })}</div>
+        <h2>Stops</h2><div>${stops.map((x) => esc(nameOf(x))).join(" → ")}</div>`;
     }
     if (sel.kind === "route") {
       const r = routes().find((x) => x.id === sel.id)!;
@@ -1158,9 +1317,128 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (open) renderRevenue();
   }
 
+  /**
+   * A day's money as one statement, over the same days as the strip's net (history.ts
+   * averageBudget), so its net is the strip's: your lines in their four families -- passenger
+   * fares and goods takings shared out by what each line takes, running costs and fuel above the
+   * pump by what each costs -- then the roads, the state, the rest. What the treasury takes,
+   * the year-end sweep and bonds aren't running costs (budget.ts): after the net, not in it.
+   */
+  interface MoneyRow { name: string; value: number; history: number[]; note?: string; income?: number; cost?: number }
+  interface MoneySection { name: string; rows: MoneyRow[]; note?: string }
+  function moneyStatement(): { sections: MoneySection[]; net: number; netHistory: number[]; after: MoneyRow[]; kept: number } {
+    const avg = averageBudget(world) as unknown as Record<string, number>;
+    const last = (k: string | string[]) => (Array.isArray(k) ? k : [k]).reduce((sum, key) => sum + (avg[key] ?? 0), 0);
+    const ls = linesNow();
+    const shareOf = (inGroup: (l: Line) => boolean, among: (l: Line) => boolean, of: (l: Line) => number) => {
+      const total = ls.filter(among).reduce((sum, l) => sum + Math.max(0, of(l)), 0);
+      return total > 0 ? ls.filter((l) => among(l) && inGroup(l)).reduce((sum, l) => sum + Math.max(0, of(l)), 0) / total : 0;
+    };
+    const ds = days();
+    const families: MoneyRow[] = [];
+    for (const g of GROUPS) {
+      const inGroup = (l: Line) => l.family === g.family && l.mode === g.mode;
+      if (!ls.some(inGroup)) continue;
+      const income = last(g.family === "people" ? "fares" : "goods") * shareOf(inGroup, (l) => l.family === g.family, (l) => l.incomePerDay);
+      const cost = last(["running", "fuel"]) * shareOf(inGroup, () => true, (l) => l.costPerDay);
+      const history = ds.map((d) => [...d.routes, ...d.lorries].filter((x) => {
+        const l = ls.find((y) => y.id === x.id);
+        return l ? inGroup(l) : false;
+      }).reduce((sum, x) => sum + x.netPerDay, 0));
+      families.push({ name: g.name, value: income - cost, history, income, cost, note: `in ${nairaK(income)} · running ${nairaK(cost)}` });
+    }
+    const fuel = last("fuel");
+    const row = (name: string, keys: string | string[], sign: 1 | -1, note?: string): MoneyRow => ({ name, value: sign * last(keys), history: dailyBudget(keys).map((v) => sign * v), note });
+    const keep = (rows: MoneyRow[]) => rows.filter((r) => Math.abs(r.value) >= 1 || r.history.some((v) => Math.abs(v) >= 1));
+    const sections: MoneySection[] = [
+      { name: "Your lines", rows: [...families, ...keep([row("Metro fares", "metro", 1)])], note: fuel >= 1 ? `their running includes ${nairaK(fuel)} of fuel above the pump` : undefined },
+      { name: "Roads", rows: keep([row("Tolls", "tolls", 1), row("Upkeep", ["upkeep", "enforcement"], -1)]) },
+      { name: "The state", rows: keep([row("Allocation", "allocation", 1)]) },
+      { name: "The rest", rows: keep([row("Park levies", "levies", 1, `the agberos kept ${nairaK(last("agberos"))}`), row("Loading levies", "loading", 1), row("Export payments", "exports", 1)]) },
+    ].filter((sec) => sec.rows.length > 0);
+    const net = sections.reduce((sum, sec) => sum + sec.rows.reduce((t, r) => t + r.value, 0), 0);
+    const after = keep([row("Treasury levy", "remitted", -1), row("Year-end sweep", "swept", -1), row("Bonds and settlements", ["bonds", "settlements"], -1)]);
+    const ins = dailyBudget(["fares", "goods", "metro", "tolls", "allocation", "levies", "loading", "exports"]);
+    const outs = dailyBudget(["running", "fuel", "upkeep", "enforcement"]);
+    return { sections, net, netHistory: ins.map((v, i) => v - (outs[i] ?? 0)), after, kept: net + after.reduce((sum, r) => sum + r.value, 0) };
+  }
+
+  /** Revenue A: the statement, then every line's money. */
+  function statementHtml(from: number): string {
+    const m = moneyStatement();
+    const spark = (values: number[]) => sparkline(values.slice(Math.max(from, values.length - 30)), css("--ink-2"));
+    const sign = (v: number) => `<td class="num ${v < 0 ? "down" : v > 0 ? "up" : ""}">${v > 0 ? "+" : ""}${naira(v)}</td>`;
+    const ls = sortRows(linesNow(), "revenue", { name: (l: Line) => lineName(l), income: (l: Line) => l.incomePerDay, cost: (l: Line) => l.costPerDay, net: (l: Line) => l.netPerDay, carried: (l: Line) => l.carried });
+    return `<div class="card wide"><h3>A day's money</h3><div class="sub">5-day averages · the last 30 days beside each</div>
+        <table class="statement"><tbody>
+        ${m.sections.map((sec) => `<tr class="sec"><td colspan="3">${sec.name}${sec.note ? ` <span class="muted">· ${esc(sec.note)}</span>` : ""}</td></tr>${sec.rows.map((r) => `<tr><td>${esc(r.name)}${r.note ? `<span class="kind">${esc(r.note)}</span>` : ""}</td>${sign(r.value)}<td class="spark">${spark(r.history)}</td></tr>`).join("")}`).join("")}
+        <tr class="total"><td>Net a day<span class="kind">as the strip shows it</span></td>${sign(m.net)}<td class="spark">${spark(m.netHistory)}</td></tr>
+        ${m.after.length ? `<tr class="sec"><td colspan="3">Then, not running costs</td></tr>${m.after.map((r) => `<tr><td>${esc(r.name)}</td>${sign(r.value)}<td class="spark">${spark(r.history)}</td></tr>`).join("")}<tr class="total"><td>Kept a day</td>${sign(m.kept)}<td></td></tr>` : ""}
+        </tbody></table></div>
+      <div class="card wide"><h3>Your lines</h3><div class="sub">Click a column to sort · their figures today, a day</div>
+        <table><thead><tr>${th("revenue", "name", "Line")}${th("revenue", "carried", "Carried")}${th("revenue", "income", "Income")}${th("revenue", "cost", "Cost")}${th("revenue", "net", "Net")}</tr></thead><tbody>
+        ${ls.map((l) => `<tr class="row" data-pick="route|${l.id}"><td><span class="swatch" style="background:${lineSwatch(l)}"></span>${esc(lineName(l))} <span class="muted">${KIND_NAME[l.kind].one}</span></td><td>${carriedText(l)}</td><td>${naira(l.incomePerDay)}</td><td>${naira(l.costPerDay)}</td><td class="${l.netPerDay < 0 ? "down" : "up"}">${naira(l.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">No lines yet</td></tr>`}
+        </tbody></table></div>`;
+  }
+
+  /** Revenue B: where a day's money comes from and where it goes, as a flow; then every line's net, side by side. */
+  function flowHtml(): string {
+    const m = moneyStatement();
+    // A family's takings in and its running out, apart; the rest by its sign; then the treasury and bonds.
+    const all = [...m.sections.flatMap((sec) => sec.rows), ...m.after];
+    const ins = all.flatMap((r) => (r.income !== undefined ? (r.income >= 1 ? [{ name: `${r.name}: takings`, value: r.income }] : []) : r.value > 0 ? [{ name: r.name, value: r.value }] : []));
+    const outs = all.flatMap((r) => (r.cost !== undefined ? (r.cost >= 1 ? [{ name: `${r.name}: running`, value: r.cost }] : []) : r.value < 0 ? [{ name: r.name, value: -r.value }] : []));
+    if (m.kept > 0) outs.push({ name: "Kept", value: m.kept });
+    else if (m.kept < 0) ins.push({ name: "From your savings", value: -m.kept });
+    const total = Math.max(1, ins.reduce((sum, x) => sum + x.value, 0));
+    const W = 1000;
+    const rowGap = 8;
+    const H = Math.max(200, 30 * Math.max(ins.length, outs.length) + 24);
+    const usable = H - 24 - rowGap * Math.max(ins.length, outs.length);
+    const scale = usable / total;
+    const col = (items: Array<{ name: string; value: number }>, x: number, anchor: "start" | "end", colour: (name: string) => string) => {
+      let y = 12;
+      let mid = (H - total * scale) / 2;
+      return items.map((it) => {
+        const h = Math.max(2, it.value * scale);
+        const out = { ...it, y, h, mid, x, anchor, colour: colour(it.name) };
+        // Room for its label however small it is.
+        y += Math.max(h + rowGap, 18);
+        mid += it.value * scale;
+        return out;
+      });
+    };
+    const left = col(ins, 0, "start", (n) => (n === "From your savings" ? css("--bad") : css("--good")));
+    const right = col(outs, W, "end", (n) => (n === "Kept" ? css("--you") : css("--warn")));
+    const bx = W / 2 - 8;
+    const band = (x0: number, y0: number, h0: number, x1: number, y1: number, h1: number, colour: string) => {
+      const c = (x0 + x1) / 2;
+      return `<path d="M${x0},${y0} C${c},${y0} ${c},${y1} ${x1},${y1} L${x1},${y1 + h1} C${c},${y1 + h1} ${c},${y0 + h0} ${x0},${y0 + h0} Z" fill="${colour}" fill-opacity="0.28"/>`;
+    };
+    const svg = `<svg class="flow" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+      ${left.map((it) => band(240, it.y, it.h, bx, it.mid, it.value * scale, it.colour)).join("")}
+      ${right.map((it) => band(bx + 16, it.mid, it.value * scale, W - 240, it.y, it.h, it.colour)).join("")}
+      <rect x="${bx}" y="${(H - total * scale) / 2}" width="16" height="${total * scale}" rx="3" fill="${css("--ink-2")}"/>
+      ${left.map((it) => `<rect x="234" y="${it.y}" width="6" height="${it.h}" fill="${it.colour}"/><text x="228" y="${it.y + it.h / 2 + 4}" text-anchor="end" class="fl">${esc(it.name)} <tspan class="fv">${nairaK(it.value)}</tspan></text>`).join("")}
+      ${right.map((it) => `<rect x="${W - 240}" y="${it.y}" width="6" height="${it.h}" fill="${it.colour}"/><text x="${W - 228}" y="${it.y + it.h / 2 + 4}" class="fl">${esc(it.name)} <tspan class="fv">${nairaK(it.value)}</tspan></text>`).join("")}
+    </svg>`;
+    // Every line's net a day, from a zero line: earners right, bleeders left, in their families.
+    const ls = linesNow();
+    const most = Math.max(1, ...ls.map((l) => Math.abs(l.netPerDay)));
+    const bars = GROUPS.map((g) => {
+      const mine = sortRows(ls.filter((l) => l.family === g.family && l.mode === g.mode), `diverge-${g.id}`, { net: (l: Line) => l.netPerDay });
+      if (mine.length === 0) return "";
+      return `<div class="dgroup">${g.name}</div>${mine.map((l) => {
+        const w = (Math.abs(l.netPerDay) / most) * 50;
+        return `<div class="drow" data-pick="route|${l.id}"><span class="dname"><span class="swatch" style="background:${lineSwatch(l)}"></span>${esc(lineName(l))}</span><span class="dbar"><i class="${l.netPerDay < 0 ? "neg" : "pos"}" style="${l.netPerDay < 0 ? `right:50%` : `left:50%`};width:${w}%"></i></span><span class="num ${l.netPerDay < 0 ? "down" : ""}">${naira(l.netPerDay)}</span></div>`;
+      }).join("")}`;
+    }).join("");
+    return `<div class="card wide"><h3>Where a day's money comes from, and where it goes</h3><div class="sub">5-day averages, the strip's${m.kept < 0 ? " · more goes out than comes in: the difference comes from your savings" : ""}</div>${svg}</div>
+      <div class="card wide"><h3>Every line's net a day</h3><div class="sub">Earning to the right, losing to the left · click one to open it</div>${bars || `<p class="muted">No lines yet</p>`}</div>`;
+  }
+
   function renderRevenue(): void {
     const ds = days();
-    const last = ds[ds.length - 1];
     const from = range > 0 ? Math.max(0, ds.length - range) : 0;
     const c = (v: string) => css(v);
     const income: Series[] = [
@@ -1183,22 +1461,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     ];
     const lastOf = (s: Series[]) => s.reduce((sum, x) => sum + (x.values[x.values.length - 1] ?? 0), 0);
     const key = (s: Series[]) => `<div class="keyrow">${s.map((x) => `<span><i style="background:${x.color}"></i>${esc(x.name)} ${nairaK(x.values[x.values.length - 1] ?? 0)}</span>`).join("")}</div>`;
-    const rows = sortRows(routes(), "revenue", { name: (r) => routeName(r), income: (r) => r.incomePerDay, cost: (r) => r.costPerDay, net: (r) => r.netPerDay, riders: (r) => r.ridersPerDay });
-    const total = (k: string) => ((last?.budget ?? {}) as Record<string, number>)[k] ?? 0;
+    const total = (k: string) => ((ds[ds.length - 1]?.budget ?? {}) as Record<string, number>)[k] ?? 0;
     const n = now();
     const scroll = revenueEl.scrollTop;
-    patchHtml(revenueEl, `
-      <div class="top"><div class="title">Revenue · day ${n.day}</div>
-        <div class="ranges">${[[0, "All"], [60, "60 days"], [30, "30 days"]].map(([k, label]) => `<button data-range="${k}" class="${range === k ? "on" : ""}">${label}</button>`).join("")}<button data-revenue="close">Back to the map ✕</button></div></div>
-      <div class="heroes">
-        <div class="hero"><div class="k">Net a day</div><div class="v num ${n.netPerDay < 0 ? "down" : "up"}">${naira(n.netPerDay)}</div></div>
-        <div class="hero"><div class="k">Your riders a day</div><div class="v num">${int(n.yourRiders)}</div></div>
-        <div class="hero opens" data-show-overlay="noseat" role="button" title="Close this to see where on the No seat overlay"><div class="k">No seat a day ›</div><div class="v num">${int(n.noSeat)}</div></div>
-        <div class="hero"><div class="k">Income a day</div><div class="v num">${naira(lastOf(income))}</div></div>
-        <div class="hero"><div class="k">Costs a day</div><div class="v num">${naira(lastOf(costs))}</div></div>
-        <div class="hero"><div class="k">Money</div><div class="v num">${naira(n.funds)}</div></div>
-      </div>
-      <div class="cards">
+    const charts = `
         <div class="card"><h3>Income a day, by source</h3><div class="sub">5-day average, stacked</div>${key(income)}${chartSvg(income, { height: 200, stacked: true, format: nairaK, from })}</div>
         <div class="card"><h3>Costs a day, by kind</h3><div class="sub">5-day average, stacked</div>${key(costs)}${chartSvg(costs, { height: 200, stacked: true, format: nairaK, from })}</div>
         <div class="card"><h3>What the treasury took</h3><div class="sub">Its levy a day (5-day average), and each year-end sweep on its day</div><div class="keyrow">${treasury.map((x) => `<span><i style="background:${x.color}"></i>${esc(x.name)}</span>`).join("")}</div>${chartSvg(treasury, { height: 160, format: nairaK, from })}</div>
@@ -1208,12 +1474,20 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
             ${[["Fares", "fares"], ["Tolls", "tolls"], ["State allocation", "allocation"], ["Park levies (agberos kept " + nairaK(total("agberos")) + ")", "levies"], ["Goods", "goods"], ["Export payments", "exports"]].map(([l, k]) => `<tr><td>${l}</td><td class="up">+${nairaK(total(k!))}</td></tr>`).join("")}
             ${[["Running costs", "running"], ["Road upkeep", "upkeep"], ["Treasury levy", "remitted"], ["Swept at year end", "swept"], ["Fuel above the pump price", "fuel"]].map(([l, k]) => `<tr><td>${l}</td><td class="down">−${nairaK(total(k!))}</td></tr>`).join("")}
           </tbody></table></div>
-        <div class="card wide treasury"><h3>The treasury</h3><div class="sub">Bonds, the named project, the chains, this period's budget</div><div class="panel-body">${hooks.treasuryMore()}</div></div>
-        <div class="card wide"><h3>Your routes</h3><div class="sub">Click a column to sort · today's figures a day</div>
-          <table><thead><tr>${th("revenue", "name", "Route")}${th("revenue", "riders", "Riders/day")}${th("revenue", "income", "Income")}${th("revenue", "cost", "Cost")}${th("revenue", "net", "Net")}</tr></thead><tbody>
-          ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}</td><td>${naira(r.incomePerDay)}</td><td>${naira(r.costPerDay)}</td><td class="${r.netPerDay < 0 ? "down" : "up"}">${naira(r.netPerDay)}</td></tr>`).join("")}
-          </tbody></table></div>
-      </div>`);
+        <div class="card wide treasury"><h3>The treasury</h3><div class="sub">Bonds, the named project, the chains, this period's budget</div><div class="panel-body">${hooks.treasuryMore()}</div></div>`;
+    patchHtml(revenueEl, `
+      <div class="top"><div class="title">Revenue · day ${n.day}</div>
+        <div class="ranges">${[[0, "All"], [60, "60 days"], [30, "30 days"]].map(([k, label]) => `<button data-range="${k}" class="${range === k ? "on" : ""}">${label}</button>`).join("")}<button data-revenue="close">Back to the map ✕</button></div></div>
+      ${trying ? tryBar() : ""}
+      <div class="heroes">
+        <div class="hero"><div class="k">Net a day</div><div class="v num ${n.netPerDay < 0 ? "down" : "up"}">${naira(n.netPerDay)}</div></div>
+        <div class="hero"><div class="k">Your riders a day</div><div class="v num">${int(n.yourRiders)}</div></div>
+        <div class="hero opens" data-show-overlay="noseat" role="button" title="Close this to see where on the No seat overlay"><div class="k">No seat a day ›</div><div class="v num">${int(n.noSeat)}</div></div>
+        <div class="hero"><div class="k">Income a day</div><div class="v num">${naira(lastOf(income))}</div></div>
+        <div class="hero"><div class="k">Costs a day</div><div class="v num">${naira(lastOf(costs))}</div></div>
+        <div class="hero"><div class="k">Money</div><div class="v num">${naira(n.funds)}</div></div>
+      </div>
+      <div class="cards">${look.revenue === "b" ? flowHtml() : statementHtml(from)}${charts}</div>`);
     revenueEl.scrollTop = scroll;
   }
 
@@ -1227,7 +1501,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   /** A click the screen handles itself: true when it did. Moves and old-card buttons are the page's. */
   function onClick(target: HTMLElement): boolean {
-    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename]");
+    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename],[data-chip],[data-try]");
     if (!el || el.closest("details.more .panel-body")) return false;
     if (el.dataset.rename) {
       renaming = el.dataset.rename;
@@ -1235,7 +1509,32 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       document.querySelector<HTMLInputElement>("#panel .namein")?.focus();
       return true;
     }
-    if (el.dataset.tab) { tab = el.dataset.tab as typeof tab; renderPanel(); return true; }
+    if (el.dataset.tab) {
+      const t = el.dataset.tab === "routes" ? tabsNow()[0]! : (el.dataset.tab as Tab);
+      tab = t;
+      selected = null;
+      renderPanel();
+      return true;
+    }
+    if (el.dataset.chip) {
+      const [name, value] = el.dataset.chip.split("|") as [string, string];
+      if (name === "lines") lineFilter = value;
+      else wayFilter = value;
+      renderPanel();
+      return true;
+    }
+    if (el.dataset.try) {
+      const [group, value] = el.dataset.try.split("|") as ["lines" | "revenue", string];
+      look = { ...look, [group]: value };
+      try {
+        localStorage.setItem(TRY_KEY, JSON.stringify(look));
+      } catch {
+        // Kept for this visit only.
+      }
+      renderPanel();
+      if (revenueOpen()) renderRevenue();
+      return true;
+    }
     if (el.dataset.back) { select(null); return true; }
     if (el.dataset.sort) {
       const [table, key] = el.dataset.sort.split(":") as [string, string];

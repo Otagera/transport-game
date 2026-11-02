@@ -305,7 +305,9 @@ const screen = createScreen(world, recorder, {
     const summary = routeSummaries(world).find((s) => s.id === id);
     return summary ? routeCard(summary) : "";
   },
-  routesMore: () => (forecasting ? bestMovesHtml() + resultsHtml() : "") + lorryRows(false) + corridorsHtml() + shareHtml(),
+  // Lorries and freight trains are lines in the list now, each with its card (lines.ts).
+  routesMore: () => (forecasting ? bestMovesHtml() + resultsHtml() : "") + corridorsHtml() + shareHtml(),
+  goodsWhy: (id) => goodsWhy(id),
   bond: (purpose) => bondButton(purpose),
   dev,
   moneyNote: () => moneyNote(),
@@ -3009,6 +3011,14 @@ function lorryRows(afterBuses: boolean): string {
 
 // A freight line's rate (freightrates.ts): cheap, standard or dear, and what it's doing --
 // who carries the goods along the line, and what spoils.
+// A goods line's card (screen.ts): why it runs as it does, in the lorry rows' words, and its rate.
+function goodsWhy(routeId: string): string {
+  const s = lorrySummaries(world).find((x) => x.id === routeId);
+  const d = diagnoseLorryRoute(world, routeId);
+  if (!s || !d) return "";
+  return `<p class="why">${forGoodsVehicle(lorryReason(d, s.costPerDay / Math.max(1, s.lorries)), routeId)}</p>${freightRateRow(routeId)}`;
+}
+
 function freightRateRow(routeId: string): string {
   if (!isFreightRoute(routeId) || !world.tuning.freightRatesEnabled) return "";
   const rate = freightRate(world, routeId);
