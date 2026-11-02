@@ -8,7 +8,7 @@
 // Draw calls kept low: the land one mesh, the water one, each road one (its colour changes),
 // each town one merged mesh, and each kind of vehicle one InstancedMesh.
 import * as THREE from "three";
-import { CLOTHES, SITE_LIFE, busShelter, cargoShip, personGeometry } from "./shapes3d";
+import { CLOTHES, SITE_LIFE, busShelter, canoe, cargoShip, fishingJetty, personGeometry, reedClump } from "./shapes3d";
 import { waitingAt } from "@engine/game/world";
 import { parsePoolKey } from "@engine/game/tick";
 import { siteProduction } from "@engine/game/production";
@@ -196,7 +196,9 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
       attribute float aWidth;
       attribute float aShore;
       attribute float aSea;
+      attribute float aDeep;
       varying float vSea;
+      varying float vDeep;
       varying float vAcross;
       varying float vAlong;
       varying float vWidth;
@@ -209,6 +211,7 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
         vWidth = aWidth;
         vShore = aShore;
         vSea = aSea;
+        vDeep = aDeep;
         vec4 world = modelMatrix * vec4(position, 1.0);
         vWorld = world.xyz;
         vec4 mvPosition = viewMatrix * world;
@@ -230,6 +233,7 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
       varying float vWidth;
       varying float vShore;
       varying float vSea;
+      varying float vDeep;
       varying vec3 vWorld;
       #include <fog_pars_fragment>
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -263,7 +267,10 @@ function makeWaterMaterial(): THREE.ShaderMaterial {
         vec3 n = normalize(vec3(-grad.x * 0.9, 1.0, -grad.y * 0.9));
         // Shallow at the shore, deep mid-channel; the sea deepens slowly away from its shore.
         float toShore = vShore;
-        float depth = smoothstep(0.0, mix(max(6.0, metres * 0.35), 90.0, vSea), toShore);
+        // How far out it takes to deepen (aDeep): a river a third of its width, the sea ninety metres,
+        // a lake its own size -- at the sea's ninety a lake a few cells across never got deep and
+        // read pale as ice (your look, 2026-11-01).
+        float depth = smoothstep(0.0, vDeep, toShore);
         vec3 col = mix(uShallow, uDeep, depth);
         // A little sky at low angles, and the sun's glint.
         vec3 view = normalize(cameraPosition - vWorld);
@@ -1027,6 +1034,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         geo.setAttribute("aWidth", new THREE.Float32BufferAttribute(wid, 1));
         geo.setAttribute("aShore", new THREE.Float32BufferAttribute(sho, 1));
         geo.setAttribute("aSea", new THREE.Float32BufferAttribute(new Float32Array(verts.length / 3), 1));
+        geo.setAttribute("aDeep", new THREE.Float32BufferAttribute(wid.map((w) => Math.max(6, Math.max(w, 8) * 0.35)), 1));
         geo.setIndex(idx);
         scene.add(new THREE.Mesh(geo, waterMaterial));
       }
@@ -1040,6 +1048,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       wetGeo.setAttribute("aWidth", new THREE.Float32BufferAttribute(new Float32Array(n).fill(200), 1));
       wetGeo.setAttribute("aShore", new THREE.Float32BufferAttribute(wetShore, 1));
       wetGeo.setAttribute("aSea", new THREE.Float32BufferAttribute(new Float32Array(n).fill(1), 1));
+      wetGeo.setAttribute("aDeep", new THREE.Float32BufferAttribute(new Float32Array(n).fill(90), 1));
       wetGeo.setIndex(waterIndex);
       scene.add(new THREE.Mesh(wetGeo, waterMaterial));
     }
@@ -1127,6 +1136,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const shoreOf = new Float32Array(GW * GH).fill(1e6); // cells past the shore (negative: in the water)
     const riverOf = new Float32Array(GW * GH).fill(1e6), seaOf = new Float32Array(GW * GH).fill(1e6);
     const alongOf = new Float32Array(GW * GH), acrossOf = new Float32Array(GW * GH), widthOf = new Float32Array(GW * GH);
+    // How far out still water takes to deepen: the sea ninety metres, a lake its own size.
+    const stillDeep = new Float32Array(GW * GH).fill(90);
     for (const river of world.waterLines ?? []) {
       const widths = river.widths ?? river.points.map(() => river.width);
       // The sea: wide along its length (its typical width), not a river with one wide mouth.
@@ -1147,7 +1158,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
           const d = Math.hypot(x - cx, y - cy) - (wa + (wb - wa) * t) / 2;
           const i = gy * GW + gx;
           if (d < shoreOf[i]!) shoreOf[i] = d;
-          if (sea) { if (d < seaOf[i]!) seaOf[i] = d; continue; }
+          if (sea) {
+            if (d < seaOf[i]!) { seaOf[i] = d; stillDeep[i] = river.lake ? Math.max(8, (river.width / 2) * M * 0.6) : 90; }
+            continue;
+          }
           if (d >= riverOf[i]!) continue;
           riverOf[i] = d;
           alongOf[i] = (run + t * len) * M;
@@ -1158,7 +1172,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
     // A quad wherever a corner is in the water or within a step of it, so the cut edge has room.
-    const verts: number[] = [], across: number[] = [], along: number[] = [], wide: number[] = [], shore: number[] = [], seaness: number[] = [], index: number[] = [];
+    const verts: number[] = [], across: number[] = [], along: number[] = [], wide: number[] = [], shore: number[] = [], seaness: number[] = [], deep: number[] = [], index: number[] = [];
     const vertexAt = new Int32Array(GW * GH).fill(-1);
     const vertex = (gx: number, gy: number) => {
       const i = gy * GW + gx;
@@ -1171,6 +1185,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       // The sea's share: 1 well inside it, 0 well inside a river, between over six cells.
       const sea = Math.max(0, Math.min(1, 0.5 + (riverOf[i]! - seaOf[i]!) / 6));
       seaness.push(sea);
+      deep.push(Math.max(6, Math.max(widthOf[i]! || 8, 8) * 0.35) * (1 - sea) + stillDeep[i]! * sea);
       // In the sea, the shore is the land's: never nearer than the line's own edge says, never shallower
       // than the dry land's distance allows (the line's far side, off the map, isn't a shore).
       const line = -shoreOf[i]! * M;
@@ -1190,6 +1205,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     geo.setAttribute("aWidth", new THREE.Float32BufferAttribute(wide, 1));
     geo.setAttribute("aShore", new THREE.Float32BufferAttribute(shore, 1));
     geo.setAttribute("aSea", new THREE.Float32BufferAttribute(seaness, 1));
+    geo.setAttribute("aDeep", new THREE.Float32BufferAttribute(deep, 1));
     geo.setIndex(index);
     scene.add(new THREE.Mesh(geo, waterMaterial));
   }
@@ -1942,6 +1958,76 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
   }
 
+  // --- Lakes (map version 13), with things whose size you know (your look, 2026-11-01: "the scale
+  // makes it hard to tell"): reeds in stands along the shore, a fishing jetty from the shore nearest
+  // a town or hamlet with its hut and drying racks, a dugout or two drifting on the open water.
+  const driftBoats: Array<{ mesh: THREE.Mesh; cx: number; cz: number; y: number; r: number; speed: number; phase: number }> = [];
+  /** How far a point is from a lake's edge, in cells: negative in the water. */
+  function lakeDistance(lake: { points: Array<[number, number]>; width: number; widths?: number[] }, x: number, y: number): number {
+    const widths = lake.widths ?? lake.points.map(() => lake.width);
+    let best = Infinity;
+    for (let k = 1; k < lake.points.length; k += 1) {
+      const [ax, ay] = lake.points[k - 1]!, [bx, by] = lake.points[k]!;
+      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1e-6;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
+      best = Math.min(best, Math.hypot(x - (ax + dx * t), y - (ay + dy * t)) - (widths[k - 1]! + (widths[k]! - widths[k - 1]!) * t) / 2);
+    }
+    return best;
+  }
+  function buildLakes(w: GameWorld): void {
+    const lakes = (w.waterLines ?? []).filter((r) => r.lake);
+    if (!lakes.length) return;
+    const kit = new Kit();
+    const homes = [...w.towns.values()].filter((t) => !t.industry).map((t) => ({ x: t.x, y: t.y })).concat(w.hamlets ?? []);
+    for (const [n, lake] of lakes.entries()) {
+      const rand = seeded(`lake-${n}-${lake.points[0]!.join(",")}`);
+      const xs = lake.points.map((q) => q[0]), ys = lake.points.map((q) => q[1]), pad = lake.width / 2 + 3;
+      const shore: Array<{ x: number; y: number }> = [], open: Array<{ x: number; y: number; d: number }> = [];
+      for (let y = Math.max(1, Math.floor(Math.min(...ys) - pad)); y <= Math.min(H - 2, Math.ceil(Math.max(...ys) + pad)); y += 0.5)
+        for (let x = Math.max(1, Math.floor(Math.min(...xs) - pad)); x <= Math.min(W - 2, Math.ceil(Math.max(...xs) + pad)); x += 0.5) {
+          const d = lakeDistance(lake, x, y);
+          if (d < -1.4) open.push({ x, y, d });
+          else if (d > 0.15 && d < 1) shore.push({ x, y });
+        }
+      // The jetty first, where a town or hamlet is nearest, so the reeds leave it room.
+      const near = (q: { x: number; y: number }) => Math.min(...homes.map((h) => Math.hypot(h.x - q.x, h.y - q.y)));
+      const landing = shore.filter((q) => occupied[Math.round(q.y) * W + Math.round(q.x)] === FREE).sort((a, b) => near(a) - near(b))[0];
+      if (landing) {
+        const cx = xs.reduce((a, b) => a + b, 0) / xs.length, cy = ys.reduce((a, b) => a + b, 0) / ys.length;
+        const len = Math.hypot(cx - landing.x, cy - landing.y) || 1, ux = (cx - landing.x) / len, uy = (cy - landing.y) / len;
+        const one = new Kit();
+        fishingJetty(one, rand, 2.6 * M);
+        kit.place(one.merged(), landing.x * M, elevationAt(landing.x, landing.y) * HEIGHT, landing.y * M, -Math.atan2(uy, ux));
+        for (let k = -1; k <= 1; k += 0.5) {
+          const x = Math.round(landing.x - ux * k), y = Math.round(landing.y - uy * k);
+          if (occupied[y * W + x] === FREE) occupied[y * W + x] = QUAY;
+        }
+      }
+      // Reeds in stands along the shore.
+      for (const q of shore) {
+        const cell = Math.round(q.y) * W + Math.round(q.x);
+        // On the wet bank (what keeps trees and houses off it is where reeds grow), never in the water.
+        if ((occupied[cell] !== FREE && occupied[cell] !== WET) || terrain.water[cell] === 1 || rand() > 0.55) continue;
+        const one = new Kit();
+        reedClump(one, rand, 0, 0);
+        kit.place(one.merged(), q.x * M, elevationAt(q.x, q.y) * HEIGHT - 0.1, q.y * M);
+      }
+      // A dugout or two, drifting slowly where the water's open.
+      for (let b = 0; b < (lake.width > 7 ? 2 : 1) && open.length; b += 1) {
+        const spot = open[Math.floor(rand() * open.length)]!;
+        const mesh = new THREE.Mesh(canoe(rand), material);
+        mesh.castShadow = true;
+        scene.add(mesh);
+        driftBoats.push({ mesh, cx: spot.x * M, cz: spot.y * M, y: elevationAt(spot.x, spot.y) * HEIGHT + 0.65, r: Math.max(2, Math.min(1.6, -spot.d - 0.9) * M), speed: 0.025 + rand() * 0.03, phase: rand() * Math.PI * 2 });
+      }
+    }
+    if (kit.empty) return;
+    const mesh = new THREE.Mesh(kit.merged(), material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+
   /** Every frame: the clock, the flares' flicker, the pump jacks' nod. */
   let lifeAt = performance.now();
   function animateSiteLife(seconds: number): void {
@@ -1960,6 +2046,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       life.jacks.forEach((jack, i) => (jack.rotation.z = Math.sin(life.angle + i * 1.3) * 0.32));
     }
     harbourCranes.forEach((boom, i) => (boom.rotation.y = Math.sin(seconds * 0.25 + i * 1.7) * 0.6));
+    for (const boat of driftBoats) {
+      const a = seconds * boat.speed + boat.phase;
+      boat.mesh.position.set(boat.cx + Math.cos(a) * boat.r, boat.y + Math.sin(seconds * 1.3 + boat.phase) * 0.05, boat.cz + Math.sin(a) * boat.r);
+      boat.mesh.rotation.y = -(a + Math.PI / 2);
+    }
     for (const ship of harbourShips) {
       const a = seconds * ship.speed + ship.phase;
       ship.mesh.position.set(ship.cx + Math.cos(a) * ship.r, 0.6, ship.cz + Math.sin(a) * ship.r);
@@ -2255,6 +2346,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
 
     syncHarbour(w);
+    buildLakes(w);
     // Inselbergs: a small steep hill (the north's and the Middle Belt's rocks, map version 4) gets a
     // bare granite dome on its top, sheeted and streaked, a boulder or two at its foot -- the land's
     // shape is the map's, this its rock showing. Drawn, not priced: one mesh for all of them.

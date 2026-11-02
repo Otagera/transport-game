@@ -718,6 +718,13 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   ground behind, clear of other towns and the old roads. The city's houses, streets and markets
   keep off it (`onQuay`, beside the four checks that keep them off sites), so it reads as the
   city's port district rather than a slab dropped on its outskirts.
+- **Lakes, deep and to scale** (2026-11-02, your look: "cool pond ... the scale makes it hard to
+  tell"; it read pale as ice). Water deepens over its own distance from the shore (`aDeep`): a
+  river a third of its width, the sea ninety metres, a lake its own size -- at the sea's ninety a
+  lake a few cells across never got past its shallows. And things whose size you know
+  (`buildLakes`, shapes3d.ts): reeds in stands on the wet bank, a fishing jetty on stilts from the
+  shore nearest a town or hamlet with its thatched hut and drying racks, a dugout or two with a
+  fisherman drifting on the open water.
 - **Your remit, veiled** (2026-11-02; remit.ts, as the 2D map's `closedCanvas`). Land outside your
   remit is faded toward the haze and drawn out of colour -- there and running, not yours to build in
   yet -- with a fine dashed line on the ground where your remit ends; its towns, sites and roads

@@ -266,6 +266,39 @@ export const SITE_LIFE: Record<string, Array<{ x: number; z: number; y: number; 
 };
 
 /** A cargo ship, facing +x, its waterline at y = 0: hull, containers on deck, the bridge aft, its funnel. */
+// --- At a lake (map version 13; your look, 2026-11-01: "the scale makes it hard to tell") -------
+// Things whose size you know, so the water's reads: reeds at its edge, a dugout on it, a jetty.
+
+/** Reeds at the water's edge: a stand of blades, green going to straw, a seed head on the tallest. */
+export function reedClump(kit: Kit, rand: Rand, x: number, z: number): void {
+  const n = 12 + Math.floor(rand() * 8);
+  for (let i = 0; i < n; i += 1) {
+    const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * 1.5, h = 1.6 + rand() * 1.4;
+    const bx = x + Math.cos(a) * d, bz = z + Math.sin(a) * d, rx = (rand() - 0.5) * 0.3, rz = (rand() - 0.5) * 0.3;
+    kit.add(new THREE.ConeGeometry(0.13, h, 3), pick(rand, [paint("--paint-green-5"), paint("--paint-green-8"), paint("--paint-green-3"), paint("--paint-green-15")]), { x: bx, y: h / 2, z: bz, rx, rz });
+    if (h > 2.5) kit.add(new THREE.CylinderGeometry(0.11, 0.11, 0.5, 4), paint("--paint-earth-36"), { x: bx + Math.sin(rz) * -h, y: h * 0.95, z: bz + Math.sin(rx) * h, rx, rz });
+  }
+}
+/** A dugout canoe, a fisherman in it with his paddle: along x, its waterline at y = 0. */
+export function canoe(rand: Rand): THREE.BufferGeometry {
+  const kit = new Kit();
+  const wood = pick(rand, [paint("--paint-earth-14"), paint("--paint-earth-46"), paint("--paint-grey-19")]);
+  rounded(kit, 5.2, 0.55, 0.85, 0.25, wood, 0, 0, -0.15);
+  kit.box(4.6, 0.08, 0.6, paint("--paint-grey-25"), 0, 0, 0.36);
+  for (const end of [-1, 1]) kit.add(new THREE.ConeGeometry(0.4, 0.8, 4), wood, { x: end * 2.85, y: 0.12, rz: end * -Math.PI / 2, ry: Math.PI / 4 });
+  person(kit, pick(rand, [paint("--paint-blue-12"), paint("--paint-light-1"), paint("--paint-red-3")]), 0.6, 0, 0.3, true);
+  kit.box(0.08, 0.08, 1.8, paint("--paint-earth-14"), 0.9, 0.3, 0.75);
+  return kit.merged();
+}
+/** A fishing jetty on stilts out from the shore along +x, a thatched hut behind it on the land (-x). */
+export function fishingJetty(kit: Kit, rand: Rand, length: number): void {
+  const plank = paint("--paint-earth-14");
+  kit.box(length, 0.18, 1.4, plank, length / 2, 0, 0.55);
+  for (let x = 0.6; x < length; x += 1.6) for (const z of [-0.6, 0.6]) kit.box(0.14, 1.6, 0.14, paint("--paint-grey-19"), x, z, -0.9);
+  hut(kit, rand, -4, 0);
+  for (let i = 0; i < 3; i += 1) kit.box(0.05, 1.1, 1.8, paint("--paint-earth-36"), -1.4, -2 + i * 0.7);
+}
+
 export function cargoShip(rand: Rand): THREE.BufferGeometry {
   const kit = new Kit();
   const hull = pick(rand, [paint("--paint-red-6"), paint("--paint-blue-20"), paint("--paint-dark-5")]);
