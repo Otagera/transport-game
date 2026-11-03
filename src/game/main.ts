@@ -89,6 +89,7 @@ import { chipAt, draw, fitView, focusFor, overlayCaption, routeColor, toScreen, 
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { keepSteady, steadyFood, steadyFuel, steadyOver, steadyShortage, steadySite } from "./steady";
 import { createScreen } from "./screen";
+import { redrawSteadily } from "./patch";
 import { shortVerdict } from "./verdicts";
 import { waysFor } from "@engine/game/crossings";
 import { labelOf } from "@engine/game/labels";
@@ -305,7 +306,12 @@ const screen = createScreen(world, recorder, {
     const summary = routeSummaries(world).find((s) => s.id === id);
     return summary ? routeCard(summary) : "";
   },
-  routesMore: () => (forecasting ? bestMovesHtml() + resultsHtml() : "") + lorryRows(false) + corridorsHtml() + shareHtml(),
+  // Under the network (screen.ts), only the developer's forecasts now: lorries and freight trains
+  // are lines in it, each with its card; a corridor's share, levies, no seat and wear are its
+  // road's row and card; who carries trips heads it.
+  routesMore: () => (forecasting ? bestMovesHtml() + resultsHtml() : ""),
+  goodsWhy: (id) => goodsWhy(id),
+  cars: (id) => carsRow(id),
   bond: (purpose) => bondButton(purpose),
   dev,
   moneyNote: () => moneyNote(),
@@ -735,13 +741,12 @@ function bestMovesHtml(): string {
   const rows = best
     .map((move) => {
       const r = move.receipt!;
-      const index = moves.list.indexOf(move);
       const money = `${r.moneyPerDay >= 0 ? "+" : "−"}₦${Math.abs(Math.round(r.moneyPerDay))}/day`;
       const back = r.paybackDays !== null ? `, pays back in ~${Math.ceil(r.paybackDays)} days` : r.moneyPerDay > 0 ? "" : ", loses money";
       const afford = world.economy.funds >= move.price;
       return `<li class="${r.moneyPerDay > 5 ? "good" : r.moneyPerDay < -5 ? "bad" : ""}">
         <span>${move.title} · ${naira(move.price)}<small>${money}${back}${Math.abs(r.you) >= 0.5 ? ` · your share ${pp(r.you)}` : ""}</small></span>
-        <button data-move="${index}" ${afford ? "" : "disabled title=\"Can't afford it yet\""}>Buy</button></li>`;
+        <button data-move="${encodeURIComponent(JSON.stringify(move.action))}" ${afford ? "" : "disabled title=\"Can't afford it yet\""}>Buy</button></li>`;
     })
     .join("");
   const status = waiting > 0 ? `<p class="hint">Checking ${waiting} more…</p>` : "";
@@ -1713,7 +1718,9 @@ function growthText(townId: string, name: string): string {
   const min = world.tuning.growthMinPlayerShare;
   const why = isCutOff(world, townId)
     ? "No road reaches it, so nothing can grow it."
-    : growth.playerShare < min
+    // Past the floor, it stays past till your share falls a band under it (steady.ts): resting on
+    // the line, the sentence flipped between its two wordings with each redraw.
+    : !steadyOver(world, `growth-floor:${townId}`, growth.playerShare, min)
     ? `It only grows once you carry at least ${pct(min)} of its trips (now ${pct(growth.playerShare)}); danfos alone keep it as it is.`
     : `Service ${pct(growth.service)} (yours ${pct(growth.playerShare)}, plus informal at half). The better served, the bigger: up to ${k(growth.cap)}.`;
   // Shrinking, it says why and what would stop it (brief, Revision 2, step 1).
@@ -2730,7 +2737,7 @@ function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
       <div class="name"><span class="swatch" style="background:${routeColor(index)}"></span>${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}
         <span class="buttons"><button data-add="${s.id}" title="Add one">+</button><button data-remove="${s.id}" title="Sell one">−</button></span></div>
       ${strikeBadge(laneAlongRoute(s.a, s.b))}
-      <div class="verdict why-${d?.verdict ?? "healthy"}">${verdict}</div>${carsRow(s.id)}
+      <div class="verdict why-${d?.verdict ?? "healthy"}">${verdict}</div>
       ${bar}
       ${dev && d ? `<small>${forVehicle(`${Math.round(d.boardingsPerDay)} riders/day · buses ${pct(d.loadFactor)} full · ${pct(d.speed)} speed · ceiling ${naira(d.ceilingPerDay)}/day`, s.id)}</small>` : ""}
     </div>`;
@@ -3093,6 +3100,14 @@ function carsRow(routeId: string): string {
 
 // A freight line's rate (freightrates.ts): cheap, standard or dear, and what it's doing --
 // who carries the goods along the line, and what spoils.
+// A goods line's card (screen.ts): why it runs as it does, in the lorry rows' words, and its rate.
+function goodsWhy(routeId: string): string {
+  const s = lorrySummaries(world).find((x) => x.id === routeId);
+  const d = diagnoseLorryRoute(world, routeId);
+  if (!s || !d) return "";
+  return `<p class="why">${forGoodsVehicle(lorryReason(d, s.costPerDay / Math.max(1, s.lorries)), routeId)}</p>${freightRateRow(routeId)}`;
+}
+
 function freightRateRow(routeId: string): string {
   if (!isFreightRoute(routeId) || !world.tuning.freightRatesEnabled) return "";
   const rate = freightRate(world, routeId);
@@ -3224,7 +3239,7 @@ function onPanelClick(event: MouseEvent): void {
   const target = (event.target as HTMLElement).closest<HTMLElement>("button, a, [data-select]") ?? (event.target as HTMLElement);
   // A problem line's move (screen.ts): the named move itself, bought.
   if (target.dataset.named !== undefined) {
-    const move = screen.namedMove(Number(target.dataset.named));
+    const move = screen.namedMove(target.dataset.named);
     if (!move) return;
     const towns = "a" in move.action && "b" in move.action ? [String(move.action.a), String(move.action.b)] : [];
     const result = act({ label: move.label, towns }, move.action);
@@ -3427,9 +3442,10 @@ function onPanelClick(event: MouseEvent): void {
     screen.select({ kind: world.towns.get(id)?.industry ? "site" : "town", id });
     return;
   }
-  const moveIndex = target.dataset.move;
-  if (moveIndex !== undefined) {
-    const move = moves.list[Number(moveIndex)];
+  // By its action, not its place in a list the forecasts remake: a held panel (patch.ts) shows an older one.
+  const moveKey = target.dataset.move;
+  if (moveKey !== undefined) {
+    const move = moves.list.find((m) => encodeURIComponent(JSON.stringify(m.action)) === moveKey);
     if (!move) return;
     const result = act(move.spec, move.action);
     if (result.ok) say(`${move.title}: bought for ${naira(move.price)}.${later}`);
@@ -3651,18 +3667,21 @@ function frame(now: number): void {
       renderToolbar();
     }
     keepSteady(world);
-    renderStrip();
-    // Not while a button in a panel is pressed: redrawing replaces the button under
-    // the pointer, and a click needs the same one pressed and released (playtest:
-    // "Keep it up" took several clicks -- the panel redraws every quarter second).
-    // Nor while you type a name in it: a redraw would take the field from under you.
-    if (!panelPressed && !(document.activeElement instanceof HTMLInputElement)) {
-      renderPanel();
-      screen.renderLog();
-      // The revenue screen's charts are the days': once a second is plenty.
-      revenueTimer += 1;
-      if (screen.revenueOpen() && revenueTimer % 4 === 0) screen.renderRevenue();
-    }
+    // Under the pointer, only the figures change (patch.ts): the rest waits for it to leave.
+    redrawSteadily(() => {
+      renderStrip();
+      // Not while a button in a panel is pressed: redrawing replaces the button under
+      // the pointer, and a click needs the same one pressed and released (playtest:
+      // "Keep it up" took several clicks -- the panel redraws every quarter second).
+      // Nor while you type a name in it: a redraw would take the field from under you.
+      if (!panelPressed && !(document.activeElement instanceof HTMLInputElement)) {
+        renderPanel();
+        screen.renderLog();
+        // The revenue screen's charts are the days': once a second is plenty.
+        revenueTimer += 1;
+        if (screen.revenueOpen() && revenueTimer % 4 === 0) screen.renderRevenue();
+      }
+    });
   }
   // Every frame: a hint pinned to a town follows it, and hovering dismisses hint 1 at once.
   renderHint();

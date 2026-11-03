@@ -78,6 +78,18 @@ at day 287; cement and steel held back 2% of people). **Towns now grow where you
 (brief, same name; `growthServiceFloor` 0.15, `growthServiceFull` 0.55): served towns +24 to +55%
 by day 300, people +8 to +21%. **Open for you:** play it; then step 2 (goods decide how much of
 that room gets built), then cotton.
+
+**The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
+you aim and The network): from your "to click on some things are difficult ... between tick the
+information is changing" -- the presentation, not the engine: lists re-sorted four times a second,
+Waiting on you's lines came and went, nothing held still under the pointer. Now it does, measured
+(96-100% of aims land, from 76-88%). And everything you run is one kind of line on one kind of way:
+the Network tab (each road or stretch of track with its lines; lorries and freight trains with
+cards of their own; the corridors folded into the roads' rows and cards), and the revenue screen as
+a flow, a statement whose net is the strip's, and every line's money. Next there: the restore lines
+that still come and go at a day's turn (their shortages' lines want a band), and the train card's
+cars once the other session's carriages land.
+
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

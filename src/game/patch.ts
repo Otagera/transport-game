@@ -7,15 +7,61 @@
 // still re-derives everything from the world each time (render-and-ui.md): this keeps the
 // elements, not the state.
 
+//
+// Kept elements still moved: a row re-sorted, a line in Waiting on you come or gone, and
+// everything under it shifted (2026-11-02, map 2418 at 4x: what was under the pointer half a
+// second after it was aimed at had changed for up to 28% of aims in the revenue screen). So
+// while the pointer is in a panel, the steady redraw changes its figures and nothing else:
+// a change of shape waits for the pointer to leave. A click's own redraw (a tab, a sort, a
+// pick) still happens at once.
+
 const lastHtml = new WeakMap<Element, string>();
 const template = document.createElement("template");
 
-/** Sets `el`'s contents to `html`, keeping the elements that are still there. */
-export function patchHtml(el: Element, html: string): void {
-  if (lastHtml.get(el) === html) return;
+// Figures, however written: "₦1.2m", "−₦34k", "62%", "3", a bar's width. Not the digits of a
+// name ("rail-12", "s1"): a row swapped for another is a change of shape. A chart is figures
+// whole -- its points, a day's new one, the data its hover reads -- and so is a figure's colour,
+// up or down as it crosses zero: neither moves anything.
+const FIGURES = /(?<![\w-])[−+-]?₦?\d[\d,.]*(?:[kmb%]|e[+-]?\d+)?/g;
+const shapeOf = (html: string) =>
+  html
+    .replace(/\b(points|d|data-chart)="[^"]*"/g, '$1="#"')
+    .replace(/class="([^"]*)"/g, (_, names: string) => `class="${names.replace(/\b(up|down)\b/g, "").trim()}"`)
+    .replace(FIGURES, "#");
+
+// A change of shape waits under the pointer this long at most: a new line in Waiting on you
+// shouldn't leave the figures standing still for as long as the pointer rests there.
+const HOLD_MS = 4000;
+const heldSince = new WeakMap<Element, number>();
+
+let steadyRedraw = false;
+/** Runs the panels' steady redraw: under the pointer, only their figures change. */
+export function redrawSteadily(redraw: () => void): void {
+  steadyRedraw = true;
+  try {
+    redraw();
+  } finally {
+    steadyRedraw = false;
+  }
+}
+
+/**
+ * Sets `el`'s contents to `html`, keeping the elements that are still there. False when held
+ * under the pointer instead: it shows the last contents still.
+ */
+export function patchHtml(el: Element, html: string): boolean {
+  const last = lastHtml.get(el);
+  if (last === html) return true;
+  if (steadyRedraw && last !== undefined && el.matches(":hover") && shapeOf(last) !== shapeOf(html)) {
+    const since = heldSince.get(el) ?? performance.now();
+    heldSince.set(el, since);
+    if (performance.now() - since < HOLD_MS) return false;
+  }
+  heldSince.delete(el);
   lastHtml.set(el, html);
   template.innerHTML = html;
   patchChildren(el, template.content);
+  return true;
 }
 
 // Rows and folds carry their own identity: matched by it, a row that moves is the same row.

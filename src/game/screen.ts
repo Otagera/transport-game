@@ -8,10 +8,12 @@ import { closedClusterOf, clusterBrings, inRemit, remitOffers } from "@engine/ga
 import { aWeekOnText, termVerdictText, pledgeMove, pledgeNow, pledgeProgress, MAX_COMMITTED, type Pledge } from "@engine/game/term";
 import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
 import type { GameWorld } from "@engine/game/types";
-import { diagnoseRoute, gameDay, roadPath, routeSummaries, townShare } from "@engine/game/world";
+import { diagnoseRoute, gameDay, networkShare, roadPath, routeSummaries, townShare } from "@engine/game/world";
 import { growthTrend, roadFull, townGrowth } from "@engine/game/growth";
-import { averageHeadline, averageNet } from "@engine/game/history";
-import { goodsFlows, flowKey, lorrySummaries } from "@engine/game/goods";
+import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
+import { diagnoseLorryRoute, goodsFlows, flowKey } from "@engine/game/goods";
+import { corridorWear } from "@engine/game/wear";
+import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { corridorSummaries } from "@engine/game/corridors";
 import { cargoName, fuelPlanned, fuelReach, fuelReachable } from "@engine/game/fuel";
 import { hasYard } from "@engine/game/yards";
@@ -20,6 +22,7 @@ import { exportsBy, farmTowns } from "@engine/game/food";
 import { borderCountry } from "@engine/game/border";
 import { exportGateway, nextPortRung, portScale, seaportLink } from "@engine/game/gateways";
 import { patchHtml } from "./patch";
+import { GROUPS, KIND_NAME, VERDICT_WORDS, lines, ways, waysOf, type Line, type Way } from "./lines";
 import { steadyFuel, steadySite } from "./steady";
 import { cementBreak, cementServed } from "@engine/game/cement";
 import { steelBreak, steelDemand, steelImports, steelServed } from "@engine/game/steel";
@@ -28,8 +31,7 @@ import { stationOf, stationOpen } from "@engine/game/stations";
 import { handoverNote, termLetter, type Letter } from "./correspondent";
 import { thenAndNowSvg } from "./thenandnow";
 import { railPath } from "@engine/game/rail";
-import { roadCapacity } from "@engine/game/congestion";
-import { townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
+import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
 import { assemblyGeneration } from "@engine/game/assembly";
@@ -56,8 +58,12 @@ export interface ScreenHooks {
   townMore(id: string): string;
   /** The old route card. */
   routeMore(id: string): string;
-  /** Under the routes list: lorries, corridors, your share (the old routes wing's rest). */
+  /** Under the network: the developer's forecasts and receipts, when they're on. */
   routesMore(): string;
+  /** A goods line's reason and its freight rate, for its card. */
+  goodsWhy(id: string): string;
+  /** A rail line's cars (main.ts carsRow): how many a train, and a carriage or wagon more; "" off rail. */
+  cars(id: string): string;
   /** The debt advice when you're in debt: shown over the routes list, not folded. */
   moneyNote(): string;
   /** The old Treasury drawer: bonds, chains, the named project, the budget lines. */
@@ -92,14 +98,23 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   let selectedFromMap = false;
   /** A row hovered in the panel or the log: the map fades the rest (focus). */
   let hover: Selection = null;
-  let tab: "routes" | "towns" | "sites" = "routes";
-  const sorts: Record<string, { key: string; dir: 1 | -1 }> = { routes: { key: "net", dir: 1 }, towns: { key: "growth", dir: -1 }, sites: { key: "use", dir: 1 }, revenue: { key: "net", dir: -1 } };
+  type Tab = "network" | "towns" | "sites";
+  let tab: Tab = "network";
+  const sorts: Record<string, { key: string; dir: 1 | -1 }> = {
+    network: { key: "net", dir: 1 }, towns: { key: "growth", dir: -1 }, sites: { key: "use", dir: 1 }, revenue: { key: "net", dir: 1 },
+  };
+  const TABS: Tab[] = ["network", "towns", "sites"];
+  const TAB_NAME: Record<Tab, string> = { network: "Network", towns: "Towns", sites: "Sites" };
   let logFilter = "all";
   let range = 0; // the revenue screen: 0 = all days
   /** Which "More" folds are open, by key: kept across the panel's redraws. */
   const openFolds = new Set<string>();
-  /** The moves the panel's problem lines offer, by index: a click does the one it names. */
-  let named: NamedMove[] = [];
+  /**
+   * The moves the panel's problem lines offer, by their action: a click does the one it names.
+   * Not by position in a list remade each redraw: a panel held under the pointer (patch.ts)
+   * shows the last redraw's buttons, and the one pressed must still buy what it says.
+   */
+  const named = new Map<string, NamedMove>();
 
   const days = (): RunDay[] => recorder.file.days;
   const nameOf = (id: string) => world.towns.get(id)?.name ?? world.ruins.get(id)?.name ?? id;
@@ -109,6 +124,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   /** The route or road being named, its field open in the panel. */
   let renaming: string | null = null;
   /** A name, and for a route its colour: the field while naming, else a button and the swatches. */
+  // A rail line's trains lengthened (main.ts carsRow, rail.ts addCar), under its vehicles.
+  function carsHtml(id: string): string {
+    const cars = hooks.cars(id);
+    return cars ? `<p class="why">${cars}</p>` : "";
+  }
+
   function nameRow(key: string, colours: boolean): string {
     const label = labelOf(world, key);
     if (renaming === key) {
@@ -244,8 +265,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   /** A real move (problems.ts) as a button the panel's click handler does. */
   const moveButton = (move: NamedMove | undefined, fallback: string): string => {
     if (!move) return fallback;
-    named.push(move);
-    return `<button data-named="${named.length - 1}" title="${esc(move.label)}">${esc(move.label.replace(/\s*\([^)]*\)$/, ""))} · ${nairaK(move.price)}</button>`;
+    const key = JSON.stringify(move.action);
+    named.delete(key);
+    named.set(key, move);
+    if (named.size > 200) named.delete(named.keys().next().value!);
+    return `<button data-named="${esc(key)}" title="${esc(move.label)}">${esc(move.label.replace(/\s*\([^)]*\)$/, ""))} · ${nairaK(move.price)}</button>`;
   };
   /** A tool's button; `at`, the places it's about, which the map frames and rings when it's pressed (main.ts pointAt). */
   // Its key in a <kbd> (look.md §5), the rest of the label escaped.
@@ -307,7 +331,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   // works, its restore under More) went unseen for 482 days. Pledges and the union's demands
   // join this list (steps 2 and 5).
 
-  type Waiting = { text: string; button: string; at: string[]; weight: number };
+  /** `id`: what it is about, kept as its words and numbers move ("cement", "union:home"). */
+  type Waiting = { id: string; text: string; button: string; at: string[]; weight: number };
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   function waitingOnYou(): Waiting[] {
     const items: Waiting[] = [];
@@ -321,11 +346,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (world.cement && cement.towns.length > 0) {
       const b = cementBreak(world);
       const who = `${int(cement.people)}k people held back in ${plural(cement.towns.length, "town")}`;
-      if (b?.kind === "idle") items.push({ text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
-      else if (b?.kind === "quarry") items.push({ text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`), at: [b.quarryId], weight: cement.people });
+      if (b?.kind === "idle") items.push({ id: "cement", text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
+      else if (b?.kind === "quarry") items.push({ id: "cement", text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`), at: [b.quarryId], weight: cement.people });
       else if (b?.kind === "carry") {
         const c = carryWhy("cement", world.cement.worksId, mostHeld(cement.towns, (t) => t.cementHeld).id);
-        items.push({ text: `Cement short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: cement.people });
+        items.push({ id: "cement", text: `Cement short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: cement.people });
       }
     }
     const steel = held((t) => t.steelHeld);
@@ -333,12 +358,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const b = steelBreak(world);
       const who = `${int(steel.people)}k people held back in ${plural(steel.towns.length, "town")}`;
       const works = world.steel.worksId ?? world.steel.terminalId;
-      if (b?.kind === "idle") items.push({ text: `The steel works is idle: ${who}`, button: restoreButton("steel"), at: works ? [works] : [], weight: steel.people });
-      else if (b?.kind === "ore") items.push({ text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} <kbd>Y</kbd>`), at: [b.mineId], weight: steel.people });
+      if (b?.kind === "idle") items.push({ id: "steel", text: `The steel works is idle: ${who}`, button: restoreButton("steel"), at: works ? [works] : [], weight: steel.people });
+      else if (b?.kind === "ore") items.push({ id: "steel", text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} <kbd>Y</kbd>`), at: [b.mineId], weight: steel.people });
       else if (b?.kind === "carry") {
         const port = steelPortShort();
         const c = carryWhy("steel", b.from, mostHeld(steel.towns, (t) => t.steelHeld).id);
-        items.push(port ? { text: `Steel short, ${who}: ${port.text}`, button: port.button, at: [b.from], weight: steel.people } : { text: `Steel short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: steel.people });
+        items.push(port ? { id: "steel", text: `Steel short, ${who}: ${port.text}`, button: port.button, at: [b.from], weight: steel.people } : { id: "steel", text: `Steel short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: steel.people });
       }
     }
     // Short by the network, not by this week's tankers (fuel.ts fuelPlanned): just after the
@@ -348,14 +373,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       // Weighed as the people living short of fuel, by how short.
       const weight = fuelShort.reduce((sum, t) => sum + t.population * (1 - (t.fuel ?? 0)), 0) * 0.3;
       const where = `${plural(fuelShort.length, "town")} short of fuel`;
-      if (!world.fuel.restored) items.push({ text: `${where}, and the refinery is idle`, button: restoreButton("refinery"), at: [world.fuel.refineryId], weight });
+      if (!world.fuel.restored) items.push({ id: "fuel", text: `${where}, and the refinery is idle`, button: restoreButton("refinery"), at: [world.fuel.refineryId], weight });
       else {
         // Restored but starved of crude: crude moves by road only from a source with a yard (truckers.ts).
         const refinery = site(world.fuel.refineryId);
         const source = world.fuel.sourceId;
         if (refinery.capacity > 0 && refinery.made < 0.6 * refinery.capacity && refinery.limit === "input" && !world.yards.has(source)) {
-          items.push({ text: `${where}: the refinery gets no crude from ${nameOf(source)}`, button: toolButton("yard", `Yard at ${nameOf(source)} <kbd>Y</kbd>`), at: [source], weight });
-        } else items.push({ text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>"), at: [world.fuel.depotId], weight });
+          items.push({ id: "fuel", text: `${where}: the refinery gets no crude from ${nameOf(source)}`, button: toolButton("yard", `Yard at ${nameOf(source)} <kbd>Y</kbd>`), at: [source], weight });
+        } else items.push({ id: "fuel", text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>"), at: [world.fuel.depotId], weight });
       }
     }
     // In debt, or losing money: what's draining it, by name (a game ran to −₦71k with 17 roads'
@@ -363,22 +388,23 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const net = averageNet(world);
     if (world.economy.funds < 0 || net < 0) {
       const last = (key: string) => dailyBudget(key).at(-1) ?? 0;
-      const losing = routes().filter((r) => r.netPerDay < 0);
+      // Every line losing money, goods lines too (lines.ts).
+      const losing = linesNow().filter((l) => l.netPerDay < 0);
       const drains = [
         last("upkeep") >= 1 ? `road upkeep ${naira(last("upkeep"))}` : "",
-        losing.length ? `${plural(losing.length, "route")} losing ${naira(-losing.reduce((sum, r) => sum + r.netPerDay, 0))}` : "",
+        losing.length ? `${plural(losing.length, "line")} losing ${naira(-losing.reduce((sum, l) => sum + l.netPerDay, 0))}` : "",
         last("bonds") >= 1 ? `bond repayments ${naira(last("bonds"))}` : "",
       ].filter(Boolean);
       const where = world.economy.funds < 0 ? `In debt: ${nairaK(world.economy.funds)}` : "Losing money";
       const flow = net < 0 ? `, ${naira(-net)} a day more out than in` : "";
-      const buttons = (losing.length ? `<button data-tab="routes" title="Your routes, the worst first">Losing routes</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep <kbd>F</kbd>") : "");
-      items.push({ text: `${where}${flow}${drains.length ? `. A day: ${drains.join(" · ")}` : ""}`, button: buttons, at: [], weight: world.economy.funds < 0 ? 1e8 : 1e6 });
+      const buttons = (losing.length ? `<button data-tab="routes" title="Your lines, the worst first">Losing lines</button>` : "") + (last("upkeep") >= 1 ? toolButton("fix", "Road upkeep <kbd>F</kbd>") : "");
+      items.push({ id: "money", text: `${where}${flow}${drains.length ? `. A day: ${drains.join(" · ")}` : ""}`, button: buttons, at: [], weight: world.economy.funds < 0 ? 1e8 : 1e6 });
     }
     // Pledges left to make this term: the strip alone was missed (a game ran 115 days with none).
     const term = world.term;
     const left = term ? MAX_COMMITTED - term.pledges.filter((p) => p.committed).length : 0;
     if (term && left > 0 && term.pledges.some((p) => !p.committed)) {
-      items.push({ text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button class="primary" data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
+      items.push({ id: "pledges", text: `Term ${term.number}: ${left === MAX_COMMITTED ? "you've made no pledges" : "one more pledge to make"}. Keep none and it's a failed term.`, button: `<button class="primary" data-verdict="pledges">Choose your pledges</button>`, at: [], weight: 5e7 });
     }
     // The rains (floods.ts): the fords named for this season, and those under water now.
     const floods = world.floods;
@@ -389,7 +415,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         const when = floods.phase === "warned" ? `floods on day ${gameDay(world, floods.riseAt) - 1}, for ${Math.round((floods.fallAt - floods.riseAt) / D)} days` : `is under water until day ${gameDay(world, floods.fallAt) - 1}`;
         const named = [ford.a, ford.b].find((id) => ford.name.startsWith(nameOf(id)));
         const road = named ? `the road to ${nameOf(named === ford.a ? ford.b : ford.a)}` : `the ${nameOf(ford.a)} – ${nameOf(ford.b)} road`;
-        items.push({ text: `${ford.name} ${when}: everything on ${road} waits at the bank`, button: `<button data-ford="${ford.id}">Raise a bridge · ${nairaK(fordBridgeCost(world, ford))}</button>`, at: [ford.a, ford.b], weight: 8e7 });
+        items.push({ id: `ford:${ford.id}`, text: `${ford.name} ${when}: everything on ${road} waits at the bank`, button: `<button data-ford="${ford.id}">Raise a bridge · ${nairaK(fordBridgeCost(world, ford))}</button>`, at: [ford.a, ford.b], weight: 8e7 });
       }
     }
     // Your remit (remit.ts): a verdict's opening, the clusters on offer, each with what it brings.
@@ -397,7 +423,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (offers.length > 0) {
       const buttons = offers.map((c) => `<button data-open-cluster="${esc(c.hub)}" title="${esc(clusterBrings(world, c).join(", "))}">Open ${esc(nameOf(c.hub))}'s cluster</button>`).join("");
       const what = offers.map((c) => `${nameOf(c.hub)}'s brings ${clusterBrings(world, c).join(", ")}`).join("; ");
-      items.push({ text: `The state extends your remit: choose a cluster to open. ${what}`, button: buttons, at: offers.map((c) => c.hub), weight: 9.5e7 });
+      items.push({ id: "remit", text: `The state extends your remit: choose a cluster to open. ${what}`, button: buttons, at: offers.map((c) => c.hub), weight: 9.5e7 });
     }
     // The unions' demands (union.ts): who's asking, how he stands, his words, the deadline, and your answers.
     for (const union of world.unions ?? []) {
@@ -410,7 +436,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         routeAlong(world, d.a, d.b) ? `<button data-union="${union.id}|coop">Hand him the route</button>` : "",
         `<button data-union="${union.id}|refuse">Refuse</button>`,
       ].join("");
-      items.push({ text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
+      items.push({ id: `union:${union.id}`, text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
     }
     // Your pledges this term, not yet kept: first, with the town (its panel has the move).
     for (const p of world.term?.pledges ?? []) {
@@ -420,24 +446,42 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const move = pledgeMove(world, p);
       const restore = move?.action.kind === "restoreRefinery" ? "refinery" : move?.action.kind === "restoreWorks" ? "works" : null;
       const bond = restore && move && world.economy.funds < move.price ? hooks.bond(restore) : "";
-      items.push({ text: `Your pledge: ${pledgeLine(p)} · ${pct(pledgeProgress(world, p))} of the way`, button: `${moveButton(move ?? undefined, "")}${bond}<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
+      items.push({ id: `pledge:${p.id}`, text: `Your pledge: ${pledgeLine(p)} · ${pct(pledgeProgress(world, p))} of the way`, button: `${moveButton(move ?? undefined, "")}${bond}<button data-pick="${kind}|${esc(p.townId)}">Show ${esc(nameOf(p.townId))}</button>`, at: [p.townId], weight: Infinity });
     }
-    return items.sort((p, q) => q.weight - p.weight).slice(0, 5);
+    return items.sort((p, q) => q.weight - p.weight);
   }
-  // When each waiting item was first seen, by what it's about (its text to the first colon,
-  // numbers left out: "Steel short, 45k people..." is one item as its numbers move). Map 949's
-  // steel card stood ~120 days and nothing said so. Dropped when it goes; back, it starts again.
+  // The five shown hold still through a game day. Ranked afresh every redraw, they swapped
+  // places and came and went as their weights crossed and their lines were crossed (2026-11-02,
+  // map 2418 at 4x: "Restore the refinery" in and out, everything under it moving with it). Now
+  // they're ranked as a day begins or when you make a move; between, each keeps its place with
+  // its words kept up to date, one gone stays till the next ranking, and a new one joins at the
+  // foot while there's room.
+  let waitingRanked = "";
+  let waitingShown: Waiting[] = [];
+  function steadyWaiting(): Waiting[] {
+    const all = waitingOnYou();
+    const at = `${gameDay(world)}|${recorder.file.actions.length}`;
+    if (at !== waitingRanked) {
+      waitingRanked = at;
+      return (waitingShown = all.slice(0, 5));
+    }
+    const now = new Map(all.map((item) => [item.id, item]));
+    const kept = waitingShown.map((item) => now.get(item.id) ?? item);
+    for (const item of all) if (kept.length < 5 && !kept.some((k) => k.id === item.id)) kept.push(item);
+    return (waitingShown = kept);
+  }
+  // When each waiting item was first seen, by what it's about. Map 949's steel card stood ~120
+  // days and nothing said so. Dropped when it goes; back, it starts again.
   const waitingSince = new Map<string, number>();
-  const waitingKey = (text: string) => text.split(":")[0]!.replace(/[\d.,₦]+k?/g, "#");
   function waitingHtml(): string {
-    const items = waitingOnYou();
+    const items = steadyWaiting();
     const today = gameDay(world);
-    const keys = new Set(items.map((item) => waitingKey(item.text)));
-    for (const key of [...waitingSince.keys()]) if (!keys.has(key)) waitingSince.delete(key);
-    for (const key of keys) if (!waitingSince.has(key)) waitingSince.set(key, today);
+    const ids = new Set(items.map((item) => item.id));
+    for (const id of [...waitingSince.keys()]) if (!ids.has(id)) waitingSince.delete(id);
+    for (const id of ids) if (!waitingSince.has(id)) waitingSince.set(id, today);
     if (items.length === 0) return "";
     const age = (item: Waiting) => {
-      const days = today - (waitingSince.get(waitingKey(item.text)) ?? today);
+      const days = today - (waitingSince.get(item.id) ?? today);
       return days >= 10 ? ` <span class="age">· ${days} days now</span>` : "";
     };
     return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"${item.at.length > 0 ? ` data-at="${esc(item.at.join(","))}"` : ""}><span>${esc(item.text)}${age(item)}</span>${item.button}</div>`).join("")}</div>`;
@@ -671,14 +715,30 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   // --- The side panel ----------------------------------------------------------------
 
-  function sortRows<T>(rows: T[], table: string, keys: Record<string, (row: T) => number | string>): T[] {
-    const { key, dir } = sorts[table]!;
+  // A table's order is kept through a game day: ranked as the day begins, when you sort it, or
+  // when you make a move, and between, its figures move and its rows don't. Ranked afresh every
+  // redraw, two routes close in net swapped places four times a second (2026-11-02, map 2418 at
+  // 4x: the revenue screen's routes re-sorted under the pointer in 37 of 43 changes).
+  const ranked = new Map<string, { at: string; ids: string[] }>();
+  /** `group`: rows ranked apart under one table's sort (the network's lines, way by way). */
+  function sortRows<T extends { id: string }>(rows: T[], table: string, keys: Record<string, (row: T) => number | string>, group = table): T[] {
+    // A table with no sort of its own yet: by its first key, highest first.
+    const { key, dir } = (sorts[table] ??= { key: Object.keys(keys)[0]!, dir: -1 });
+    const at = `${gameDay(world)}|${recorder.file.actions.length}|${key}|${dir}`;
+    const was = ranked.get(group);
+    const place = new Map(was?.ids.map((id, i) => [id, i]));
+    // The same rows as when ranked: in that order.
+    if (was?.at === at && rows.length === was.ids.length && rows.every((r) => place.has(r.id))) {
+      return rows.slice().sort((x, y) => place.get(x.id)! - place.get(y.id)!);
+    }
     const get = keys[key]!;
-    return rows.slice().sort((x, y) => {
+    const sorted = rows.slice().sort((x, y) => {
       const a = get(x);
       const b = get(y);
       return (typeof a === "string" ? a.localeCompare(b as string) : (a as number) - (b as number)) * dir;
     });
+    ranked.set(group, { at, ids: sorted.map((r) => r.id) });
+    return sorted;
   }
   function th(table: string, key: string, label: string): string {
     const s = sorts[table]!;
@@ -686,34 +746,113 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   }
 
   function renderPanel(): void {
-    named = [];
     const scroll = panelEl.scrollTop;
     if (selected && !exists(selected)) selected = null;
     if (selected) {
-      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}<div class="pane"><button data-back="1">◂ All ${tab}</button>${detailHtml(selected)}</div>`);
+      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}<div class="pane"><button data-back="1">◂ ${TAB_NAME[tab]}</button>${detailHtml(selected)}</div>`);
     } else {
-      const tabs = `<div class="tabs">${(["routes", "towns", "sites"] as const).map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${t[0]!.toUpperCase()}${t.slice(1)}</button>`).join("")}</div>`;
-      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${tab === "routes" ? routesTable() : tab === "towns" ? townsTable() : sitesTable()}</div>`);
+      const tabs = `<div class="tabs">${TABS.map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${TAB_NAME[t]}</button>`).join("")}</div>`;
+      const list = tab === "network" ? hooks.moneyNote() + networkList() + fold("forecasts", "More: the forecasts", hooks.routesMore()) : tab === "towns" ? townsTable() : sitesTable();
+      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${list}</div>`);
     }
     panelEl.scrollTop = scroll;
   }
   function exists(sel: NonNullable<Selection>): boolean {
     if (sel.kind === "town" || sel.kind === "site") return world.towns.has(sel.id);
-    if (sel.kind === "route") return world.routes.some((r) => r.id === sel.id);
+    if (sel.kind === "route") return world.routes.some((r) => r.id === sel.id) || world.lorryRoutes.some((r) => r.id === sel.id);
     return world.simulation.map.segments.some((s) => s.id === sel.id);
   }
 
-  function routesTable(): string {
-    const all = routes();
-    const rows = sortRows(all, "routes", { name: (r) => routeName(r), vehicles: (r) => r.vehicles, riders: (r) => r.ridersPerDay, load: (r) => r.loadFactor, net: (r) => r.netPerDay });
-    const losing = all.filter((r) => r.netPerDay < 0).length;
-    const lines = lorrySummaries(world);
-    return `${hooks.moneyNote()}<h2>Your routes · ${all.length}${all.length ? `, ${losing} losing money` : ""}</h2>
-      ${all.length ? `<table><thead><tr>${th("routes", "name", "Route")}${th("routes", "vehicles", "Veh.")}${th("routes", "riders", "Riders/day")}${th("routes", "load", "Full")}${th("routes", "net", "Net/day")}</tr></thead><tbody>
-      ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${r.vehicles}</td><td>${int(r.ridersPerDay)}</td><td>${pct(r.loadFactor)}</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("")}
-      </tbody></table>` : `<p class="muted">No routes yet. Pick the bus tool <kbd>B</kbd>, click a town, then another.</p>`}
-      ${lines.length ? `<h2>Freight lines and lorries</h2><table><tbody>${lines.map((g) => `<tr><td><span class="swatch" style="background:var(--goods)"></span>${esc(routeName(g))}</td><td>${g.lorries}</td><td class="${g.netPerDay < 0 ? "down" : ""}">${naira(g.netPerDay)}</td></tr>`).join("")}</tbody></table>` : ""}
-      ${fold("routes-more", "More: lorries, corridors, your share", hooks.routesMore())}`;
+  // --- The network (lines.ts): everything you run, under what it runs on ----------------
+  // Each road (as a corridor is: the whole of it between two towns) and each stretch of track,
+  // with every line that runs along it -- a line through three towns under each road it uses,
+  // the buses and lorries and trains that share a road together. Your playtest (2026-11-02),
+  // of three lists tried: one table was cleaner, the network's pairing better; this is both.
+
+  // One reading of the lines and ways per moment of the game, however many lists and charts ask.
+  let linesAt = "";
+  let linesCache: Line[] = [];
+  let waysCache: Way[] = [];
+  const freshAt = () => `${world.economy.elapsedSeconds}|${recorder.file.actions.length}`;
+  function linesNow(): Line[] {
+    if (linesAt !== freshAt()) {
+      linesAt = freshAt();
+      linesCache = lines(world);
+      waysCache = [];
+    }
+    return linesCache;
+  }
+  function waysNow(): Way[] {
+    linesNow();
+    if (waysCache.length === 0) waysCache = ways(world);
+    return waysCache;
+  }
+  const lineName = (l: Line) => routeName(l);
+  const lineSwatch = (l: Line) => (l.family === "goods" ? labelOf(world, routeLabelKey(l.id))?.colour ?? "var(--goods)" : swatchOf(l));
+  const carriedText = (l: Line) => (l.family === "goods" ? `${int(l.carried)} t` : int(l.carried));
+  const filterOf = (l: Line, f: string) => f === "all" || l.family === f || l.mode === f;
+  let lineFilter = "all";
+  /** The roads and track nothing of yours runs on: listed only when asked. */
+  let showIdle = false;
+  const chips = (name: string, on: string, options: Array<[string, string, number]>) =>
+    `<div class="chips">${options.filter(([, , n], i) => i === 0 || n > 0).map(([id, label, n]) => `<button class="toggle${on === id ? " on" : ""}" data-chip="${name}|${id}">${label} <span class="muted">${n}</span></button>`).join("")}</div>`;
+  const verdictWord = (l: Line) => (l.verdict ? ` · <span class="warnword">${esc(VERDICT_WORDS[l.verdict] ?? l.verdict)}</span>` : "");
+  const lineKeys = { name: (l: Line) => lineName(l), vehicles: (l: Line) => l.vehicles, carried: (l: Line) => l.carried, full: (l: Line) => l.full, net: (l: Line) => l.netPerDay };
+
+  /** The ways in your remit: either end yours to answer for. */
+  const remitWays = () => waysNow().filter((w) => inRemit(world, w.a) || inRemit(world, w.b));
+  const wayKind = (w: Way) => (w.mode === "rail" ? (w.outOfService ? "Track · the old line, out of service" : "Track") : w.retired ? "Retired" : `${w.surface === "paved" ? "Paved" : w.surface === "mixed" ? "Part paved" : "Dirt"}${w.lane ? " · bus lane" : ""}`);
+  // Roads wear and jam (wear.ts, congestion.ts); track does neither, so only a road is flagged.
+  const wayTrouble = (w: Way) => (w.mode !== "road" || w.retired ? null : w.load > 0.9 && w.speed < 0.7 ? "Jammed" : w.condition < 0.5 ? "Worn" : null);
+  const wayName = (w: Way) => {
+    const key = w.mode === "road" ? roadLabelKeyOf(world, w.id) : null;
+    return (key && labelOf(world, key)?.name) || `${nameOf(w.a)} – ${nameOf(w.b)}`;
+  };
+  const corridorOf = (w: Way) => (w.mode === "road" ? corridorSummaries(world).find((c) => (c.a === w.a && c.b === w.b) || (c.a === w.b && c.b === w.a)) ?? null : null);
+  const noSeatOn = (w: Way) => {
+    const c = corridorOf(w);
+    const seat = c ? corridorNoSeat(world).get(c.key) : undefined;
+    return seat && seat.perDay >= NO_SEAT_MIN_PER_DAY ? seat : null;
+  };
+  /** A way in a line: what it is, how it's holding up, who carries its trips. */
+  function wayFacts(w: Way): string {
+    const c = corridorOf(w);
+    const trouble = wayTrouble(w);
+    const seat = noSeatOn(w);
+    return [
+      wayKind(w),
+      `${pct(w.condition)} condition`,
+      w.mode === "road" ? `traffic ${pct(w.load)}` : "",
+      trouble ? `<span class="warnword">${trouble}</span>` : "",
+      c ? `${c.takenSince !== null ? "<b>taken</b>, " : ""}you carry ${pct(c.you)}` : "",
+      seat ? `<span class="warnword">no seat ${int(seat.perDay)} a day</span>` : "",
+    ].filter(Boolean).join(" · ");
+  }
+
+  function networkList(): string {
+    const all = remitWays();
+    const ls = linesNow();
+    if (ls.length === 0) return `<p class="muted">No lines yet. Pick the bus tool <kbd>B</kbd>, click a town, then another.</p>`;
+    const on = waysOf(world, ls, all);
+    const shown = ls.filter((l) => filterOf(l, lineFilter));
+    const linesOn = new Map<string, Line[]>();
+    for (const l of shown) for (const id of on.get(l.id) ?? []) linesOn.set(id, [...(linesOn.get(id) ?? []), l]);
+    const used = sortRows(all.filter((w) => linesOn.has(w.id)), "network", { net: (w: Way) => (linesOn.get(w.id) ?? []).reduce((sum, l) => sum + l.netPerDay, 0) }, "network:ways");
+    const idle = all.filter((w) => !ls.some((l) => on.get(l.id)?.includes(w.id)));
+    const losing = ls.filter((l) => l.netPerDay < 0).length;
+    const count = (f: string) => ls.filter((l) => filterOf(l, f)).length;
+    const share = networkShare(world);
+    const wayRow = (w: Way) => `<tr class="wayrow" data-pick="segment|${w.id}"><td colspan="5">${wayTrouble(w) ? "⚠ " : ""}${esc(wayName(w))}<span class="kind">${wayFacts(w)}</span></td></tr>`;
+    const lineRow = (l: Line) => `<tr class="row" data-pick="route|${l.id}"><td><span class="swatch" style="background:${lineSwatch(l)}"></span>${esc(lineName(l))}<span class="kind">${KIND_NAME[l.kind].one}${verdictWord(l)}</span></td><td>${l.vehicles}</td><td>${carriedText(l)}</td><td>${pct(l.full)}</td><td class="${l.netPerDay < 0 ? "down" : ""}">${naira(l.netPerDay)}</td></tr>`;
+    const total = shown.reduce((sum, l) => sum + l.netPerDay, 0);
+    return `<h2>Your network · ${ls.length} ${ls.length === 1 ? "line" : "lines"}${losing ? `, ${losing} losing money` : ""}</h2>
+      <div class="bar3" title="Who carried trips between towns: you, the informal sector, stayed home"><i style="width:${pct(share.player)};background:var(--you)"></i><i style="width:${pct(share.informal)};background:var(--informal)"></i><i style="width:${pct(share.lost)};background:var(--home)"></i></div>
+      <p class="muted sharenote">Trips between towns: you carry ${pct(share.player)}, informal ${pct(share.informal)}, ${pct(share.lost)} stay home</p>
+      ${chips("lines", lineFilter, [["all", "All", ls.length], ["people", "People", count("people")], ["goods", "Goods", count("goods")], ["road", "Road", count("road")], ["rail", "Rail", count("rail")]])}
+      <table class="network"><thead><tr>${th("network", "name", "Line")}${th("network", "vehicles", "Veh.")}${th("network", "carried", "A day")}${th("network", "full", "Full")}${th("network", "net", "Net/day")}</tr></thead>
+      <tbody>${used.map((w) => wayRow(w) + sortRows(linesOn.get(w.id) ?? [], "network", lineKeys, `network:${w.id}`).map(lineRow).join("")).join("")}</tbody>
+      <tfoot><tr><td>${shown.length} ${shown.length === 1 ? "line" : "lines"}</td><td>${shown.reduce((sum, l) => sum + l.vehicles, 0)}</td><td></td><td></td><td class="${total < 0 ? "down" : ""}">${naira(total)}</td></tr></tfoot></table>
+      ${idle.length ? `<table class="network idle"><tbody><tr class="sec"><td colspan="5">Nothing of yours on them · ${idle.length} <button class="quiet" data-chip="idle|">${showIdle ? "Hide" : "Show"}</button></td></tr>${showIdle ? idle.map(wayRow).join("") : ""}</tbody></table>` : ""}`;
   }
 
   function townsTable(): string {
@@ -828,6 +967,28 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <table><tbody>${here.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
         ${fold("town", "More: its trips, parks, metro, strikes", hooks.townMore(t.id))}`;
     }
+    if (sel.kind === "route" && world.lorryRoutes.some((x) => x.id === sel.id)) {
+      // A goods line: the same card as a passenger line's, its figures in tonnes.
+      const l = linesNow().find((x) => x.id === sel.id)!;
+      const ds = days();
+      const net = ds.map((d) => d.lorries.find((x) => x.id === l.id)?.netPerDay ?? 0);
+      const first = Math.max(0, ds.findIndex((d) => d.lorries.some((x) => x.id === l.id)));
+      const d = diagnoseLorryRoute(world, l.id);
+      const stops = (l.mode === "rail" ? railPath(world, l.a, l.b) : roadPath(world, l.a, l.b))?.nodeIds ?? [l.a, l.b];
+      return `<div class="kicker">${l.kind === "freight" ? "Freight trains" : "Lorries"}${l.verdict ? ` · ${esc(VERDICT_WORDS[l.verdict] ?? l.verdict)}` : ""}</div>
+        <div class="head"><div class="title">${esc(lineName(l))}</div><div class="num ${l.netPerDay < 0 ? "down" : "up"}">${naira(l.netPerDay)}/day</div></div>
+        ${hooks.goodsWhy(l.id)}
+        <div class="tiles">
+          ${tile("Carried a day", `${int(l.carried)} t`, d ? `${int(d.outbound)} t want to go out, ${int(d.inbound)} t back` : "")}
+          ${tile("How full", pct(l.full))}
+          ${tile(l.kind === "freight" ? "Freight trains" : "Lorries", `${l.vehicles} <button data-remove="${l.id}" title="Sell one">−</button> <button data-add="${l.id}" title="Add one">+</button>`)}
+          ${tile("In / cost a day", `${nairaK(l.incomePerDay)} / ${nairaK(l.costPerDay)}`)}
+        </div>
+        ${carsHtml(l.id)}
+        ${d ? `<div class="chart"><div class="t"><span>The goods along it</span><span>carried ${pct(d.delivered)} · spoiled ${pct(d.spoiled)}</span></div><div class="bar3"><i style="width:${pct(d.delivered)};background:var(--goods)"></i><i style="width:${pct(d.spoiled)};background:var(--home)"></i></div></div>` : ""}
+        <div class="chart"><div class="t"><span>Net a day</span><span>since day ${ds[first]?.day ?? gameDay(world)}</span></div>${chartSvg([{ name: "Net a day", color: css("--goods"), values: net }], { height: 90, format: nairaK, from: first, zeroLine: true })}</div>
+        <h2>Stops</h2><div>${stops.map((x) => esc(nameOf(x))).join(" → ")}</div>`;
+    }
     if (sel.kind === "route") {
       const r = routes().find((x) => x.id === sel.id)!;
       const ds = days();
@@ -844,6 +1005,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
           ${tile("Vehicles", `${r.vehicles} <button data-remove="${r.id}" title="Sell one">−</button> <button data-add="${r.id}" title="Add one">+</button>`)}
           ${tile("In / cost a day", `${nairaK(r.incomePerDay)} / ${nairaK(r.costPerDay)}`)}
         </div>
+        ${carsHtml(r.id)}
         <div class="chart"><div class="t"><span>Net a day</span><span>since day ${ds[first]?.day ?? gameDay(world)}</span></div>${chartSvg([{ name: "Net a day", color: css("--you"), values: net }], { height: 90, format: nairaK, from: first, zeroLine: true })}</div>
         <h2>Stops</h2><div>${r.stops.map((s) => esc(nameOf(s))).join(" → ")}</div>
         ${fold("route", "More: why, its road, freight", hooks.routeMore(r.id))}`;
@@ -911,34 +1073,50 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         ${inn.length ? `<h2>In</h2><table><tbody>${flowRows(inn, (f) => f.from)}</tbody></table>` : ""}
         ${fold("site", "More: what it makes, expand, restore", hooks.townMore(t.id))}`;
     }
-    const s = world.simulation.map.segments.find((x) => x.id === sel.id)!;
-    const roadKey = s.type === "road" ? roadLabelKeyOf(world, s.id) : null;
-    const a = s.fromNodeId;
-    const b = s.toNodeId;
-    const cap = s.type === "rail" ? Infinity : roadCapacity(world, s.id);
-    const cars = privateLoad(world, s.id);
-    const flow = (world.roadFlowEMA.get(s.id) ?? 0) + cars;
-    const load = Number.isFinite(cap) && cap > 0 ? flow / cap : 0;
-    const speed = world.segmentSpeed.get(s.id) ?? 1;
-    const condition = s.condition ?? 1;
-    const yours = routes().filter((r) => r.stops.some((x, i) => i > 0 && ((r.stops[i - 1] === a && x === b) || (r.stops[i - 1] === b && x === a)))).reduce((sum, r) => sum + r.ridersPerDay, 0);
-    const corridor = corridorSummaries(world).find((c) => (c.a === a && c.b === b) || (c.a === b && c.b === a));
-    const problem: Problem = speed < 0.7
-      ? { text: `Jammed: traffic at ${pct(speed)} of free speed`, button: toolButton("road", s.surface === "dirt" ? "Pave it <kbd>R</kbd>" : "A bus lane <kbd>R</kbd>") }
-      : condition < 0.5 ? { text: "Worn: vehicles pay more on it", button: toolButton("fix", "Keep it up <kbd>F</kbd>") } : null;
-    return `<div class="kicker">${s.type === "rail" ? "Track" : `Road · ${s.surface ?? ""}${s.busLane ? " · bus lane" : ""}`}</div>
-      <div class="head"><div class="title">${esc(roadKey && labelOf(world, roadKey)?.name ? labelOf(world, roadKey)!.name! : `${nameOf(a)} – ${nameOf(b)}`)}</div></div>
-      ${roadKey && labelOf(world, roadKey)?.name ? `<div class="muted">${esc(nameOf(a))} – ${esc(nameOf(b))}</div>` : ""}
-      ${roadKey && s.type === "road" ? nameRow(roadKey, false) : ""}
+    // A road or a stretch of track, whole (lines.ts Way): what it is, how it's holding up, the
+    // lines on it, who carries its trips -- the corridor under More, folded into its card.
+    const piece = world.simulation.map.segments.find((x) => x.id === sel.id)!;
+    const w = waysNow().find((x) => x.pieces.some((p) => p.id === piece.id)) ?? null;
+    if (!w) return "";
+    const roadKey = w.mode === "road" ? roadLabelKeyOf(world, w.id) : null;
+    const named = roadKey ? labelOf(world, roadKey)?.name : undefined;
+    const busiest = w.pieces.reduce((best, p) => ((world.roadFlowEMA.get(p.id) ?? 0) > (world.roadFlowEMA.get(best.id) ?? 0) ? p : best), w.pieces[0]!);
+    const cars = w.mode === "road" ? privateLoad(world, busiest.id) : 0;
+    const flow = (world.roadFlowEMA.get(busiest.id) ?? 0) + cars;
+    const ls = linesNow();
+    const on = waysOf(world, ls, [w]);
+    const here = ls.filter((l) => on.get(l.id)?.includes(w.id));
+    const c = corridorOf(w);
+    const seat = noSeatOn(w);
+    const problem: Problem = w.outOfService ? null
+      : w.mode === "road" && w.speed < 0.7 && w.load > 0.9 ? { text: `Jammed: traffic at ${pct(w.speed)} of free speed`, button: toolButton("road", w.surface === "dirt" ? "Pave it <kbd>R</kbd>" : "A bus lane <kbd>R</kbd>", [w.a, w.b]) }
+      : seat ? { text: `No seat for ${int(seat.perDay)} a day, most between ${nameOf(seat.worst.a)} and ${nameOf(seat.worst.b)}`, button: moveButton(seat.move, "") }
+      : null;
+    // Its wear, as one decision (brief, Revision 2: wear per corridor, never per piece).
+    const wear = w.mode === "road" && world.tuning.wearEnabled ? corridorWear(world, w.a, w.b) : null;
+    const first = w.pieces[0]!;
+    const retire = w.yours ? `<button data-retire="${first.id}" title="Stop its upkeep and tolls now; it decays and is gone in ${world.tuning.retireGoneDays} days. Towns it joined can be cut off; your lines on it go round, or are sold if nothing else joins their towns. Track can then be laid on its line for less (K).">Retire</button>` : "";
+    const wearHtml = !wear ? ""
+      : first.retiredAt !== undefined ? `<div class="problem"><span>Retired day ${gameDay(world, first.retiredAt)}: gone on day ${gameDay(world, goneAt(world, first))}</span><button data-restore="${first.id}" title="Repair it to new and keep it">Restore · ${nairaK(restoreRoadCost(world, first.id))}</button></div>`
+      : wear.kept ? `<div class="problem none"><span>Kept up: ${naira(wear.upkeepPerDay)} a day</span><span class="actions"><button data-keep="${first.id}|0" title="Stop paying to keep it up: it starts wearing again">Stop</button>${retire}</span></div>`
+      : `<div class="problem${wear.condition >= 0.97 ? " none" : ""}"><span>${wear.condition >= 0.97 ? "Sound" : `Worn: ${pct(wear.speed)} speed${wear.roughPerDay >= 1 ? `, costs your vehicles ${naira(wear.roughPerDay)} a day` : ""}`}</span><span class="actions"><button data-keep="${first.id}|1" title="Repair it as it wears, billed as it goes${wear.repair >= 1 ? `; the catch-up repair (${naira(wear.repair)}) is charged now` : ""}">Keep it up · ${nairaK(wear.upkeepPerDay)}/day</button>${wear.repair >= 1 ? `<button data-fixnow="${first.id}" title="Repair all of it to new, once">Fix now · ${nairaK(wear.repair)}</button>` : ""}${retire}</span></div>`;
+    const costs = c ? [c.leviesLostPerDay >= 1 ? `park levies ${naira(-c.leviesLostPerDay)} a day since you came` : "", c.lastStrikeCost !== null ? (c.lastStrikeCost < 1 ? "the last strike cost nothing" : `the last strike cost ${naira(c.lastStrikeCost)}`) : c.takenSince !== null && !c.hasLane ? "no pushback without a lane" : ""].filter(Boolean) : [];
+    return `<div class="kicker">${w.mode === "rail" ? "Track" : "Road"} · ${wayKind(w).replace(/^Track( · )?/, "") || "in service"}${w.pieces.length > 1 ? ` · ${w.pieces.length} stretches` : ""}</div>
+      <div class="head"><div class="title">${esc(named || `${nameOf(w.a)} – ${nameOf(w.b)}`)}</div></div>
+      ${named ? `<div class="muted">${esc(nameOf(w.a))} – ${esc(nameOf(w.b))}</div>` : ""}
+      ${roadKey ? nameRow(roadKey, false) : ""}
       ${problemHtml(problem)}
+      ${wearHtml}
       <div class="tiles">
-        ${tile("Traffic", pct(load), "of what it carries before it jams")}
+        ${w.mode === "road" ? tile("Traffic", pct(w.load), "of what it carries before it jams") : ""}
         ${cars > 0 && flow > 0 ? tile("Private cars", pct(cars / flow), "of its traffic") : ""}
-        ${tile("Speed", pct(speed))}
-        ${tile("Your riders along it", int(yours))}
-        ${tile("Condition", pct(condition))}
+        ${w.mode === "road" ? tile("Speed", pct(w.speed)) : ""}
+        ${tile("Condition", pct(w.condition), w.kept ? "kept up" : "")}
+        ${w.upkeepPerDay >= 1 ? tile("Upkeep", `${nairaK(w.upkeepPerDay)}/day`) : ""}
       </div>
-      ${corridor ? `<h2>Who carries its trips${corridor.takenSince !== null ? " · taken" : ""}</h2><div class="bar3"><i style="width:${pct(corridor.you)};background:var(--you)"></i><i style="width:${pct(corridor.informal)};background:var(--informal)"></i><i style="width:${pct(corridor.lost)};background:var(--home)"></i></div><div class="muted">you ${pct(corridor.you)} · informal ${pct(corridor.informal)} · stayed home ${pct(corridor.lost)}</div>` : ""}`;
+      ${c ? `<h2>Who carries its trips${c.takenSince !== null ? ` · taken day ${gameDay(world, c.takenSince)}` : ` · taken at ${pct(world.tuning.corridorTakenShare)}`}</h2><div class="bar3"><i style="width:${pct(c.you)};background:var(--you)"></i><i style="width:${pct(c.informal)};background:var(--informal)"></i><i style="width:${pct(c.lost)};background:var(--home)"></i></div><div class="muted">you ${pct(c.you)} · informal ${pct(c.informal)} · stayed home ${pct(c.lost)}${costs.length ? ` · ${costs.join(" · ")}` : ""}</div>` : ""}
+      <h2>Your lines on it · ${here.length}</h2>
+      <table><tbody>${here.map((l) => `<tr class="row" data-pick="route|${l.id}"><td><span class="swatch" style="background:${lineSwatch(l)}"></span>${esc(lineName(l))}<span class="kind">${KIND_NAME[l.kind].one}${verdictWord(l)}</span></td><td>${l.vehicles}</td><td class="${l.netPerDay < 0 ? "down" : ""}">${naira(l.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>`;
   }
 
   // --- The log -----------------------------------------------------------------------
@@ -992,11 +1170,15 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
     // Only when something new happened: a redraw under the pointer swallows a click.
     if (!force && entries.length === logSize) return;
-    logSize = entries.length;
     const groups: Array<[string, string]> = [["all", "All"], ["trouble", "Strikes"], ["sites", "Sites"], ["growth", "Growth"], ["corridors", "Corridors"], ["money", "Money"]];
-    logShown = entries.filter((e) => logFilter === "all" || e.group === logFilter).reverse();
-    patchHtml(logEl, `<h2>What happened</h2><div id="logfilter">${groups.map(([id, label]) => `<button data-log="${id}" class="${logFilter === id ? "on" : ""}">${label}</button>`).join("")}</div>
-      ${logShown.map((e, i) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}`);
+    // Each line by its place in the whole log, which only grows: a log held under the pointer
+    // (patch.ts) still opens the line clicked.
+    logShown = entries;
+    const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => logFilter === "all" || e.group === logFilter).reverse();
+    const drawn = patchHtml(logEl, `<h2>What happened</h2><div id="logfilter">${groups.map(([id, label]) => `<button data-log="${id}" class="${logFilter === id ? "on" : ""}">${label}</button>`).join("")}</div>
+      ${shown.map(({ e, i }) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}`);
+    // Held under the pointer, it's drawn again once the pointer leaves.
+    if (drawn) logSize = entries.length;
   }
 
   // --- The term's verdict and your record (brief, Revision 5, step 3) -----------------
@@ -1122,9 +1304,132 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (open) renderRevenue();
   }
 
+  /**
+   * A day's money as one statement, over the same days as the strip's net (history.ts
+   * averageBudget), so its net is the strip's: your lines in their four families -- passenger
+   * fares and goods takings shared out by what each line takes, running costs and fuel above the
+   * pump by what each costs -- then the roads, the state, the rest. What the treasury takes,
+   * the year-end sweep and bonds aren't running costs (budget.ts): after the net, not in it.
+   */
+  interface MoneyRow { name: string; value: number; history: number[]; note?: string; income?: number; cost?: number }
+  interface MoneySection { name: string; rows: MoneyRow[]; note?: string }
+  function moneyStatement(): { sections: MoneySection[]; net: number; netHistory: number[]; after: MoneyRow[]; kept: number } {
+    const avg = averageBudget(world) as unknown as Record<string, number>;
+    const last = (k: string | string[]) => (Array.isArray(k) ? k : [k]).reduce((sum, key) => sum + (avg[key] ?? 0), 0);
+    const ls = linesNow();
+    const shareOf = (inGroup: (l: Line) => boolean, among: (l: Line) => boolean, of: (l: Line) => number) => {
+      const total = ls.filter(among).reduce((sum, l) => sum + Math.max(0, of(l)), 0);
+      return total > 0 ? ls.filter((l) => among(l) && inGroup(l)).reduce((sum, l) => sum + Math.max(0, of(l)), 0) / total : 0;
+    };
+    const ds = days();
+    const families: MoneyRow[] = [];
+    for (const g of GROUPS) {
+      const inGroup = (l: Line) => l.family === g.family && l.mode === g.mode;
+      if (!ls.some(inGroup)) continue;
+      const income = last(g.family === "people" ? "fares" : "goods") * shareOf(inGroup, (l) => l.family === g.family, (l) => l.incomePerDay);
+      const cost = last(["running", "fuel"]) * shareOf(inGroup, () => true, (l) => l.costPerDay);
+      const history = ds.map((d) => [...d.routes, ...d.lorries].filter((x) => {
+        const l = ls.find((y) => y.id === x.id);
+        return l ? inGroup(l) : false;
+      }).reduce((sum, x) => sum + x.netPerDay, 0));
+      families.push({ name: g.name, value: income - cost, history, income, cost, note: `in ${nairaK(income)} · running ${nairaK(cost)}` });
+    }
+    const fuel = last("fuel");
+    const row = (name: string, keys: string | string[], sign: 1 | -1, note?: string): MoneyRow => ({ name, value: sign * last(keys), history: dailyBudget(keys).map((v) => sign * v), note });
+    const keep = (rows: MoneyRow[]) => rows.filter((r) => Math.abs(r.value) >= 1 || r.history.some((v) => Math.abs(v) >= 1));
+    const sections: MoneySection[] = [
+      { name: "Your lines", rows: [...families, ...keep([row("Metro fares", "metro", 1)])], note: fuel >= 1 ? `their running includes ${nairaK(fuel)} of fuel above the pump` : undefined },
+      { name: "Roads", rows: keep([row("Tolls", "tolls", 1), row("Upkeep", ["upkeep", "enforcement"], -1)]) },
+      { name: "The state", rows: keep([row("Allocation", "allocation", 1)]) },
+      { name: "The rest", rows: keep([row("Park levies", "levies", 1, `the agberos kept ${nairaK(last("agberos"))}`), row("Loading levies", "loading", 1), row("Export payments", "exports", 1)]) },
+    ].filter((sec) => sec.rows.length > 0);
+    const net = sections.reduce((sum, sec) => sum + sec.rows.reduce((t, r) => t + r.value, 0), 0);
+    const after = keep([row("Treasury levy", "remitted", -1), row("Year-end sweep", "swept", -1), row("Bonds and settlements", ["bonds", "settlements"], -1)]);
+    const ins = dailyBudget(["fares", "goods", "metro", "tolls", "allocation", "levies", "loading", "exports"]);
+    const outs = dailyBudget(["running", "fuel", "upkeep", "enforcement"]);
+    return { sections, net, netHistory: ins.map((v, i) => v - (outs[i] ?? 0)), after, kept: net + after.reduce((sum, r) => sum + r.value, 0) };
+  }
+
+  /** The statement: a day's money, line by line of the budget. */
+  function statementHtml(from: number): string {
+    const m = moneyStatement();
+    const spark = (values: number[]) => sparkline(values.slice(Math.max(from, values.length - 30)), css("--ink-2"));
+    const sign = (v: number) => `<td class="num ${v < 0 ? "down" : v > 0 ? "up" : ""}">${v > 0 ? "+" : ""}${naira(v)}</td>`;
+    return `<div class="card"><h3>A day's money</h3><div class="sub">5-day averages · the last 30 days beside each</div>
+        <table class="statement"><tbody>
+        ${m.sections.map((sec) => `<tr class="sec"><td colspan="3">${sec.name}${sec.note ? ` <span class="muted">· ${esc(sec.note)}</span>` : ""}</td></tr>${sec.rows.map((r) => `<tr><td>${esc(r.name)}${r.note ? `<span class="kind">${esc(r.note)}</span>` : ""}</td>${sign(r.value)}<td class="spark">${spark(r.history)}</td></tr>`).join("")}`).join("")}
+        <tr class="total"><td>Net a day<span class="kind">as the strip shows it</span></td>${sign(m.net)}<td class="spark">${spark(m.netHistory)}</td></tr>
+        ${m.after.length ? `<tr class="sec"><td colspan="3">Then, not running costs</td></tr>${m.after.map((r) => `<tr><td>${esc(r.name)}</td>${sign(r.value)}<td class="spark">${spark(r.history)}</td></tr>`).join("")}<tr class="total"><td>Kept a day</td>${sign(m.kept)}<td></td></tr>` : ""}
+        </tbody></table></div>`;
+  }
+
+  /**
+   * Every line's money, in its family: what it carried, took and cost a day, and its net as a
+   * bar from a zero line -- earners right, bleeders left -- so the one bleeding shows at a look.
+   */
+  function linesMoneyHtml(): string {
+    const ls = linesNow();
+    if (ls.length === 0) return "";
+    const most = Math.max(1, ...ls.map((l) => Math.abs(l.netPerDay)));
+    const keys = { name: (l: Line) => lineName(l), carried: (l: Line) => l.carried, income: (l: Line) => l.incomePerDay, cost: (l: Line) => l.costPerDay, net: (l: Line) => l.netPerDay };
+    const groups = GROUPS.map((g) => {
+      const mine = ls.filter((l) => l.family === g.family && l.mode === g.mode);
+      if (mine.length === 0) return "";
+      return `<tr class="sec"><td colspan="6">${g.name}</td></tr>${sortRows(mine, "revenue", keys, `revenue:${g.id}`).map((l) => {
+        const w = (Math.abs(l.netPerDay) / most) * 50;
+        return `<tr class="row" data-pick="route|${l.id}"><td><span class="swatch" style="background:${lineSwatch(l)}"></span>${esc(lineName(l))} <span class="muted">${KIND_NAME[l.kind].one}</span></td><td>${carriedText(l)}</td><td>${naira(l.incomePerDay)}</td><td>${naira(l.costPerDay)}</td><td class="${l.netPerDay < 0 ? "down" : "up"}">${naira(l.netPerDay)}</td><td class="dcell"><span class="dbar"><i class="${l.netPerDay < 0 ? "neg" : "pos"}" style="${l.netPerDay < 0 ? "right:50%" : "left:50%"};width:${w}%"></i></span></td></tr>`;
+      }).join("")}`;
+    }).join("");
+    return `<div class="card wide"><h3>Your lines</h3><div class="sub">Their figures today, a day · earning right of the line, losing left · click a column to sort, a line to open it</div>
+      <table class="linesmoney"><thead><tr>${th("revenue", "name", "Line")}${th("revenue", "carried", "Carried")}${th("revenue", "income", "Income")}${th("revenue", "cost", "Cost")}${th("revenue", "net", "Net")}<th></th></tr></thead><tbody>${groups}</tbody></table></div>`;
+  }
+
+  /** Where a day's money comes from and where it goes, as a flow. */
+  function flowHtml(): string {
+    const m = moneyStatement();
+    // A family's takings in and its running out, apart; the rest by its sign; then the treasury and bonds.
+    const all = [...m.sections.flatMap((sec) => sec.rows), ...m.after];
+    const ins = all.flatMap((r) => (r.income !== undefined ? (r.income >= 1 ? [{ name: `${r.name}: takings`, value: r.income }] : []) : r.value > 0 ? [{ name: r.name, value: r.value }] : []));
+    const outs = all.flatMap((r) => (r.cost !== undefined ? (r.cost >= 1 ? [{ name: `${r.name}: running`, value: r.cost }] : []) : r.value < 0 ? [{ name: r.name, value: -r.value }] : []));
+    if (m.kept > 0) outs.push({ name: "Kept", value: m.kept });
+    else if (m.kept < 0) ins.push({ name: "From your savings", value: -m.kept });
+    const total = Math.max(1, ins.reduce((sum, x) => sum + x.value, 0));
+    const W = 1000;
+    const rowGap = 8;
+    const H = Math.max(200, 30 * Math.max(ins.length, outs.length) + 24);
+    const usable = H - 24 - rowGap * Math.max(ins.length, outs.length);
+    const scale = usable / total;
+    const col = (items: Array<{ name: string; value: number }>, x: number, anchor: "start" | "end", colour: (name: string) => string) => {
+      let y = 12;
+      let mid = (H - total * scale) / 2;
+      return items.map((it) => {
+        const h = Math.max(2, it.value * scale);
+        const out = { ...it, y, h, mid, x, anchor, colour: colour(it.name) };
+        // Room for its label however small it is.
+        y += Math.max(h + rowGap, 18);
+        mid += it.value * scale;
+        return out;
+      });
+    };
+    const left = col(ins, 0, "start", (n) => (n === "From your savings" ? css("--bad") : css("--good")));
+    const right = col(outs, W, "end", (n) => (n === "Kept" ? css("--you") : css("--warn")));
+    const bx = W / 2 - 8;
+    const band = (x0: number, y0: number, h0: number, x1: number, y1: number, h1: number, colour: string) => {
+      const c = (x0 + x1) / 2;
+      return `<path d="M${x0},${y0} C${c},${y0} ${c},${y1} ${x1},${y1} L${x1},${y1 + h1} C${c},${y1 + h1} ${c},${y0 + h0} ${x0},${y0 + h0} Z" fill="${colour}" fill-opacity="0.28"/>`;
+    };
+    const svg = `<svg class="flow" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+      ${left.map((it) => band(240, it.y, it.h, bx, it.mid, it.value * scale, it.colour)).join("")}
+      ${right.map((it) => band(bx + 16, it.mid, it.value * scale, W - 240, it.y, it.h, it.colour)).join("")}
+      <rect x="${bx}" y="${(H - total * scale) / 2}" width="16" height="${total * scale}" rx="3" fill="${css("--ink-2")}"/>
+      ${left.map((it) => `<rect x="234" y="${it.y}" width="6" height="${it.h}" fill="${it.colour}"/><text x="228" y="${it.y + it.h / 2 + 4}" text-anchor="end" class="fl">${esc(it.name)} <tspan class="fv">${nairaK(it.value)}</tspan></text>`).join("")}
+      ${right.map((it) => `<rect x="${W - 240}" y="${it.y}" width="6" height="${it.h}" fill="${it.colour}"/><text x="${W - 228}" y="${it.y + it.h / 2 + 4}" class="fl">${esc(it.name)} <tspan class="fv">${nairaK(it.value)}</tspan></text>`).join("")}
+    </svg>`;
+    return `<div class="card wide"><h3>Where a day's money comes from, and where it goes</h3><div class="sub">5-day averages, the strip's${m.kept < 0 ? " · more goes out than comes in: the difference comes from your savings" : ""}</div>${svg}</div>`;
+  }
+
   function renderRevenue(): void {
     const ds = days();
-    const last = ds[ds.length - 1];
     const from = range > 0 ? Math.max(0, ds.length - range) : 0;
     const c = (v: string) => css(v);
     const income: Series[] = [
@@ -1147,10 +1452,20 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     ];
     const lastOf = (s: Series[]) => s.reduce((sum, x) => sum + (x.values[x.values.length - 1] ?? 0), 0);
     const key = (s: Series[]) => `<div class="keyrow">${s.map((x) => `<span><i style="background:${x.color}"></i>${esc(x.name)} ${nairaK(x.values[x.values.length - 1] ?? 0)}</span>`).join("")}</div>`;
-    const rows = sortRows(routes(), "revenue", { name: (r) => routeName(r), income: (r) => r.incomePerDay, cost: (r) => r.costPerDay, net: (r) => r.netPerDay, riders: (r) => r.ridersPerDay });
-    const total = (k: string) => ((last?.budget ?? {}) as Record<string, number>)[k] ?? 0;
+    const total = (k: string) => ((ds[ds.length - 1]?.budget ?? {}) as Record<string, number>)[k] ?? 0;
     const n = now();
     const scroll = revenueEl.scrollTop;
+    const netAndMoney = `<div class="card"><h3>Net a day and money held</h3><div class="sub">Net a day</div>${chartSvg([{ name: "Net a day", color: c("--you"), values: ds.map((d) => d.netPerDay) }], { height: 140, format: nairaK, from, zeroLine: true })}<div class="sub">Money held</div>${chartSvg([{ name: "Money", color: c("--ink-2"), values: ds.map((d) => d.funds) }], { height: 110, format: nairaK, from })}</div>`;
+    const charts = `
+        <div class="card"><h3>Income a day, by source</h3><div class="sub">5-day average, stacked</div>${key(income)}${chartSvg(income, { height: 200, stacked: true, format: nairaK, from })}</div>
+        <div class="card"><h3>Costs a day, by kind</h3><div class="sub">5-day average, stacked</div>${key(costs)}${chartSvg(costs, { height: 200, stacked: true, format: nairaK, from })}</div>
+        <div class="card"><h3>What the treasury took</h3><div class="sub">Its levy a day (5-day average), and each year-end sweep on its day</div><div class="keyrow">${treasury.map((x) => `<span><i style="background:${x.color}"></i>${esc(x.name)}</span>`).join("")}</div>${chartSvg(treasury, { height: 160, format: nairaK, from })}</div>
+        <div class="card"><h3>Where the money went, all game</h3><div class="sub">Totals since day 1</div>
+          <table><tbody>
+            ${[["Fares", "fares"], ["Tolls", "tolls"], ["State allocation", "allocation"], ["Park levies (agberos kept " + nairaK(total("agberos")) + ")", "levies"], ["Goods", "goods"], ["Export payments", "exports"]].map(([l, k]) => `<tr><td>${l}</td><td class="up">+${nairaK(total(k!))}</td></tr>`).join("")}
+            ${[["Running costs", "running"], ["Road upkeep", "upkeep"], ["Treasury levy", "remitted"], ["Swept at year end", "swept"], ["Fuel above the pump price", "fuel"]].map(([l, k]) => `<tr><td>${l}</td><td class="down">−${nairaK(total(k!))}</td></tr>`).join("")}
+          </tbody></table></div>
+        <div class="card wide treasury"><h3>The treasury</h3><div class="sub">Bonds, the named project, the chains, this period's budget</div><div class="panel-body">${hooks.treasuryMore()}</div></div>`;
     patchHtml(revenueEl, `
       <div class="top"><div class="title">Revenue · day ${n.day}</div>
         <div class="ranges">${[[0, "All"], [60, "60 days"], [30, "30 days"]].map(([k, label]) => `<button data-range="${k}" class="${range === k ? "on" : ""}">${label}</button>`).join("")}<button data-revenue="close">Back to the map ✕</button></div></div>
@@ -1162,22 +1477,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="hero"><div class="k">Costs a day</div><div class="v num">${naira(lastOf(costs))}</div></div>
         <div class="hero"><div class="k">Money</div><div class="v num">${naira(n.funds)}</div></div>
       </div>
-      <div class="cards">
-        <div class="card"><h3>Income a day, by source</h3><div class="sub">5-day average, stacked</div>${key(income)}${chartSvg(income, { height: 200, stacked: true, format: nairaK, from })}</div>
-        <div class="card"><h3>Costs a day, by kind</h3><div class="sub">5-day average, stacked</div>${key(costs)}${chartSvg(costs, { height: 200, stacked: true, format: nairaK, from })}</div>
-        <div class="card"><h3>What the treasury took</h3><div class="sub">Its levy a day (5-day average), and each year-end sweep on its day</div><div class="keyrow">${treasury.map((x) => `<span><i style="background:${x.color}"></i>${esc(x.name)}</span>`).join("")}</div>${chartSvg(treasury, { height: 160, format: nairaK, from })}</div>
-        <div class="card"><h3>Net a day and money held</h3><div class="sub">Net a day</div>${chartSvg([{ name: "Net a day", color: c("--you"), values: ds.map((d) => d.netPerDay) }], { height: 140, format: nairaK, from, zeroLine: true })}<div class="sub">Money held</div>${chartSvg([{ name: "Money", color: c("--ink-2"), values: ds.map((d) => d.funds) }], { height: 110, format: nairaK, from })}</div>
-        <div class="card"><h3>Where the money went, all game</h3><div class="sub">Totals since day 1</div>
-          <table><tbody>
-            ${[["Fares", "fares"], ["Tolls", "tolls"], ["State allocation", "allocation"], ["Park levies (agberos kept " + nairaK(total("agberos")) + ")", "levies"], ["Goods", "goods"], ["Export payments", "exports"]].map(([l, k]) => `<tr><td>${l}</td><td class="up">+${nairaK(total(k!))}</td></tr>`).join("")}
-            ${[["Running costs", "running"], ["Road upkeep", "upkeep"], ["Treasury levy", "remitted"], ["Swept at year end", "swept"], ["Fuel above the pump price", "fuel"]].map(([l, k]) => `<tr><td>${l}</td><td class="down">−${nairaK(total(k!))}</td></tr>`).join("")}
-          </tbody></table></div>
-        <div class="card wide treasury"><h3>The treasury</h3><div class="sub">Bonds, the named project, the chains, this period's budget</div><div class="panel-body">${hooks.treasuryMore()}</div></div>
-        <div class="card wide"><h3>Your routes</h3><div class="sub">Click a column to sort · today's figures a day</div>
-          <table><thead><tr>${th("revenue", "name", "Route")}${th("revenue", "riders", "Riders/day")}${th("revenue", "income", "Income")}${th("revenue", "cost", "Cost")}${th("revenue", "net", "Net")}</tr></thead><tbody>
-          ${rows.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}</td><td>${naira(r.incomePerDay)}</td><td>${naira(r.costPerDay)}</td><td class="${r.netPerDay < 0 ? "down" : "up"}">${naira(r.netPerDay)}</td></tr>`).join("")}
-          </tbody></table></div>
-      </div>`);
+      <div class="cards">${flowHtml()}${statementHtml(from)}${netAndMoney}${linesMoneyHtml()}${charts}</div>`);
     revenueEl.scrollTop = scroll;
   }
 
@@ -1191,7 +1491,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   /** A click the screen handles itself: true when it did. Moves and old-card buttons are the page's. */
   function onClick(target: HTMLElement): boolean {
-    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename]");
+    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename],[data-chip]");
     if (!el || el.closest("details.more .panel-body")) return false;
     if (el.dataset.rename) {
       renaming = el.dataset.rename;
@@ -1199,7 +1499,20 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       document.querySelector<HTMLInputElement>("#panel .namein")?.focus();
       return true;
     }
-    if (el.dataset.tab) { tab = el.dataset.tab as typeof tab; renderPanel(); return true; }
+    if (el.dataset.tab) {
+      // The old "routes" (a Waiting on you button): the network.
+      tab = el.dataset.tab === "routes" ? "network" : (el.dataset.tab as Tab);
+      selected = null;
+      renderPanel();
+      return true;
+    }
+    if (el.dataset.chip) {
+      const [name, value] = el.dataset.chip.split("|") as [string, string];
+      if (name === "lines") lineFilter = value;
+      else showIdle = !showIdle;
+      renderPanel();
+      return true;
+    }
     if (el.dataset.back) { select(null); return true; }
     if (el.dataset.sort) {
       const [table, key] = el.dataset.sort.split(":") as [string, string];
@@ -1262,9 +1575,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     /** Naming done (kept or dropped): the field closes. */
     stopRenaming: () => { renaming = null; renderPanel(); },
     /** The named move a problem line's button offers. */
-    namedMove: (i: number): NamedMove | undefined => named[i],
+    namedMove: (key: string): NamedMove | undefined => named.get(key),
     /** The towns and sites on Waiting on you: the map marks these, and only these. */
-    waitingTargets: (): Set<string> => new Set(waitingOnYou().flatMap((item) => item.at)),
+    waitingTargets: (): Set<string> => new Set(waitingShown.flatMap((item) => item.at)),
     get selected() { return selected; },
     /** What the map focuses: a row hovered, else the thing picked. */
     get focus(): Selection { return hover ?? (selectedFromMap ? null : selected); },

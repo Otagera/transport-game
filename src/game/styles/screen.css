@@ -119,3 +119,21 @@ details.more > .panel-body { padding-top: var(--sp-2); }
 .pledges-pane .pledge .bar { flex: 1 1 auto; width: auto; background: var(--line); }
 .pledges-pane .pledge button { flex: none; font-size: var(--fs-dense); padding: 0 var(--sp-2); }
 .hero.opens { cursor: pointer; }
+
+/* The network (screen.ts, lines.ts): each road or stretch of track a header row, the lines on it under it. */
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: 0 0 var(--sp-2); }
+.chips button { padding: 0 var(--sp-2); font-size: var(--fs-caption); }
+.chips .muted { margin-left: var(--sp-1); }
+td .kind { display: block; font-size: var(--fs-caption); color: var(--muted); }
+.warnword { color: var(--warn); font-weight: 600; }
+#panel tfoot td { border-bottom: 0; font-weight: 600; color: var(--ink-2); }
+.why { margin: var(--sp-2) 0; font-size: var(--fs-dense); color: var(--ink-2); }
+.sharenote { margin: var(--sp-1) 0 var(--sp-2); font-size: var(--fs-caption); }
+#panel table.network tr.wayrow td { text-align: left; padding-top: var(--sp-3); font-weight: 600; color: var(--ink); border-bottom: 1px solid var(--line); cursor: pointer; }
+#panel table.network tr.wayrow:hover td { background: var(--surface-2); }
+#panel table.network tr.wayrow .kind { font-weight: 400; }
+#panel table.network tr.row td:first-child { padding-left: var(--sp-3); }
+#panel table.network.idle { margin-top: var(--sp-2); }
+#panel table.network tr.sec td { text-align: left; color: var(--muted); font-size: var(--fs-caption); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+#panel table.network tr.sec button { margin-left: var(--sp-2); padding: 0 var(--sp-2); font-size: var(--fs-caption); text-transform: none; letter-spacing: 0; }
+.problem .actions { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); }

@@ -306,7 +306,8 @@ terrain isn't applied: the map still draws shaded hills.
   a light hill wash, and "THE RIDGE" and "THE RIVER" on the ground where there's room.
   Route lines Mini Metro's way: a slot per route on every road, each drawn parallel to the
   road in its slot (`drawRouteLines`, `strokeParallel`).
-- **Rail lines' cards** (2026-11-02): a passenger line's card and a freight line's row say how
+- **Rail lines' cards** (2026-11-02; on both line cards under their tiles since the network,
+  2026-11-03, the `cars` hook): a passenger line's card and a freight line's card say how
   long their trains run ("2 of 4 cars a train, 160 seats each") with "+ carriage" or "+ wagon" and
   its price for every train on the line (`carsRow`, rail.ts `addCar`): each car's seats or tonnes
   and running cost, and "no more room on the track". The Train and Freight previews say a line's
@@ -836,7 +837,8 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   revenue screen.
 - **The log**: the run's events as lines, filterable, a click shows the town or site it's about.
   Redrawn only when an event arrives -- a redraw under the pointer swallows a click.
-- **The panel**: Routes, Towns, Sites tabs that sort by column, or one thing picked -- a row, a
+- **The panel**: Network, Towns, Sites tabs that sort by column (Routes until 2026-11-02, see The
+  network below), or one thing picked -- a row, a
   log line, a town pointed at on the map (it stays when the pointer leaves for the panel; not
   mid-build), a road clicked with nothing else under it. Each has the lab's tiles, a chart
   over the days, and one problem line. Its button is real: a named move (`problems.ts`) is
@@ -844,13 +846,21 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   (`data-tool`). A row hovered, or a thing picked from the panel, focuses the map; a town
   shown because you pointed at it doesn't fade the map.
 - **"More"**: the old cards, whole, under a fold that stays open across redraws -- the town or
-  site card (trips, parks, metro, strikes, production, expand, restore), the route card, the
-  routes wing's rest (lorries, corridors, your share), and the Treasury drawer as a card on the
-  revenue screen (bonds, the named project, chains). Their buttons go through `onPanelClick`
+  site card (trips, parks, metro, strikes, production, expand, restore), the route card, and the
+  Treasury drawer as a card on the revenue screen (bonds, the named project, chains). The routes
+  wing's rest (lorries, corridors, your share) went into the network and the road card
+  (2026-11-02): its corridors were another style under a fold; only the developer's forecasts
+  are left under the network. Their buttons go through `onPanelClick`
   as before: nothing the old cards could do was lost.
-- **The revenue screen**: the lab's -- heroes, income and costs stacked, what the treasury
-  took, net and money, totals since day 1, the routes table -- plus the treasury card.
-  Esc closes it.
+- **The revenue screen** (2026-11-02; of two tried you asked for both): the heroes, then **the
+  flow** -- a day's money from where it comes (each family's takings, the allocation, levies,
+  exports) to where it goes (each family's running, the treasury, what's kept); **the
+  statement** -- a day's money line by line, on the strip's own days (`averageBudget`), so its
+  net is the strip's to the naira; the treasury's levy, the sweep and bonds after the net, not
+  in it (budget.ts: not running costs); fuel above the pump is tallied apart from running, not
+  inside it -- with the net and money held beside it; **your lines** -- every line in its
+  family, carried, income, cost, net, and its net as a bar from a zero line; then the stacked
+  charts, totals since day 1 and the treasury card. Esc closes it.
 - **Redrawn in place** (`patch.ts patchHtml`, 2026-10-28): the strip, log, panel and revenue
   screen are still built as HTML strings from the world, but applied to the elements already
   there -- text and attributes change, an element comes or goes only when the content does,
@@ -875,6 +885,46 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   pattern. A source's share is told as its part of the averaged whole: averaged apart, capped
   moment by moment, they read "75% supplied (86% imported)". Numbers that move because the
   game is moving (a worn road's repair price climbing) are left alone: steady swings, not trends.
+
+- **Held still while you aim** (`patch.ts`, 2026-11-02; your playtest: "to click on some
+  things are difficult ... between tick the information is changing"). Kept elements still
+  moved: a probe sampling what's under a column of points at 10 Hz on map 2418 at 4x found the
+  revenue screen's routes re-sorted under the pointer in 37 of 43 changes (half of aims on
+  another row a second later), and Waiting on you's restore lines coming and going with their
+  weights, moving every list and card under them. Now: under the pointer a steady redraw
+  (`redrawSteadily`) changes only figures -- the HTML with its figures, charts and up/down
+  colours taken out must match -- and a real change of shape waits for the pointer to leave,
+  four seconds at most; tables are ranked once a game day, when you sort, or after a move
+  (`sortRows`, the figures in them live); Waiting on you keeps its five through a day
+  (`steadyWaiting`, items by `id`). Anything a button names by position in a list remade each
+  redraw is named by what it is (a problem line's move by its action, a log line by its place in
+  the whole log): a held panel shows an older redraw, and its button must still do what it says.
+  After, the pointer in the panel: 96-100% of aims land on what was aimed at (88% in the routes
+  list, 76% on the revenue screen before), figures still updating.
+
+### The network (`lines.ts`, 2026-11-02)
+
+Your playtest: "the difference between roads (corridors), routes and the trains, freight and
+track ... need harmonization". Buses, minibuses, BRT and passenger trains were a table;
+lorries and freight trains a table you couldn't click and older cards under More, with no card;
+roads had no list (the corridors under More, a road's card only from the map), track none.
+
+- **One record each** (`lines.ts`): a `Line` for everything you run -- family (people, goods),
+  mode (road, rail), vehicles, carried a day (riders or tonnes), how full, money, verdict -- and
+  a `Way` for what it runs on: a road whole between two towns (`chainOf`, which is what a
+  corridor is) or a stretch of track. `waysOf` puts each line on every way its path uses.
+- **The Network tab**: one table, each road or stretch of track a header row with its facts
+  (surface, condition, traffic, jammed or worn, your share of its trips, taken, riders with no
+  seat), the lines on it under it -- a line through three towns under each road it uses, the
+  buses and lorries and trains sharing a road together. Chips narrow it to people, goods, road
+  or rail; the roads and track nothing of yours runs on are listed when asked. Of three lists
+  tried (one table; the four families with their trends; this), you found the table cleaner and
+  the network's pairing better: this is both.
+- **Cards**: a goods line has the passenger line's card, in tonnes, with its reason and freight
+  rate (`goodsWhy`); a road or track's card is the whole way -- its lines, who carries its trips,
+  levies lost, strikes, no seat with its move as a button, and its wear as one decision (keep it
+  up, fix now, retire, restore) -- the corridor fold's content in the card's own style. Track
+  doesn't wear (wear.ts is roads'), so it's never flagged worn.
 
 ### Your remit on the screen (2026-10-31; engine.md, Your remit)
 
