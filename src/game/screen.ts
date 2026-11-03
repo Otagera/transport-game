@@ -68,6 +68,8 @@ export interface ScreenHooks {
   moneyNote(): string;
   /** The old Treasury drawer: bonds, chains, the named project, the budget lines. */
   treasuryMore(): string;
+  /** Current chain state, for the Revenue screen's opening empty state. */
+  chainsSummary(): string;
   /** A bond for a restore, when you can't pay for it (main.ts bondButton); "" when none's on offer. */
   bond(purpose: "works" | "refinery" | "steel"): string;
   /** The page is in dev mode (?dev=1): the term stat names the design console's key. */
@@ -101,7 +103,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   type Tab = "network" | "towns" | "sites";
   let tab: Tab = "network";
   const sorts: Record<string, { key: string; dir: 1 | -1 }> = {
-    network: { key: "net", dir: 1 }, towns: { key: "growth", dir: -1 }, sites: { key: "use", dir: 1 }, revenue: { key: "net", dir: 1 },
+    network: { key: "net", dir: 1 }, towns: { key: "pop", dir: -1 }, sites: { key: "use", dir: 1 }, revenue: { key: "net", dir: 1 },
   };
   const TABS: Tab[] = ["network", "towns", "sites"];
   const TAB_NAME: Record<Tab, string> = { network: "Network", towns: "Towns", sites: "Sites" };
@@ -737,7 +739,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const stat = (k: string, title: string, v: string, value: number, then: number | undefined, values: number[], fmt: (x: number) => string, color = css("--ink-2"), overlay?: string) => {
       const d = then === undefined ? 0 : value - then;
       const cls = d > 0 ? "up" : d < 0 ? "down" : "muted";
-      const change = then === undefined ? `<div class="d muted">from day 10</div>` : `<div class="d ${cls}">${d >= 0 ? "▲" : "▼"} ${fmt(Math.abs(d))} in 10 days</div>`;
+      const change = then === undefined ? `<div class="d muted">10-day change from day 10</div>` : `<div class="d ${cls}">${d >= 0 ? "▲" : "▼"} ${fmt(Math.abs(d))} in 10 days</div>`;
       // One that opens its overlay, to show where (No seat: the playtest's 2,590 a day, more than your riders, said nowhere where).
       const opens = overlay ? ` data-show-overlay="${overlay}" role="button"` : "";
       return `<div class="stat${overlay ? " opens" : ""}" title="${title}${overlay ? " -- click to see where" : ""}"${opens}><div class="k">${k}</div><div class="v num">${v}</div>${change}${sparkline(values, color)}</div>`;
@@ -1507,9 +1509,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
             ${[["Running costs", "running"], ["Road upkeep", "upkeep"], ["Treasury levy", "remitted"], ["Swept at year end", "swept"], ["Fuel above the pump price", "fuel"]].map(([l, k]) => `<tr><td>${l}</td><td class="down">−${nairaK(total(k!))}</td></tr>`).join("")}
           </tbody></table></div>
         <div class="card wide treasury"><h3>The treasury</h3><div class="sub">Bonds, the named project, the chains, this period's budget</div><div class="panel-body">${hooks.treasuryMore()}</div></div>`;
+    const ledgerStart = ds.length < 3 ? `<div class="card wide"><h3>The region is already moving</h3><div class="sub">Revenue charts begin after two days of records. Until then, here is what the region needs.</div>${hooks.chainsSummary()}</div>` : "";
     patchHtml(revenueEl, `
       <div class="top"><div class="title">Revenue · day ${n.day}</div>
         <div class="ranges">${[[0, "All"], [60, "60 days"], [30, "30 days"]].map(([k, label]) => `<button data-range="${k}" class="${range === k ? "on" : ""}">${label}</button>`).join("")}<button data-revenue="close">Back to the map ✕</button></div></div>
+      ${ledgerStart}
       <div class="heroes">
         <div class="hero"><div class="k">Net a day</div><div class="v num ${n.netPerDay < 0 ? "down" : "up"}">${naira(n.netPerDay)}</div></div>
         <div class="hero"><div class="k">Your riders a day</div><div class="v num">${int(n.yourRiders)}</div></div>

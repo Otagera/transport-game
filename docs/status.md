@@ -94,7 +94,10 @@ Waiting on you's lines came and went, nothing held still under the pointer. Now 
 (96-100% of aims land, from 76-88%). And everything you run is one kind of line on one kind of way:
 the Network tab (each road or stretch of track with its lines; lorries and freight trains with
 cards of their own; the corridors folded into the roads' rows and cards), and the revenue screen as
-a flow, a statement whose net is the strip's, and every line's money. Next there: the restore lines
+a flow, a statement whose net is the strip's, and every line's money. **Opening polish** (2026-11-03,
+brief, Information design): the first hint opens Demand before explaining it, Towns opens largest
+first, the strip labels the not-yet-available 10-day comparison, and Revenue explains its early
+empty charts while surfacing chain state. Next there: the restore lines
 that still come and go at a day's turn (their shortages' lines want a band), and the train card's
 cars once the other session's carriages land.
 
