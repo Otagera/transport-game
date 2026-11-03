@@ -48,7 +48,7 @@ describe("the airport (airport.ts; five modes scoped, the airport)", () => {
     expect(freight).toBeLessThan(20);
   }, 120_000);
 
-  test("unserved, its trips show as wanted and not made; a bus line from it carries them, and pays", () => {
+  test("unserved, its trips show as wanted and not made; a bus from it carries them, and pays", () => {
     const left = start();
     days(left, 6);
     const before = airportSummary(left)!;
@@ -56,10 +56,11 @@ describe("the airport (airport.ts; five modes scoped, the airport)", () => {
     expect(before.stranded).toBeGreaterThan(0.3);
     expect(before.you).toBe(0);
     const served = start();
-    for (let i = 0; i < 3; i += 1) expect(applyAction(served, { kind: "bus", a: served.airport!, b: served.port! }).ok).toBe(true);
-    days(served, 6);
+    // One bus: a line that pays, thinly (a second pays less, a third can lose: engine.md, The airport).
+    expect(applyAction(served, { kind: "bus", a: served.airport!, b: served.port! }).ok).toBe(true);
+    days(served, 8);
     const after = airportSummary(served)!;
-    expect(after.you).toBeGreaterThan(0.08);
+    expect(after.you).toBeGreaterThan(0.05);
     expect(routeSummaries(served).find((r) => r.a === served.airport || r.b === served.airport)!.netPerDay).toBeGreaterThan(0);
   }, 240_000);
 

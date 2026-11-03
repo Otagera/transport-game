@@ -1266,8 +1266,9 @@ flowchart LR
   arrivals to the towns and departures from them, reciprocal (principles §3, Demand). Unserved they
   show as wanted and not made (`pairOutcomes`, `airportSummary`): 73-88% stranded with its dirt road
   and nothing of yours, the danfos taking the rest; a Waiting-on-you item and its card name the move.
-  Three buses from it to the home city (maps 8703, 2418, 10 days) carried 16-25% and netted
-  +₦121-352 a day; 500 trips a day want more.
+  One bus from it to the home city (maps 8703, 2418, 10 days) carries 10-14% of its 350-370 trips a
+  day and nets +₦56-87 a day; a second, +₦23-57 between them; a third loses on one of the two -- a
+  line that pays, thinly, while most of its travellers want to go on past the city.
 - **Air freight** (`airportFlows`, in `goodsFlows`): `airFreightPerThousand` (0.012) of the region's
   people a day -- 8-10 t -- to the market towns by their people. Packed to travel, it keeps and goes
   in legs (`keeps`, `relayed`): a few tonnes split six ways never filled a truck to each and rotted
