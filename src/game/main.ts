@@ -318,6 +318,12 @@ const screen = createScreen(world, recorder, {
   dev,
   moneyNote: () => moneyNote(),
   treasuryMore: () => treasuryHtml(),
+  chainsSummary: () => {
+    const chains = chainLines();
+    return chains.length > 0
+      ? chains.map((chain) => `<p class="chain ${chain.state}"><b>${chain.name}</b> ${chain.line}</p>`).join("")
+      : `<p class="hint">No chains on this map.</p>`;
+  },
 });
 const panelEl = document.querySelector<HTMLElement>("#panel")!;
 const logEl = document.querySelector<HTMLElement>("#log")!;
@@ -3634,12 +3640,20 @@ const hintsOff = (() => {
   }
 })();
 const hints = createHintState(hintsOff);
+let firstHintLayerPicked = false;
 
 function renderHint(): void {
   const hint = updateHints(hints, world, hoverTown);
   if (!hint) {
     hintEl.hidden = true;
     return;
+  }
+  if (hint.id === 1 && !firstHintLayerPicked) {
+    firstHintLayerPicked = true;
+    if (overlay === "none") {
+      overlay = "demand";
+      renderOverlays();
+    }
   }
   if (hintEl.dataset.id !== String(hint.id)) {
     hintEl.dataset.id = String(hint.id);

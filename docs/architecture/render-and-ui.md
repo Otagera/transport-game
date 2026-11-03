@@ -443,8 +443,9 @@ terrain isn't applied: the map still draws shaded hills.
 - **Hints** (`hints.ts`, no DOM; `renderHint` every frame): the brief's six, one at a time,
   each latched by the game's state, shown lowest first, dismissed by doing the thing (a
   hover; a route of yours; a road; a vehicle added; funds back or a sale; a day passing for
-  the toll hint), skipped if already done when its turn comes. A hint about a town sits
-  beside it on the map; × closes it; "Hints off" (or `H`) is remembered in localStorage.
+  the toll hint), skipped if already done when its turn comes. The first hint turns on Demand
+  before explaining it. A hint about a town sits beside it on the map; × closes it; "Hints off"
+  (or `H`) is remembered in localStorage.
 
 - **`render.ts`** draws, back to front: ground and terrain (water cells, hills shaded by height,
   cached in an offscreen canvas per view since terrain never changes), roads along their
@@ -926,9 +927,10 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
 - **The log**: the run's events as lines, filterable, a click shows the town or site it's about.
   Redrawn only when an event arrives -- a redraw under the pointer swallows a click.
 - **The panel**: Network, Towns, Sites tabs that sort by column (Routes until 2026-11-02, see The
-  network below), or one thing picked -- a row, a
-  log line, a town pointed at on the map (it stays when the pointer leaves for the panel; not
-  mid-build), a road clicked with nothing else under it. Each has the lab's tiles, a chart
+  network below); Towns opens largest first, since growth and service are all equal on day 1; or
+  one thing picked -- a row, a log line, a town pointed at on the map (it stays when the pointer
+  leaves for the panel; not mid-build), a road clicked with nothing else under it. Each has the
+  lab's tiles, a chart
   over the days, and one problem line. Its button is real: a named move (`problems.ts`) is
   bought (`data-named`), a route's is add or sell, the rest pick the tool that does it
   (`data-tool`). A row hovered, or a thing picked from the panel, focuses the map; a town
@@ -948,7 +950,8 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   in it (budget.ts: not running costs); fuel above the pump is tallied apart from running, not
   inside it -- with the net and money held beside it; **your lines** -- every line in its
   family, carried, income, cost, net, and its net as a bar from a zero line; then the stacked
-  charts, totals since day 1 and the treasury card. Esc closes it.
+  charts, totals since day 1 and the treasury card. Before two days of records, an opening card
+  explains why the charts are empty and surfaces the current chain state instead. Esc closes it.
 - **Redrawn in place** (`patch.ts patchHtml`, 2026-10-28): the strip, log, panel and revenue
   screen are still built as HTML strings from the world, but applied to the elements already
   there -- text and attributes change, an element comes or goes only when the content does,
