@@ -36,7 +36,9 @@ import { paint as tokenPaint, paintAlpha, paintHex } from "./palette3d";
 import { farmTowns } from "@engine/game/food";
 import { inFarmBelt } from "@engine/game/clusters";
 import { clusterAt, isClosed, landOf, remitOn } from "@engine/game/remit";
-import { BLOCK_WALLS, CONCRETE, ROOFS, WALLS, WINDOWS, fillingStation, fuelSeller, haulageYard, kiosk, metroEntrance, motorPark, railStation } from "./shapes3d";
+import { BLOCK_WALLS, CAR_LENGTH, CONCRETE, COUPLING, LOCO_LENGTH, ROOFS, WALLS, WINDOWS, fillingStation, fuelSeller, haulageYard, kiosk, metroEntrance, motorPark } from "./shapes3d";
+import { PLATFORM_WIDTH, THROAT, layStations, onStation, reachAlong, stationAt, stationNodes, throatLine, type Station } from "./stations3d";
+import { carsOn } from "@engine/game/rail";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
 
@@ -1282,6 +1284,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     mesh.geometry.dispose();
     for (const child of mesh.children) (child as THREE.Mesh).geometry?.dispose();
   };
+  /** A line with `from` cells cut off its start and `to` off its end. */
+  function trimmed(line: Point[], from: number, to: number): Point[] {
+    const [, rest] = splitPolyline(line, from);
+    const [kept] = splitPolyline(rest, Math.max(0, polylineLength(rest) - to));
+    return kept.length >= 2 ? kept : rest.slice(0, 2);
+  }
   /** A polyline moved `off` cells to its left (negative: right), for a lane down a road's side. */
   function offsetLine(points: Point[], off: number): Point[] {
     return points.map((p, k) => {
@@ -1369,18 +1377,24 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const seen = new Set<string>();
     // Track's parts once the roads are known: no sleepers where a road runs over the track.
     const pendingTracks: Array<{ mesh: THREE.Mesh; line: Point[]; lift: number; disused: boolean }> = [];
+    const atStations = stationNodes(w);
     for (const segment of segments) {
       seen.add(segment.id);
       const retired = segment.retiredAt !== undefined;
       const known = roads.get(segment.id);
       const disused = segment.type === "rail" && w.railOutOfService.has(segment.id);
-      const look = `${roadLook(segment)}:${disused}`;
+      // Track stops short of a station: its throats and platforms carry it in (stations3d.ts).
+      const whole = segmentPolyline(w.simulation.map, segment);
+      const length = polylineLength(whole);
+      const cutFrom = segment.type === "rail" && !retired ? reachAlong(w, segment.fromNodeId, length, atStations) / M : 0;
+      const cutTo = segment.type === "rail" && !retired ? reachAlong(w, segment.toNodeId, length, atStations) / M : 0;
+      const look = `${roadLook(segment)}:${disused}:${cutFrom.toFixed(2)}:${cutTo.toFixed(2)}`;
       if (known && known.look === look) continue;
       if (known) {
         drop(known.mesh);
         known.material.dispose();
       }
-      const line = segmentPolyline(w.simulation.map, segment);
+      const line = cutFrom || cutTo ? trimmed(whole, cutFrom, cutTo) : whole;
       const rail = segment.type === "rail";
       // Track: a ballast bed with the rails' dark band on it; a road: tarmac or dirt, coloured by its traffic.
       // A dirt road is laterite and narrower; a paved one is asphalt with a centre line; a bus lane
@@ -1442,7 +1456,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   };
   const up3 = new THREE.Vector3(0, 1, 0);
   /** A line of track's parts on its ballast: sleepers, rails, poles beside it; grass where it's out of service. */
-  function trackParts(mesh: THREE.Mesh, line: Point[], lift: number, disused: boolean, ways: Point[][]): void {
+  function trackParts(mesh: THREE.Mesh, line: Point[], lift: number, disused: boolean, ways: Point[][], withPoles = true): void {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), at = new THREE.Vector3();
     const near = ways.filter((way) => way.some((p) => line.some((r) => Math.hypot(p.x - r.x, p.y - r.y) < 12)));
     const underRoad = (x: number, y: number) => near.some((way) => way.some((p, k) => k > 0 && distToSegment(x, y, way[k - 1]!, p) < 5.6 / M));
@@ -1457,7 +1471,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     mesh.add(ties);
     for (const side of [1, -1]) mesh.add(new THREE.Mesh(ribbonGeometry(offsetLine(line, (side * 0.75) / M), 0.22, lift + 0.42), disused ? rustMaterial : railMaterial));
     // Telegraph poles along the line, a few metres off it, not in the water.
-    const poles = along(line, 46, 20).filter((p) => !wetNear(p.x - Math.sin(p.heading) * 0.6, p.y + Math.cos(p.heading) * 0.6));
+    const poles = !withPoles ? [] : along(line, 46, 20).filter((p) => !wetNear(p.x - Math.sin(p.heading) * 0.6, p.y + Math.cos(p.heading) * 0.6));
     if (poles.length) {
       const posts = new THREE.InstancedMesh(poleShape, poleMaterial, poles.length);
       poles.forEach((p, i) => {
@@ -1635,7 +1649,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const reachCells = radius / M + 3;
     const local = roadLines.filter((line) => line.some((p) => Math.hypot(p.x - town.x, p.y - town.y) < reachCells + 20));
     const nearRoad = (x: number, y: number, clear: number) =>
-      local.some((line) => line.some((p, k) => k > 0 && distToSegment(x, y, line[k - 1]!, p) < clear));
+      local.some((line) => line.some((p, k) => k > 0 && distToSegment(x, y, line[k - 1]!, p) < clear)) || onStationGround(x, y, clear * M);
     // And out of the rivers as they're drawn (their lines are wider than their wet cells).
     const wet = wetAround(town, reachCells * 1.5 + 30);
     const placed: Array<{ x: number; z: number; r: number }> = [];
@@ -2623,7 +2637,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const tier = town.industry ? "village" : tierOf(town.population, town.id === cityId);
       // A step every fifth of its size (or a tier change): a growing town rebuilds now and then.
       const boom = !town.industry && growthTrend(w, town.id) === "growing";
-      const key = town.industry ? `site:${town.industry}` : `${tier}:${Math.round(Math.log(Math.max(1, town.population)) * 5)}${boom ? ":boom" : ""}`;
+      const key = town.industry ? `site:${town.industry}` : `${tier}:${Math.round(Math.log(Math.max(1, town.population)) * 5)}${boom ? ":boom" : ""}|${stations.get(town.id)?.key ?? ""}`;
       const known = towns.get(town.id);
       if (known && known.key !== key) {
         scene.remove(known.mesh, known.label);
@@ -2708,8 +2722,50 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   let placedAt = performance.now();
   // Your vehicles in their route's colour where you've given it one (labels.ts), else their kind's.
   const tintColour = new THREE.Color();
-  const KIND_TINT: Partial<Record<VehicleKind3D, string>> = { bus: tokenPaint("--you"), minibus: tokenPaint("--paint-blue-9"), brt: tokenPaint("--paint-red-3"), train: tokenPaint("--you") };
-  const tinted = new Set<VehicleKind3D>(["bus", "minibus", "brt", "train"]);
+  const KIND_TINT: Partial<Record<VehicleKind3D, string>> = { bus: tokenPaint("--you"), minibus: tokenPaint("--paint-blue-9"), brt: tokenPaint("--paint-red-3"), train: tokenPaint("--you"), coach: tokenPaint("--you") };
+  const tinted = new Set<VehicleKind3D>(["bus", "minibus", "brt", "train", "coach"]);
+  // A rail edge's line and length, and its segment: asked for every car of every train each frame.
+  const railEdges = new Map<string, { line: Point[]; length: number; segmentId: string | null }>();
+  let railEdgesFor = "";
+  function railEdge(w: GameWorld, from: string, to: string, v: Vehicle) {
+    const key = `${from}>${to}`;
+    let edge = railEdges.get(key);
+    if (!edge) {
+      const line = edgeLine(w, from, to, v);
+      edge = { line, length: polylineLength(line) * M, segmentId: routingFor(w, v).graph.get(from)?.find((c) => c.to === to)?.segmentId ?? null };
+      railEdges.set(key, edge);
+    }
+    return edge;
+  }
+  /**
+   * A point `back` metres behind a train's front along its path -- back through the edges it has
+   * come along -- drawn where the station puts it: in a throat on its curve, at the platforms on
+   * its line's own track (stations3d.ts onStation).
+   */
+  function railPoint(w: GameWorld, v: Vehicle, back: number, routeId: string | undefined): Point | null {
+    const n = v.path.length;
+    if (n < 2 || v.pathIndex >= n) return null;
+    let idx = v.pathIndex;
+    let from = v.path[(idx - 1 + n) % n]!, to = v.path[idx]!;
+    let edge = railEdge(w, from, to, v);
+    let at = edge.length * v.edgeProgress - back;
+    for (let hop = 0; at < 0 && hop < 8; hop += 1) {
+      if (v.lifecycle !== "cyclic" && idx <= 1) { at = 0; break; }
+      idx = (idx - 1 + n) % n;
+      from = v.path[(idx - 1 + n) % n]!;
+      to = v.path[idx]!;
+      edge = railEdge(w, from, to, v);
+      at += edge.length;
+    }
+    at = Math.max(0, Math.min(edge.length, at));
+    if (edge.segmentId) {
+      const a = stations.get(from), b = stations.get(to);
+      const p = (a && onStation(a, edge.segmentId, at, routeId)) || (b && onStation(b, edge.segmentId, edge.length - at, routeId));
+      if (p) return p;
+    }
+    const [, ahead] = splitPolyline(edge.line, at / M);
+    return ahead[0] ?? edge.line[edge.line.length - 1]!;
+  }
   // Laterite dust behind whatever drives a worn road: rough enough to cost your buses
   // (wear.ts roughCostFactor), it shows. One instanced mesh of puffs, three a vehicle.
   const DUST_MAX = 3000;
@@ -2725,6 +2781,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     let puffs = 0;
     const routeOf = new Map<string, string>();
     for (const route of w.routes) for (const id of route.vehicleIds) routeOf.set(id, route.id);
+    for (const route of w.lorryRoutes) for (const id of route.vehicleIds) routeOf.set(id, route.id);
+    const shape = `${w.simulation.map.segments.length}:${w.railRouting.graph.size}`;
+    if (shape !== railEdgesFor) { railEdgesFor = shape; railEdges.clear(); }
     const now = performance.now();
     const turn = Math.min(1, ((now - placedAt) / 1000) * 10);
     placedAt = now;
@@ -2734,6 +2793,33 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const pose = poseOf(w, v);
       if (!pose) continue;
       const kind = kindOf(w, v);
+      if (kind === "train" || kind === "freight") {
+        // A train in its pieces: its engine, then each car, every one along the track behind the
+        // last -- round a throat's curve, in along its own platform (VEHICLE_SCALE as the rest).
+        const route = routeOf.get(v.id);
+        const cars = route ? carsOn(w, route) : 1;
+        const joints = [0, LOCO_LENGTH * VEHICLE_SCALE];
+        for (let c = 0; c < cars; c += 1) {
+          const start = joints[joints.length - 1]! + COUPLING * VEHICLE_SCALE;
+          joints.push(start, start + CAR_LENGTH * VEHICLE_SCALE);
+        }
+        const points = joints.map((d) => railPoint(w, v, d, route));
+        if (points.every((p) => p)) {
+          seen.add(v.id);
+          for (let k = 0; k * 2 + 1 < points.length; k += 1) {
+            const front = points[k * 2]!, rear = points[k * 2 + 1]!;
+            const cx = (front.x + rear.x) / 2, cy = (front.y + rear.y) / 2;
+            const at = ground(cx, cy, 0.4);
+            const deck = decks.get(cellKey(cx, cy));
+            if (deck !== undefined) at.y = Math.max(at.y, deck + 0.4);
+            const heading = Math.atan2(front.y - rear.y, front.x - rear.x);
+            const piece: VehicleKind3D = k === 0 ? kind : kind === "train" ? "coach" : "wagon";
+            if (k === 0) drawnVehicles.push({ id: v.id, at, rail: true });
+            (byKind.get(piece) ?? byKind.set(piece, []).get(piece)!).push({ at, heading, tint: tinted.has(piece) ? (route && labelOf(w, routeLabelKey(route))?.colour) || KIND_TINT[piece] : undefined });
+          }
+          continue;
+        }
+      }
       // Keep right, as the 2D map does: opposite directions on one road don't overlap.
       const side = (kind === "train" || kind === "freight" ? 0 : 2.4) / M;
       const cx = pose.x - Math.sin(pose.angle) * side, cy = pose.y + Math.cos(pose.angle) * side;
@@ -3140,13 +3226,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     clearTrees((cell) => cleared.has(cell));
   }
   // What you've built at towns (your word: make 3D show your own work): a motor park, a haulage
-  // yard, a rail station where the track stops, metro entrances. Each stands just outside its
+  // yard, metro entrances (a rail station is its own: syncStations). Each stands just outside its
   // town's houses, on its own side; one mesh, rebuilt when any of them changes.
   let builds: THREE.Mesh | null = null;
   let buildsKey = "";
   function syncBuilds(w: GameWorld): void {
-    const stations = new Set(w.simulation.map.segments.filter((s) => s.type === "rail" && s.retiredAt === undefined).flatMap((s) => [s.fromNodeId, s.toNodeId]));
-    const key = `${[...w.parks].sort()}|${[...w.yards].sort()}|${[...stations].sort()}|${[...w.metros].map(([t, n]) => `${t}:${n}`).sort()}`;
+    const key = `${[...w.parks].sort()}|${[...w.yards].sort()}|${[...w.metros].map(([t, n]) => `${t}:${n}`).sort()}`;
     if (key === buildsKey) return;
     buildsKey = key;
     if (builds) { scene.remove(builds); builds.geometry.dispose(); builds = null; }
@@ -3178,21 +3263,6 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       if (at) parkAt.set(id, at);
     }
     for (const id of w.yards) { const t = w.towns.get(id); if (t) standAt(t, 2.4, (k, ry) => haulageYard(k, seeded(`yard-${id}`), ry)); }
-    for (const id of stations) {
-      const t = w.towns.get(id);
-      if (!t || t.industry) continue;
-      // Beside the track, where it comes into the town.
-      const seg = w.simulation.map.segments.find((s) => s.type === "rail" && (s.fromNodeId === id || s.toNodeId === id))!;
-      const line = segmentPolyline(w.simulation.map, seg);
-      const out = seg.fromNodeId === id ? line : [...line].reverse();
-      const [, rest] = splitPolyline(out, Math.min(polylineLength(out) * 0.5, (reachCells.get(id) ?? 3) * 0.6));
-      const p = rest[0]!, q = rest[1] ?? out[out.length - 1]!;
-      const dir = Math.atan2(q.y - p.y, q.x - p.x);
-      const sx = p.x - Math.sin(dir) * 1.1, sy = p.y + Math.cos(dir) * 1.1;
-      const one = new Kit();
-      railStation(one, seeded(`station-${id}`), -dir);
-      kit.place(one.merged(), sx * M, elevationAt(sx, sy) * HEIGHT - 0.1, sy * M);
-    }
     for (const [id, lines] of w.metros) {
       const t = w.towns.get(id);
       for (let n = 0; t && n < lines; n += 1) standAt(t, 4.2 + n * 1.3, (k, ry) => metroEntrance(k, ry), 4);
@@ -3204,6 +3274,209 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     scene.add(builds);
     const gone = new Set(cleared);
     clearTrees((cell) => gone.has(cell));
+  }
+  // --- Stations (stations3d.ts; your playtest, map 8703 day 482: Otido's trains in one heap) ------
+  // Each rail town's station in its parts: a platform track for each line, island platforms with
+  // canopies, benches and lamps, a footbridge, the station building on its own platform with its
+  // clock tower; freight on loops outside them past a goods shed; the throats fanning each line's
+  // track in from the open line. One group a station, rebuilt when its layout changes.
+  let stations = new Map<string, Station>();
+  const stationMeshes = new Map<string, { key: string; group: THREE.Group; ballast: THREE.Material }>();
+  let stationsInput = "";
+  /** Station tracks and throats as lines (cells), and the cells under them: towns and trees keep off. */
+  let stationLines: Point[][] = [];
+  let stationCells = new Set<number>();
+  function syncStations(w: GameWorld): void {
+    const lines = [...w.routes, ...w.lorryRoutes].filter((r) => r.id.startsWith("rail:") || r.id.startsWith("freight:")).map((r) => r.id).sort().join(",");
+    const rails = w.simulation.map.segments.filter((s) => s.type === "rail" && s.retiredAt === undefined).map((s) => s.id).join(",");
+    const roadsNow = w.simulation.map.segments.filter((s) => s.type === "road" && s.retiredAt === undefined);
+    // The sites' yards once they're placed (syncTowns): a station stands clear of them.
+    const input = `${lines}|${rails}|${roadsNow.length}|${siteAt.size}`;
+    if (input === stationsInput) return;
+    stationsInput = input;
+    const roadsOnly = roadsNow.map((s) => segmentPolyline(w.simulation.map, s));
+    const blocked = (x: number, y: number) => x < 1 || y < 1 || x > W - 2 || y > H - 2 || terrain.water[Math.round(y) * W + Math.round(x)] === 1 || inYard(x, y, 6) || onQuay(x, y, 1);
+    stations = layStations(w, roadsOnly, blocked);
+    for (const [id, built] of stationMeshes) {
+      if (stations.get(id)?.key === built.key) continue;
+      scene.remove(built.group);
+      built.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      built.ballast.dispose();
+      stationMeshes.delete(id);
+    }
+    for (const st of stations.values()) if (!stationMeshes.has(st.id)) stationMeshes.set(st.id, buildStation(st, roadsOnly));
+    stationLines = [...stations.values()].flatMap((st) => [
+      ...st.tracks.map((t) => [stationAt(st, -st.half, t.offset), stationAt(st, st.half, t.offset)]),
+      ...[...st.throats].flatMap(([segmentId, idx]) => idx.map((i) => throatLine(st, st.ends.get(segmentId)!, st.tracks[i]!.offset, 8))),
+    ]);
+    stationCells = new Set<number>();
+    for (const st of stations.values()) for (let u = -st.half - 6; u <= st.half + 6; u += 4) for (let v = -st.width / 2 - 18; v <= st.width / 2 + 18; v += 4) {
+      const p = stationAt(st, u, v);
+      stationCells.add(Math.round(p.y) * W + Math.round(p.x));
+    }
+    for (const line of stationLines) for (let k = 1; k < line.length; k += 1) for (let t = 0; t <= 1; t += 0.25) {
+      const a = line[k - 1]!, b = line[k]!;
+      stationCells.add(Math.round(a.y + (b.y - a.y) * t) * W + Math.round(a.x + (b.x - a.x) * t));
+    }
+    if (planted) clearTrees((cell) => stationCells.has(cell));
+  }
+  /** Whether a point (cells) is on a station's ground or its track, `clear` metres to spare: towns build round it. */
+  function onStationGround(x: number, y: number, clear: number): boolean {
+    for (const st of stations.values()) {
+      const dx = (x - st.centre.x) * M, dy = (y - st.centre.y) * M;
+      if (Math.hypot(dx, dy) > st.half + st.width + THROAT + clear + 30) continue;
+      const u = dx * Math.cos(st.axis) + dy * Math.sin(st.axis), v = -dx * Math.sin(st.axis) + dy * Math.cos(st.axis);
+      if (Math.abs(u) < st.half + 4 + clear && Math.abs(v) < st.width / 2 + 18 + clear) return true;
+    }
+    return stationLines.some((line) => line.some((p, k) => k > 0 && distToSegment(x, y, line[k - 1]!, p) < (clear + 4) / M));
+  }
+  const STATION = {
+    platform: tokenPaint("--paint-earth-14"), edge: tokenPaint("--paint-earth-52"), post: tokenPaint("--paint-grey-20"),
+    roof: tokenPaint("--paint-red-4"), canopy: tokenPaint("--paint-light-4"), bench: tokenPaint("--paint-earth-26"),
+    wall: tokenPaint("--paint-earth-5"), trim: tokenPaint("--paint-light-4"), glass: tokenPaint("--paint-blue-17"),
+    dark: tokenPaint("--paint-dark-2"), clock: tokenPaint("--paint-light-1"), steel: tokenPaint("--paint-grey-14"),
+    shed: tokenPaint("--paint-grey-11"), paving: tokenPaint("--paint-earth-10"), buffer: tokenPaint("--paint-red-3"),
+  };
+  function buildStation(st: Station, roads: Point[][]): { key: string; group: THREE.Group; ballast: THREE.Material } {
+    const group = new THREE.Group();
+    const ballast = roadSurface(withClouds(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-9"), side: THREE.DoubleSide })), ROAD_KIND.ballast, 4.6);
+    const lift = 0.38;
+    const track = (line: Point[]) => {
+      const mesh = new THREE.Mesh(ribbonGeometry(line, 4.6, lift), ballast);
+      mesh.receiveShadow = true;
+      trackParts(mesh, line, lift, false, roads, false);
+      group.add(mesh);
+    };
+    for (const t of st.tracks) track([stationAt(st, -st.half, t.offset), stationAt(st, st.half, t.offset)]);
+    for (const [segmentId, idx] of st.throats) for (const i of idx) track(throatLine(st, st.ends.get(segmentId)!, st.tracks[i]!.offset));
+    const kit = new Kit();
+    // A piece at (u along the tracks, v across), metres, on the ground there; its own x along, z across.
+    const put = (one: Kit, u: number, v: number, y = 0) => {
+      const p = stationAt(st, u, v);
+      kit.place(one.merged(), p.x * M, floorAt(p.x, p.y) + y, p.y * M, -st.axis);
+    };
+    const H = st.half, C = STATION;
+    // The island platforms: a metre up, yellow lines at their edges, a canopy over their middle
+    // on a row of posts, benches under it, lamps and the station's name toward their ends.
+    const platforms = [...new Set(st.tracks.map((t) => t.platform).filter((p): p is number => p !== null))];
+    const islands: Array<{ v: number; w: number }> = platforms.map((v) => ({ v, w: PLATFORM_WIDTH }));
+    // The building's own platform, beside the outermost passenger track on its side: toward the
+    // town's middle where the station stands off it, else the side with a passenger track outermost.
+    const across = { x: -Math.sin(st.axis), y: Math.cos(st.axis) };
+    const toward = (st.node.x - st.centre.x) * across.x + (st.node.y - st.centre.y) * across.y;
+    const lo = st.tracks[0], hi = st.tracks[st.tracks.length - 1];
+    const sideOk = (side: number) => (side > 0 ? hi && !hi.freight : lo && !lo.freight);
+    let side = Math.abs(toward) > 0.5 ? Math.sign(toward) : sideOk(1) ? 1 : -1;
+    if (!sideOk(side) && sideOk(-side)) side = -side;
+    const outer = side > 0 ? hi : lo;
+    let buildingV = 0;
+    if (outer) {
+      const ownPlatform = outer.offset + side * (2.3 + 2.6);
+      if (!outer.freight) islands.push({ v: ownPlatform, w: 5.2 });
+      buildingV = outer.offset + side * (2.3 + (outer.freight ? 4 : 5.2) + 6.5);
+    }
+    // Where a road still crosses the station (a town's middle has nowhere else), the platforms
+    // break for it: the road runs through at grade between their sections.
+    const nearRoads = roads.filter((line) => line.some((p) => Math.hypot(p.x - st.centre.x, p.y - st.centre.y) * M < H + st.width + 40));
+    const roadAt = (u: number, v: number, pad: number) => {
+      const p = stationAt(st, u, v);
+      return nearRoads.some((line) => line.some((q, k) => k > 0 && distToSegment(p.x, p.y, line[k - 1]!, q) < pad / M));
+    };
+    for (const { v, w } of islands) {
+      for (let u = -H + 4; u < H; u += 8) {
+        if (roadAt(u, v, 8.5)) continue;
+        const one = new Kit();
+        one.box(8.05, 1.0, w, C.platform);
+        for (const e of [w / 2 - 0.45, -(w / 2 - 0.45)]) one.box(8.05, 0.05, 0.4, C.edge, 0, e, 1.0);
+        put(one, u, v, -0.1);
+      }
+      for (let u = -0.55 * H; u <= 0.55 * H + 0.1; u += 9) {
+        if (roadAt(u, v, 9)) continue;
+        const one = new Kit();
+        one.box(0.3, 3.3, 0.3, C.post, 0, 0, 0.9);
+        one.box(9.1, 0.22, w - 1.2, C.canopy, 0, 0, 4.2);
+        one.gable(9.1, w - 1.2, 0.55, C.canopy, 0, 0, 4.42);
+        if (Math.round(u / 9) % 2 === 0) for (const z of [-1.2, 1.2]) { one.box(1.8, 0.45, 0.5, C.bench, 2.5, z, 0.9); one.box(1.8, 0.5, 0.1, C.bench, 2.5, z + Math.sign(z) * 0.25, 1.35); }
+        put(one, u, v, -0.1);
+      }
+      for (const u of [-0.82 * H, 0.82 * H]) {
+        const one = new Kit();
+        one.box(0.16, 4, 0.16, C.post, 0, 0, 0.9);
+        one.box(0.7, 0.22, 0.4, C.dark, 0, 0, 4.85);
+        one.box(0.12, 1.6, 0.12, C.post, 3, -0.8, 0.9);
+        one.box(0.12, 1.6, 0.12, C.post, 3, 0.8, 0.9);
+        one.box(0.1, 0.65, 2.6, C.glass, 3, 0, 2.4);
+        put(one, u, v, -0.1);
+      }
+    }
+    // A footbridge across every track toward one end: its deck on steel, steps down to each platform.
+    const vs = [...st.tracks.map((t) => t.offset), ...islands.map((i) => i.v)];
+    const v0 = Math.min(...vs) - 3, v1 = Math.max(...vs) + 3, ub = 0.6 * H;
+    for (let v = v0; v < v1; v += 6) {
+      const one = new Kit();
+      one.box(2.8, 0.45, Math.min(6.05, v1 - v + 0.05), C.steel, 0, 0, 6.6);
+      for (const x of [-1.35, 1.35]) one.box(0.12, 1.1, Math.min(6.05, v1 - v + 0.05), C.steel, x, 0, 7.05);
+      put(one, ub, v + Math.min(3, (v1 - v) / 2));
+    }
+    for (const { v } of islands) {
+      const one = new Kit();
+      for (let i = 0; i < 7; i += 1) one.box(1.05, 0.8, 2.2, C.steel, -1.9 - i * 1.0, 0, 6.6 - (i + 1) * 0.8);
+      put(one, ub, v, 0.9);
+    }
+    for (const v of [v0, v1]) {
+      const one = new Kit();
+      one.box(3, 6.6, 3, C.steel, 0, 0, 0);
+      put(one, ub, v);
+    }
+    // The building, two floors and a clock tower, behind its own platform, its forecourt toward the town.
+    if (outer) {
+      const L = Math.min(42, H * 0.9), D = 11, s = side;
+      const one = new Kit();
+      one.box(L, 7.2, D, C.wall);
+      one.gable(L + 0.8, D + 0.8, 3.2, C.roof, 0, 0, 7.2);
+      for (let x = -L / 2 + 3; x < L / 2 - 2; x += 3.2) for (const y of [1.4, 4.6]) if (Math.abs(x) > 3.5 || y > 3) one.box(1.4, 1.7, D + 0.1, C.glass, x, 0, y);
+      one.box(5, 13.5, 5, C.trim);
+      one.cone(3.9, 3.4, C.roof, 0, 0, 13.5, 4);
+      one.box(2.4, 2.4, 5.12, C.clock, 0, 0, 10.4);
+      one.box(0.2, 1.0, 5.2, C.dark, 0, 0, 11.6);
+      one.box(0.8, 0.2, 5.2, C.dark, 0.35, 0, 11.6);
+      one.box(3.2, 3.0, 0.2, C.dark, 0, s * (D / 2 + 0.05), 0);
+      one.box(L, 0.25, 4, C.canopy, 0, -s * (D / 2 + 2), 4.0);
+      for (let x = -L / 2 + 2; x <= L / 2 - 2; x += 6) one.box(0.25, 4.0, 0.25, C.post, x, -s * (D / 2 + 3.6), 0);
+      one.box(10, 0.25, 3.5, C.canopy, 0, s * (D / 2 + 1.75), 3.6);
+      one.box(L + 14, 0.12, 14, C.paving, 0, s * (D / 2 + 7), 0);
+      put(one, 0, buildingV, -0.1);
+    }
+    // Freight on its loops outside: a goods shed beside the outermost.
+    const freight = st.tracks.filter((t) => t.freight);
+    if (freight.length) {
+      const f = freight.reduce((a, t) => (Math.abs(t.offset) > Math.abs(a.offset) ? t : a));
+      const s = Math.sign(f.offset) || 1;
+      const one = new Kit();
+      const L = Math.min(32, H * 0.8);
+      one.box(L, 1.1, 6, C.platform, 0, 0, 0);
+      one.box(L, 6.2, 9, C.shed, 0, s * 1.5, 0);
+      one.gable(L + 0.6, 9.6, 2.2, C.steel, 0, s * 1.5, 6.2);
+      for (let x = -L / 2 + 4; x < L / 2 - 2; x += 7) one.box(3.4, 4, 9.1, C.dark, x, s * 1.5, 0);
+      put(one, -0.25 * H, f.offset + s * (2.3 + 3), -0.1);
+    }
+    // A buffer stop where a track's platform ends with no throat beyond it: a line ends here.
+    st.tracks.forEach((t, i) => {
+      for (const end of [1, -1]) {
+        const fed = [...st.ends.values()].some((e) => e.side === end && (st.throats.get(e.segmentId) ?? []).includes(i));
+        if (fed) continue;
+        const one = new Kit();
+        one.box(1.2, 1.2, 3.0, C.buffer, 0, 0, 0.3);
+        one.box(0.5, 0.35, 3.1, C.edge, -end * 0.6, 0, 1.1);
+        put(one, end * (H + 0.6), t.offset);
+      }
+    });
+    const mesh = new THREE.Mesh(kit.merged(), material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    scene.add(group);
+    return { key: st.key, group, ballast };
   }
   /** A road built since, or a town grown: the trees in its way go. */
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -3395,8 +3668,18 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       }
     }
     // The crowds: where, how many, how they stand.
-    type Crowd = { key: string; n: number; at: { x: number; z: number; ry: number }; place: (rand: () => number, i: number) => [number, number, number] };
+    type Crowd = { key: string; n: number; at: { x: number; z: number; ry: number }; place: (rand: () => number, i: number) => [number, number, number]; lift?: number };
     const crowds: Crowd[] = [];
+    // On the station's platforms, as many as wait in the town, between its lines' tracks.
+    for (const st of stations.values()) {
+      const islands = [...new Set(st.tracks.map((t) => t.platform).filter((p): p is number => p !== null))];
+      if (!islands.length) continue;
+      const n = Math.max(2, Math.min(24, Math.round(waitingAt(w, st.id) / 8 / islands.length)));
+      islands.forEach((v, k) => {
+        const p = stationAt(st, 0, v);
+        crowds.push({ key: `station:${st.id}:${k}`, n, at: { x: p.x * M, z: p.y * M, ry: -st.axis }, place: (r) => [(r() - 0.5) * st.half * 1.3, (r() - 0.5) * (PLATFORM_WIDTH - 2.2), 0.3], lift: 0.9 });
+      });
+    }
     for (const [id, list] of served) {
       const n = Math.max(1, Math.min(30, Math.round(waitingAt(w, id) / 6 / list.length)));
       // In front of the shelter, between it and the kerb; a long wait spills along the road.
@@ -3431,7 +3714,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const x = crowd.at.x + lx * cos + lz * sin, z = crowd.at.z - lx * sin + lz * cos;
         // Facing the road (or the stalls, give or take), clothes from the town's prints.
         turned.setFromAxisAngle(up, crowd.at.ry + (rand() - 0.5) * (roam > 1 ? 6 : 1.2));
-        m.compose(where.set(x, elevationAt(x / M, z / M) * HEIGHT, z), turned, size);
+        m.compose(where.set(x, elevationAt(x / M, z / M) * HEIGHT + (crowd.lift ?? 0), z), turned, size);
         clothes.setMatrixAt(i, m);
         bodies.setMatrixAt(i, m);
         clothes.setColorAt(i, colour.copy(clothesColours[Math.floor(rand() * clothesColours.length)]!));
@@ -3655,11 +3938,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const roadsOn = network !== "rail", railOn = network !== "roads";
     for (const road of roads.values()) road.mesh.visible = road.rail ? railOn : roadsOn;
     if (crossings) crossings.visible = roadsOn && railOn;
-    for (const [kind, mesh] of fleets) mesh.visible = kind === "train" || kind === "freight" ? railOn : roadsOn;
+    for (const [kind, mesh] of fleets) mesh.visible = kind === "train" || kind === "freight" || kind === "coach" || kind === "wagon" ? railOn : roadsOn;
     dust.visible = roadsOn;
     for (const thing of scenery) thing.visible = showScenery;
     for (const mesh of groves.values()) mesh.visible = showScenery;
     if (roadside) roadside.visible = showScenery && roadsOn;
+    for (const built of stationMeshes.values()) built.group.visible = railOn;
   }
   // An overlay's marks as arcs over the land, town to town -- the 2D map's curves stood up, as high
   // as they're long -- in the overlay's own colours, unlit, through the haze.
@@ -3797,6 +4081,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       if (now - slowAt > 500) {
         slowAt = now;
         colourRoads(w);
+        syncStations(w);
         syncTowns(w);
         if (planted) syncSellers(w);
         syncSiteLife(w);
@@ -3808,12 +4093,17 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (!planted) {
           plant(w);
           buildRoadside(w);
+          clearTrees((cell) => stationCells.has(cell));
         }
       }
       placeVehicles(w);
     },
     dispose() {
       arcs([]);
+      for (const built of stationMeshes.values()) {
+        built.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+        built.ballast.dispose();
+      }
       for (const road of roads.values()) {
         drop(road.mesh);
         road.material.dispose();

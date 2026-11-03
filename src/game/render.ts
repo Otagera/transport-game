@@ -4,7 +4,7 @@ import { labelOf, routeLabelKey } from "@engine/game/labels";
 import type { GameTown, GameWorld } from "@engine/game/types";
 import type { Segment } from "@engine/map/types";
 import type { RoutingContext, Vehicle } from "@engine/simulation/types";
-import { routingFor } from "@engine/game/rail";
+import { carsOn, routingFor } from "@engine/game/rail";
 import { gameDay, roadChain, townShare } from "@engine/game/world";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { growthTrend } from "@engine/game/growth";
@@ -893,6 +893,8 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
   const colourOf = (route: string | undefined) => (route && labelOf(world, routeLabelKey(route))?.colour) || COLORS.player;
   const routeOf = new Map<string, string>();
   for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
+  // A train as long as its cars (rail.ts addCar): one car, the pill it always was; four, nearly twice.
+  const trainLength = (route: string | undefined) => 12 + 8 * Math.min(4, route ? carsOn(world, route) : 1) ** 0.75;
   for (const vehicle of world.simulation.vehicles) {
     const informal = vehicle.lifecycle === "one-shot";
     if (informal && !oneByOne) continue;
@@ -909,10 +911,10 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
       else if (mode === "okada") pill(ctx, pose, 2.6, 2.6, COLORS.danfo, COLORS.ink, null);
       else pill(ctx, pose, 6, 3.2, COLORS.danfo, COLORS.ink, null);
     } else if (vehicle.carries === "goods") {
-      // Your freight: brown, filled by its load (a freight train longer).
-      pill(ctx, pose, world.railVehicles.has(vehicle.id) ? 20 : 12, 5, COLORS.goods, COLORS.goods, full);
+      // Your freight: brown, filled by its load (a freight train longer, the more wagons it pulls).
+      pill(ctx, pose, world.railVehicles.has(vehicle.id) ? trainLength(route) : 12, 5, COLORS.goods, COLORS.goods, full);
     } else if (world.railVehicles.has(vehicle.id)) {
-      pill(ctx, pose, 20, 5, colourOf(route), COLORS.rail, full);
+      pill(ctx, pose, trainLength(route), 5, colourOf(route), COLORS.rail, full);
     } else {
       // In its route's colour, where you've given it one (labels.ts): your network as lines.
       const len = vehicle.id.startsWith("minibus-") ? 8 : vehicle.id.startsWith("brt-") ? 15 : 11;

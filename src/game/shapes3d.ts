@@ -676,7 +676,9 @@ const PANE_DARK = paint("--paint-grey-18");
 
 // --- Vehicles: each facing +x, standing on y = 0, a little larger than life ---------------
 
-export type VehicleKind3D = "bus" | "brt" | "minibus" | "danfo" | "keke" | "okada" | "truck" | "tanker" | "train" | "freight";
+export type VehicleKind3D = "bus" | "brt" | "minibus" | "danfo" | "keke" | "okada" | "truck" | "tanker" | "train" | "freight" | "coach" | "wagon";
+/** A train's pieces along the track, metres before VEHICLE_SCALE (view3d.ts): its engine, each car, the gap between. */
+export const LOCO_LENGTH = 7.2, CAR_LENGTH = 10.6, COUPLING = 0.5;
 const TYRE = paint("--paint-grey-26"), GLASS = paint("--paint-blue-5"), HUB = paint("--paint-grey-2"), DARK = paint("--paint-dark-5");
 const HEADLAMP = paint("--paint-light-3"), TAIL = paint("--paint-red-3"), TRIM = paint("--paint-grey-22");
 /** A body with rounded edges, standing on y at its centre (x, z). */
@@ -820,23 +822,30 @@ export function vehicleGeometry(kind: VehicleKind3D): THREE.BufferGeometry {
     }
     case "train":
     case "freight": {
-      // The locomotive: a long hood, its cab at the front, a headlamp; behind it a coach (windows
-      // in a row) or a covered wagon (ribbed, the goods' brown).
-      // Yours (a passenger train) white, as your buses are, so the route's colour tints it whole; a freight
-      // train's engine the railway's yellow.
+      // The locomotive alone, centred on itself (its cars are drawn one by one behind it, each
+      // following the track: view3d.ts placeVehicles): a long hood, its cab at the front, a
+      // headlamp. Yours (a passenger train) white, as your buses are, so the route's colour tints
+      // it whole; a freight train's engine the railway's yellow.
       const loco = kind === "train" ? paint("--paint-light-4") : paint("--paint-earth-52");
-      kit.box(7, 0.5, 2.6, paint("--paint-grey-24"), 5.3, 0, 0.3);
-      rounded(kit, 5, 2.3, 2.4, 0.3, loco, 4.3, 0, 0.8);
-      rounded(kit, 2, 3.0, 2.8, 0.25, loco, 7.6, 0, 0.8);
-      kit.box(0.08, 0.9, 2.3, GLASS, 8.62, 0, 2.6);
-      kit.box(0.1, 0.25, 0.4, HEADLAMP, 8.63, 0, 1.6);
-      kit.box(5, 0.12, 2.42, DARK, 4.3, 0, 1.6);
-      const car = kind === "train" ? paint("--paint-light-1") : paint("--paint-earth-58");
-      kit.box(10.5, 0.5, 2.6, paint("--paint-grey-24"), -3.6, 0, 0.3);
-      rounded(kit, 10.5, 2.9, 2.9, 0.3, car, -3.6, 0, 0.8);
-      if (kind === "train") panes(kit, -8.4, 1.2, 2.2, 0.85, 2.9, 8);
-      else for (let i = 0; i < 6; i += 1) kit.box(0.14, 3.0, 2.98, paint("--paint-earth-62"), -8.3 + i * 1.9, 0, 0.75);
-      for (const x of [7, 3.2, 0.6, -7.8]) for (const z of [-1.1, 1.1]) kit.add(new THREE.CylinderGeometry(0.42, 0.42, 0.2, 10), TYRE, { x, y: 0.42, z, rx: Math.PI / 2 });
+      kit.box(7, 0.5, 2.6, paint("--paint-grey-24"), 0, 0, 0.3);
+      rounded(kit, 5, 2.3, 2.4, 0.3, loco, -1, 0, 0.8);
+      rounded(kit, 2, 3.0, 2.8, 0.25, loco, 2.3, 0, 0.8);
+      kit.box(0.08, 0.9, 2.3, GLASS, 3.32, 0, 2.6);
+      kit.box(0.1, 0.25, 0.4, HEADLAMP, 3.33, 0, 1.6);
+      kit.box(5, 0.12, 2.42, DARK, -1, 0, 1.6);
+      for (const x of [1.7, -2.1]) for (const z of [-1.1, 1.1]) kit.add(new THREE.CylinderGeometry(0.42, 0.42, 0.2, 10), TYRE, { x, y: 0.42, z, rx: Math.PI / 2 });
+      break;
+    }
+    case "coach":
+    case "wagon": {
+      // A car, centred on itself: a coach (windows in a row, white for its line's colour) or a
+      // covered wagon (ribbed, the goods' brown).
+      const car = kind === "coach" ? paint("--paint-light-1") : paint("--paint-earth-58");
+      kit.box(10.5, 0.5, 2.6, paint("--paint-grey-24"), 0, 0, 0.3);
+      rounded(kit, 10.5, 2.9, 2.9, 0.3, car, 0, 0, 0.8);
+      if (kind === "coach") panes(kit, -4.8, 4.8, 2.2, 0.85, 2.9, 8);
+      else for (let i = 0; i < 6; i += 1) kit.box(0.14, 3.0, 2.98, paint("--paint-earth-62"), -4.7 + i * 1.9, 0, 0.75);
+      for (const x of [3.8, -3.8]) for (const z of [-1.1, 1.1]) kit.add(new THREE.CylinderGeometry(0.42, 0.42, 0.2, 10), TYRE, { x, y: 0.42, z, rx: Math.PI / 2 });
       break;
     }
   }

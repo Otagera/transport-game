@@ -617,6 +617,33 @@ label), then the road or track nearest where the ray meets the land, within 12 p
 each opening the card the 2D map would (`screen.select`). Only what's showing (the layers) can be
 picked, and the pointer says when something under it can be.
 
+**Stations and trains in their parts** (2026-11-03, `stations3d.ts`; your playtest, map 8703 day
+482: Otido's six lines and its freight in one heap in the town's middle). The game's trains have no
+platforms -- every line's track runs to its town's node, and a train loads the moment it's there
+(no dwell) -- so drawn as they ran, a hub's trains met at one point. Now each rail town (a site's
+track is its own) has a station laid out from the network (`layStations`): its axis the way most
+of its track runs (angles doubled, so in and out count alike); a platform track for each line
+through it, ordered so each comes in on the side its track arrives from, passenger lines in pairs
+round island platforms, freight on loops outside them; its platforms 68-104 m by the town's size
+(kept from its first drawing, `halfFor`); its centre on the node or beside it, wherever the
+fewest roads cross it, nothing's in the way (water, a site's yard, the quay) and its lines' throats
+run shortest (an offset station's far-side lines crossed the whole town to reach it). The open
+line stops a throat's length out (`reachAlong`, the segment trimmed in `syncRoads`), and each
+line's throat curves in from there to its own track (`throatLine`, a cubic from the line's own
+heading to the platform's). A train is drawn in its pieces -- the engine, then each car
+(`carsOn`, `LOCO_LENGTH`, `CAR_LENGTH`), every one a set distance back along the path it came,
+round the throat and down its own platform (`railPoint`, `onStation`) -- so a hub's trains fan out
+and stand side by side, and a four-car train is as long as it is. The station itself
+(`buildStation`): ballast, sleepers and rails on every platform track and throat (no telegraph
+poles inside), island platforms a metre up with yellow edges, white canopies on posts, benches,
+lamps and name boards; a footbridge across every track with steps down to each platform; the
+building on its own platform, two floors and a clock tower, its forecourt toward the town; a goods
+shed beside the freight loops; a buffer stop where a line ends. Where a road still crosses (a
+town's middle hemmed in by water and sites has nowhere else), the platforms break and the road
+runs through at grade. The waiting stand on the platforms (the town's waiting, `waitingAt`, split
+across its islands). The town's houses keep off the station and its throats (`onStationGround`);
+a town rebuilds when its station changes. The 2D map's train pills are longer by their cars.
+
 **The 3D view's look** (2026-10-26, borrowed from two procedural-landscape films the user
 pointed at, napali and procedural-alpine-lake). ACES filmic tone mapping at exposure 0.92 (1.25
 washed the land pale and lost the shadows); a soft vignette as a CSS gradient over the canvas
