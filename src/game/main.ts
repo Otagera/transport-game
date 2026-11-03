@@ -77,8 +77,9 @@ import { checkExpand, expandCost, expandLevel, siteScale } from "@engine/game/ex
 import { bondAmount, bondPerDay, checkBond, type BondPurpose } from "@engine/game/bonds";
 import type { SiteLimit } from "@engine/game/production";
 import { borderCountry } from "@engine/game/border";
-import { exportsArriving, exportsBy, farmland, farmTowns, flourCapacity, flourOutput, flourWant, foodActive, foodWant, marketFed, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/game/food";
+import { exportsArriving, exportsBy, farmland, farmTowns, flourCapacity, flourOutput, flourWant, foodActive, foodWant, marketFed, marketTowns, millCapacity, millOutput, stapleArriving, wheatArriving } from "@engine/game/food";
 import { jobsGrowth, siteJobs, staffFactor, staffing, workforceShares } from "@engine/game/workers";
+import { clothExported, clothServed, clothWant, cottonArriving, cottonTowns, textileBreak, textileCapacity, textileOutput } from "@engine/game/textile";
 import { cementActive, cementImports, cementServed, isCementSite, limestoneArriving, worksCapacity, worksOutput, cementBreak } from "@engine/game/cement";
 import { isSteelSite, mineOutput, oreArriving, steelBreak, steelCapacity, steelImports, steelOutput, steelServed } from "@engine/game/steel";
 import { isYourRoad } from "@engine/game/upkeep";
@@ -1913,6 +1914,7 @@ function renderIndustry(townId: string): void {
   if (world.towns.get(townId)?.industry === "gateway") return renderCoastRoad(townId);
   if (world.towns.get(townId)?.industry === "station") return renderStation(townId);
   if (world.towns.get(townId)?.industry === "assembly") return renderAssembly(townId);
+  if (world.textile && world.towns.get(townId)?.industry === "textile") return renderTextileSite(townId);
   const limestone = cementActive(world);
   const cargo = limestone ? "limestone" : "stone";
   const site = world.towns.get(townId)!;
@@ -2066,6 +2068,45 @@ function renderPowerSite(townId: string): void {
   townEl.innerHTML = `
     <div class="town-card">
       <div class="k">${kicker}</div>
+      <div class="title">${site.name}</div>
+      ${productionHtml(townId)}
+      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}${workersItem(townId)}</ul>
+      ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
+    </div>`;
+}
+
+// The textile mill (textile.ts; brief, Cotton and the textile mill): idle until restored; then its
+// cotton (from the far farm towns, the border or the port), its cloth to the markets, the rest out.
+function renderTextileSite(townId: string): void {
+  const textile = world.textile!;
+  const site = world.towns.get(townId)!;
+  const t = world.tuning;
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const capacity = textileCapacity(world);
+  const cottonNeed = capacity * (t.cottonPerCloth ?? 1);
+  const from = textile.source === "farms" ? `the far clusters' farm towns (${cottonTowns(world).length})` : textile.source === "border" ? `over the border at ${townName(world.border!)}` : `through the port at ${townName(world.port!)}`;
+  const markets = marketTowns(world).filter((town) => clothWant(world, town.id) > 0);
+  const served = markets.length ? markets.reduce((sum, town) => sum + clothServed(world, town.id), 0) / markets.length : 0;
+  const lines = [
+    textile.working ? `Makes up to ${perDay(capacity)} t of cloth a day from ${perDay(cottonNeed)} t of cotton, ${from}: ${perDay(cottonArriving(world))} t a day is reaching it.` : `Built to make ${perDay(capacity)} t of cloth a day from cotton ${from}.`,
+    `The biggest employer of any site: ${Math.round((t.jobsTextile ?? 0) * 1000).toLocaleString()} jobs working, and room to grow in the towns whose people get here.`,
+    textile.working ? `Its cloth: the markets get ${pct(served)} of what they want, and a market with cloth draws more trade. What they don't take goes out for export: ${perDay(clothExported(world))} t a day now.` : "Its cloth would go to the markets its road reaches, drawing trade there; the rest out for export.",
+    "Built for the cotton belt, run down and shut (Kaduna).",
+  ];
+  const broken = textileBreak(world);
+  let problem = "";
+  let action = "";
+  if (broken?.kind === "idle") {
+    problem = `Idle. Restore it and its shift comes back, wanting cotton.`;
+    action = `<span class="actions"><button data-restore-textile="1">Restore it: ${naira(t.textileRestoreCost ?? 0)}</button>${world.economy.funds < (t.textileRestoreCost ?? 0) ? bondButton("textile") : ""}</span>`;
+  } else if (broken?.kind === "cotton") {
+    problem = textile.source === "farms"
+      ? `Short of cotton: ${perDay(cottonArriving(world))} of ${perDay(cottonNeed)} t a day. It's grown in the far clusters: open one, and bring it home -- track and a freight train (<kbd>K</kbd>, <kbd>G</kbd>), or yards (<kbd>Y</kbd>) for hauliers.`
+      : `Short of cotton: ${perDay(cottonArriving(world))} of ${perDay(cottonNeed)} t a day comes from ${from}. A road, or a yard (<kbd>Y</kbd>) there, brings more.`;
+  }
+  townEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">Textile mill · ${textile.working ? `${perDay(textileOutput(world))} t of cloth a day` : "idle"}</div>
       <div class="title">${site.name}</div>
       ${productionHtml(townId)}
       <ul>${lines.map((line) => `<li>${line}</li>`).join("")}${workersItem(townId)}</ul>
@@ -3404,8 +3445,9 @@ function onPanelClick(event: MouseEvent): void {
   if (target.dataset.bond) {
     const purpose = target.dataset.bond as BondPurpose;
     const lent = bondAmount(world, purpose) ?? 0;
-    const towns = purpose === "refinery" && world.fuel ? [world.fuel.refineryId] : purpose === "works" && world.cement ? [world.cement.worksId] : world.project ? [world.project.a, world.project.b] : [];
-    const result = act({ label: `a bond for ${purpose === "project" ? "your project" : purpose === "works" ? "the cement works" : "the refinery"}`, towns }, { kind: "bond", purpose });
+    const towns = purpose === "refinery" && world.fuel ? [world.fuel.refineryId] : purpose === "works" && world.cement ? [world.cement.worksId] : purpose === "textile" && world.textile ? [world.textile.millId] : world.project ? [world.project.a, world.project.b] : [];
+    const what = purpose === "project" ? "your project" : purpose === "works" ? "the cement works" : purpose === "textile" ? "the textile mill" : purpose === "steel" ? "the steel works" : purpose === "power" ? "the power station" : "the refinery";
+    const result = act({ label: `a bond for ${what}`, towns }, { kind: "bond", purpose });
     say(result.ok
       ? `Borrowed ${naira(lent)}${purpose === "project" ? " toward your project: build it" : ", and it's restored"}. You repay ${naira(bondPerDay(world, lent))} a day for ${world.tuning.bondTermDays} days.`
       : `Can't borrow: ${result.reason}`, !result.ok, 9);
@@ -3454,6 +3496,12 @@ function onPanelClick(event: MouseEvent): void {
   if (target.dataset.restorePower) {
     const result = act({ label: "restoring the power station", towns: world.power ? [world.power.stationId] : [] }, { kind: "restorePower" });
     say(result.ok ? `Power station restored for ${naira(result.amount ?? 0)}. ${world.power ? townName(world.power.mineId) : "Its mine"} starts digging: get the coal to it, and every works in its reach makes more.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.restoreTextile) {
+    const result = act({ label: "restoring the textile mill", towns: world.textile ? [world.textile.millId] : [] }, { kind: "restoreTextile" });
+    say(result.ok ? `Textile mill restored for ${naira(result.amount ?? 0)}. Its shift comes back; get cotton to it, and its cloth to the markets.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

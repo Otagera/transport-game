@@ -85,7 +85,11 @@ line's goods are yours); a shrinking town said "short of cement" while your shar
 fell -- now it says why it's shrinking first. **Open for you:** play it; then step 2 (goods decide
 how much of that room gets built), then cotton. **Where next** (brief, same name) built after it:
 a pane under the pledges ranking the four towns with the most people to gain, what's in the way,
-and the move -- C41 holds on two of four on map 8703; **next: cotton and the textile mill.**
+and the move -- C41 holds on two of four on map 8703. **Cotton and the textile mill** (brief, same
+name; textile.ts) built after it: an idle mill at home on every map, cotton from a northern map's far
+farm towns or over the border, cloth to the markets (trade) and the rest exported, the biggest
+employer. C42 mostly holds on five maps, C43 fails (the strategist builds no cotton line). **Open for
+you:** play it; then the south's oil palms and palm-oil mill.
 
 **The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
 you aim and The network): from your "to click on some things are difficult ... between tick the

@@ -13,6 +13,7 @@ import { fuelFlows, isFuelSite, shortageAt } from "./fuel";
 import { cementFlows, isCementSite } from "./cement";
 import { isSteelSite, steelFlows } from "./steel";
 import { powerFlows } from "./power";
+import { textileFlows } from "./textile";
 import { haulShare } from "./truckers";
 import { haulCost, longHaul, relayed } from "./haulage";
 import { foodActive, foodFlows } from "./food";
@@ -96,7 +97,7 @@ export function parseRelayKey(key: string): { to: string; kind: GoodsKind; origi
 function keeps(world: GameWorld, fromId: string): boolean {
   const from = world.towns.get(fromId);
   // Air freight is packed to travel (airport.ts): it keeps as cement does.
-  return isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill" || from?.industry === "airport";
+  return isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill" || from?.industry === "airport" || from?.industry === "textile";
 }
 
 /**
@@ -155,6 +156,8 @@ export function goodsFlows(world: GameWorld): GoodsFlow[] {
   flows.push(...powerFlows(world));
   // Air freight from the airport to the market towns (airport.ts).
   flows.push(...airportFlows(world));
+  // Cotton and the textile mill (textile.ts): cotton in, cloth to the markets and out.
+  flows.push(...textileFlows(world));
   return flows;
 }
 

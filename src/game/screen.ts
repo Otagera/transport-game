@@ -604,6 +604,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (world.towns.get(s.id)?.industry === "powerstation" && world.power && !world.power.working) {
       return { text: "Idle: shut down and left. Restore it and the works in its reach make more", button: `<button data-restore-power="1">Restore it · ${nairaK(world.tuning.powerRestoreCost ?? 0)}</button>` };
     }
+    if (world.towns.get(s.id)?.industry === "textile" && world.textile && !world.textile.working) {
+      return { text: `Idle: run down and shut. Restore it: ${int((world.tuning.jobsTextile ?? 0) * 1000)} jobs, cloth for the markets, the rest exported`, button: `<button data-restore-textile="1">Restore it · ${nairaK(world.tuning.textileRestoreCost ?? 0)}</button>` };
+    }
     if (!(s.capacity > 0 && s.made < 0.6 * s.capacity)) return null;
     const button = s.limit === "workers" ? toolButton("bus", "A bus for its workers <kbd>B</kbd>") : s.limit === "input" ? toolButton("yard", "A yard where it comes from <kbd>Y</kbd>") : `<span class="muted">See More</span>`;
     return { text: `Makes ${pct(s.made / s.capacity)} of what it could: held back by its ${s.limit}`, button };

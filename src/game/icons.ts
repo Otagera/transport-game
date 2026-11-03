@@ -67,7 +67,7 @@ export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }
   plantation: { family: "food", name: "Oil-palm plantation", next: true },
   palmmill: { family: "food", name: "Palm-oil mill", next: true },
   cottonfarm: { family: "food", name: "Cotton farms", next: true },
-  textilemill: { family: "trade", name: "Textile mill", next: true },
+  textilemill: { family: "trade", name: "Textile mill" },
   ranch: { family: "food", name: "Cattle market (herds)", next: true },
   abattoir: { family: "food", name: "Abattoir", next: true },
   cocoa: { family: "food", name: "Cocoa farms", next: true },

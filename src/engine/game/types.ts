@@ -1,3 +1,4 @@
+import type { TextileState } from "./textile";
 import type { TermState } from "./term";
 import type { UnionState } from "./union";
 import type { FloodState } from "./floods";
@@ -51,7 +52,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly" | "coalmine" | "powerstation" | "airport";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly" | "coalmine" | "powerstation" | "airport" | "textile";
 
 export interface GameRoadDef {
   a: string;
@@ -668,6 +669,24 @@ export interface GameTuning {
   powerRestoreCost?: number;
   jobsPowerStation?: number;
   jobsCoalMine?: number;
+  /**
+   * Cotton and the textile mill (textile.ts; brief, Cotton and the textile mill): on; restoring it;
+   * thousands employed working; cloth a market wants a thousand people a day, tonnes; the mill's
+   * capacity as a multiple of day 1's want (the rest exported); cotton a tonne of cloth takes;
+   * cotton a northern far farm town grows a thousand a day; the share of the mill's cotton that
+   * comes over the border or through the port elsewhere; a fed market's extra trips at all it
+   * wants; export pay a tonne of cloth at the sea. Absent in older runs: no mill.
+   */
+  textileEnabled?: boolean;
+  textileRestoreCost?: number;
+  jobsTextile?: number;
+  clothPerThousandPerDay?: number;
+  textileMillShare?: number;
+  cottonPerCloth?: number;
+  cottonPerThousandPerDay?: number;
+  cottonImportShare?: number;
+  clothTripBoost?: number;
+  clothExportPay?: number;
   steelPerThousandPerDay: number;
   steelWorksShare: number;
   steelImportShare: number;
@@ -936,6 +955,8 @@ export interface GameWorld {
   power?: PowerState | null;
   /** Your pipelines and the inherited one (pipelines.ts); absent when they're off. */
   pipelines?: import("./pipelines").Pipeline[];
+  /** Cotton and the textile mill (textile.ts): absent on a run without it. */
+  textile?: TextileState | null;
   /** Each site's staffed days and the camp at its gate (workers.ts). */
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */

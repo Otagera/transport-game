@@ -56,7 +56,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   },
   {
     id: "supplies", label: "Sites making goods", col: 1, row: 4, feeds: ["hauliers"], unit: "t/day",
-    keys: [/^cement/, /^steel/, /^coal/, /^power/, /^pipe/, /^airFreight/, /^fuel/, /^refinery/, /^crude/, /^works/, /^mine/, /^ore/, /^limestone/, /^quarry/, /^newRefinery/, /^flour/, /^food/, /^mill/, /^wheat/, /^staple/, /^farm/, /^field/, /^industr/, /^expand/, /^assembly/, /^jobs/, /^staff/, /^workers/, /^peoplePerJob$/, /^stone/, /^ridgeField/, /^supplies/, /^tanker/],
+    keys: [/^cement/, /^steel/, /^coal/, /^power/, /^pipe/, /^airFreight/, /^fuel/, /^refinery/, /^crude/, /^works/, /^mine/, /^ore/, /^limestone/, /^quarry/, /^newRefinery/, /^flour/, /^food/, /^mill/, /^wheat/, /^staple/, /^farm/, /^field/, /^industr/, /^expand/, /^assembly/, /^jobs/, /^staff/, /^workers/, /^peoplePerJob$/, /^stone/, /^ridgeField/, /^supplies/, /^tanker/, /^textile/, /^cloth/, /^cotton/],
     measure: safe((w) => goodsFlows(w).reduce((t, f) => t + f.rate * D, 0)),
   },
   {

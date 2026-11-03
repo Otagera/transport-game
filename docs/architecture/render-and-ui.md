@@ -398,6 +398,12 @@ terrain isn't applied: the map still draws shaded hills.
   the works' capacity (`cementBreak` "capacity") reads "X makes all it can: N t a day with
   imports, of M wanted" with **Expand X · ₦** (`data-expand`), on the town's line, its callout
   and Waiting on you, instead of advice to carry it.
+- **The textile mill** (textile.ts): its card (main.ts `renderTextileSite`) -- what it can make and
+  from where, its jobs, the markets' share of the cloth and what's exported, the restore with a
+  bond beside it; the sites list's line while idle; the sheet's spool on the map (render.ts maps
+  the `textile` kind to the `textilemill` glyph); in 3D a weaving shed under a sawtooth roof with
+  its north lights, the spinning block, the boiler chimney (smoke while it works), bales in the
+  yard (shapes3d.ts).
 - **Where next** (brief, Where next; screen.ts `whereNextHtml`, problems.ts `whereNext`) -- a pane
   under the pledges: the four towns in your remit with the most people to gain, each "**Olono** ·
   +90k: you carry 23% of its trips, most toward Otido (181 a day)" with its move (priced, or the

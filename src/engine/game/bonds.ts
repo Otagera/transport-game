@@ -7,6 +7,7 @@ import { restoreRefinery } from "./fuel";
 import { restoreWorks } from "./cement";
 import { restoreSteel } from "./steel";
 import { powerActive, restorePower } from "./power";
+import { restoreTextile, textileActive } from "./textile";
 import { heldForProject } from "./project";
 
 // Bonds (docs/brief.md, Revision 3, money, from the step 2 playtest): borrow
@@ -26,7 +27,7 @@ import { heldForProject } from "./project";
 //   - Bounded: all repayments together at most `bondIncomeCap` of what you
 //     take in a day, so a bond can't buy the game.
 
-export type BondPurpose = "refinery" | "works" | "steel" | "power" | "project";
+export type BondPurpose = "refinery" | "works" | "steel" | "power" | "textile" | "project";
 
 export interface Bond {
   id: string;
@@ -47,6 +48,7 @@ export function bondAmount(world: GameWorld, purpose: BondPurpose): number | nul
   if (purpose === "works") return world.cement && !world.cement.working ? t.worksRestoreCost : null;
   if (purpose === "steel") return world.steel?.worksId && !world.steel.working ? t.steelRestoreCost : null;
   if (purpose === "power") return world.power && powerActive(world) && !world.power.working ? t.powerRestoreCost ?? null : null;
+  if (purpose === "textile") return world.textile && textileActive(world) && !world.textile.working ? t.textileRestoreCost ?? null : null;
   const project = world.project;
   if (!project) return null;
   const short = Math.ceil(project.price - heldForProject(world));
@@ -105,6 +107,10 @@ export function issueBond(world: GameWorld, purpose: BondPurpose): ActionResult 
     const done = restorePower(world);
     if (!done.ok) return undo(world, lent, done.reason);
     label = `restoring ${world.towns.get(world.power!.stationId)?.name ?? "the power station"}`;
+  } else if (purpose === "textile") {
+    const done = restoreTextile(world);
+    if (!done.ok) return undo(world, lent, done.reason);
+    label = `restoring ${world.towns.get(world.textile!.millId)?.name ?? "the textile mill"}`;
   } else {
     const p = world.project!;
     label = `the ${projectName(p.rung)} on ${world.towns.get(p.a)?.name} – ${world.towns.get(p.b)?.name}`;

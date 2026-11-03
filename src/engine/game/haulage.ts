@@ -115,7 +115,12 @@ export function relayed(world: GameWorld, origin: string, kind: GoodsKind): bool
  * (truckers.ts haulShare, `longHaulTail`) rather than stopping dead. Not relayed (relayLimestone).
  */
 export function longHaul(world: GameWorld, origin: string, to: string, kind: GoodsKind): boolean {
-  if (!world.tuning.longHaulTail || kind !== "supplies") return false;
+  if (!world.tuning.longHaulTail) return false;
+  // Cotton to the textile mill, from far farm towns or the border, and its cloth out (textile.ts):
+  // the same tail, not relayed (relaying it measured as limestone's would: map 3218's cost).
+  const textile = world.textile;
+  if (textile && world.tuning.textileEnabled && (to === textile.millId || origin === textile.millId)) return true;
+  if (kind !== "supplies") return false;
   const from = world.towns.get(origin)?.industry;
   return from === "quarry" && isCementSite(world.towns.get(to)) && !relayed(world, origin, kind);
 }

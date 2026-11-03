@@ -1,3 +1,4 @@
+import { cottonArriving, textileCapacity, textileOutput } from "./textile";
 import type { GameWorld } from "./types";
 import { portScale } from "./gateways";
 import { flowKey, goodsFlows, type GoodsFlow } from "./goods";
@@ -168,6 +169,14 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
       capacity = coalWanted(world);
       made = coalOutput(world);
       idle = !world.power?.working;
+      break;
+    // Cotton and the textile mill (textile.ts).
+    case "textile":
+      product = "cloth";
+      capacity = textileCapacity(world);
+      made = textileOutput(world);
+      inputs = [{ name: "cotton", arriving: cottonArriving(world), needed: capacity * (t.cottonPerCloth ?? 1) }];
+      idle = !world.textile?.working;
       break;
     case "oilfield":
     case "terminal":

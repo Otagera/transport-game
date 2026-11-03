@@ -14,6 +14,7 @@ import { foundGateTown, updateSettlements, type GameEvent } from "./settlement";
 import { updateSites } from "./workers";
 import { repayBonds } from "./bonds";
 import { payExports } from "./food";
+import { payClothExports } from "./textile";
 import { updateSweep } from "./sweep";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
@@ -321,7 +322,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   // The state's allocation: a base, plus a share of the growth you caused (budget.ts).
   // And its export payment on cash crops reaching the port (food.ts): the state's, like the allocation.
   const exportsBefore = world.budget.exports;
-  const exported = payExports(world, dt);
+  const exported = payExports(world, dt) + payClothExports(world, dt);
   const allocation = (allocationPerDay(world) * dt) / SECONDS_PER_GAME_DAY + exported;
   const otherIncome = takings.tolls + takings.levies + takings.loading + allocation;
   // payExports has already paid the exports in; until exportsPaidOnce they were paid again

@@ -282,6 +282,7 @@ export const SITE_YARD: Record<string, { w: number; d: number; gate: number }> =
   works: { w: 56, d: 48, gate: -2 }, assembly: { w: 56, d: 42, gate: 8 },
   steelworks: { w: 56, d: 42, gate: 0 }, steelport: { w: 54, d: 40, gate: 6 },
   mill: { w: 50, d: 40, gate: 6 }, flourmill: { w: 50, d: 40, gate: 6 }, silo: { w: 50, d: 40, gate: 6 },
+  textile: { w: 60, d: 44, gate: 10 },
   station: { w: 30, d: 22, gate: 0 }, border: { w: 36, d: 30, gate: 0 }, gateway: { w: 36, d: 30, gate: 0 },
   airport: { w: 124, d: 64, gate: 30 },
 };
@@ -546,6 +547,25 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     }
     return;
   }
+  if (kind === "textile") {
+    // The textile mill (Kaduna's): the long weaving shed under its sawtooth roof, north lights
+    // glazed, the spinning block beside it, the boiler house's chimney, and bales in the yard.
+    yardOf(kind, kit);
+    kit.box(34, 8, 20, paint("--paint-earth-14"), -6, -6);
+    for (let k = 0; k < 6; k += 1) {
+      const x = -20 + k * 5.6;
+      kit.add(new THREE.BoxGeometry(5.6, 0.4, 20).rotateZ(-0.5), paint("--paint-grey-6"), { x: x + 1.2, y: 9.2, z: -6 });
+      kit.box(0.3, 2.4, 20, PANE, x + 3.4, -6, 8);
+    }
+    if (kit.fits(16, -10, 6)) {
+      kit.box(12, 12, 12, paint("--paint-earth-14"), 16, -10);
+      kit.gable(12, 12, 2.4, paint("--paint-grey-6"), 16, -10, 12);
+      for (let k = 0; k < 3; k += 1) kit.box(9, 0.8, 0.12, PANE, 16, -3.95, 3 + k * 3.2);
+    }
+    kit.cylinder(1.4, 26, paint("--paint-earth-47"), 22, 8, 0, 10);
+    kit.box(6, 5, 6, paint("--paint-grey-5"), 22, 4);
+    return;
+  }
   // Anything else: long sheds and a stack.
   kit.box(22, 7, 12, paint("--paint-earth-14"), 0, 0);
   kit.gable(22, 12, 3, paint("--paint-grey-6"), 0, 0, 7);
@@ -589,6 +609,7 @@ export const SITE_STOCK: Record<string, { x: number; z: number; n: number; item:
     steelworks: { x: -10, z: 2, n: 18, item: coils },
     steelport: { x: -20, z: -6, n: 36, item: coils },
     assembly: { x: -18, z: 9, n: 24, item: cars },
+    textile: { x: -24, z: 10, n: 24, item: sacks(paint("--paint-light-4")) },
   };
 })();
 
@@ -609,6 +630,7 @@ export const SITE_BAY: Record<string, { x: number; z: number; ry: number; vehicl
   steelworks: { x: 2, z: -2, ry: 0, vehicle: "truck" },
   steelport: { x: 12, z: 6, ry: 0, vehicle: "truck" },
   assembly: { x: 10, z: 14, ry: 0, vehicle: "truck" },
+  textile: { x: 8, z: 12, ry: 0, vehicle: "truck" },
 };
 
 /** The excavator in a quarry's pit: tracks and body below, the house, boom and bucket that swing above. */
@@ -645,6 +667,7 @@ export const SITE_LIFE: Record<string, Array<{ x: number; z: number; y: number; 
   ironmine: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 14, z: 4, y: 6, what: "dust" }, { x: -8, z: -2, y: 0.2, what: "digger" }],
   coalmine: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 14, z: 4, y: 6, what: "dust" }, { x: -8, z: -2, y: 0.2, what: "digger" }],
   powerstation: [{ x: -16, z: -9, y: 18.5, what: "steam" }, { x: -16, z: 9, y: 18.5, what: "steam" }, { x: 16, z: -10, y: 30.5, what: "smoke" }],
+  textile: [{ x: 22, z: 8, y: 26.5, what: "smoke" }],
 };
 
 /** A cargo ship, facing +x, its waterline at y = 0: hull, containers on deck, the bridge aft, its funnel. */
