@@ -130,6 +130,11 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // 4,214 t of cement for one town and delivered none.
   trucksFreeOfDanfoBudget: true,
   truckerHoldLoads: 2,
+  // Goods bound for a stop your freight line serves from where they wait are your
+  // line's: hauliers leave them (truckers.ts). Map 8703, your playtest: hauliers from
+  // the yards at the works and terminal took the cement first, and the trains built
+  // for it ran a fifth full and lost money. Run files without it replay as played.
+  freightFirst: true,
   // Towns expect better service as they grow (Revision 4, 2): from 80k, 15%
   // of their trips, a point more each 10k, 35% at most (280k). Short of it, a
   // town keeps only part of what your service would grow it to. First

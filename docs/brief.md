@@ -992,6 +992,35 @@ five; towns you don't serve still don't grow. C39 holds on three maps, overshoot
 fastest towns +52 to +87%): a full point at 0.6, not 0.55, if play finds it quick. Step 2 waits on
 your playtest.
 
+### The advice that didn't work (your playtest of map 8703, 2026-11-03)
+
+Day 482, "the most fun in a while"; people 730k -> 1.71M. Late on it was hard to know what to
+connect, and towns shrank though you did what their cards said -- *"connect towns to where food
+is, or it needs cement or steel, which I did but maybe didn't work or I didn't understand."*
+Replayed: steel worked (Otido's held back 47k -> 1k). Cement and the shrinking didn't, each for
+a reason the cards hid:
+
+1. **The cement works was full, and the card said carry.** From day 280 it made all it could
+   (219 t a day, with twice the limestone it needed), against 290-365 t wanted; the towns got
+   60-73%, ~220k people held back. Never expanded (₦36,000, millions held). Now the advice reads
+   the works first: at capacity and short, "makes all it can ... of M wanted", **Expand it**.
+2. **The trains you built for it carried nothing.** Your yards at the works and terminal (the
+   cards' advice) let hauliers take the cement first; the freight trains (the cards' advice too)
+   ran 3-20% full and lost money. Now goods bound where your freight line goes from there are
+   your line's: hauliers leave them (`freightFirst`).
+3. **A shrinking town said "short of cement".** Eligo lost people because, grown, it made more
+   trips than your lines took (your share 48% -> 36%, days 360-400); its card named cement,
+   which came first on the line. Now a shrinking town says why first, with your share then and
+   now.
+
+Measured from your day-481 world, 30 days on: with (2), money +₦146k, +13k people, the far towns'
+cement up 5-7 points; with (1)'s expansion too (₦90k), +42k people against as played, cement
+held back 358k -> 295k, and the advice moves on to the quarry the bigger works now needs.
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C40 | Advice names the limit | Where a chain is short, the card's move is the one that raises what arrives: expand at capacity, never carry; a freight line's goods reach its trains |
+
 ### Checks for the remit
 
 | # | Check | Passes when |

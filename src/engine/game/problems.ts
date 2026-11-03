@@ -209,6 +209,11 @@ export function shrinkCause(world: GameWorld, townId: string): ShrinkCause | nul
     }
     return { why: `its road allows less than on day ${dayOf(world, peak.atSeconds)}`, move: null };
   }
+  // Your share fell as it grew: a bigger town makes more trips than your lines carry
+  // (map 8703: Eligo 48% -> 36% over days 360-400 with two lines into it full).
+  if (peak && peak.playerShare - now.playerShare > 0.05) {
+    return { why: `you carry ${pct(now.playerShare)} of its trips, down from ${pct(peak.playerShare)} on day ${dayOf(world, peak.atSeconds)}: grown, it makes more trips than your lines take`, move: serviceMove };
+  }
   if (peak && peak.service - now.service > 0.02) {
     return { why: `its service fell from ${pct(peak.service)} to ${pct(now.service)} since day ${dayOf(world, peak.atSeconds)} (yours ${pct(now.playerShare)})`, move: serviceMove };
   }

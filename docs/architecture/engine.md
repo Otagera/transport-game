@@ -982,6 +982,17 @@ meets it (x = cells / max; half, for a tail of a quarter) and then `tail / x`: a
 reach, a tenth at two and a half times it, never none. One truck a load, straight there. The
 site's line and the problem card say "a long haul by road ... a freight train takes the rest".
 
+**Your freight line's goods are yours** (2026-11-03, `freightFirst`, truckers.ts
+`freightServes`). Goods waiting at a place, bound for a stop a freight train of yours calls at
+from there, are left to your trains: hauliers don't lift them -- unless you've set that line
+dear (freightrates.ts): priced up, its shippers go to the hauliers, as the rate says. Map 8703: yards at the works and
+the cement terminal (built on the cards' advice) let hauliers lift cement 120 cells out at twice
+the rate, and the freight trains built for it ran 3-20% full and lost money -- the cards had sent
+the player to both. From that world, 30 days with it on: money +₦146k (+6%), +13k people, the far
+towns' cement up (Eligo 61% -> 67%, Olono 61% -> 66%), the near ones' down a little (hauliers
+still carry those); most lines still run part empty, there being too little cement to fill them
+(the capacity break above). Run files without the key replay as played.
+
 How far hauliers go, by the share of what's waiting they take a second (`haulShare`, the
 pickup rate's multiplier: goods that keep while they wait still go in the end at a low one).
 Without a yard their reach is 40 cells, from one 120; limestone to the works tails off past half
@@ -1202,6 +1213,14 @@ flowchart LR
 - **On screen** (`main.ts`): the works' and terminal's cards (`renderCementSite`, with the
   Restore button), a Cement line on the town card (`cementText`), "can't grow: no cement" as
   the town's problem, the map footer saying how the works started; glyphs in `render.ts`.
+- **Where the chain breaks** (`cementBreak`, for the advice): idle; no quarry working; a
+  quarry whose limestone isn't arriving; **capacity** -- the works at 95% of what it can make
+  and the works and imports together under 95% of what the towns want, with `expandCost` (null
+  at `expandMaxLevel`); else carry. Capacity is checked before carry: no carrying makes more
+  cement. Map 8703 (your playtest, 2026-11-03): the works at capacity from day 280 to 481 with
+  twice the limestone it could use, the towns 60-73% served, the card saying carry it -- and
+  never expanded (₦36,000, millions held). From that world, expanding twice took the cement
+  held back from 367k to 295k people in 30 days, and the break moved on to the quarry.
 
 ### Speed: what a tick spends (2026-10-20)
 

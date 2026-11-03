@@ -10,7 +10,7 @@ import { canAfford, SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { planRoad } from "./roads";
 import { staffFactor } from "./workers";
-import { siteScale } from "./expand";
+import { expandCost, siteScale } from "./expand";
 
 // The building chain (docs/brief.md, Revision 3, step 2a): limestone ->
 // cement -> the towns that grow. It replaces stone's growth bonus with a
@@ -233,20 +233,37 @@ export function inheritedRoad(world: GameWorld, id: string, a: string, b: string
  *     day); imported cement comes through the silo where there is one;
  *   - quarry: a quarry is working but little of its limestone reaches the
  *     works -- connect it (road and yard, or track);
+ *   - capacity: the works makes all it can and the towns want more than it
+ *     and the imports together -- expand it (`expandCost`, null when it's
+ *     expanded as far as it goes). Map 8703, your playtest, 2026-11-03: the
+ *     works at capacity from day 280 with twice the limestone it could use,
+ *     never expanded (₦36,000, ₦6M held), while the card said to carry
+ *     cement -- and the freight trains built for it ran a fifth full;
  *   - carry: the works makes enough; it isn't reaching the town.
  */
 export type CementBreak =
   | { kind: "idle" }
   | { kind: "no-quarry"; nextDay: number; siloId: string | null }
   | { kind: "quarry"; quarryId: string }
+  | { kind: "capacity"; made: number; wanted: number; expandCost: number | null }
   | { kind: "carry" };
+
+/** Tonnes a second of cement every building town wants together. */
+export function cementWanted(world: GameWorld): number {
+  return builders(world).reduce((sum, town) => sum + cementDemand(world, town.id), 0);
+}
 
 export function cementBreak(world: GameWorld): CementBreak | null {
   const cement = world.cement;
   if (!cement) return null;
   if (!cement.working) return { kind: "idle" };
   const capacity = worksCapacity(world);
-  if (capacity > 0 && worksOutput(world) >= 0.6 * capacity) return { kind: "carry" };
+  const output = worksOutput(world);
+  // At capacity and short overall: no carrying makes more cement (the works first, then its imports).
+  const made = output + cementImports(world);
+  const wanted = cementWanted(world);
+  if (capacity > 0 && output >= 0.95 * capacity && made < 0.95 * wanted) return { kind: "capacity", made, wanted, expandCost: expandCost(world, cement.worksId) };
+  if (capacity > 0 && output >= 0.6 * capacity) return { kind: "carry" };
   const quarries = [...world.industries.values()].filter((industry) => industry.kind === "quarry" && world.towns.has(industry.id));
   if (quarries.length === 0) {
     const nextDay = Math.ceil((world.industrySchedule.nextAtSeconds - world.startSeconds) / SECONDS_PER_GAME_DAY) + 1;
