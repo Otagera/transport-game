@@ -9,11 +9,12 @@
 #panel-col { right: 0; width: var(--right); border-left: 1px solid var(--line); }
 #panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 #log { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-#overlays { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+#overlays, #layers { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 #zoom-control { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 #zoom-control button { min-width: 28px; }
 /* The 3D view's labels (view3d.ts): towns by tier, sites quieter; villages only up close. */
-body.in3d #overlays, body.in3d #overlay-caption, body.in3d #hint, body.in3d #key { display: none !important; }
+/* The overlays and the layer buttons are both views'; the hints and the key the 2D map's. */
+body.in3d #hint, body.in3d #key { display: none !important; }
 /* What the overlay shows, in a line under its buttons (outside review, 2026-10-26). */
 #overlay-caption { font-size: var(--fs-dense); line-height: 1.4; color: var(--ink-2); margin-top: calc(var(--sp-1) * -1); }
 #overlay-caption[hidden] { display: none; }

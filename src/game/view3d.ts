@@ -29,7 +29,7 @@ import { MIN_CONDITION } from "@engine/map/decay";
 import { isFlooded } from "@engine/game/floods";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { tierOf, type Tier } from "./icons";
-import type { Focus } from "./render";
+import type { Focus, Network, OverlayMark } from "./render";
 import { steadyOver, steadyShortage } from "./steady";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { paint as tokenPaint, paintAlpha, paintHex } from "./palette3d";
@@ -354,10 +354,17 @@ export interface View3D {
   tilt(radians: number): void;
   /** Day or night: the light, the sky, lit windows. */
   setNight(night: boolean): void;
+  /** The layer buttons (main.ts): roads and track or one alone, and the land's trees, rocks and hamlets. */
+  setLayers(network: Network, scenery: boolean): void;
+  /** An overlay's marks (render.ts overlayMarks), as arcs over the land; none, none drawn. */
+  setOverlay(marks: readonly OverlayMark[]): void;
 }
 
-/** `onPick`: a town or site clicked (its mesh or its label) -- main.ts opens its panel. */
-export function createView3D(onPick: (townId: string) => void = () => {}): View3D {
+/** What a click in 3D picked: a town or site, one of your lines (a vehicle on it), or a road or stretch of track. */
+export type Pick3D = { kind: "place" | "route" | "segment"; id: string };
+
+/** `onPick`: something clicked -- a vehicle, a town or site (its mesh or its label), a road or track -- main.ts opens its card. */
+export function createView3D(onPick: (pick: Pick3D) => void = () => {}): View3D {
   const host = document.createElement("div");
   host.id = "view3d";
   host.style.cssText = "position:fixed;inset:0;display:none;";
@@ -402,19 +409,25 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
   };
   addEventListener("resize", resize);
   resize();
-  // A click (not a drag that turned the camera) on a town's buildings picks it.
+  // A click (not a drag that turned the camera) picks what's under it, the smallest first: a
+  // vehicle within a few pixels (they're small from any height), then a town's or site's
+  // buildings, then the road or track nearest the ground it hit.
   const ray = new THREE.Raycaster();
   let down: { x: number; y: number } | null = null;
   renderer.domElement.addEventListener("pointerdown", (event) => { down = { x: event.clientX, y: event.clientY }; });
   renderer.domElement.addEventListener("pointerup", (event) => {
     if (!down || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 5 || !built) return;
     down = null;
-    ray.setFromCamera(new THREE.Vector2((event.clientX / innerWidth) * 2 - 1, -(event.clientY / innerHeight) * 2 + 1), camera);
-    const hit = ray.intersectObjects(built.pickable, true)[0];
-    let found: THREE.Object3D | null = hit?.object ?? null;
-    while (found && !found.userData.townId) found = found.parent;
-    const id = found?.userData.townId as string | undefined;
-    if (id) onPick(id);
+    const pick = built.pickAt(event.clientX, event.clientY, ray);
+    if (pick) onPick(pick);
+  });
+  // Over something you can click, the pointer says so; checked a few times a second, not every move.
+  let hoverAt = 0;
+  renderer.domElement.addEventListener("pointermove", (event) => {
+    const now = performance.now();
+    if (!built || event.buttons || now - hoverAt < 120) return;
+    hoverAt = now;
+    renderer.domElement.style.cursor = built.pickAt(event.clientX, event.clientY, ray) ? "pointer" : "";
   });
 
   let built: Built | null = null;
@@ -423,6 +436,8 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
   let glideTo: THREE.Vector3 | null = null;
   let pendingTurn = 0, pendingTilt = 0;
   let night = false;
+  let layers: { network: Network; scenery: boolean } = { network: "both", scenery: true };
+  let marks: readonly OverlayMark[] = [];
   // A drag of your own stops a glide.
   controls.addEventListener("start", () => (glideTo = null));
   return {
@@ -438,6 +453,12 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
     setNight(on) {
       night = on;
       built?.setNight(on);
+    },
+    setLayers(network, scenery) {
+      layers = { network, scenery };
+    },
+    setOverlay(next) {
+      marks = next;
     },
     show(world) {
       if (built?.world !== world) {
@@ -457,6 +478,8 @@ export function createView3D(onPick: (townId: string) => void = () => {}): View3
       if (built?.world !== world) this.show(world);
       built!.focus(focus, selected);
       built!.update(world);
+      built!.layers(layers.network, layers.scenery);
+      built!.arcs(marks);
       // A newly selected place: the camera glides over to it, keeping its angle and distance.
       if (selected !== lastSelected) {
         lastSelected = selected;
@@ -523,6 +546,8 @@ interface Built {
   sun: THREE.DirectionalLight;
   /** The towns' and sites' meshes, for a click. */
   pickable: THREE.Object3D[];
+  /** What's under a screen point (CSS pixels): a vehicle, a town or site, a road or track; null for bare land. */
+  pickAt(x: number, y: number, ray: THREE.Raycaster): Pick3D | null;
   /** The ground's height under a point of the 3D world. */
   groundAt(x: number, z: number): number;
   /** The land's extent (metres), to keep the camera over it. */
@@ -539,10 +564,14 @@ interface Built {
   /** Where a town or site stands, on the ground; null when it isn't drawn. */
   centreOf(id: string): THREE.Vector3 | null;
   update(world: GameWorld): void;
+  /** Show or hide by layer (the buttons): roads, track, and their vehicles; the scenery. */
+  layers(network: Network, scenery: boolean): void;
+  /** The overlay's arcs, rebuilt when its marks are new ones. */
+  arcs(marks: readonly OverlayMark[]): void;
   dispose(): void;
 }
 
-function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapControls, onPick: (townId: string) => void): Built {
+function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapControls, onPick: (pick: Pick3D) => void): Built {
   const { terrain } = world.simulation.map;
   const W = terrain.width;
   const H = terrain.height;
@@ -646,6 +675,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
 
   const disposables: Array<{ dispose(): void }> = [];
   const own = <T extends { dispose(): void }>(thing: T): T => (disposables.push(thing), thing);
+  /** The land's scenery -- rocks, hamlets, reeds, the clouds -- for the Scenery button (trees are `groves`). */
+  const scenery: THREE.Object3D[] = [];
   const skyGeo = new THREE.SphereGeometry(5000, 32, 24);
   skyGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(skyGeo.attributes.position!.count * 3), 3));
   /** The sky's colours: overhead, at the horizon (the fog's too), and below it. */
@@ -888,6 +919,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   }
   /** The land beyond the edge, recoloured to the horizon it fades into (day or night). */
   let recolourSkirt: (horizonHex: number) => void = () => {};
+  /** The land's mesh, where a click's ray meets the ground (pickAt). */
+  let landMesh: THREE.Mesh | null = null;
   {
     const geo = own(new THREE.PlaneGeometry((W - 1) * M, (H - 1) * M, (W - 1) * 2, (H - 1) * 2));
     geo.rotateX(-Math.PI / 2);
@@ -898,6 +931,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const land = new THREE.Mesh(geo, own(withClouds(veiled(new THREE.MeshLambertMaterial({ map: groundTexture }), true))));
     land.receiveShadow = true;
     scene.add(land);
+    landMesh = land;
     // Beyond the map's edge (your word, 2026-10-31: "land fades off", in place of the diorama's cut
     // slab): the land runs on -- the edge's own ground and height, rolling gently, the sea or a river
     // carried outward where they meet the edge -- and fades into the horizon's haze, so there is no
@@ -2443,6 +2477,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
+    scenery.push(mesh);
   }
 
   /** Every frame: the clock, the flares' flicker, the pump jacks' nod. */
@@ -2615,7 +2650,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (town.industry && built.clear) addSiteLife(town, mesh, built.clear);
         const text = document.createElement("div");
         text.className = town.industry ? "label3d site" : `label3d ${tier}`;
-        text.addEventListener("click", () => onPick(town.id));
+        text.addEventListener("click", () => onPick({ kind: "place", id: town.id }));
         const label = new CSS2DObject(text);
         label.position.copy(ground(town.x + x / M, town.y + z / M, town.industry ? 30 : 45));
         scene.add(label);
@@ -2683,7 +2718,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   dust.count = 0;
   scene.add(dust);
   const puffAt = new THREE.Vector3(), puffScale = new THREE.Vector3(), still = new THREE.Quaternion();
+  /** Where each vehicle was drawn this frame, and on what, for a click (pickAt). */
+  let drawnVehicles: Array<{ id: string; at: THREE.Vector3; rail: boolean }> = [];
   function placeVehicles(w: GameWorld): void {
+    drawnVehicles = [];
     let puffs = 0;
     const routeOf = new Map<string, string>();
     for (const route of w.routes) for (const id of route.vehicleIds) routeOf.set(id, route.id);
@@ -2719,6 +2757,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         }
       }
       const route = routeOf.get(v.id);
+      drawnVehicles.push({ id: v.id, at, rail: kind === "train" || kind === "freight" });
       (byKind.get(kind) ?? byKind.set(kind, []).get(kind)!).push({ at, heading, tint: tinted.has(kind) ? (route && labelOf(w, routeLabelKey(route))?.colour) || KIND_TINT[kind] : undefined });
     }
     dust.count = puffs;
@@ -2817,6 +2856,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       rocks.castShadow = true;
       rocks.receiveShadow = true;
       scene.add(rocks);
+      scenery.push(rocks);
     }
 
     // Hamlets (map version 12): the land's small places between the towns -- a few compounds, round
@@ -2850,6 +2890,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       hamlets.castShadow = true;
       hamlets.receiveShadow = true;
       scene.add(hamlets);
+      scenery.push(hamlets);
     }
 
     // Fields: a ring round each town, beyond its houses; farm towns (food.ts) farm more, and a
@@ -3503,6 +3544,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   })));
   cloudLayer.renderOrder = 2;
   scene.add(cloudLayer);
+  scenery.push(cloudLayer);
   const cloudMaterial = cloudLayer.material as THREE.ShaderMaterial;
 
   let rainKey = "";
@@ -3560,7 +3602,97 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
 
   let network = "";
   let slowAt = 0;
+  // --- A click: what's under it ------------------------------------------------------------------
+  const PICK_PX = 12;
+  const projected = new THREE.Vector3();
+  function pickAt(px: number, py: number, ray: THREE.Raycaster): Pick3D | null {
+    const w = world;
+    const roadsOn = shown.network !== "rail", railOn = shown.network !== "roads";
+    // A vehicle: the nearest drawn within a few pixels, of a layer that's showing.
+    let best: { id: string; d: number } | null = null;
+    for (const v of drawnVehicles) {
+      if (v.rail ? !railOn : !roadsOn) continue;
+      projected.copy(v.at).project(camera);
+      if (projected.z > 1) continue;
+      const d = Math.hypot(((projected.x + 1) / 2) * innerWidth - px, ((1 - projected.y) / 2) * innerHeight - py);
+      if (d < PICK_PX && (!best || d < best.d)) best = { id: v.id, d };
+    }
+    if (best) {
+      const line = [...w.routes, ...w.lorryRoutes].find((r) => r.vehicleIds.includes(best!.id));
+      if (line) return { kind: "route", id: line.id };
+      // The danfos' and hauliers': the road they're on.
+      const vehicle = w.simulation.vehicles.find((x) => x.id === best!.id);
+      const under = vehicle && segmentUnder(w, vehicle);
+      if (under) return { kind: "segment", id: under.id };
+    }
+    ray.setFromCamera(new THREE.Vector2((px / innerWidth) * 2 - 1, -(py / innerHeight) * 2 + 1), camera);
+    const hit = ray.intersectObjects([...towns.values()].map((t) => t.mesh), true)[0];
+    let found: THREE.Object3D | null = hit?.object ?? null;
+    while (found && !found.userData.townId) found = found.parent;
+    const id = found?.userData.townId as string | undefined;
+    if (id) return { kind: "place", id };
+    // A road or track: the nearest to where the ray meets the land, within a few pixels' worth.
+    const ground = landMesh && ray.intersectObject(landMesh, false)[0]?.point;
+    if (!ground) return null;
+    const metresPerPx = (2 * camera.position.distanceTo(ground) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / innerHeight;
+    const reach = Math.max(6, PICK_PX * metresPerPx) / M;
+    const gx = ground.x / M, gy = ground.z / M;
+    let road: { id: string; d: number } | null = null;
+    for (const [segmentId, r] of roads) {
+      if (!r.mesh.visible || r.retired) continue;
+      for (let i = 1; i < r.line.length; i += 1) {
+        const d = distToSegment(gx, gy, r.line[i - 1]!, r.line[i]!);
+        if (d < reach && (!road || d < road.d)) road = { id: segmentId, d };
+      }
+    }
+    return road ? { kind: "segment", id: road.id } : null;
+  }
+
+  // --- Layers and overlays (the buttons over the log, as on the 2D map) ---------------------------
+  const shown: { network: Network } = { network: "both" };
+  function layers(network: Network, showScenery: boolean): void {
+    shown.network = network;
+    const roadsOn = network !== "rail", railOn = network !== "roads";
+    for (const road of roads.values()) road.mesh.visible = road.rail ? railOn : roadsOn;
+    if (crossings) crossings.visible = roadsOn && railOn;
+    for (const [kind, mesh] of fleets) mesh.visible = kind === "train" || kind === "freight" ? railOn : roadsOn;
+    dust.visible = roadsOn;
+    for (const thing of scenery) thing.visible = showScenery;
+    for (const mesh of groves.values()) mesh.visible = showScenery;
+    if (roadside) roadside.visible = showScenery && roadsOn;
+  }
+  // An overlay's marks as arcs over the land, town to town -- the 2D map's curves stood up, as high
+  // as they're long -- in the overlay's own colours, unlit, through the haze.
+  const arcGroup = new THREE.Group();
+  scene.add(arcGroup);
+  let arcsFor: readonly OverlayMark[] | null = null;
+  const cssColour = document.createElement("canvas").getContext("2d")!;
+  function arcs(next: readonly OverlayMark[]): void {
+    if (next === arcsFor) return;
+    arcsFor = next;
+    for (const child of [...arcGroup.children] as THREE.Mesh[]) {
+      child.geometry.dispose();
+      (child.material as THREE.Material).dispose();
+      arcGroup.remove(child);
+    }
+    for (const m of next) {
+      const p = ground(m.a.x, m.a.y, 12), q = ground(m.b.x, m.b.y, 12);
+      const span = p.distanceTo(q);
+      const mid = p.clone().add(q).multiplyScalar(0.5);
+      mid.y = Math.max(p.y, q.y) + (m.straight ? 0.12 : 0.28) * span + 20;
+      const curve = new THREE.QuadraticBezierCurve3(p, mid, q);
+      cssColour.fillStyle = m.color;
+      const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(cssColour.fillStyle as string), transparent: true, opacity: Math.max(0.4, m.alpha), depthWrite: false, fog: false });
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(12, Math.round(span / 25)), 1.5 + m.width * 1.4, 8, false), material);
+      tube.renderOrder = 3;
+      arcGroup.add(tube);
+    }
+  }
+
   return {
+    layers,
+    arcs,
+    pickAt,
     rain(seconds, away) {
       animateSiteLife(seconds);
       rainMaterial.uniforms.uTime!.value = seconds;
@@ -3681,6 +3813,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       placeVehicles(w);
     },
     dispose() {
+      arcs([]);
       for (const road of roads.values()) {
         drop(road.mesh);
         road.material.dispose();

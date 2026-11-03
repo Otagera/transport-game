@@ -597,6 +597,26 @@ glides over to a newly selected place, keeping its angle (a drag of yours stops 
 Recoloured when the focus changes and on the roads' half-second recolour. From the outside
 review: selecting a place should show what it's connected to, or 3D is scenery.
 
+**Layers, both views** (2026-11-03, your "toggle just roads/rails in 2d or 3d"). Under the overlay
+buttons, "Roads and rail · Roads · Rail" (`Network`, render.ts): the 2D map leaves the other off
+(`drawRoads` filters its segments and junction plates, `drawVehicles` its vehicles by
+`railVehicles`, the wardens go with the roads); in 3D the same (`Built.layers`: each road or
+track mesh by its `rail`, level crossings only with both, each fleet by kind, the laterite dust
+with the roads). In 3D a Scenery button as well: the trees (`groves`), rocks, hamlets, reeds,
+filling stations and clouds off, so the network reads through the land; towns, sites, water and
+people stay -- they're the game. The overlays are both views' now: in 3D each mark
+(`overlayMarks`, exported from render.ts, the 2D map's own) an arc over the land town to town,
+its top about a seventh of its span up (an Informal share corridor lower), as thick as its value, in
+its colour, unlit and through the haze; rebuilt when the marks are (once a second). The caption
+under the buttons shows in 3D too.
+
+**Click anything in 3D** (2026-11-03; `Built.pickAt`, `Pick3D`). The 3D view was watch-only but
+for towns and sites; a click now picks, smallest first: a vehicle drawn within 12 px (its line's
+card; a danfo's or hauliers' truck, the road it's on), a town's or site's buildings (or its
+label), then the road or track nearest where the ray meets the land, within 12 px' worth --
+each opening the card the 2D map would (`screen.select`). Only what's showing (the layers) can be
+picked, and the pointer says when something under it can be.
+
 **The 3D view's look** (2026-10-26, borrowed from two procedural-landscape films the user
 pointed at, napali and procedural-alpine-lake). ACES filmic tone mapping at exposure 0.92 (1.25
 washed the land pale and lost the shadows); a soft vignette as a CSS gradient over the canvas

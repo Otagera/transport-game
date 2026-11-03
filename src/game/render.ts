@@ -2,6 +2,7 @@ import { isClosed, landOf, remitOn } from "@engine/game/remit";
 import { privateLoad } from "@engine/game/private";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
 import type { GameTown, GameWorld } from "@engine/game/types";
+import type { Segment } from "@engine/map/types";
 import type { RoutingContext, Vehicle } from "@engine/simulation/types";
 import { routingFor } from "@engine/game/rail";
 import { gameDay, roadChain, townShare } from "@engine/game/world";
@@ -173,9 +174,14 @@ export interface DrawState {
   problems?: ReadonlySet<string>;
   /** The overlay on the map, one at a time. */
   overlay?: Overlay;
+  /** Which of the network shows (the layer buttons, main.ts): roads and rail, or one without the other. */
+  network?: Network;
   /** Places a card's button is about, for a few seconds after it's pressed (main.ts pointAt): a pulsing ring. */
   pointed?: ReadonlySet<string>;
 }
+
+/** The layer buttons' choice, the 2D map's and the 3D view's alike: roads and track, or one alone. */
+export type Network = "both" | "roads" | "rail";
 
 // --- Frame state ------------------------------------------------------------------
 
@@ -289,14 +295,15 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   // capsules are where the informal sector shows on the map, and a day-2 map without them was empty.
   const oneByOne = drawsAt(zoomTier, "vehiclesOneByOne") || (state.gameSpeed ?? 1) < 4;
   const overlay = state.overlay ?? "none";
+  const network = state.network ?? "both";
 
   drawGround(ctx, world, view);
   if (drawsAt(zoomTier, "hamlet")) drawHamlets(ctx, world, view);
-  drawRoads(ctx, world, view, overlay !== "none");
+  drawRoads(ctx, world, view, overlay !== "none", network);
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
-  drawVehicles(ctx, world, view, oneByOne, overlay !== "none");
+  drawVehicles(ctx, world, view, oneByOne, overlay !== "none", network);
   cityId = [...world.towns.values()].filter((t) => !t.industry).reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id ?? null;
   farms = world.food ? new Set(farmTowns(world).map((t) => t.id)) : new Set();
   // Every label claims its place first, by priority, and only then does anything paint (density.ts).
@@ -308,7 +315,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     else drawTown(ctx, world, view, town, state);
   }
   for (const ruin of world.ruins.values()) if (placed.has(`ruin:${ruin.id}`)) drawRuin(ctx, view, ruin);
-  if (drawsAt(zoomTier, "wardens")) drawWardens(ctx, world, view);
+  if (drawsAt(zoomTier, "wardens") && network !== "rail") drawWardens(ctx, world, view);
   // The rest, the least important first, so the most important paints on top.
   for (const p of paints.filter((x) => placed.has(x.id)).sort((a, b) => b.priority - a.priority)) p.paint();
   for (const chip of chips) drawChip(ctx, chip);
@@ -623,7 +630,7 @@ const RUNG_ORDER = { dirt: 0, paved: 1, lane: 2, rail: 3 } as const;
  * One object a road, in passes sorted by rung: every casing (--line), every body, the junction
  * plates, then the cores, bus-lane stripes and ties.
  */
-function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, dim: boolean): void {
+function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, dim: boolean, network: Network = "both"): void {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   const map = world.simulation.map;
@@ -633,7 +640,9 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
   // 2026-10-26: switching modes barely changed a map whose roads stayed at full strength).
   const alphaFor = (id: string) => (focus && !focus.segments.has(id) ? FADED : dim ? OVERLAY_BACKDROP : 1);
   const colors = { free: COLORS.free, busy: COLORS.busy, jammed: COLORS.jammed };
-  const items = map.segments.map((s) => {
+  // The layer buttons: roads alone, or track alone, the other left off the map.
+  const shows = (s: Segment) => network === "both" || (s.type === "rail") === (network === "rail");
+  const items = map.segments.filter(shows).map((s) => {
     const rung = segmentRung(s);
     const rail = s.type === "rail";
     const load = rail ? 0 : ((world.roadFlowEMA.get(s.id) ?? 0) + privateLoad(world, s.id)) / Math.max(1e-6, roadCapacity(world, s.id));
@@ -677,7 +686,7 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
   }
   // Pass C: the junction plates -- where two or more meet, one disc in the most congested one's colour.
   const bySegment = new Map(live.map((x) => [x.s.id, x]));
-  for (const plate of junctionPlates(world, (s) => s.retiredAt === undefined, (s) => RUNG_WIDTH[segmentRung(s)] * markScale)) {
+  for (const plate of junctionPlates(world, (s) => s.retiredAt === undefined && shows(s), (s) => RUNG_WIDTH[segmentRung(s)] * markScale)) {
     const p = toScreen(view, plate.x, plate.y);
     const meeting = [...bySegment.values()].filter((x) => x.s.fromNodeId === plate.node || x.s.toNodeId === plate.node);
     const roads = meeting.filter((x) => !x.rail);
@@ -721,11 +730,14 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
 
 // --- Overlays: one at a time (the lab's Demand, No seat, Informal share, Goods) ------------------
 
-let overlayCache: { at: number; world: GameWorld; overlay: Overlay; marks: Array<{ a: GameTown; b: GameTown; width: number; color: string; alpha: number; straight?: boolean }> } | null = null;
-function overlayMarks(world: GameWorld, overlay: Overlay) {
+/** An overlay's mark: a line between two towns, as wide as what it shows (the 3D view draws it as an arc). */
+export interface OverlayMark { a: GameTown; b: GameTown; width: number; color: string; alpha: number; straight?: boolean }
+let overlayCache: { at: number; world: GameWorld; overlay: Overlay; marks: OverlayMark[] } | null = null;
+export function overlayMarks(world: GameWorld, overlay: Overlay): OverlayMark[] {
+  if (overlay === "none") return [];
   const now = world.economy.elapsedSeconds;
   if (overlayCache && overlayCache.world === world && overlayCache.overlay === overlay && Math.abs(now - overlayCache.at) < 1) return overlayCache.marks;
-  const marks: Array<{ a: GameTown; b: GameTown; width: number; color: string; alpha: number; straight?: boolean }> = [];
+  const marks: OverlayMark[] = [];
   const town = (id: string) => world.towns.get(id);
   if (overlay === "demand") {
     const pairs = new Map<string, { a: string; b: string; v: number }>();
@@ -877,13 +889,14 @@ function pill(ctx: CanvasRenderingContext2D, pose: { x: number; y: number; angle
   ctx.restore();
 }
 
-function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, oneByOne: boolean, dim = false): void {
+function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, oneByOne: boolean, dim = false, network: Network = "both"): void {
   const colourOf = (route: string | undefined) => (route && labelOf(world, routeLabelKey(route))?.colour) || COLORS.player;
   const routeOf = new Map<string, string>();
   for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
   for (const vehicle of world.simulation.vehicles) {
     const informal = vehicle.lifecycle === "one-shot";
     if (informal && !oneByOne) continue;
+    if (network !== "both" && world.railVehicles.has(vehicle.id) !== (network === "rail")) continue;
     const pose = vehiclePose(world, view, vehicle);
     if (!pose) continue;
     const route = routeOf.get(vehicle.id);

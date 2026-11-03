@@ -85,7 +85,7 @@ import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
 import { averageBudget, averageNet } from "@engine/game/history";
-import { chipAt, draw, fitView, focusFor, overlayCaption, routeColor, toScreen, townRadius, type Ghost, type Overlay, type View } from "./render";
+import { chipAt, draw, fitView, focusFor, overlayCaption, overlayMarks, routeColor, toScreen, townRadius, type Ghost, type Network, type Overlay, type OverlayMark, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { keepSteady, steadyFood, steadyFuel, steadyOver, steadyShortage, steadySite } from "./steady";
 import { createScreen } from "./screen";
@@ -374,18 +374,22 @@ let night3d = (() => { try { return localStorage.getItem(NIGHT_3D_KEY) === "1"; 
 let in3d = false;
 async function toggle3d(): Promise<void> {
   in3d = !in3d;
-  if (in3d && !view3d) view3d = (await import("./view3d")).createView3D((id) => {
-    // A town or site clicked in 3D: its panel, as a click on the map would.
-    screen.select({ kind: world.towns.get(id)?.industry ? "site" : "town", id });
+  if (in3d && !view3d) view3d = (await import("./view3d")).createView3D((pick) => {
+    // Clicked in 3D: its card, as a click on the map would open it -- a town or site, the line a
+    // vehicle runs on (a danfo's or hauliers' truck, its road), a road or a stretch of track.
+    if (pick.kind === "place") screen.select({ kind: world.towns.get(pick.id)?.industry ? "site" : "town", id: pick.id });
+    else screen.select({ kind: pick.kind, id: pick.id });
   });
   if (in3d) {
     view3d?.setNight(night3d);
     view3d?.show(world);
   }
   else view3d?.hide();
-  // The overlays, key and hints are the 2D map's (index.html hides them under body.in3d).
+  // The key and hints are the 2D map's (map.css hides them under body.in3d); the overlays and the
+  // layer buttons are both views'.
   document.body.classList.toggle("in3d", in3d);
   renderZoomControl();
+  renderLayers();
 }
 let view: View = { scale: 1, offsetX: 0, offsetY: 0 };
 
@@ -3578,6 +3582,27 @@ overlaysEl.addEventListener("click", (event) => {
 });
 renderOverlays();
 
+// The layer buttons (2026-11-03, your "toggle just roads/rails in 2d or 3d"): roads and track, or
+// one alone, on the map and in 3D alike; in 3D the scenery too -- trees, rocks, hamlets, clouds --
+// so the network reads through the land.
+let network: Network = "both";
+let scenery = true;
+const NO_MARKS: OverlayMark[] = [];
+const layersEl = document.querySelector<HTMLDivElement>("#layers")!;
+function renderLayers(): void {
+  const opts: Array<[Network, string]> = [["both", "Roads and rail"], ["roads", "Roads"], ["rail", "Rail"]];
+  layersEl.innerHTML = opts.map(([id, label]) => `<button data-network="${id}" class="${network === id ? "on" : ""}">${label}</button>`).join("")
+    + (in3d ? `<button data-scenery="1" class="${scenery ? "on" : ""}" title="Trees, rocks, hamlets and clouds">Scenery</button>` : "");
+}
+layersEl.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>("button");
+  if (!button) return;
+  if (button.dataset.network) network = button.dataset.network as Network;
+  else if (button.dataset.scenery) scenery = !scenery;
+  renderLayers();
+});
+renderLayers();
+
 // The places on Waiting on you, for the map's mark. Rechecked twice a second, not every
 // frame -- the list reads a good deal of the world.
 let problemTowns = new Set<string>();
@@ -3644,12 +3669,15 @@ function frame(now: number): void {
     runningAt = speed;
   }
   const picked = screen.focus;
-  if (!in3d) renderCaption(now);
+  renderCaption(now);
   const focusOn = { town: focusTown() ?? (picked && picked.kind !== "route" && picked.kind !== "segment" ? picked.id : null), route: focusRoute ?? (picked?.kind === "route" ? picked.id : null) };
   // In 3D the same focus: a selected town's or route's connections lit, the town ringed.
-  if (in3d && view3d) view3d.frame(world, focusFor(world, focusOn.town, focusOn.route), focusOn.route ? null : focusOn.town);
-  else draw(ctx, world, view, {
-    selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay,
+  if (in3d && view3d) {
+    view3d.setLayers(network, scenery);
+    view3d.setOverlay(overlay === "none" ? NO_MARKS : overlayMarks(world, overlay));
+    view3d.frame(world, focusFor(world, focusOn.town, focusOn.route), focusOn.route ? null : focusOn.town);
+  } else draw(ctx, world, view, {
+    selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay, network,
     pointed: pointed && performance.now() < pointed.until ? pointed.ids : undefined,
     focusTown: focusOn.town,
     focusRoute: focusOn.route,
