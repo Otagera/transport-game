@@ -1174,6 +1174,50 @@ flowchart LR
   played run (map 543) replayed with fuel on: net −15% and trips −17% by day 30, against
   −37% before imports went to 1.0 and the effects were softened.
 
+### Pipelines (2026-11-03; five-modes.md, 1. Pipeline; brief, Decisions log)
+
+- **`pipelines.ts`** -- `world.pipelines`, plain data, behind `pipelinesEnabled` (absent in older
+  runs). A pipe runs from a fuel source (the tank farm, a refinery: `isPipeSource`) to a town, laid
+  beside the road (`pipePlan`: the road path's line, ₦`pipeCostPerCell` 2,000 a cell). Refined fuel
+  only (your call: tankers carry refined fuel; crude is your trains' or a yard's hauliers').
+- **Each tick** (`runPipelines`, after `produceAndSpoil`, before `truckersPickUp`): a running pipe
+  takes `dial` × the flows at its source bound for the towns it serves, up to `pipeCapPerDay` (250 t),
+  from the source's yard; fuel for its own town is delivered there (counted yours, `delivered`), fuel
+  bound beyond waits there between legs for hauliers (`goods.relay`), as off a freight train. Lost on
+  the way: `pipeLossKept` 2%, rising to `pipeLossNeglected` 10% as its condition falls with no upkeep
+  (`pipeNeglectDays` 60). Upkeep `pipeUpkeepPerDay` ₦400, with the roads' (`pipeUpkeep`).
+- **Which towns it serves** (`pipeServes`): its own, and any hauliers reach quicker from its end
+  than tankers from its source (`haulage.ts haulCostFrom`: a town's legs are 40 cells, a fuel
+  site's 200). Measured first by road distance, a pipe to the port city beside the tank farm (map
+  8703) took every town's fuel and left it for 40-cell legs: served towns' supply fell 74% → 58%.
+- **Its reach** (`pipeReach`, read by `fuelFlows`): a working pipe with fuel on its dial extends its
+  source's reach to the towns tankers reach from its end, filled after the towns the source reached
+  anyway -- a second source only adds (principles §3, Economy). At nothing on the dial it changes
+  nothing, not even where fuel is sent.
+- **The trap** (`tanker`, 0..1 of a fleet for its whole flow): its corridor's hauliers follow the
+  work left them (`1 - share`), over `pipeTankerDays` (20), never below `pipeTankerFloor` (15%);
+  hauliers' keenness on fuel at its source for the towns it serves is `tankers / work left`
+  (`tankerFactor`, truckers.ts): enough while it runs, too few the day a strike or a tap stops it,
+  coming back as slowly.
+- **The union** (union.ts `pipeMoves`, `pipeDrift`): the source's union hears of every tenth of dial
+  (-0.02 a tenth up), and up to 0.3 or more makes a `pipeline` demand -- pay, concede (the dial
+  halved, in tenths), or refuse; refused or ignored, a strike shuts the pipe `pipeStrikeDays` (7).
+  Off with his demand on the table, it's met. The tonnes push him day by day
+  (`pipeUnionPerTonneDay` 1.67e-5: against the stance's 120-day fade, about -0.5 at 250 t a day):
+  the temperature follows the dial, not the build. New and restored pipes start at nothing.
+- **Taps** -- once a game day while it runs, `pipeTapPer100Cells` (1%) a day for 100 cells of it,
+  three times that neglected (a deterministic draw by its id and the day): shut `pipeTapDays` (5).
+- **The inherited line** (`placeInheritedPipe`, at the start): broken, from the tank farm to the
+  old railway's end nearest the port and up the line to its far end (your call: where the colonial
+  economy wanted fuel). On maps 8703, 2418, 949, 3218, 7585: 140-272 cells, ₦98-190k to restore at
+  `pipeRestorePerCell` (700); its far end often in a far cluster, so the remit waits on it.
+- **Measured** (map 8703, the tank farm 389 t a day to 12 places): a pipe to Idawo (82 road cells,
+  ~80 t a day) at the full dial took the tankers off that run (≈6 → 0) and kept it 98-100%
+  supplied. A pipe to Otido (18 cells): its town supplied 93% (dial 0), 97% (half), 98% (full); a
+  7-day strike after 40 days, worst shortage 16% / 43% / 64%, mean 8% / 12% / 19% -- the more by
+  pipe, the more a strike costs (test/pipelines.test.ts checks each). **Not yet:** the strategist
+  builds no pipes, so the scope's 250-day check (the fuel chain still makes decisions) is open.
+
 ### The building chain (Revision 3, step 2a)
 
 - **`cement.ts`** — one **cement works** per map, placed at start (`placeCementWorks`, from

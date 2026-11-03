@@ -176,6 +176,8 @@ export interface DrawState {
   overlay?: Overlay;
   /** Which of the network shows (the layer buttons, main.ts): roads and rail, or one without the other. */
   network?: Network;
+  /** A pipeline whose card is open: drawn heavier. */
+  focusPipe?: string | null;
   /** Places a card's button is about, for a few seconds after it's pressed (main.ts pointAt): a pulsing ring. */
   pointed?: ReadonlySet<string>;
 }
@@ -300,6 +302,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   drawGround(ctx, world, view);
   if (drawsAt(zoomTier, "hamlet")) drawHamlets(ctx, world, view);
   drawRoads(ctx, world, view, overlay !== "none", network);
+  drawPipes(ctx, world, view, overlay !== "none", state.focusPipe ?? null);
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
@@ -726,6 +729,52 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
     strokeLine(ctx, view, x.line);
   }
   ctx.globalAlpha = 1;
+}
+
+// --- Pipelines (pipelines.ts): beside the road, fuel red; the fuel moving along a running one ------
+
+/** How far beside its road a pipeline is drawn, cells (and hit, main.ts pipeAt). */
+export const PIPE_SIDE = 0.9;
+/** A pipeline's line as drawn, map cells. */
+export function pipeLine(line: Point[]): Point[] {
+  return offsetPolyline(line, PIPE_SIDE);
+}
+function drawPipes(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, dim: boolean, focusPipe: string | null): void {
+  if (!world.pipelines?.length) return;
+  const now = world.economy.elapsedSeconds;
+  // Display only: the dashes drift along a running pipe as the fuel does.
+  const drift = (performance.now() / 1000) * 14;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const p of world.pipelines) {
+    const pts = pipeLine(p.line).map((q) => toScreen(view, q.x, q.y));
+    const stroke = () => {
+      ctx.beginPath();
+      pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.stroke();
+    };
+    const lit = focusPipe === p.id;
+    const shut = p.working && p.outUntil > now;
+    ctx.globalAlpha = (dim ? OVERLAY_BACKDROP : 1) * (p.working ? 1 : 0.5);
+    ctx.setLineDash([]);
+    ctx.strokeStyle = COLORS.groundEdge;
+    ctx.lineWidth = (lit ? 5.5 : 4) * markScale;
+    stroke();
+    ctx.strokeStyle = p.working ? COLORS.fuel : COLORS.ink2;
+    ctx.lineWidth = (lit ? 3.4 : 2.4) * markScale;
+    if (!p.working || shut) ctx.setLineDash([2.5 * markScale, 3.5 * markScale]);
+    stroke();
+    if (p.working && !shut && p.dial > 0 && p.carried > 0) {
+      ctx.setLineDash([3 * markScale, 9 * markScale]);
+      ctx.lineDashOffset = -drift * markScale;
+      ctx.strokeStyle = COLORS.surface;
+      ctx.lineWidth = 1.2 * markScale;
+      stroke();
+      ctx.lineDashOffset = 0;
+    }
+  }
+  ctx.restore();
 }
 
 // --- Overlays: one at a time (the lab's Demand, No seat, Informal share, Goods) ------------------

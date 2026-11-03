@@ -90,6 +90,19 @@ a flow, a statement whose net is the strip's, and every line's money. Next there
 that still come and go at a day's turn (their shortages' lines want a band), and the train card's
 cars once the other session's carriages land.
 
+**Layers, 3D you can click, stations, and the first of five modes** (2026-11-03; branches
+`layers` → `stations` → `pipeline`, not yet merged). Roads and rail apart in both views, the
+scenery off in 3D, the overlays as arcs in 3D, and a click on anything in 3D opens its card
+(render-and-ui.md, Layers; Click anything in 3D). Each rail town's station laid out from the network
+-- a platform track a line, the throats fanning in -- so a hub's trains stand side by side, each
+drawn with its cars (render-and-ui.md, Stations and trains). And your scope of five modes
+([five-modes.md](five-modes.md)): **the pipeline built** (engine.md, Pipelines) -- refined fuel from
+the tank farm or a refinery to a town, its dial what share goes by pipe, the union following the
+tonnes, the tankers drifting off its corridor and slow to return when a strike or a tap stops it;
+an inherited line broken up the old railway. Next: the airport (the third gateway); the coach, the
+okada rule and the urban ladder wait on `SCALES-AND-MODES.md`; water last. Open: the strategist
+builds no pipes yet (the scope's 250-day check).
+
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

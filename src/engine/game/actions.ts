@@ -12,6 +12,7 @@ import { setEnforcement, settleStrike, type Enforcement } from "./pushback";
 import { dropProject, nameProject, type ProjectRung } from "./project";
 import { restoreRoad, retireRoad } from "./retire";
 import { restoreRefinery } from "./fuel";
+import { buildPipe, restorePipe, setPipeDial, setPipeKept } from "./pipelines";
 import { restoreWorks } from "./cement";
 import { restoreSteel } from "./steel";
 import { restorePower } from "./power";
@@ -45,6 +46,10 @@ export type ActionSpec =
   | { kind: "retire" | "restore" | "repair"; segmentId: string }
   | { kind: "dropProject" }
   | { kind: "restoreRefinery" }
+  | { kind: "pipe"; a: string; b: string }
+  | { kind: "restorePipe"; id: string }
+  | { kind: "pipeDial"; id: string; dial: number }
+  | { kind: "pipeKeep"; id: string; on: boolean }
   | { kind: "upgradePort" }
   | { kind: "restoreWorks" }
   | { kind: "restoreSteel" }
@@ -174,6 +179,14 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       const result = restoreWorks(world);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
     }
+    case "pipe":
+      return buildPipe(world, spec.a, spec.b);
+    case "restorePipe":
+      return restorePipe(world, spec.id);
+    case "pipeDial":
+      return setPipeDial(world, spec.id, spec.dial);
+    case "pipeKeep":
+      return setPipeKept(world, spec.id, spec.on);
     case "restorePower": {
       const result = restorePower(world);
       return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };

@@ -29,7 +29,7 @@ import { MIN_CONDITION } from "@engine/map/decay";
 import { isFlooded } from "@engine/game/floods";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { tierOf, type Tier } from "./icons";
-import type { Focus, Network, OverlayMark } from "./render";
+import { pipeLine, type Focus, type Network, type OverlayMark } from "./render";
 import { steadyOver, steadyShortage } from "./steady";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { paint as tokenPaint, paintAlpha, paintHex } from "./palette3d";
@@ -363,7 +363,7 @@ export interface View3D {
 }
 
 /** What a click in 3D picked: a town or site, one of your lines (a vehicle on it), or a road or stretch of track. */
-export type Pick3D = { kind: "place" | "route" | "segment"; id: string };
+export type Pick3D = { kind: "place" | "route" | "segment" | "pipe"; id: string };
 
 /** `onPick`: something clicked -- a vehicle, a town or site (its mesh or its label), a road or track -- main.ts opens its card. */
 export function createView3D(onPick: (pick: Pick3D) => void = () => {}): View3D {
@@ -3275,6 +3275,65 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     const gone = new Set(cleared);
     clearTrees((cell) => gone.has(cell));
   }
+  // --- Pipelines (pipelines.ts) --------------------------------------------------------------------
+  // A steel pipe beside its road (as the 2D map draws it, PIPE_SIDE off), on a support every dozen
+  // metres, a pumping station where it leaves its source; rust and gaps where it's broken. One mesh a
+  // pipe, rebuilt when it's restored or laid.
+  const pipeMeshes = new Map<string, { key: string; group: THREE.Group; line: Point[] }>();
+  const pipeSteel = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-grey-14") }));
+  const pipeRust = own(new THREE.MeshLambertMaterial({ color: paintHex("--paint-earth-26") }));
+  function syncPipes(w: GameWorld): void {
+    const seen = new Set<string>();
+    for (const p of w.pipelines ?? []) {
+      seen.add(p.id);
+      const key = `${p.working}|${p.line.length}|${p.cells.toFixed(2)}`;
+      if (pipeMeshes.get(p.id)?.key === key) continue;
+      const old = pipeMeshes.get(p.id);
+      if (old) { scene.remove(old.group); old.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose()); }
+      const group = new THREE.Group();
+      const line = pipeLine(p.line);
+      const points = along(line, 5, 0).map((q) => new THREE.Vector3(q.x * M, floorAt(q.x, q.y) + 1.4, q.y * M));
+      const last = line[line.length - 1]!;
+      points.push(new THREE.Vector3(last.x * M, floorAt(last.x, last.y) + 1.4, last.y * M));
+      if (points.length >= 2) {
+        // Broken: in lengths, with gaps where it's been cut or rotted through.
+        const runs = p.working ? [points] : points.reduce<THREE.Vector3[][]>((out, q, i) => { if (i % 9 === 0) out.push([]); if (i % 9 < 7) out[out.length - 1]!.push(q); return out; }, []).filter((r) => r.length >= 2);
+        for (const run of runs) {
+          const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(run), Math.max(2, run.length * 2), 0.65, 7, false), p.working ? pipeSteel : pipeRust);
+          tube.castShadow = true;
+          group.add(tube);
+        }
+      }
+      const kit = new Kit();
+      for (const q of along(line, 12, 4)) {
+        const one = new Kit();
+        one.box(0.5, 1.0, 2.0, tokenPaint("--paint-grey-20"), 0, 0, 0);
+        kit.place(one.merged(), q.x * M, floorAt(q.x, q.y) - 0.1, q.y * M, -q.heading);
+      }
+      // A pumping station where it leaves its source: a shed, a manifold, two small tanks.
+      const first = line[0]!, next = line[1] ?? first;
+      const heading = Math.atan2(next.y - first.y, next.x - first.x);
+      const station = new Kit();
+      station.box(8, 4.2, 6, tokenPaint("--paint-light-4"), 0, -6, 0);
+      station.gable(8.6, 6.6, 1.4, tokenPaint("--paint-red-4"), 0, -6, 4.2);
+      for (const z of [5, 10]) station.cylinder(2.2, 4.5, tokenPaint("--paint-light-1"), -2, z, 0, 14);
+      station.box(3, 1.6, 1.6, p.working ? tokenPaint("--paint-earth-52") : tokenPaint("--paint-earth-26"), 4, 0, 0.6);
+      kit.place(station.merged(), first.x * M, floorAt(first.x, first.y) - 0.1, first.y * M, -heading);
+      const parts = new THREE.Mesh(kit.merged(), material);
+      parts.castShadow = true;
+      parts.receiveShadow = true;
+      group.add(parts);
+      scene.add(group);
+      pipeMeshes.set(p.id, { key, group, line });
+    }
+    for (const [id, built] of pipeMeshes) {
+      if (seen.has(id)) continue;
+      scene.remove(built.group);
+      built.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      pipeMeshes.delete(id);
+    }
+  }
+
   // --- Stations (stations3d.ts; your playtest, map 8703 day 482: Otido's trains in one heap) ------
   // Each rail town's station in its parts: a platform track for each line, island platforms with
   // canopies, benches and lamps, a footbridge, the station building on its own platform with its
@@ -3928,6 +3987,15 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (d < reach && (!road || d < road.d)) road = { id: segmentId, d };
       }
     }
+    // A pipeline beside its road: whichever of the two is nearer.
+    let pipe: { id: string; d: number } | null = null;
+    for (const [id, built] of pipeMeshes) {
+      for (let i = 1; i < built.line.length; i += 1) {
+        const d = distToSegment(gx, gy, built.line[i - 1]!, built.line[i]!);
+        if (d < reach && (!pipe || d < pipe.d)) pipe = { id, d };
+      }
+    }
+    if (pipe && (!road || pipe.d < road.d)) return { kind: "pipe", id: pipe.id };
     return road ? { kind: "segment", id: road.id } : null;
   }
 
@@ -4082,6 +4150,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         slowAt = now;
         colourRoads(w);
         syncStations(w);
+        syncPipes(w);
         syncTowns(w);
         if (planted) syncSellers(w);
         syncSiteLife(w);

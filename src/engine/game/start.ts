@@ -1,4 +1,5 @@
 import { placePower } from "./power";
+import { placeInheritedPipe } from "./pipelines";
 import { startUnions } from "./union";
 import { placeBorder, placeCoastRoad } from "./border";
 import { placeStations } from "./stations";
@@ -101,6 +102,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   startTerms(world);
   // And your remit: the home cluster's land (remit.ts).
   startRemit(world);
+  // The inherited pipeline, broken, up the old railway (pipelines.ts).
+  placeInheritedPipe(world);
   // And a chairman for each cluster's union (union.ts).
   startUnions(world);
   // And the old roads' fords, and when the first rains come (floods.ts).

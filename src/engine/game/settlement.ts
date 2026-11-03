@@ -61,6 +61,9 @@ export type GameEvent =
   | { kind: "remit-offered"; number: number; hubs: string[] }
   // The union (union.ts): a demand on the table, your answer (or ignoring it), his stance crossing a line.
   | { kind: "union-demand"; union: string; chairman: string; text: string; deadlineAt: number }
+  // Pipelines (pipelines.ts): shut by a strike or a tap, and running again.
+  | { kind: "pipe-out"; pipe: string; a: string; b: string; reason: "strike" | "tap"; days: number }
+  | { kind: "pipe-back"; pipe: string; a: string; b: string; reason: "strike" | "tap" }
   | { kind: "union-answered"; union: string; chairman: string; answer: "pay" | "concede" | "coop" | "refuse" | "ignored" }
   | { kind: "flood-warning"; fords: Array<{ id: string; name: string }>; inDays: number; days: number }
   | { kind: "flood-rose"; fords: Array<{ id: string; name: string }>; days: number }

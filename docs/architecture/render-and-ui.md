@@ -617,6 +617,19 @@ label), then the road or track nearest where the ray meets the land, within 12 p
 each opening the card the 2D map would (`screen.select`). Only what's showing (the layers) can be
 picked, and the pointer says when something under it can be.
 
+**Pipelines on the screen** (2026-11-03; engine.md, Pipelines). The Pipe tool (<kbd>I</kbd>, under
+Build): a fuel source and a town, either first; its preview the road it's laid beside, its price,
+the fuel going its way now (`pipeWouldCarry`). On the 2D map (`drawPipes`) a fuel-red line
+`PIPE_SIDE` (0.9 cells) beside its road, light dashes drifting along it while fuel flows, dashed
+when shut, dotted grey when broken; heavier when its card is open; a click on it opens its card
+(`pipeAt`, before the road's). Its card: the dial in tenths (− / +), through it of its cap and of
+what goes its way, the share of a fleet its tankers are, lost on the way and its upkeep; the union
+that loads its tankers and what the dial does to him; the trap in a line; keep it up or not;
+restore the inherited one. The Network tab lists the pipelines under the lines; a shut pipe is a
+Waiting-on-you item; a union's pipeline demand offers "Turn the pipe down" as its concession. In
+3D a steel pipe on supports beside its road (rust and gaps where it's broken), a pumping station
+at its source; clicking it opens its card.
+
 **Stations and trains in their parts** (2026-11-03, `stations3d.ts`; your playtest, map 8703 day
 482: Otido's six lines and its freight in one heap in the town's middle). The game's trains have no
 platforms -- every line's track runs to its town's node, and a train loads the moment it's there

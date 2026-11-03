@@ -576,6 +576,26 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // felt (people within chance) and no line reached the coal (139-244 road cells: ₦600k+ of track),
   // so hauliers carried half of it from a yard, or none. The mine's place is being reworked.
   coalEnabled: false,
+  // Pipelines (pipelines.ts; brief, Decisions log, 2026-11-03, five modes scoped): refined fuel from
+  // the tank farm or a refinery to a town, its dial what share goes by pipe. First guesses from the
+  // scope, to measure with the strategist: ₦2,000 a cell new, ₦700 to restore the inherited line;
+  // 250 t a day; ₦400 a day; 2% lost kept up, 10% neglected; hauliers follow the work over 20 days
+  // (15% always stay); a strike 7 days, a tap 5, about one a hundred days on a 100-cell pipe; at
+  // 250 t a day the union settles near -0.5 (stance fades over unionMemoryDays, 120: 250 x 120 x k).
+  pipelinesEnabled: true,
+  pipeCostPerCell: 2000,
+  pipeRestorePerCell: 700,
+  pipeCapPerDay: 250,
+  pipeUpkeepPerDay: 400,
+  pipeLossKept: 0.02,
+  pipeLossNeglected: 0.1,
+  pipeNeglectDays: 60,
+  pipeTankerDays: 20,
+  pipeTankerFloor: 0.15,
+  pipeStrikeDays: 7,
+  pipeTapDays: 5,
+  pipeTapPer100Cells: 0.01,
+  pipeUnionPerTonneDay: 0.0000167,
   powerCoalPerDay: 120,
   powerReachCells: 60,
   coalMinCells: 45,

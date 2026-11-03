@@ -1,4 +1,5 @@
 import { projectName } from "@engine/game/project";
+import { pipeSummaries } from "@engine/game/pipelines";
 import { routeAlong, stanceWord, unionOf } from "@engine/game/union";
 import { fordBridgeCost, fordById } from "@engine/game/floods";
 import { LINE_COLOURS, labelOf, roadLabelKeyOf, routeLabelKey } from "@engine/game/labels";
@@ -51,7 +52,7 @@ import { siteChain, siteProduction } from "@engine/game/production";
 // everything the lab didn't show (trips, industry controls, strikes, bonds...) under
 // a "More" fold: the page passes them in (ScreenHooks), and their buttons work as before.
 
-export type Selection = { kind: "town" | "route" | "site" | "segment"; id: string } | null;
+export type Selection = { kind: "town" | "route" | "site" | "segment" | "pipe"; id: string } | null;
 
 export interface ScreenHooks {
   /** The old town or site card, whole. */
@@ -433,10 +434,16 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const buttons = [
         `<button data-union="${union.id}|pay">Pay his members · ${nairaK(d.price)}</button>`,
         d.kind === "lane" && world.lanes.some((l) => (l.a === d.a && l.b === d.b) || (l.a === d.b && l.b === d.a)) ? `<button data-union="${union.id}|concede">Ease the lane</button>` : "",
+        d.kind === "pipeline" && world.pipelines?.some((p) => p.a === d.a && p.b === d.b && p.dial > 0) ? `<button data-union="${union.id}|concede">Turn the pipe down to ${pct(Math.floor((world.pipelines.find((p) => p.a === d.a && p.b === d.b)?.dial ?? 0) * 5) / 10)}</button>` : "",
         routeAlong(world, d.a, d.b) ? `<button data-union="${union.id}|coop">Hand him the route</button>` : "",
         `<button data-union="${union.id}|refuse">Refuse</button>`,
       ].join("");
       items.push({ id: `union:${union.id}`, text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
+    }
+    // A pipeline shut by a strike or a tap (pipelines.ts): its fuel back on its tankers, as many as its dial kept.
+    for (const p of pipeSummaries(world)) {
+      if (!p.working || !p.outReason) continue;
+      items.push({ id: `pipe:${p.id}`, text: `Your pipeline ${p.name} is shut by ${p.outReason === "tap" ? "a tap" : "a strike"}, back in ${plural(p.backInDays, "day")}: its fuel waits on tankers, ${pct(p.tankers)} of a fleet for it.`, button: `<button data-pick="pipe|${p.id}">Its card</button>`, at: [p.b], weight: 8.5e7 });
     }
     // Your pledges this term, not yet kept: first, with the town (its panel has the move).
     for (const p of world.term?.pledges ?? []) {
@@ -752,13 +759,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}<div class="pane"><button data-back="1">◂ ${TAB_NAME[tab]}</button>${detailHtml(selected)}</div>`);
     } else {
       const tabs = `<div class="tabs">${TABS.map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${TAB_NAME[t]}</button>`).join("")}</div>`;
-      const list = tab === "network" ? hooks.moneyNote() + networkList() + fold("forecasts", "More: the forecasts", hooks.routesMore()) : tab === "towns" ? townsTable() : sitesTable();
+      const list = tab === "network" ? hooks.moneyNote() + networkList() + pipesList() + fold("forecasts", "More: the forecasts", hooks.routesMore()) : tab === "towns" ? townsTable() : sitesTable();
       patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${list}</div>`);
     }
     panelEl.scrollTop = scroll;
   }
   function exists(sel: NonNullable<Selection>): boolean {
     if (sel.kind === "town" || sel.kind === "site") return world.towns.has(sel.id);
+    if (sel.kind === "pipe") return !!world.pipelines?.some((p) => p.id === sel.id);
     if (sel.kind === "route") return world.routes.some((r) => r.id === sel.id) || world.lorryRoutes.some((r) => r.id === sel.id);
     return world.simulation.map.segments.some((s) => s.id === sel.id);
   }
@@ -853,6 +861,15 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       <tbody>${used.map((w) => wayRow(w) + sortRows(linesOn.get(w.id) ?? [], "network", lineKeys, `network:${w.id}`).map(lineRow).join("")).join("")}</tbody>
       <tfoot><tr><td>${shown.length} ${shown.length === 1 ? "line" : "lines"}</td><td>${shown.reduce((sum, l) => sum + l.vehicles, 0)}</td><td></td><td></td><td class="${total < 0 ? "down" : ""}">${naira(total)}</td></tr></tfoot></table>
       ${idle.length ? `<table class="network idle"><tbody><tr class="sec"><td colspan="5">Nothing of yours on them · ${idle.length} <button class="quiet" data-chip="idle|">${showIdle ? "Hide" : "Show"}</button></td></tr>${showIdle ? idle.map(wayRow).join("") : ""}</tbody></table>` : ""}`;
+  }
+
+  // Your pipelines (pipelines.ts), and the inherited one: under the network, each to its card.
+  function pipesList(): string {
+    const ps = pipeSummaries(world);
+    if (!ps.length) return "";
+    const state = (p: (typeof ps)[number]) => (!p.working ? "broken" : p.outReason ? `shut · ${p.outReason === "tap" ? "tapped" : "a strike"}` : p.dial === 0 ? "idle" : `${pct(p.dial)} by pipe`);
+    return `<h2>Pipelines · ${ps.length}</h2>
+      <table class="network"><tbody>${ps.map((p) => `<tr class="row" data-pick="pipe|${p.id}"><td>${p.outReason ? "⚠ " : ""}${esc(p.name)}<span class="kind">${state(p)}${p.inherited ? " · inherited" : ""}</span></td><td>${int(p.perDay)} t/day</td></tr>`).join("")}</tbody></table>`;
   }
 
   function townsTable(): string {
@@ -1010,6 +1027,35 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <h2>Stops</h2><div>${r.stops.map((s) => esc(nameOf(s))).join(" → ")}</div>
         ${fold("route", "More: why, its road, freight", hooks.routeMore(r.id))}`;
     }
+    if (sel.kind === "pipe") {
+      // A pipeline (pipelines.ts): what it carries, the dial, its tankers, its union, its state.
+      const p = pipeSummaries(world).find((x) => x.id === sel.id)!;
+      const union = unionOf(world, p.a);
+      const upkeep = world.tuning.pipeUpkeepPerDay ?? 400;
+      const tenths = Math.round(p.dial * 10);
+      const dial = `${pct(p.dial)} <button data-pipe-dial="${p.id}|${Math.max(0, tenths - 1) / 10}" title="Less by pipe"${tenths <= 0 || !p.working ? " disabled" : ""}>−</button> <button data-pipe-dial="${p.id}|${Math.min(10, tenths + 1) / 10}" title="More by pipe"${tenths >= 10 || !p.working ? " disabled" : ""}>+</button>`;
+      const problem: Problem = !p.working
+        ? { text: `Broken since the old days${p.inherited ? ": it runs where the colonial economy wanted fuel" : ""}. Restore it, and it carries what you send it`, button: `<button data-restore-pipe="${p.id}">Restore it · ${nairaK(p.restoreCost)}</button>` }
+        : p.outReason
+          ? { text: `Shut by ${p.outReason === "tap" ? "a tap: thieves broke into it" : "the tanker drivers' strike"}, back in ${plural(p.backInDays, "day")}. Its fuel goes by tanker meanwhile, and ${pct(p.tankers)} of a fleet for it are still working its corridor`, button: "" }
+          : p.dial === 0
+            ? { text: "Carrying nothing: turn its dial up to send fuel by pipe", button: "" }
+            : !p.kept && p.condition < 0.7
+              ? { text: `Neglected: ${pct(p.lossShare)} of what it carries is lost, and thieves tap it more`, button: `<button data-pipe-keep="${p.id}|1">Keep it up · ${naira(upkeep)}/day</button>` }
+              : null;
+      return `<div class="kicker">Pipeline · fuel${p.inherited ? " · inherited" : ""} · ${!p.working ? "broken" : p.outReason ? "shut" : p.dial === 0 ? "idle" : "running"}</div>
+        <div class="head"><div class="title">${esc(p.name)}</div><div class="num">${int(p.perDay)} t/day</div></div>
+        ${problemHtml(problem)}
+        <div class="tiles">
+          ${tile("By pipe", dial, "the rest goes by tanker")}
+          ${tile("Through it", `${int(p.perDay)} t/day`, `of ${int(p.capPerDay)} it can carry; ${int(p.wantedPerDay)} goes its way`)}
+          ${tile("Tankers on it", pct(p.tankers), "of a fleet for all its fuel")}
+          ${tile("Lost on the way", pct(p.lossShare), p.kept ? `kept up, ${naira(upkeep)}/day` : "not kept up")}
+        </div>
+        <p class="why">${union ? `${esc(union.chairman)}'s union (${stanceWord(union.stance)}) loads its tankers at ${esc(nameOf(p.a))}: every tonne through the pipe is work off his drivers, and moves him against you. ` : ""}Its tankers follow the work: send it all by pipe and they drift away over weeks, and the day a strike or a tap stops it, its fuel waits for tankers that aren't there.</p>
+        ${p.working ? `<p><button data-pipe-keep="${p.id}|${p.kept ? 0 : 1}">${p.kept ? "Stop keeping it up" : `Keep it up · ${naira(upkeep)}/day`}</button></p>` : ""}
+        <h2>Where it runs</h2><div>${esc(nameOf(p.a))} → ${esc(nameOf(p.b))}, ${int(p.cells)} cells${p.inherited ? ", up the old railway" : ", beside the road"}</div>`;
+    }
     if (sel.kind === "site") {
       const t = world.towns.get(sel.id)!;
       const s = site(sel.id);
@@ -1146,6 +1192,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "flood-rose": return { text: `Flooded: ${e.fords.map((f) => f.name).join(", ")}, for ${e.days} days`, tone: "bad", group: "trouble", select: null };
       case "flood-fell": return { text: `The water's down at ${e.fords.map((f) => f.name).join(", ")}`, tone: "good", group: "trouble", select: null };
       case "union-demand": return { text: `${e.chairman}: "${e.text}"`, tone: "bad", group: "trouble", select: null };
+      case "pipe-out": return { text: `${ab(e)}: the pipeline ${e.reason === "tap" ? "tapped" : "shut by a strike"}, ${e.days} days`, tone: "bad", group: "trouble", select: { kind: "town", id: e.b } };
+      case "pipe-back": return { text: `${ab(e)}: the pipeline running again`, tone: "good", group: "trouble", select: { kind: "town", id: e.b } };
       case "union-answered": return { text: `${e.chairman}: ${{ pay: "you paid his members", concede: "you eased the lane", coop: "you handed him the route", refuse: "you refused him", ignored: "you ignored him: he strikes" }[e.answer]}`, tone: e.answer === "refuse" || e.answer === "ignored" ? "bad" : "good", group: "trouble", select: null };
       case "union-stance": return { text: `${e.chairman}'s union is ${e.stance} now`, tone: e.stance === "with you" ? "good" : e.stance === "against you" ? "bad" : "", group: "trouble", select: null };
       case "term-started": return { text: `Term ${e.number} began: ${e.pledges.length} pledges on offer`, tone: "", group: "growth", select: null };

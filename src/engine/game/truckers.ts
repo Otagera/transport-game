@@ -9,6 +9,7 @@ import { tollFor, type Takings } from "./budget";
 import { hasYard } from "./yards";
 import { haulierPull } from "./freightrates";
 import { createOneShotVehicle } from "../simulation/vehicle";
+import { tankerFactor } from "./pipelines";
 
 // Private truckers: the informal sector's freight rival (docs/brief.md,
 // Revision 2, the informal hook in goods, agreed 2026-10-19; principles.md
@@ -75,7 +76,9 @@ export function truckersPickUp(world: GameWorld, dt: number): void {
     // From a haulage yard (yards.ts), hauliers reach further and load faster.
     const atYard = tuning.yardsEnabled && hasYard(world, from);
     // Against your freight line's rate (freightrates.ts): keener against a dear one, less against a cheap.
-    const pull = haulierPull(world, from, to);
+    // Where a pipe carries a share of it, the hauliers on its corridor are as many as its work has
+    // kept (pipelines.ts tankerFactor): enough for what it leaves them, too few the day it stops.
+    const pull = haulierPull(world, from, to) * (origin === from ? tankerFactor(world, from, final) : 1);
     // Fuel over the border goes by tanker too (gateways.ts borderFuelSite).
     const reach = legReach(world, from, kind) * pull;
     // No more than a few loads held a destination (truckerHoldLoads): the rest stays at the

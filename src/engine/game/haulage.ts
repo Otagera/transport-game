@@ -188,6 +188,25 @@ export function nextStop(world: GameWorld, at: string, to: string, reach: number
   return best;
 }
 
+/**
+ * Cost of hauliers' quickest way to `to` from `at`, its first leg at `at`'s own reach (a fuel
+ * site's tankers' 200 cells, a town's 40): what nextStop picks by. Infinity if none. For a
+ * pipeline (pipelines.ts pipeServes): fuel goes the pipe's way only where that's quicker.
+ */
+export function haulCostFrom(world: GameWorld, at: string, to: string, reach = legReach(world, at, "supplies")): number {
+  if (at === to) return 0;
+  const plans = haulPlans(world);
+  const ahead = toward(world, plans, to);
+  const from = plans.dist.get(at);
+  let best = Infinity;
+  for (const [id, rest] of ahead) {
+    if (id === at) continue;
+    const cells = from?.get(id);
+    if (cells !== undefined) best = Math.min(best, legCost(cells, reach) + rest);
+  }
+  return best;
+}
+
 /** Cost of hauliers' quickest way to `to` from `at` (legs from relays); Infinity if none. */
 export function haulCost(world: GameWorld, at: string, to: string): number {
   return toward(world, haulPlans(world), to).get(at) ?? Infinity;

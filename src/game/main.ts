@@ -1,4 +1,5 @@
 import { coalArriving, coalOutput, inPowerReach, powerActive, powerLift, powerShare, poweredSites } from "@engine/game/power";
+import { checkPipe, isPipeSource, pipePlan, pipeWouldCarry } from "@engine/game/pipelines";
 import { aWeekOnText, termVerdictText } from "@engine/game/term";
 import { SIM_DT } from "@engine/loop";
 import { gameTick } from "@engine/game/tick";
@@ -85,7 +86,7 @@ import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
 import { averageBudget, averageNet } from "@engine/game/history";
-import { chipAt, draw, fitView, focusFor, overlayCaption, overlayMarks, routeColor, toScreen, townRadius, type Ghost, type Network, type Overlay, type OverlayMark, type View } from "./render";
+import { chipAt, draw, fitView, focusFor, overlayCaption, overlayMarks, pipeLine, routeColor, toScreen, townRadius, type Ghost, type Network, type Overlay, type OverlayMark, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { keepSteady, steadyFood, steadyFuel, steadyOver, steadyShortage, steadySite } from "./steady";
 import { createScreen } from "./screen";
@@ -110,7 +111,7 @@ import type { View3D } from "./view3d";
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "park" | "track" | "train" | "freight" | "fix";
+type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "park" | "track" | "train" | "freight" | "fix" | "pipe";
 
 // Which systems run (tuning.ts). `?systems=all` turns every one on, for
 // comparing; `?goods=off` and `?wear=off` turn those off, so a playtest can
@@ -652,6 +653,9 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
     }
     case "track":
       return { kind: "track", a, b, alignment: trackAction(world, a, b) === "build" ? wayBetween("track", a, b).way : "cheapest" };
+    case "pipe":
+      // From the fuel source, whichever was clicked first.
+      return isPipeSource(world, b) && !isPipeSource(world, a) ? { kind: "pipe", a: b, b: a } : { kind: "pipe", a, b };
     case "bus":
     case "minibus":
     case "brt":
@@ -912,6 +916,13 @@ function announce(event: GameEvent): void {
     say(`${aWeekOnText(world, event)}.`, false, 8);
   } else if (event.kind === "founded") {
     say(`${event.name} has grown on the ${townName(event.between[0])}–${townName(event.between[1])} road. Your buses there stop at it.`, false, 6);
+  } else if (event.kind === "pipe-out") {
+    // A pipe shut (pipelines.ts): its fuel falls back on the tankers, as many as its dial kept.
+    say(event.reason === "tap"
+      ? `Your pipeline ${townName(event.a)}–${townName(event.b)} has been tapped: shut ${event.days} days for repair. Its fuel goes by tanker meanwhile -- if the tankers are still there.`
+      : `The tanker drivers have struck: your pipeline ${townName(event.a)}–${townName(event.b)} is shut ${event.days} days. Its fuel goes by tanker meanwhile -- if the tankers are still there.`, true, 9);
+  } else if (event.kind === "pipe-back") {
+    say(`Your pipeline ${townName(event.a)}–${townName(event.b)} is running again.`, false, 6);
   } else {
     say(`${event.name} has emptied out: not enough traffic passes any more.`, true, 6);
   }
@@ -926,6 +937,22 @@ function townAt(x: number, y: number): string | null {
 }
 
 /** The road under the cursor (screen px), for the fix tool: nearest within a few pixels. */
+/** The pipeline drawn under a screen point (render.ts pipeLine), if any. */
+function pipeAt(x: number, y: number): string | null {
+  let best: { id: string; d: number } | null = null;
+  for (const p of world.pipelines ?? []) {
+    const pts = pipeLine(p.line).map((q) => toScreen(view, q.x, q.y));
+    for (let i = 1; i < pts.length; i += 1) {
+      const a = pts[i - 1]!, b = pts[i]!;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      const d = Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t));
+      if (d < 6 && (!best || d < best.d)) best = { id: p.id, d };
+    }
+  }
+  return best?.id ?? null;
+}
+
 function roadAt(x: number, y: number): string | null {
   let best: { id: string; d: number } | null = null;
   for (const segment of world.simulation.map.segments) {
@@ -979,6 +1006,7 @@ function toolOn(candidate: Tool): boolean {
   if (candidate === "freight") return t.goodsEnabled && t.railEnabled;
   if (candidate === "track" || candidate === "train") return t.railEnabled;
   if (candidate === "fix") return t.wearEnabled;
+  if (candidate === "pipe") return !!t.pipelinesEnabled && t.fuelEnabled && t.goodsEnabled;
   // The BRT bus runs only in a bus lane: its tool appears once you have one.
   if (candidate === "brt") return world.lanes.length > 0;
   return true;
@@ -1042,6 +1070,12 @@ canvas.addEventListener("click", (event) => {
   }
   const town = townAt(event.clientX, event.clientY);
   if (!town) {
+    // A pipeline under the click (drawn beside its road): its card, before the road's.
+    const pipe = selectedTown === null ? pipeAt(event.clientX, event.clientY) : null;
+    if (pipe) {
+      screen.select({ kind: "pipe", id: pipe });
+      return;
+    }
     // Nothing but a road under the click: the road in the panel (the information lab).
     const road = selectedTown === null ? roadAt(event.clientX, event.clientY) : null;
     if (road && world.simulation.map.segments.some((s) => s.id === road)) screen.select({ kind: "segment", id: road });
@@ -1136,6 +1170,13 @@ canvas.addEventListener("click", (event) => {
     const result = act({ label, towns }, { kind: "track", a: from, b: town, alignment: way });
     if (result.ok) say(restoring ? `Restored the old line ${townName(from)} – ${townName(town)} for ${naira(cost)}: trains can run on it` : action === "onroad" ? `The road ${townName(from)} – ${townName(town)} became the railway, for ${naira(cost)}.` : `Laid track ${townName(from)} – ${townName(town)} for ${naira(cost)}`);
     else say(`Can't lay track: ${result.reason}`, true);
+  } else if (tool === "pipe") {
+    const spec = actionFor("pipe", from, town) as { kind: "pipe"; a: string; b: string };
+    const result = act({ label: `a pipeline ${townName(spec.a)} – ${townName(spec.b)}`, towns: [spec.a, spec.b] }, spec);
+    if (result.ok) {
+      say(`Pipeline ${townName(spec.a)} – ${townName(spec.b)} laid for ${naira(result.amount ?? 0)}. It carries nothing until you turn its dial up (its card): every tenth by pipe is a tenth off the tanker drivers, and their union hears of it.`, false, 10);
+      screen.select({ kind: "pipe", id: `pipe:${spec.a}~${spec.b}` });
+    } else say(`Can't lay a pipeline: ${result.reason}`, true);
   } else if (tool === "freight") {
     const count = (world.lorryRoutes.find((r) => r.id === freightRouteId(from, town))?.vehicleIds.length ?? 0) + 1;
     const result = act({ label: addLabel("freight train", count, from, town), towns, routeId: freightRouteId(from, town) }, { kind: "freight", a: from, b: town });
@@ -1245,6 +1286,7 @@ window.addEventListener("keydown", (event) => {
     if (world.tuning.parksEnabled) setTool("park");
   }
   else if (event.key === "k" || event.key === "K") setTool("track");
+  else if ((event.key === "i" || event.key === "I") && toolOn("pipe")) setTool("pipe");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
   else if ((event.key === "c" || event.key === "C") && world.tuning.causewaysEnabled && world.floods) {
@@ -1517,6 +1559,16 @@ function ghost(): Ghost | null {
     const ghost = { from: selectedTown, to: end, ok: check.ok, path: shownPath(check, path), rail: true, label: refusedOr(check, label, `Train ${naira(world.tuning.trainPurchaseCost)}`) };
     return withForecast(ghost, { kind: "train", a: selectedTown, b: to }, { label: "a train", towns: [selectedTown, to] });
   }
+  if (tool === "pipe") {
+    // From the fuel source to a town: what it costs, and the fuel going its way now.
+    const [a, b] = isPipeSource(world, to) && !isPipeSource(world, selectedTown) ? [to, selectedTown] : [selectedTown, to];
+    const check = checkPipe(world, a, b);
+    const plan = pipePlan(world, a, b);
+    const price = "reason" in plan ? "" : naira(plan.price);
+    const goes = "reason" in plan ? 0 : pipeWouldCarry(world, a, b) * SECONDS_PER_GAME_DAY;
+    const label = `Pipeline ${price} · ${Math.round(goes)} t/day of fuel goes its way (it carries up to ${world.tuning.pipeCapPerDay ?? 250}) · upkeep ${naira(world.tuning.pipeUpkeepPerDay ?? 400)}/day`;
+    return { from: selectedTown, to: end, ok: check.ok, line: "reason" in plan ? undefined : plan.line, label: refusedOr(check, label, `Pipeline ${price}`) };
+  }
   if (tool === "freight") {
     const check = checkFreight(world, selectedTown, to);
     const goods = goodsAlong(world, selectedTown, to, true);
@@ -1636,7 +1688,7 @@ function renderToolbar(): void {
         ...on(t.goodsEnabled, button("Freight", "G", tool === "freight", () => setTool("freight"))),
       ),
     ),
-    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track")))),
+    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track"))), ...on(toolOn("pipe"), button("Pipe", "I", tool === "pipe", () => setTool("pipe")))),
     ...on(t.straightAlignmentEnabled, group(t.railEnabled ? "Line (road, track)" : "Line", "setting", lineSwitch)),
     ...on(t.wearEnabled, group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix")))),
     group(
@@ -3372,6 +3424,32 @@ function onPanelClick(event: MouseEvent): void {
     renderPanel();
     return;
   }
+  // A pipeline's card (screen.ts): its dial, keeping it up, restoring the inherited one.
+  if (target.dataset.pipeDial) {
+    const [id, value] = target.dataset.pipeDial.split("|") as [string, string];
+    const p = world.pipelines?.find((x) => x.id === id);
+    const result = act({ label: `the pipe ${p ? pair(p.a, p.b) : ""} to ${Math.round(Number(value) * 100)}%`, towns: p ? [p.a, p.b] : [] }, { kind: "pipeDial", id, dial: Number(value) });
+    if (!result.ok) say(`Can't: ${result.reason}`, true);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.pipeKeep) {
+    const [id, on] = target.dataset.pipeKeep.split("|") as [string, string];
+    const p = world.pipelines?.find((x) => x.id === id);
+    const result = act({ label: on === "1" ? "keeping a pipeline up" : "letting a pipeline go", towns: p ? [p.a, p.b] : [] }, { kind: "pipeKeep", id, on: on === "1" });
+    if (!result.ok) say(`Can't: ${result.reason}`, true);
+    else say(on === "1" ? `Keeping the pipeline up, ${naira(world.tuning.pipeUpkeepPerDay ?? 400)}/day: it mends, and loses little.` : "No longer keeping the pipeline up: it will lose more on the way, and thieves will tap it more.", on !== "1", 6);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.restorePipe) {
+    const id = target.dataset.restorePipe;
+    const p = world.pipelines?.find((x) => x.id === id);
+    const result = act({ label: "restoring a pipeline", towns: p ? [p.a, p.b] : [] }, { kind: "restorePipe", id });
+    say(result.ok ? `Pipeline restored for ${naira(result.amount ?? 0)}. Its dial is at nothing: turn it up on its card to send fuel by pipe.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
   if (target.dataset.restorePower) {
     const result = act({ label: "restoring the power station", towns: world.power ? [world.power.stationId] : [] }, { kind: "restorePower" });
     say(result.ok ? `Power station restored for ${naira(result.amount ?? 0)}. ${world.power ? townName(world.power.mineId) : "Its mine"} starts digging: get the coal to it, and every works in its reach makes more.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
@@ -3670,7 +3748,7 @@ function frame(now: number): void {
   }
   const picked = screen.focus;
   renderCaption(now);
-  const focusOn = { town: focusTown() ?? (picked && picked.kind !== "route" && picked.kind !== "segment" ? picked.id : null), route: focusRoute ?? (picked?.kind === "route" ? picked.id : null) };
+  const focusOn = { town: focusTown() ?? (picked && picked.kind !== "route" && picked.kind !== "segment" && picked.kind !== "pipe" ? picked.id : null), route: focusRoute ?? (picked?.kind === "route" ? picked.id : null) };
   // In 3D the same focus: a selected town's or route's connections lit, the town ringed.
   if (in3d && view3d) {
     view3d.setLayers(network, scenery);
@@ -3681,6 +3759,7 @@ function frame(now: number): void {
     pointed: pointed && performance.now() < pointed.until ? pointed.ids : undefined,
     focusTown: focusOn.town,
     focusRoute: focusOn.route,
+    focusPipe: picked?.kind === "pipe" ? picked.id : null,
   });
 
   panelTimer += elapsed;

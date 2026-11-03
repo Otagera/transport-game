@@ -7,6 +7,7 @@ import { SECONDS_PER_GAME_DAY as D } from "../economy/state";
 import { inHome } from "./fuel";
 import { clusterOf } from "./clusters";
 import { removeBus, roadChain } from "./world";
+import { strikePipe, type Pipeline } from "./pipelines";
 
 // The union as a party (docs/brief.md, Revision 5, step 5; agreed 2026-10-25: "proceed").
 // The designer's review: "the rival is weather, not a character". Each cluster's transport
@@ -28,7 +29,7 @@ import { removeBus, roadChain } from "./world";
 // Plain data on the world, changed here and by the `union` action, so a run file replays it.
 // Off, and absent, in runs played before it (no unionEnabled).
 
-export type DemandKind = "lane" | "corridor" | "welfare";
+export type DemandKind = "lane" | "corridor" | "welfare" | "pipeline";
 export type Answer = "pay" | "concede" | "coop" | "refuse";
 
 export interface Demand {
@@ -119,6 +120,7 @@ function demand(world: GameWorld, union: UnionState, kind: DemandKind, a: string
   const ab = `${nameOf(world, a)}–${nameOf(world, b)}`;
   const text = kind === "lane" ? `Our drivers lost their road on ${ab} to your lane. Ease it, or see to our members.`
     : kind === "corridor" ? `You've taken ${ab} from our members. Leave us the run, or see to them.`
+    : kind === "pipeline" ? `Your pipe from ${ab} is taking our tanker drivers' loads. Turn it down, or see to our members.`
     : `Our members are suffering. See to their welfare.`;
   const days = world.tuning.unionDemandDays ?? 7;
   union.demand = { kind, a, b, text, price: priceFor(world, union, kind), deadlineAt: world.economy.elapsedSeconds + days * D };
@@ -161,12 +163,20 @@ export function answerDemand(world: GameWorld, unionId: string, answer: Answer):
     world.economy.funds -= d.price;
     world.budget.settlements += d.price;
     move(world, union, 0.2, `you saw to his members (₦${d.price.toLocaleString()})`, events);
+  } else if (answer === "concede" && d.kind === "pipeline") {
+    // Turned down to half (in tenths): his drivers get half its loads back.
+    const pipe = world.pipelines?.find((p) => p.a === d.a && p.b === d.b);
+    if (!pipe || !pipe.working || pipe.dial <= 0) return { ok: false, reason: "nothing to concede there" };
+    pipe.dial = Math.floor(pipe.dial * 5) / 10;
+    move(world, union, 0.25, `you turned the pipe from ${ab} down to ${Math.round(pipe.dial * 100)}%`, events);
   } else if (answer === "concede") {
     const lane = d.kind === "lane" ? laneOn(world, d.a, d.b) : undefined;
     if (!lane) return { ok: false, reason: "nothing to concede there" };
     setEnforcement(world, d.a, d.b, "lax");
     lane.encroachment = Math.max(lane.encroachment, 0.5);
     move(world, union, 0.25, `you eased the lane on ${ab}`, events);
+  } else if (answer === "coop" && d.kind === "pipeline") {
+    return { ok: false, reason: "a pipeline isn't his to run" };
   } else if (answer === "coop") {
     const route = routeAlong(world, d.a, d.b);
     if (!route) return { ok: false, reason: "you run no route there" };
@@ -175,7 +185,7 @@ export function answerDemand(world: GameWorld, unionId: string, answer: Answer):
     move(world, union, 0.35, `you handed the ${ab} route to his cooperative`, events);
   } else {
     move(world, union, -0.2, `you refused him on ${ab}`, events);
-    strikeNow(world, d);
+    strikeNow(world, d, events);
   }
   union.demand = null;
   world.union = { events: [...(world.union?.events ?? []), ...events, { kind: "union-answered", union: union.id, chairman: union.chairman, answer }] };
@@ -187,8 +197,13 @@ export function routeAlong(world: GameWorld, a: string, b: string): { id: string
   return world.routes.find((r) => (r.a === a && r.b === b) || (r.a === b && r.b === a));
 }
 
-/** Refused or ignored on a laned corridor: the grievance is full, a strike is announced (pushback.ts). */
-function strikeNow(world: GameWorld, d: Demand): void {
+/** Refused or ignored on a laned corridor: the grievance is full, a strike is announced (pushback.ts). On a pipe, its drivers walk out and it stops (pipelines.ts). */
+function strikeNow(world: GameWorld, d: Demand, events: GameEvent[]): void {
+  if (d.kind === "pipeline") {
+    const e = strikePipe(world, d.a, d.b);
+    if (e) events.push(e);
+    return;
+  }
   const lane = laneOn(world, d.a, d.b);
   if (lane && lane.strikeAt === 0 && lane.strikeUntil <= world.economy.elapsedSeconds) lane.grievance = 1;
 }
@@ -215,7 +230,7 @@ export function updateUnions(world: GameWorld, dt: number, happened: readonly Ga
     if (d && now >= d.deadlineAt) {
       union.demand = null;
       move(world, union, -0.3, `you ignored him on ${nameOf(world, d.a)}–${nameOf(world, d.b)}`, events);
-      strikeNow(world, d);
+      strikeNow(world, d, events);
       events.push({ kind: "union-answered", union: union.id, chairman: union.chairman, answer: "ignored" });
     }
     if (!union.demand && now >= union.nextDemandAt) {
@@ -234,4 +249,45 @@ export function updateUnions(world: GameWorld, dt: number, happened: readonly Ga
 /** Roads a refused chairman's strike would cover (for the panel): the lane's chain. */
 export function demandRoad(world: GameWorld, d: Demand): string[] {
   return (roadChain(world, d.a, d.b) ?? []).map((piece) => piece.id);
+}
+
+/**
+ * A pipe's dial turned (pipelines.ts): the union of its source -- where its tanker drivers load --
+ * hears of every tenth, a little (the steady push is the tonnes, pipeDrift). Up to a third or
+ * more, he makes a demand; down, a little toward you; off, his demand is met.
+ */
+export function pipeMoves(world: GameWorld, pipe: Pipeline, before: number, after: number): void {
+  if (!on(world) || after === before) return;
+  const union = unionOf(world, pipe.a);
+  if (!union) return;
+  const events: GameEvent[] = [];
+  const tenths = Math.round((after - before) * 10);
+  const ab = `${nameOf(world, pipe.a)}–${nameOf(world, pipe.b)}`;
+  move(world, union, -0.02 * tenths, tenths > 0 ? `your pipe from ${ab} up to ${Math.round(after * 100)}%` : `your pipe from ${ab} down to ${Math.round(after * 100)}%`, events);
+  if (tenths > 0 && after >= 0.3) demand(world, union, "pipeline", pipe.a, pipe.b, events);
+  // Turned off with his demand on the table: met.
+  if (after === 0 && union.demand?.kind === "pipeline" && union.demand.a === pipe.a && union.demand.b === pipe.b) {
+    union.demand = null;
+    move(world, union, 0.1, `you turned the pipe from ${ab} off`, events);
+  }
+  world.union = { events: [...(world.union?.events ?? []), ...events] };
+}
+
+/**
+ * Every tick (pipelines.ts runPipelines): the tonnes through each running pipe push its union
+ * against you, a little a day -- the temperature follows the dial, not the build. Against the
+ * stance's fade (unionMemoryDays) it settles where the flow holds it: about -0.5 at 250 t a day.
+ */
+export function pipeDrift(world: GameWorld, dt: number, events: GameEvent[]): void {
+  if (!on(world) || !world.pipelines) return;
+  const k = world.tuning.pipeUnionPerTonneDay ?? 0;
+  for (const pipe of world.pipelines) {
+    if (pipe.carried <= 0) continue;
+    const union = unionOf(world, pipe.a);
+    if (!union) continue;
+    const before = stanceWord(union.stance);
+    union.stance = Math.max(-1, union.stance - k * pipe.carried * D * (dt / D));
+    const after = stanceWord(union.stance);
+    if (after !== before) events.push({ kind: "union-stance", union: union.id, chairman: union.chairman, stance: after });
+  }
 }

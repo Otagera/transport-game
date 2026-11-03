@@ -622,6 +622,28 @@ export interface GameTuning {
    * station and the mine, thousands. Absent in older runs: no coal, no power.
    */
   coalEnabled?: boolean;
+  /**
+   * Pipelines (pipelines.ts; brief, Decisions log, 2026-11-03, five modes scoped): on; a new one's
+   * price a cell and an inherited one's to restore; what one carries a day at most, t; upkeep a day;
+   * the share lost on the way kept up, and neglected; days to fall to nothing neglected; how fast its
+   * hauliers follow the work, days, and the least of them that stay; days a strike and a tap shut it;
+   * a tap's chance a day for 100 cells of it. Absent in older runs: no pipelines.
+   */
+  pipelinesEnabled?: boolean;
+  pipeCostPerCell?: number;
+  pipeRestorePerCell?: number;
+  pipeCapPerDay?: number;
+  pipeUpkeepPerDay?: number;
+  pipeLossKept?: number;
+  pipeLossNeglected?: number;
+  pipeNeglectDays?: number;
+  pipeTankerDays?: number;
+  pipeTankerFloor?: number;
+  pipeStrikeDays?: number;
+  pipeTapDays?: number;
+  pipeTapPer100Cells?: number;
+  /** How far a tonne a day through a pipe pushes its union against you, a day (union.ts pipeDrift). */
+  pipeUnionPerTonneDay?: number;
   powerCoalPerDay?: number;
   powerReachCells?: number;
   /** The coal mine's distance from the station, straight, cells: past the hauliers' reach, within a line you can save for. */
@@ -897,6 +919,8 @@ export interface GameWorld {
   steel: SteelState | null;
   /** Coal and power (power.ts): the mine, the station; absent on a map or run without them. */
   power?: PowerState | null;
+  /** Your pipelines and the inherited one (pipelines.ts); absent when they're off. */
+  pipelines?: import("./pipelines").Pipeline[];
   /** Each site's staffed days and the camp at its gate (workers.ts). */
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */

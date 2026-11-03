@@ -185,6 +185,12 @@ export function remitRefusal(world: GameWorld, spec: ActionSpec): string | null 
       return placesOutsideRemit(world, spec.siteId);
     case "restoreRefinery":
       return world.fuel ? placesOutsideRemit(world, world.fuel.refineryId) : null;
+    case "pipe":
+      return placesOutsideRemit(world, spec.a, spec.b);
+    case "restorePipe": {
+      const pipe = world.pipelines?.find((p) => p.id === spec.id);
+      return pipe ? placesOutsideRemit(world, pipe.a, pipe.b) : null;
+    }
     case "restoreWorks":
       return world.cement ? placesOutsideRemit(world, world.cement.worksId) : null;
     case "restoreSteel":

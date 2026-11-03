@@ -1,4 +1,5 @@
 import { updateUnions } from "./union";
+import { pipeUpkeep, runPipelines } from "./pipelines";
 import { nextEpoch } from "./epoch";
 import { updatePrivateTraffic } from "./private";
 import { updateTerm } from "./term";
@@ -175,6 +176,9 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   updateRoadSpeeds(world, dt);
   // Goods arrive at their yards, and some of what's waiting spoils (goods.ts).
   if (tuning.goodsEnabled) produceAndSpoil(world, dt);
+  // The pipelines take their share of the fuel waiting at their sources (pipelines.ts).
+  const piped = new Map<string, number>();
+  const pipeEvents = tuning.goodsEnabled ? runPipelines(world, dt, piped) : [];
   // Truckers take some of what's waiting, short hauls fastest (truckers.ts).
   if (tuning.goodsEnabled) truckersPickUp(world, dt);
   const routeOf = new Map<string, string>();
@@ -305,6 +309,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
     }
   }
 
+  for (const [key, amount] of piped) goodsDelivered.set(key, (goodsDelivered.get(key) ?? 0) + amount);
   updateGoodsOutcomes(world, goodsDelivered, dt, goodsTrucked);
   updateFuelShortage(world);
   updateAssembly(world, dt); // the plant learns as it runs, and its discount follows (assembly.ts)
@@ -334,7 +339,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   // Roads wear with the traffic that just ran on them; maintained ones are
   // repaired as they go, and that upkeep is a running cost like a bus's.
   // Routine upkeep on the roads you built or paved, wear or no wear (upkeep.ts).
-  const roadUpkeep = (tuning.wearEnabled ? updateRoadWear(world, dt) : 0) + chargeRoutineUpkeep(world, dt);
+  const roadUpkeep = (tuning.wearEnabled ? updateRoadWear(world, dt) : 0) + chargeRoutineUpkeep(world, dt) + pipeUpkeep(world, dt);
   // Bus lanes: encroachment, the union's grievance, and strict enforcement's
   // wardens (pushback.ts). First, credit each laned corridor with your fares
   // on the routes along it, so a strike's cost can be read against normal days.
@@ -348,7 +353,7 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   }
   const lanes = updateLanes(world, dt);
   // The unions (union.ts): what this tick's lanes and corridors did to them, their demands' deadlines.
-  lanes.events.push(...updateUnions(world, dt, lanes.events));
+  lanes.events.push(...pipeEvents, ...updateUnions(world, dt, lanes.events));
   const upkeep = roadUpkeep + lanes.cost;
   // ...and your road vehicles pay more to run on worn roads (wear.ts).
   const rough = tuning.wearEnabled ? chargeRoughRoads(world, dt, routeOf) : { total: 0, byRoute: new Map<string, number>() };

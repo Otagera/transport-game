@@ -13,6 +13,7 @@ import { SWITCHED_OFF } from "./tuning";
 import { staffFactor } from "./workers";
 import { siteScale } from "./expand";
 import { assemblyActive, assemblyNeeds } from "./assembly";
+import { pipeReach } from "./pipelines";
 
 // The fuel chain (docs/brief.md, Revision 3, step 1): goods that feel real,
 // in chains. One site's output is another's input, and a site makes nothing
@@ -201,16 +202,25 @@ export function fuelFlows(world: GameWorld): GoodsFlow[] {
   // and sat there (map 2418, day 230: 653 t a day made, none carried, a Dekina pledge stuck at 0%).
   const within = world.tuning.fuelWithinReach;
   const reaches = (siteId: string, roadCells: number, townId: string) => !within || roadCells <= fuelReach(world, siteId) || !!railPath(world, siteId, townId);
+  // A working pipe from a source reaches the town at its end and those tankers reach from there
+  // (pipelines.ts): they come after the towns it reached anyway, so a pipe only adds (principles
+  // §3, Economy: a second source must only add), nearest the pipe's end first.
+  const withPipes = (siteId: string, reached: typeof towns) => {
+    if (!within) return reached;
+    const has = new Set(reached.map((x) => x.town.id));
+    const more = towns.map((x) => ({ x, d: has.has(x.town.id) ? null : pipeReach(world, siteId, x.town.id) })).filter((y) => y.d !== null).sort((p, q) => p.d! - q.d!).map((y) => y.x);
+    return more.length ? [...reached, ...more] : reached;
+  };
   // Imports first, nearest the tank farm first (a town no road reaches still
   // gets its share: it waits for one, and its card says so); then the
   // refinery fills what's still short, nearest it first -- the far side.
-  fill("depot", within ? byDepot.filter((x) => reaches(depot.id, x.dd, x.town.id)) : byDepot);
+  fill("depot", withPipes(depot.id, within ? byDepot.filter((x) => reaches(depot.id, x.dd, x.town.id)) : byDepot));
   if (border) fill("border", [...towns].filter((x) => Number.isFinite(x.db) && x.db <= world.tuning.tankerMaxHaulCells).sort((p, q) => p.db - q.db));
   // The fuel the refinery would have sent out of reach: what's still short there, before it fills.
-  const outOfReach = within ? byRefinery.filter((x) => Number.isFinite(x.dr) && !reaches(refinery.id, x.dr, x.town.id)).reduce((sum, x) => sum + Math.max(0, unmet(x)), 0) : 0;
-  fill("refinery", byRefinery.filter((x) => Number.isFinite(x.dr) && reaches(refinery.id, x.dr, x.town.id)));
+  const outOfReach = within ? byRefinery.filter((x) => Number.isFinite(x.dr) && !reaches(refinery.id, x.dr, x.town.id) && pipeReach(world, refinery.id, x.town.id) === null).reduce((sum, x) => sum + Math.max(0, unmet(x)), 0) : 0;
+  fill("refinery", withPipes(refinery.id, byRefinery.filter((x) => Number.isFinite(x.dr) && reaches(refinery.id, x.dr, x.town.id))));
   // The second refinery last, nearest it first; by road only, as the old one.
-  if (second) fill("new", [...towns].filter((x) => Number.isFinite(x.dn) && reaches(second.id, x.dn, x.town.id)).sort((p, q) => p.dn - q.dn));
+  if (second) fill("new", withPipes(second.id, [...towns].filter((x) => Number.isFinite(x.dn) && reaches(second.id, x.dn, x.town.id)).sort((p, q) => p.dn - q.dn)));
   const flows: GoodsFlow[] = [];
   for (const x of towns) {
     if (x.fromRefinery > 0) flows.push({ from: fuel.refineryId, to: x.town.id, kind: "supplies", rate: x.fromRefinery });
