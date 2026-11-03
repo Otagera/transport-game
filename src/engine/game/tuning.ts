@@ -587,8 +587,8 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // the strategist. A few hundred travellers a day each way at the start (0.35 a thousand of ~750k);
   // 5-15 t of air freight a day (0.012 a thousand) at 8x the goods rate; 18-30 cells from the home city.
   airportEnabled: true,
-  airportTravellersPerThousand: 0.35,
-  airportReachCells: 40,
+  airportTravellersPerThousand: 0.25,
+  airportReachCells: 100,
   airportMinCells: 18,
   airportMaxCells: 30,
   airFreightPerThousand: 0.012,

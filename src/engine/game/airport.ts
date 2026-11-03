@@ -76,13 +76,13 @@ export function placeAirport(world: GameWorld): void {
 /** Travellers a day, each way, the region's people as they are now. */
 export function airportTravellersPerDay(world: GameWorld): number {
   if (!on(world)) return 0;
-  return (world.tuning.airportTravellersPerThousand ?? 0.35) * people(world).reduce((sum, t) => sum + t.population, 0);
+  return (world.tuning.airportTravellersPerThousand ?? 0.25) * people(world).reduce((sum, t) => sum + t.population, 0);
 }
 
 /** How the airport's travellers split over the towns: by their people, the near ones more. */
 function shares(world: GameWorld): Array<{ town: string; share: number }> {
   const airport = world.towns.get(world.airport!)!;
-  const decay = world.tuning.airportReachCells ?? 40;
+  const decay = world.tuning.airportReachCells ?? 100;
   const weights = people(world).map((t) => ({ town: t.id, w: t.population / (1 + Math.hypot(t.x - airport.x, t.y - airport.y) / decay) }));
   const total = weights.reduce((sum, x) => sum + x.w, 0) || 1;
   return weights.map((x) => ({ town: x.town, share: x.w / total })).filter((x) => x.share > 0.002);

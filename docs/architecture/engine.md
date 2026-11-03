@@ -1215,8 +1215,16 @@ flowchart LR
   ~80 t a day) at the full dial took the tankers off that run (≈6 → 0) and kept it 98-100%
   supplied. A pipe to Otido (18 cells): its town supplied 93% (dial 0), 97% (half), 98% (full); a
   7-day strike after 40 days, worst shortage 16% / 43% / 64%, mean 8% / 12% / 19% -- the more by
-  pipe, the more a strike costs (test/pipelines.test.ts checks each). **Not yet:** the strategist
-  builds no pipes, so the scope's 250-day check (the fuel chain still makes decisions) is open.
+  pipe, the more a strike costs (test/pipelines.test.ts checks each).
+- **The scope's 250-day check** (the strategist taught it: a pipe where a source sends 40+ t a day
+  30+ road cells, its dial at 60%, turned with its towns' shortages and the union, his demands paid
+  when cheap else conceded; maps 8703, 2418, 949, 3218, 7585): a pipe on all five, laid days 123-195
+  when the money was there; fuel-chain decisions by 50 days 0/0/0/3/21, 0/0/18/26/0, 0/0/0/0/9,
+  0/0/0/6/12, 0/0/0/0/21 -- after a pipe, the chain kept deciding to day 250 on four; on 2418 it went
+  quiet once imports stopped reaching its pipe's town (the refinery fed it; the pipe carried 1 t a
+  day). The union ended with you on all five (+0.59 to +0.96): paying his cheap demands outweighs the
+  tonnes -- the political price is mild for a player with money. No strikes or taps in 50-125 days of
+  pipe. The restored old line (8703) carried nothing: its far towns' fuel came from the refinery.
 
 ### The airport (2026-11-03; five-modes.md, 2. Airport; brief, The region, The gateways)
 
@@ -1226,8 +1234,9 @@ flowchart LR
   inherited dirt road to the home city -- out of the way, as Nigerian airports are. A site with no
   people (industry "airport", population 0): it makes demand and grows nothing.
 - **Travellers** (`airportDemand`, in `refreshDemand`, so daily with the towns): each way
-  `airportTravellersPerThousand` (0.35) of the region's people a day -- 240-290 on maps 8703, 2418,
-  949, 3218, 7585 -- split over the towns by their people, fading over `airportReachCells` (40):
+  `airportTravellersPerThousand` (0.25) of the region's people a day -- about 180-210 on maps 8703,
+  2418, 949, 3218, 7585 -- split over the towns by their people, fading over `airportReachCells`
+  (100; at 0.35 and 40 the home city's pair with it was the map's biggest trip on 4 of 5 maps):
   arrivals to the towns and departures from them, reciprocal (principles §3, Demand). Unserved they
   show as wanted and not made (`pairOutcomes`, `airportSummary`): 73-88% stranded with its dirt road
   and nothing of yours, the danfos taking the rest; a Waiting-on-you item and its card name the move.
@@ -1238,8 +1247,13 @@ flowchart LR
   in legs (`keeps`, `relayed`): a few tonnes split six ways never filled a truck to each and rotted
   waiting. The hauliers carry it by road, paying the loading levy at the airport (`levied`); your
   freight train at `airFreightRate` (8x) the tonne (`fares.ts goodsFares`) if you lay track to it.
-  Named "air freight" (`cargoName`). **Not yet:** the scope's check that connecting it changes a
-  term's decision on 3 of 5 seeds waits on the strategist learning it.
+  Named "air freight" (`cargoName`).
+- **The scope's check, measured** (the strategist, its airport among the trips it may serve, maps
+  8703, 2418, 949, 3218, 7585 to day 120): served on day 1-2 on all five -- its rules serve the
+  biggest unserved trips first and a bus is cheap -- carrying 19-27% of its 383-500 trips a day by
+  day 120, 71-77% stranded. So "on 3 of 5, rather than always" doesn't pass as written: reaching it
+  isn't a capital decision while a bus does it; paving its long road or a rail link would be, and the
+  strategist doesn't weigh those for it. Open.
 
 ### The building chain (Revision 3, step 2a)
 

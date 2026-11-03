@@ -102,8 +102,10 @@ tonnes, the tankers drifting off its corridor and slow to return when a strike o
 an inherited line broken up the old railway. **The airport built** (engine.md, The airport): there
 on day 1 on a long dirt road, a few hundred travellers a day each way stranded until you reach it,
 8-10 t of air freight a day by hauliers or your freight train. Next: the coach, the okada rule and
-the urban ladder wait on `SCALES-AND-MODES.md`; water last. Open: the strategist neither builds
-pipes nor serves the airport yet (the scope's 250-day and 3-of-5-seeds checks).
+the urban ladder wait on `SCALES-AND-MODES.md`; water last. The strategist taught both (engine.md,
+the scope's checks measured): the fuel chain keeps deciding after a pipe on 4 of 5 maps, but the
+union's price is mild when you can pay; the airport is served on day 1-2 everywhere, so its check
+("rather than always") is open -- a capital decision only if reaching it costs more than a bus.
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
