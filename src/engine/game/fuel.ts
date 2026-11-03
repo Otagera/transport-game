@@ -239,6 +239,9 @@ export function fuelReach(world: GameWorld, siteId: string): number {
 /** What a goods flow carries, named by the kind of site it leaves. */
 export function cargoName(world: GameWorld, from: string, kind: "produce" | "supplies", to?: string): string {
   const site = world.towns.get(from)?.industry;
+  // Cotton and the textile mill (textile.ts): cotton in, cloth out.
+  if (site === "textile") return "cloth";
+  if (world.textile && to !== undefined && to === world.textile.millId) return "cotton";
   // The food chain (food.ts): a farm town's staple to the mill, its cash crop to the port; the mill's food.
   const food = world.food && world.tuning.foodEnabled ? world.food : null;
   if (food && site === "mill") return food.crops.food;

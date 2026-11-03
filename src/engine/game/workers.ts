@@ -64,6 +64,9 @@ export function siteJobs(world: GameWorld, town: GameTown): number {
       return t.jobsMill * siteScale(world, town.id);
     case "flourmill":
       return t.jobsFlourMill * siteScale(world, town.id);
+    // The textile mill (textile.ts): the biggest employer, working; a caretaker's few idle.
+    case "textile":
+      return world.textile?.working ? (t.jobsTextile ?? 0) * siteScale(world, town.id) : idle;
     // The assembly plant (assembly.ts): a shift, working from the start.
     case "assembly":
       return t.jobsAssembly ?? 0;

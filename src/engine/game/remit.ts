@@ -1,3 +1,4 @@
+import { cottonTowns } from "./textile";
 import type { ClusterDef, GameWorld } from "./types";
 import { inHome } from "./fuel";
 import { clusterOf } from "./clusters";
@@ -163,6 +164,8 @@ export function clusterBrings(world: GameWorld, cluster: ClusterDef): string[] {
   const brings: string[] = [`${cluster.towns.length} towns`];
   if (world.tuning.clusterOffersEnabled) brings.push(cluster.offer === "limestone" ? "a limestone field" : "a farm belt");
   if (world.power && world.tuning.coalEnabled && world.power.clusterHub === cluster.hub) brings.push("a coal mine (power for your works)");
+  // A northern map's far farm towns grow cotton for the textile mill (textile.ts).
+  if (world.textile?.source === "farms" && world.tuning.textileEnabled && cluster.towns.some((id) => cottonTowns(world).some((town) => town.id === id))) brings.push("cotton (for your textile mill)");
   if (cluster.towns.includes(world.seaport ?? "")) brings.push("the seaport's city");
   const railEnds = new Set(world.simulation.map.segments.filter((s) => s.id.startsWith("inherited-rail-")).flatMap((s) => [s.fromNodeId, s.toNodeId]));
   if (cluster.towns.some((t) => railEnds.has(t))) brings.push("the old railway's far end");
@@ -191,6 +194,8 @@ export function remitRefusal(world: GameWorld, spec: ActionSpec): string | null 
       return world.steel?.worksId ? placesOutsideRemit(world, world.steel.worksId) : null;
     case "restorePower":
       return world.power ? placesOutsideRemit(world, world.power.stationId) : null;
+    case "restoreTextile":
+      return world.textile ? placesOutsideRemit(world, world.textile.millId) : null;
     case "fix": case "retire": case "restore": case "repair": {
       const chain = chainOf(world, spec.segmentId);
       return chain ? linkOutsideRemit(world, chain.a, chain.b) : null;

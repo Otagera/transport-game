@@ -1,4 +1,5 @@
 import { placePower } from "./power";
+import { placeTextile } from "./textile";
 import { startUnions } from "./union";
 import { placeBorder, placeCoastRoad } from "./border";
 import { placeStations } from "./stations";
@@ -80,6 +81,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeStations(world);
   // And coal and power (power.ts): after every other site, so they sit where they did.
   placePower(world);
+  // And the idle textile mill (textile.ts): after every other site, so they sit where they did.
+  placeTextile(world, map.region);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) {
     gameTick(world, SIM_DT);

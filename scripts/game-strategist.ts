@@ -50,6 +50,8 @@ import { checkMetro, metroLines, metroPrice, metroRiders } from "../src/engine/g
 import { crudeArriving, fuelSupply, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput } from "../src/engine/game/fuel";
 import { townGrowth } from "../src/engine/game/growth";
 import { marketFed, marketTowns } from "../src/engine/game/food";
+import { clothExported, clothServed, clothWant, cottonArriving, cottonTowns, textileOutput } from "../src/engine/game/textile";
+import { workforceShares } from "../src/engine/game/workers";
 import type { GameWorld } from "../src/engine/game/types";
 
 const SEEDS = (process.env.SEEDS ?? "0,543,2411").split(",").map(Number);
@@ -111,6 +113,9 @@ const sold = new Map<string, number>();
 /** Every move made, by kind, and the building ones made today. */
 const made = new Map<string, number>();
 let buildsToday = 0;
+// The textile mill's restore day by seed, and the seed being played (C42).
+const restoredDay = new Map<number, number>();
+let seedNow = 0;
 const pairOf = (action: ActionSpec) => ("a" in action && "b" in action ? [action.a, action.b].sort().join("~") : null);
 
 function act(world: GameWorld, day: number, action: ActionSpec, why: string): boolean {
@@ -380,6 +385,13 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
       else if (checkBond(world, "steel").ok) did(act(world, day, { kind: "bond", purpose: "steel" }, "steel short: borrow for the steel works"));
     }
   }
+  // The textile mill (textile.ts): restored from day 30, when it can be paid for or borrowed for --
+  // its shift is jobs for the towns around it, and its cloth trade for the markets.
+  const textile = world.textile;
+  if (textile && !textile.working && day >= 30 && inRemit(world, textile.millId)) {
+    if (spend(world, world.tuning.textileRestoreCost ?? 0)) { if (did(act(world, day, { kind: "restoreTextile" }, "restore the textile mill"))) restoredDay.set(seedNow, day); }
+    else if (checkBond(world, "textile").ok) { if (did(act(world, day, { kind: "bond", purpose: "textile" }, "borrow for the textile mill"))) restoredDay.set(seedNow, day); }
+  }
   // Every working site and open quarry gets a road to the network.
   for (const site of [...world.towns.values()].filter((t) => t.industry && t.industry !== "oilfield" && t.industry !== "terminal")) siteRoads(world, day, site.id, did);
 
@@ -436,6 +448,7 @@ function siteRoads(world: GameWorld, day: number, siteId: string, did: (ok: bool
 
 function play(seed: number): { seed: number; days: Day[]; world: GameWorld } {
   const world = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, OVERRIDES);
+  seedNow = seed;
   const losing = new Map<string, number>();
   const days: Day[] = [];
   let last = { ...world.budget };
@@ -585,6 +598,24 @@ for (const seed of SEEDS) {
     const o = world.goods.outcomes.get(flowKey({ from: pw.mineId, to: pw.stationId, kind: "supplies" }));
     const opened = pw.clusterHub && world.remit ? (world.remit.open.includes(pw.clusterHub) ? "open" : "closed") : "-";
     console.log(`  power: coal cluster ${opened}, station ${pw.working ? "working" : "idle"}, power ${Math.round(powerShare(world) * 100)}%; coal a day by your trains ${Math.round((o?.delivered ?? 0) * D)} t, hauliers ${Math.round((o?.trucked ?? 0) * D)} t`);
+  }
+  // C42, C43: the textile mill (brief, Cotton and the textile mill).
+  if (world.textile) {
+    const tx = world.textile;
+    const p = siteProduction(world, tx.millId);
+    const restored = restoredDay.get(seed);
+    // Its commuters against every trip set out from the towns in its reach.
+    let commutes = 0, inReach = 0;
+    for (const [key, r] of world.pairOutcomes) {
+      const [a, b] = key.split(":");
+      const all = r.player + r.poached + r.gaveUp + r.lost;
+      if (b === tx.millId) commutes += all;
+      if (a && world.basePopulation.has(a) && workforceShares(world, world.towns.get(tx.millId)!).has(a)) inReach += all;
+    }
+    const markets = marketTowns(world).filter((t) => clothWant(world, t.id) > 0);
+    const served = markets.length ? markets.reduce((sum, t) => sum + clothServed(world, t.id), 0) / markets.length : 0;
+    const cottonOpen = tx.source === "farms" && world.remit ? (world.clusters ?? []).filter((c) => c.towns.some((id) => cottonTowns(world).some((t) => t.id === id))).filter((c) => world.remit!.open.includes(c.hub)).length : null;
+    console.log(`  C42 textile (${tx.source}): ${tx.working ? `restored day ${restored ?? "?"}` : "idle"}; cotton ${Math.round(cottonArriving(world) * D)} of ${Math.round((p?.inputs[0]?.needed ?? 0) * D)} t/day, cloth ${Math.round(textileOutput(world) * D)} t/day, markets served ${Math.round(served * 100)}%, exported ${Math.round(clothExported(world) * D)} t/day; its commuters ${Math.round((commutes / Math.max(1e-9, inReach)) * 100)}% of trips in reach${cottonOpen !== null ? `; C43 cotton clusters open ${cottonOpen}` : ""}`);
   }
   console.log(`  freight (rate ${world.tuning.freightRateDefault ?? "standard"}): ${lines.length} line(s); along them your trains ${Math.round(split.yours)} t/day, hauliers ${Math.round(split.hauliers)}, spoiling ${Math.round(split.spoiled)}; trucks on the road now ${trucks}; goods income ₦${Math.round(world.budget.goods / 1000)}k all game`);
   console.log(`  metros (Revision 4, 6): ${[...world.metros].map(([id, lines]) => `${world.towns.get(id)?.name} ${lines} line(s), ${Math.round(metroRiders(world, id).riders)} riders/day`).join("; ") || "none"}; metro fares ₦${Math.round(world.budget.metro / 1000)}k all game`);

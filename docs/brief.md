@@ -1047,6 +1047,54 @@ growth starts. So a town below that line now says how many more trips a day star
 games are still to measure. One bus is a small step on a town of 240k: the list says where, not
 how much.
 
+### Cotton and the textile mill (agreed 2026-11-03)
+
+After Where next, the chains table's cotton row (More industries, more chains), with your answers:
+*"the north can have the cotton farms but the mill can be everywhere, and the south would get it at
+the border, like we do for oil ... then the south can get its oil palm and factory"*; cloth for
+*"jobs + market trade, then export: everything should be exportable, given locals have no use or
+can't get to it"*; the mill idle at home.
+
+- **An idle textile mill at home, on every map** (the Kaduna textile mills story: built, run down,
+  shut). In the home cluster near its biggest towns, with an old road; restored like the steel
+  works (`textileRestoreCost` ₦50k, or a bond). From then it wants cotton.
+- **Cotton, by region.** On a northern map (north, north-east) the farm towns of the far clusters
+  grow it -- Kano's and Zaria's belt -- so opening one is what brings cotton home: the long haul is
+  yours. Elsewhere it comes over the border crossing, a share of what the mill can use, as fuel
+  comes over to the north (gateways.ts); where there's no crossing, through the port.
+- **The biggest employer.** Working, the mill employs more than any site (`jobsTextile`, 5k): a
+  big draw of commuters, and the room to grow that jobs give the towns that reach it (workers.ts);
+  its camp at the gate as the big sites have.
+- **Cloth to the markets, the rest out.** Its cloth goes to the market towns its road reaches, split
+  by want; a market with cloth draws more trade (trips to it, as food's does). What the markets
+  don't take, or can't be reached, goes for export by the mill's way out (the port or the border,
+  whichever nets more) and is paid a tonne.
+
+**Everything is exportable** (your rule, for every chain from here): what a site makes that the
+towns can't use or can't reach goes out through a gateway for export pay, rather than sitting and
+spoiling. Cloth first; the others as each is next touched.
+
+Then the south's own chain: oil palms and a palm-oil mill.
+
+Behind `textileEnabled`: older runs replay as played; a new game starts with it on.
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C42 | The mill is worth restoring | Strategist, five maps (two northern) to day 300: restored by day 200 on most; its commuters 5% or more of the trips in its reach; cloth reaching markets or the gateway; people and money within reason of a twin without it |
+| C43 | Cotton is a reason to open a cluster | On the northern maps, the cluster with the cotton opened and cotton reaching the mill by day 300, most of it by your track or a yard's long haul |
+
+**Built 2026-11-03.** Measured, the strategist restoring it from day 30, five maps to day 300 against
+twins without it (people; net a day): 2327 (north) 923k / 872k, ₦4.5k / ₦4.9k; 2411 (north) 894k /
+901k, ₦6.2k / ₦5.9k; 543 (south) 918k / 872k, ₦9.9k / ₦7.2k; 3218 1,088k /
+1,139k, ₦10.1k / ₦11.4k (restored only on day 219); 8703 949k / 909k, ₦4.3k / ₦5.6k. Its commuters
+7-11% of the trips in its reach on all five; cotton 0-52% of what it can use, so no cloth was
+exported anywhere and the markets got 10-20%. **C42 mostly holds** (restored by day 200 on four;
+people up 4-6% where cotton came, down where it came late or not at all; money mixed). **C43
+fails:** the strategist opened both northern maps' cotton clusters but builds no line to them --
+on 2411 no cotton arrived. Next: the strategist's cotton line, then C43 again; and why its goods
+income fell to 0% on three maps with the mill (10-13% without: the restore and its bond spent
+first, not yet checked). Cotton supply is the limit everywhere: your playtest decides the numbers.
+
 ### Checks for the remit
 
 | # | Check | Passes when |

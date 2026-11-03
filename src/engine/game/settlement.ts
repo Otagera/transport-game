@@ -1,5 +1,6 @@
 import { commuteDemand } from "./workers";
 import { applyMarketTrade } from "./food";
+import { applyClothTrade } from "./textile";
 import type { Vehicle } from "../simulation/types";
 import type { GameTown, GameWorld } from "./types";
 import { emptyOutcome, gravityDemand, pairKey } from "./world";
@@ -189,6 +190,7 @@ export function refreshDemand(world: GameWorld): void {
   ];
   applyRailDemand(world); // trips a passenger line makes that weren't made before
   applyMarketTrade(world); // trips a fed market draws (food.ts)
+  applyClothTrade(world); // and a market with cloth (textile.ts)
   for (const pair of world.simulation.demand) {
     const key = pairKey(pair.from, pair.to);
     if (!world.pairOutcomes.has(key)) world.pairOutcomes.set(key, emptyOutcome());

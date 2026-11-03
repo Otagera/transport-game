@@ -15,6 +15,7 @@ import { restoreRefinery } from "./fuel";
 import { restoreWorks } from "./cement";
 import { restoreSteel } from "./steel";
 import { restorePower } from "./power";
+import { restoreTextile } from "./textile";
 import { expandSite } from "./expand";
 import { buildYard } from "./yards";
 import { buildPark } from "./parks";
@@ -49,6 +50,7 @@ export type ActionSpec =
   | { kind: "restoreWorks" }
   | { kind: "restoreSteel" }
   | { kind: "restorePower" }
+  | { kind: "restoreTextile" }
   | { kind: "expand"; siteId: string }
   | { kind: "yard"; townId: string }
   | { kind: "park"; townId: string }
@@ -177,6 +179,10 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
     case "restorePower": {
       const result = restorePower(world);
       return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };
+    }
+    case "restoreTextile": {
+      const result = restoreTextile(world);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
     }
     case "restoreSteel": {
       const result = restoreSteel(world);

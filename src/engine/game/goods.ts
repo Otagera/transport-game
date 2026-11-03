@@ -12,6 +12,7 @@ import { fuelFlows, isFuelSite, shortageAt } from "./fuel";
 import { cementFlows, isCementSite } from "./cement";
 import { isSteelSite, steelFlows } from "./steel";
 import { powerFlows } from "./power";
+import { textileFlows } from "./textile";
 import { haulShare } from "./truckers";
 import { haulCost, longHaul, relayed } from "./haulage";
 import { foodActive, foodFlows } from "./food";
@@ -94,7 +95,7 @@ export function parseRelayKey(key: string): { to: string; kind: GoodsKind; origi
 /** Goods keep or spoil as their source's do: fuel, cement, steel and milled food keep. */
 function keeps(world: GameWorld, fromId: string): boolean {
   const from = world.towns.get(fromId);
-  return isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill";
+  return isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill" || from?.industry === "textile";
 }
 
 /**
@@ -151,6 +152,8 @@ export function goodsFlows(world: GameWorld): GoodsFlow[] {
   // The steel chain (steel.ts): ore to the works, steel to the towns.
   flows.push(...steelFlows(world));
   flows.push(...powerFlows(world));
+  // Cotton and the textile mill (textile.ts): cotton in, cloth to the markets and out.
+  flows.push(...textileFlows(world));
   return flows;
 }
 

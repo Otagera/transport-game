@@ -75,6 +75,7 @@ import type { Segment } from "@engine/map/types";
 import { isDirt as isDirtRoad } from "@engine/game/congestion";
 import { agberoCutAt, parkReport } from "@engine/game/parks";
 import { cementBreak } from "@engine/game/cement";
+import { clothExported, clothWant, cottonImports, cottonTowns, payClothExports, textileBreak, textileCapacity, textileFlows, textileOutput } from "@engine/game/textile";
 import { freightFareFactor, haulierPull } from "@engine/game/freightrates";
 import { metroLines, metroRiders, runMetros } from "@engine/game/metro";
 import { indexOutcomes, townShare as shareOfTown, townShareBetweenTowns } from "@engine/game/world";
@@ -2718,6 +2719,77 @@ describe("where next (problems.ts whereNext; brief, Where next)", () => {
       expect(mid.kind).not.toBe("unserved");
       expect(mid.why).toMatch(/you carry \d+% of its trips/);
     }
+  });
+});
+
+describe("cotton and the textile mill (textile.ts; brief, Cotton and the textile mill)", () => {
+  const begin = (seed: number, overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 1, maxEmergentTowns: 0, ...overrides });
+
+  test("an idle mill at home on every map; a northern map's far farm towns grow its cotton, a southern one's comes over the border", () => {
+    const south = begin(8703);
+    expect(south.textile).toMatchObject({ working: false, source: "border" });
+    const mill = south.towns.get(south.textile!.millId)!;
+    expect(mill.industry).toBe("textile");
+    expect(inHome(south, mill)).toBe(true);
+    expect(cottonTowns(south)).toEqual([]);
+    const north = begin(2327);
+    expect(north.textile?.source).toBe("farms");
+    expect(cottonTowns(north).length).toBeGreaterThan(0);
+    expect(cottonTowns(north).every((town) => !inHome(north, town))).toBe(true);
+    // A far cluster with cotton says so when it's offered.
+    const clusters = north.clusters ?? [];
+    expect(clusters.some((c) => clusterBrings(north, c).includes("cotton (for your textile mill)"))).toBe(true);
+  });
+
+  test("idle, a caretaker's few and nothing moves; restored, its shift comes back and it wants cotton", () => {
+    const w = begin(8703);
+    const mill = w.towns.get(w.textile!.millId)!;
+    expect(siteJobs(w, mill)).toBe(w.tuning.jobsIdle);
+    expect(textileFlows(w)).toEqual([]);
+    expect(textileBreak(w)).toEqual({ kind: "idle" });
+    w.economy.funds = 1e6;
+    expect(applyAction(w, { kind: "restoreTextile" })).toEqual({ ok: true, amount: w.tuning.textileRestoreCost! });
+    expect(siteJobs(w, mill)).toBe(w.tuning.jobsTextile!);
+    expect(siteJobs(w, mill)).toBeGreaterThan(Math.max(w.tuning.jobsRefinery, w.tuning.jobsWorks, w.tuning.jobsSteelworks));
+    const cotton = textileFlows(w).filter((f) => f.to === mill.id);
+    expect(cotton).toEqual([{ from: w.border!, to: mill.id, kind: "produce", rate: cottonImports(w) }]);
+    expect(cargoName(w, w.border!, "produce", mill.id)).toBe("cotton");
+    expect(cargoName(w, mill.id, "supplies")).toBe("cloth");
+    expect(applyAction(w, { kind: "restoreTextile" }).ok).toBe(false);
+  });
+
+  test("its cloth to the markets by want, the rest out for export, paid a tonne", () => {
+    const w = begin(8703);
+    w.economy.funds = 1e6;
+    applyAction(w, { kind: "restoreTextile" });
+    const mill = w.textile!.millId;
+    // All the cotton it can use arriving: it makes all it can, more than the markets want.
+    w.goods.outcomes.set(goodsKey({ from: w.border!, to: mill, kind: "produce" }), { delivered: textileCapacity(w) * w.tuning.cottonPerCloth! * 2, spoiled: 0 });
+    w.tuning.workersEnabled = false;
+    expect(textileOutput(w)).toBeCloseTo(textileCapacity(w), 9);
+    const out = textileFlows(w).filter((f) => f.from === mill);
+    // One flow a place; every market gets all it wants, and all it makes leaves the mill.
+    expect(new Set(out.map((f) => f.to)).size).toBe(out.length);
+    const wanted = out.reduce((sum, f) => sum + clothWant(w, f.to), 0);
+    for (const f of out) expect(f.rate).toBeGreaterThanOrEqual(clothWant(w, f.to) - 1e-12);
+    expect(out.reduce((sum, f) => sum + f.rate, 0)).toBeCloseTo(textileCapacity(w), 9);
+    expect(wanted).toBeLessThan(textileCapacity(w));
+    // Paid on the export's part of what gets out, the markets' cloth not.
+    for (const f of out) w.goods.outcomes.set(goodsKey(f), { delivered: f.rate, spoiled: 0 });
+    expect(clothExported(w)).toBeCloseTo(textileCapacity(w) - wanted, 9);
+    const before = w.economy.funds;
+    const paid = payClothExports(w, 1);
+    expect(paid).toBeGreaterThan(0);
+    expect(w.economy.funds - before).toBeCloseTo(paid, 9);
+  });
+
+  test("a bond can restore it; a run file from before it has no mill", () => {
+    const w = begin(8703, { bondsEnabled: true });
+    expect(bondAmount(w, "textile")).toBe(w.tuning.textileRestoreCost!);
+    const old = { ...DEFAULT_GAME_TUNING };
+    delete old.textileEnabled;
+    const before = startRun(GAME_MAP, 8703, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, maxEmergentTowns: 0, textileEnabled: undefined });
+    expect(before.textile ?? null).toBeNull();
   });
 });
 

@@ -1749,6 +1749,31 @@ room above `cementFreeShare` (+40%) is scaled by cement served, then the room ab
   problem when short (`workersProblem`), a Jobs line on town cards (`jobsText`), the camp's
   founding message.
 
+### Cotton and the textile mill (2026-11-03; brief, Cotton and the textile mill)
+
+- **`textile.ts`** -- `placeTextile` (start.ts, after every other site): an idle mill in the home
+  cluster, the dry spot nearest its market towns' middle by size, 8+ cells from any town and within
+  16 of one on the network, with an old road (`textile-mill-road`). `world.textile` = `{ millId,
+  working, source, baseWant }`; absent with `textileEnabled` off and in older runs.
+- **Cotton's source by region**: a northern map (north, north-east) -- `cottonTowns`, the farm
+  towns outside the home cluster, each `cottonPerThousandPerDay` × its farmland while the mill
+  works; elsewhere the border crossing, else the port, `cottonImportShare` of what the mill can use
+  (the port's by `importsArriving` × `portScale`). Cotton is `produce` and spoils as produce does;
+  it and cloth haul with the long-haul tail (haulage.ts `longHaul`: far means less, never none),
+  not relayed in legs -- limestone's lesson on the cost.
+- **The mill**: idle, a caretaker's `jobsIdle`; restored (`restoreTextile`, `textileRestoreCost`,
+  a bond's purpose `textile`) it employs `jobsTextile` (5k, the most of any site) and makes
+  `min(textileMillShare × day 1's cloth want, cotton arriving / cottonPerCloth)` × staffing × power.
+- **Cloth** (`textileFlows`): split over the market towns the mill's road reaches by want
+  (`clothPerThousandPerDay`); the rest to its way out (gateways.ts `exportGateway` from the mill),
+  paid `clothExportPay` a tonne in the gateway's proportion (`payClothExports`, beside the crops'
+  in tick.ts). Where the way out is a market too (the home city on the coast) it's one flow, the
+  want and the export together, and `clothExported` takes the export's part. A market with cloth
+  draws `clothTripBoost` more trips at all it wants (`applyClothTrade`, after the food's).
+- `textileBreak`: idle, short of cotton (from where), or carry. The card (main.ts
+  `renderTextileSite`) and the sites list name the restore; a northern far cluster with cotton says
+  "cotton (for your textile mill)" when it's offered (remit.ts `clusterBrings`).
+
 ### The food chain (Revision 3, step 3)
 
 - **`food.ts`** — `placeMill` (from `start.ts`, last of the sites, so the others keep their
