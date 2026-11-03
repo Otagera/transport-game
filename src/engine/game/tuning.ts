@@ -179,6 +179,10 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // straight there). Off by default: replaying that run, it cost 6-16% of trips and ~30% more trucks
   // throughout, and paid back only late, once the near quarries worked out (+27k people by day 331).
   relayLimestone: false,
+  // ...but past the reach it doesn't stop dead (map 2327, day 183: a far quarry's limestone sat with
+  // roads all the way): hauliers take a share falling off slowly, a quarter at the reach, a tenth
+  // at two and a half times it, never none. One truck a load, straight there: no relays.
+  longHaulTail: 0.25,
   // Imported steel, on a map without a works, from the towns as they are (steel.ts): 70% of
   // what they want, 91% and then all of it as the port grows (portImportScale).
   steelImportsFollowTowns: true,
@@ -564,6 +568,20 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   steelFreeShare: 0.8,
   jobsSteelworks: 3,
   jobsMine: 0.5,
+  // Coal and power (power.ts; brief, A chain at each opening, agreed 2026-11-02): a coal mine in a
+  // far cluster, the idle station at home, and every processing site within 60 cells of it makes up
+  // to 30% more from the same input, by the share of its 120 t of coal a day that arrives. Restoring
+  // it sits between the cement works (45,000) and Ajaokuta (80,000). First guesses, to measure (C37, C38).
+  // Off (2026-11-03) until it passes C37 and C38: measured on three maps to day 300, power wasn't
+  // felt (people within chance) and no line reached the coal (139-244 road cells: ₦600k+ of track),
+  // so hauliers carried half of it from a yard, or none. The mine's place is being reworked.
+  coalEnabled: false,
+  powerCoalPerDay: 120,
+  powerReachCells: 60,
+  powerBoost: 0.3,
+  powerRestoreCost: 60000,
+  jobsPowerStation: 1,
+  jobsCoalMine: 0.5,
   freightRateCheap: 0.6,
   freightRateDear: 1.6,
   freightHaulierPull: 0.5,
@@ -821,6 +839,17 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   retireGoneDays: 60,
   railOnRoadShare: 0.5,
   trackSlots: 4,
+  // ...and by passes a day, not trains (2026-11-02, map 2327's playtest: a train bound far
+  // filled a short shared stretch as if it lived there). 30 is the old 4 trains on a 40-cell
+  // line, give or take: 15 on a 120-cell one, 1 on a 10-cell shuttle.
+  trackPassesPerDay: 30,
+  // A line's trains lengthened, a car at a time: each car a train's seats or a freight
+  // train's tonnes, for less than a train and a third of its running cost, and no more room.
+  trainMaxCars: 4,
+  carriageCost: 6000,
+  carriageOperatingCostPerSecond: 2,
+  wagonCost: 1000,
+  wagonOperatingCostPerSecond: 2,
   railInducedDemand: 0.3,
   stationCapShare: 0.3,
 };

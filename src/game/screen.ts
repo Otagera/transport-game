@@ -22,7 +22,7 @@ import { patchHtml } from "./patch";
 import { steadyFuel, steadySite } from "./steady";
 import { cementBreak, cementServed } from "@engine/game/cement";
 import { steelBreak, steelDemand, steelImports, steelServed } from "@engine/game/steel";
-import { goodsOnTheWay, haulBreak } from "@engine/game/haulage";
+import { goodsOnTheWay, haulBreak, longHaul } from "@engine/game/haulage";
 import { stationOf, stationOpen } from "@engine/game/stations";
 import { handoverNote, termLetter, type Letter } from "./correspondent";
 import { thenAndNowSvg } from "./thenandnow";
@@ -211,7 +211,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const carried = Math.min(1, (f.yours + f.hauliers) / Math.max(1e-6, f.perDay));
       const road = roadPath(world, id, f.to);
       const rail = railPath(world, id, f.to);
-      const state: "moving" | "waiting" | "far" | "noroad" = carried >= 0.3 ? "moving" : !road && !rail ? "noroad" : (road?.distance ?? Infinity) > reach && !rail ? "far" : "waiting";
+      const past = (road?.distance ?? Infinity) > reach && !rail;
+      const state: "moving" | "waiting" | "far" | "long" | "noroad" = carried >= 0.3 ? "moving" : !road && !rail ? "noroad" : past && longHaul(world, id, f.to, "supplies") ? "long" : past ? "far" : "waiting";
       return { to: nameOf(f.to), perDay: f.perDay, carried, state };
     }).sort((a, b) => b.perDay - a.perDay);
     const source = inn[0] ? nameOf(inn[0].from) : "";
@@ -220,15 +221,17 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const far = outputs.filter((o) => o.state === "far");
     const noRoad = outputs.filter((o) => o.state === "noroad");
     const waiting = outputs.filter((o) => o.state === "waiting");
+    const long = outputs.filter((o) => o.state === "long");
     const stuck = p.limit === "idle" ? "Idle: restore it, and it starts."
       : p.limit === "input" && inputs[0] ? `Short of ${inputs[0].name}: ${pct(inputs[0].share)} of what it can use arrives${source ? ` from ${source}` : ""}.`
       : p.limit === "workers" ? `Short-staffed: ${pct(p.staffing ?? 0)} of a shift gets here. A bus for its workers.`
       : far.length ? `${names(far)}: past the ${fuelSite ? "tankers'" : "hauliers'"} reach (${Math.round(reach)} cells by road). Only a freight train gets it there.`
+      : long.length ? `${names(long)}: a long haul by road, past the hauliers' reach (${Math.round(reach)} cells): they take a little of it. A freight train takes the rest.`
       : noRoad.length ? `No road to ${names(noRoad)}.`
       : waiting.length ? `${names(waiting)}: its ${p.product} waits for hauliers.` : "";
     const data: FigureData = {
       product: p.product, running: p.capacity > 0 ? Math.min(1, p.made / p.capacity) : 0, madePerDay: p.made * D,
-      staffing: p.staffing, limit: p.limit, inputs, outputs, stuck, kind: fuelSite ? "refinery" : "works",
+      staffing: p.staffing, limit: p.limit, inputs, outputs: outputs.map((o) => ({ ...o, state: o.state === "long" ? "waiting" as const : o.state })), stuck, kind: fuelSite ? "refinery" : "works",
     };
     return siteFigure(data, performance.now());
   }
@@ -494,6 +497,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   function siteProblem(s: Site): Problem {
     if (world.towns.get(s.id)?.industry === "steelworks" && world.steel && !world.steel.working) {
       return { text: "Idle: built, never run. Restore it and its mine starts digging", button: `<button data-restore-steel="1">Restore it · ${nairaK(world.tuning.steelRestoreCost)}</button>` };
+    }
+    if (world.towns.get(s.id)?.industry === "powerstation" && world.power && !world.power.working) {
+      return { text: "Idle: shut down and left. Restore it and the works in its reach make more", button: `<button data-restore-power="1">Restore it · ${nairaK(world.tuning.powerRestoreCost ?? 0)}</button>` };
     }
     if (!(s.capacity > 0 && s.made < 0.6 * s.capacity)) return null;
     const button = s.limit === "workers" ? toolButton("bus", "A bus for its workers <kbd>B</kbd>") : s.limit === "input" ? toolButton("yard", "A yard where it comes from <kbd>Y</kbd>") : `<span class="muted">See More</span>`;

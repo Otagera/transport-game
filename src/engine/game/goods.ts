@@ -6,13 +6,14 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import type { GameRoute, GameWorld } from "./types";
 import { SWITCHED_OFF } from "./tuning";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, roadPath, routeKey, type ActionResult } from "./world";
-import { lineSlots, railPath } from "./rail";
+import { carPrice, carsOn, lineFullReason, lineSlots, railPath } from "./rail";
 import { industryFlows } from "./industries";
 import { fuelFlows, isFuelSite, shortageAt } from "./fuel";
 import { cementFlows, isCementSite } from "./cement";
 import { isSteelSite, steelFlows } from "./steel";
+import { powerFlows } from "./power";
 import { haulShare } from "./truckers";
-import { haulCost, relayed } from "./haulage";
+import { haulCost, longHaul, relayed } from "./haulage";
 import { foodActive, foodFlows } from "./food";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
@@ -149,6 +150,7 @@ export function goodsFlows(world: GameWorld): GoodsFlow[] {
   flows.push(...foodFlows(world));
   // The steel chain (steel.ts): ore to the works, steel to the towns.
   flows.push(...steelFlows(world));
+  flows.push(...powerFlows(world));
   return flows;
 }
 
@@ -343,7 +345,7 @@ function goodsPath(world: GameWorld, a: string, b: string, onTrack: boolean) {
 
 /** Running cost a day of one vehicle on a goods route. */
 export function goodsVehicleCostPerDay(world: GameWorld, routeId: string): number {
-  const perSecond = isFreightRoute(routeId) ? world.tuning.freightOperatingCostPerSecond : world.tuning.lorryOperatingCostPerSecond;
+  const perSecond = isFreightRoute(routeId) ? world.tuning.freightOperatingCostPerSecond + (carsOn(world, routeId) - 1) * carPrice(world, routeId).perSecond : world.tuning.lorryOperatingCostPerSecond;
   return perSecond * SECONDS_PER_GAME_DAY;
 }
 
@@ -388,9 +390,10 @@ export function checkFreight(world: GameWorld, a: string, b: string): ActionResu
   if (!world.tuning.goodsEnabled || !world.tuning.railEnabled) return { ok: false, reason: SWITCHED_OFF };
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!railPath(world, a, b)) return { ok: false, reason: "no working track between them" };
-  const line = lineSlots(world, a, b);
-  if (line.used >= line.slots) return { ok: false, reason: `the line is full: ${line.used} of ${line.slots} trains` };
-  if (!canAfford(world.economy, world.tuning.freightPurchaseCost)) return { ok: false, reason: "can't afford a freight train" };
+  const line = lineSlots(world, a, b, true);
+  if (line.full) return { ok: false, reason: lineFullReason(line) };
+  const cars = carsOn(world, freightRouteId(a, b));
+  if (!canAfford(world.economy, world.tuning.freightPurchaseCost + (cars - 1) * carPrice(world, freightRouteId(a, b)).price)) return { ok: false, reason: "can't afford a freight train" };
   return { ok: true };
 }
 
@@ -407,14 +410,16 @@ export function addFreightTrain(world: GameWorld, a: string, b: string): ActionR
   }
   const { tuning } = world;
   const id = `freight-${world.nextId++}`;
-  const vehicle = createVehicle(id, [route.a, route.b], world.railRouting, tuning.freightSpeed, tuning.freightCapacity, undefined, "goods", 0);
+  const cars = route.cars ?? 1;
+  const car = carPrice(world, routeId);
+  const vehicle = createVehicle(id, [route.a, route.b], world.railRouting, tuning.freightSpeed, tuning.freightCapacity * cars, undefined, "goods", 0);
   world.railVehicles.add(id);
   const others = route.vehicleIds
     .map((otherId) => world.simulation.vehicles.find((candidate) => candidate.id === otherId))
     .filter((candidate): candidate is Vehicle => candidate !== undefined);
   placeAtCycleFraction(world, vehicle, largestGapMidpoint(others.map((other) => cycleFraction(world, other))));
   world.simulation.vehicles.push(vehicle);
-  registerPurchase(world.economy, id, tuning.freightPurchaseCost, tuning.freightOperatingCostPerSecond, FREIGHT_DEF_ID);
+  registerPurchase(world.economy, id, tuning.freightPurchaseCost + (cars - 1) * car.price, tuning.freightOperatingCostPerSecond + (cars - 1) * car.perSecond, FREIGHT_DEF_ID);
   route.vehicleIds.push(id);
   return { ok: true };
 }
@@ -506,7 +511,7 @@ export function lorryEstimate(world: GameWorld, a: string, b: string): { tonnesP
     const site = world.towns.get(flow.from)?.industry;
     const outcome = world.goods.outcomes.get(flowKey(flow));
     const moved = (outcome?.delivered ?? 0) + (outcome?.trucked ?? 0) > 0;
-    const share = !tuning.truckersEnabled || site === "oilfield" || site === "terminal" ? 0 : haulShare(world, cells, reach);
+    const share = !tuning.truckersEnabled || site === "oilfield" || site === "terminal" ? 0 : haulShare(world, cells, reach, longHaul(world, flow.from, flow.to, flow.kind) ? (tuning.longHaulTail ?? 0) : 0);
     const trucked = (moved ? (outcome?.trucked ?? 0) : flow.rate * share) * SECONDS_PER_GAME_DAY;
     const yours = (outcome?.delivered ?? 0) * SECONDS_PER_GAME_DAY;
     const free = Math.max(0, flow.rate * SECONDS_PER_GAME_DAY - trucked - yours);

@@ -277,7 +277,8 @@ export const SITE_YARD: Record<string, { w: number; d: number; gate: number }> =
   refinery: { w: 54, d: 40, gate: 4 }, newrefinery: { w: 54, d: 40, gate: 4 },
   terminal: { w: 50, d: 38, gate: 6 }, depot: { w: 50, d: 38, gate: 6 },
   oilfield: { w: 46, d: 32, gate: 10 },
-  quarry: { w: 54, d: 42, gate: 14 }, ironmine: { w: 54, d: 42, gate: 14 },
+  quarry: { w: 54, d: 42, gate: 14 }, ironmine: { w: 54, d: 42, gate: 14 }, coalmine: { w: 54, d: 42, gate: 14 },
+  powerstation: { w: 58, d: 46, gate: 8 },
   works: { w: 56, d: 48, gate: -2 }, assembly: { w: 56, d: 42, gate: 8 },
   steelworks: { w: 56, d: 42, gate: 0 }, steelport: { w: 54, d: 40, gate: 6 },
   mill: { w: 50, d: 40, gate: 6 }, flourmill: { w: 50, d: 40, gate: 6 }, silo: { w: 50, d: 40, gate: 6 },
@@ -365,12 +366,12 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     for (let i = 0; i < 3; i += 1) kit.box(7, 3, 2.4, i % 2 ? paint("--paint-earth-53") : paint("--paint-blue-11"), -14 + i * 9, 10);
     return;
   }
-  if (kind === "quarry" || kind === "ironmine") {
+  if (kind === "quarry" || kind === "ironmine" || kind === "coalmine") {
     // The pit: its floor, benches stepping up round it, spoil on the rim; the crusher, its conveyor
     // up to the stockpile (SITE_STOCK grows it), a dump truck on the haul road. The excavator in
     // the pit swings as it digs (SITE_LIFE).
-    const rock = kind === "quarry" ? paint("--paint-earth-12") : paint("--paint-red-5");
-    const face = kind === "quarry" ? paint("--paint-earth-41") : paint("--paint-earth-51");
+    const rock = kind === "quarry" ? paint("--paint-earth-12") : kind === "coalmine" ? paint("--paint-grey-24") : paint("--paint-red-5");
+    const face = kind === "quarry" ? paint("--paint-earth-41") : kind === "coalmine" ? paint("--paint-grey-21") : paint("--paint-earth-51");
     // In 6 m pieces, so a road across it takes only what's on it.
     for (let x = -18; x < 6; x += 6) for (let z = -9; z < 9; z += 6) kit.box(6, 0.12, 6, kind === "quarry" ? paint("--paint-earth-26") : paint("--paint-earth-60"), x + 3, z + 3);
     for (const [step, h] of [[0, 2.2], [1, 4.2]] as const) {
@@ -455,6 +456,29 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     kit.cone(5, 4, paint("--paint-grey-22"), -23, -4, 0, 7, 0.3);
     return;
   }
+  if (kind === "powerstation") {
+    // A coal-fired power station (Oji River): two cooling towers, waisted, the boiler house and its
+    // tall chimney (SITE_LIFE), the coal heap and its conveyor up to the bunkers, the switchyard.
+    yardOf(kind, kit);
+    for (const [x, z] of [[-16, -9], [-16, 9]] as const) {
+      if (!kit.fits(x, z, 7)) continue;
+      kit.add(new THREE.CylinderGeometry(4.6, 6.6, 9, 20), paint("--paint-grey-2"), { x, y: 4.5, z });
+      kit.add(new THREE.CylinderGeometry(5.2, 4.6, 9, 20), paint("--paint-grey-2"), { x, y: 13.5, z });
+    }
+    if (kit.fits(6, -4, 7)) {
+      kit.box(14, 14, 12, paint("--paint-earth-14"), 6, -4);
+      kit.box(14.4, 0.6, 12.4, STEEL, 6, -4, 14);
+      kit.cylinder(1.5, 30, paint("--paint-grey-5"), 16, -10, 0, 10);
+    }
+    for (let i = 0; i < 4; i += 1) kit.cone(3.5 + rand(), 2.5 + rand(), paint("--paint-grey-24"), -2 + i * 6, 15, 0, 7, rand());
+    conveyor(kit, 6, 13, 2, 6, 2, 12);
+    for (let i = 0; i < 3; i += 1) for (let k = 0; k < 2; k += 1) {
+      if (!kit.fits(22, 4 + i * 4, 1.2)) continue;
+      kit.box(1.6, 2.4, 1.6, paint("--paint-grey-16"), 21 + k * 3.5, 4 + i * 4);
+      kit.cylinder(0.1, 6, STEEL, 21 + k * 3.5, 4 + i * 4, 0, 4);
+    }
+    return;
+  }
   if (kind === "steelport") {
     // Imported steel's terminal: a yard of coils and beams (SITE_STOCK), an overhead crane over it, the shed.
     yardOf(kind, kit);
@@ -519,6 +543,7 @@ export const SITE_STOCK: Record<string, { x: number; z: number; n: number; item:
   return {
     quarry: { x: 22, z: -10, n: 14, item: heap(paint("--paint-earth-12")) },
     ironmine: { x: 22, z: -10, n: 14, item: heap(paint("--paint-red-5")) },
+    coalmine: { x: 22, z: -10, n: 14, item: heap(paint("--paint-grey-24")) },
     works: { x: -26, z: 12, n: 24, item: sacks(paint("--paint-grey-1")) },
     silo: { x: -20, z: -14, n: 24, item: sacks(paint("--paint-grey-1")) },
     mill: { x: -22, z: 4, n: 24, item: sacks(paint("--paint-earth-5")) },
@@ -538,6 +563,7 @@ export const SITE_BAY: Record<string, { x: number; z: number; ry: number; vehicl
   oilfield: { x: 10, z: 16, ry: 0, vehicle: "tanker" },
   quarry: { x: 19, z: 14.5, ry: 0, vehicle: "truck" },
   ironmine: { x: 19, z: 14.5, ry: 0, vehicle: "truck" },
+  coalmine: { x: 19, z: 14.5, ry: 0, vehicle: "truck" },
   works: { x: 18, z: 17.5, ry: 0, vehicle: "truck" },
   silo: { x: 6, z: 2, ry: 0, vehicle: "truck" },
   mill: { x: 6, z: 2, ry: 0, vehicle: "truck" },
@@ -579,6 +605,8 @@ export const SITE_LIFE: Record<string, Array<{ x: number; z: number; y: number; 
   silo: [{ x: -1, z: 12, y: 14.5, what: "dust" }],
   quarry: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 14, z: 4, y: 6, what: "dust" }, { x: -8, z: -2, y: 0.2, what: "digger" }],
   ironmine: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 14, z: 4, y: 6, what: "dust" }, { x: -8, z: -2, y: 0.2, what: "digger" }],
+  coalmine: [{ x: -10, z: 0, y: 2, what: "dust" }, { x: 14, z: 4, y: 6, what: "dust" }, { x: -8, z: -2, y: 0.2, what: "digger" }],
+  powerstation: [{ x: -16, z: -9, y: 18.5, what: "steam" }, { x: -16, z: 9, y: 18.5, what: "steam" }, { x: 16, z: -10, y: 30.5, what: "smoke" }],
 };
 
 /** A cargo ship, facing +x, its waterline at y = 0: hull, containers on deck, the bridge aft, its funnel. */

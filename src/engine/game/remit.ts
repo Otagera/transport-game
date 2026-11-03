@@ -162,6 +162,7 @@ export function openCluster(world: GameWorld, hub: string): { ok: boolean; reaso
 export function clusterBrings(world: GameWorld, cluster: ClusterDef): string[] {
   const brings: string[] = [`${cluster.towns.length} towns`];
   if (world.tuning.clusterOffersEnabled) brings.push(cluster.offer === "limestone" ? "a limestone field" : "a farm belt");
+  if (world.power && world.tuning.coalEnabled && world.power.clusterHub === cluster.hub) brings.push("a coal mine (power for your works)");
   if (cluster.towns.includes(world.seaport ?? "")) brings.push("the seaport's city");
   const railEnds = new Set(world.simulation.map.segments.filter((s) => s.id.startsWith("inherited-rail-")).flatMap((s) => [s.fromNodeId, s.toNodeId]));
   if (cluster.towns.some((t) => railEnds.has(t))) brings.push("the old railway's far end");
@@ -188,6 +189,8 @@ export function remitRefusal(world: GameWorld, spec: ActionSpec): string | null 
       return world.cement ? placesOutsideRemit(world, world.cement.worksId) : null;
     case "restoreSteel":
       return world.steel?.worksId ? placesOutsideRemit(world, world.steel.worksId) : null;
+    case "restorePower":
+      return world.power ? placesOutsideRemit(world, world.power.stationId) : null;
     case "fix": case "retire": case "restore": case "repair": {
       const chain = chainOf(world, spec.segmentId);
       return chain ? linkOutsideRemit(world, chain.a, chain.b) : null;

@@ -55,6 +55,11 @@ export function siteJobs(world: GameWorld, town: GameTown): number {
       return world.steel?.working ? t.jobsMine : idle;
     case "steelport":
       return t.jobsSilo;
+    // Coal and power (power.ts): as the steel works and its mine, a caretaker's few while idle.
+    case "powerstation":
+      return world.power?.working ? t.jobsPowerStation ?? 0 : idle;
+    case "coalmine":
+      return world.power?.working ? t.jobsCoalMine ?? 0 : idle;
     case "mill":
       return t.jobsMill * siteScale(world, town.id);
     case "flourmill":

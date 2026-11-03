@@ -1,3 +1,4 @@
+import { placePower } from "./power";
 import { startUnions } from "./union";
 import { placeBorder, placeCoastRoad } from "./border";
 import { placeStations } from "./stations";
@@ -77,6 +78,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeAssemblyPlant(world);
   // And the old line's stations (stations.ts): after every other site, so they sit where they did.
   placeStations(world);
+  // And coal and power (power.ts): after every other site, so they sit where they did.
+  placePower(world);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) {
     gameTick(world, SIM_DT);

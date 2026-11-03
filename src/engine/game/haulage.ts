@@ -107,6 +107,19 @@ export function relayed(world: GameWorld, origin: string, kind: GoodsKind): bool
   return isCementSite(site) || isSteelSite(site) || isFuelSite(site) || (kind === "supplies" && origin === borderFuelSite(world));
 }
 
+/**
+ * A quarry's limestone to the works, straight there (brief, Goods get there over connected roads,
+ * amended 2026-11-02): far means less, not none -- hauliers' share tails off past their reach
+ * (truckers.ts haulShare, `longHaulTail`) rather than stopping dead. Not relayed (relayLimestone).
+ */
+export function longHaul(world: GameWorld, origin: string, to: string, kind: GoodsKind): boolean {
+  if (!world.tuning.longHaulTail || kind !== "supplies") return false;
+  const from = world.towns.get(origin)?.industry;
+  // ...and the coal mine's coal to the power station (power.ts), as far and as straight.
+  if (from === "coalmine") return world.towns.get(to)?.industry === "powerstation";
+  return from === "quarry" && isCementSite(world.towns.get(to)) && !relayed(world, origin, kind);
+}
+
 /** How far hauliers go from here on one leg, before your freight line's pull: a yard's reach, a tanker's from a fuel site, else a short haul. */
 export function legReach(world: GameWorld, at: string, kind: GoodsKind): number {
   const t = world.tuning;

@@ -21,6 +21,7 @@ import type { CorridorState } from "./corridors";
 import type { FuelState } from "./fuel";
 import type { CementState } from "./cement";
 import type { SteelState } from "./steel";
+import type { PowerState } from "./power";
 import type { SitesState } from "./workers";
 import type { Bond } from "./bonds";
 import type { FoodState } from "./food";
@@ -50,7 +51,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly" | "coalmine" | "powerstation";
 
 export interface GameRoadDef {
   a: string;
@@ -147,6 +148,8 @@ export interface GameRoute {
   a: string;
   b: string;
   vehicleIds: string[];
+  /** A rail line's cars a train (rail.ts addCar): absent, one. */
+  cars?: number;
   /** When it opened (economy seconds): a route younger than a day reads its fares by its own age. */
   openedAtSeconds: number;
   /** Rolling riders boarding this route's buses, per second. */
@@ -327,6 +330,8 @@ export interface GameTuning {
   goodsRelay?: boolean;
   /** A quarry's limestone goes in legs too (haulage.ts relayed), as the cement it makes does. Absent in older runs: off. */
   relayLimestone?: boolean;
+  /** A quarry's limestone to the works past hauliers' reach: their share tails off as this over the reach's share, never to none (haulage.ts longHaul). Absent: none past it. */
+  longHaulTail?: number;
   /** On a map without a steel works, the terminal lands `steelImportShareNow` of what the towns want now, not of day 1's (steel.ts steelImports). Absent in older runs: day 1's. */
   steelImportsFollowTowns?: boolean;
   steelImportShareNow?: number;
@@ -611,6 +616,18 @@ export interface GameTuning {
    * the mine and the terminal, thousands. Run files without it replay without steel.
    */
   steelEnabled: boolean;
+  /**
+   * Coal and power (power.ts; brief, A chain at each opening): on; coal the station burns a day,
+   * tonnes; its reach, cells; the most it lifts a site's output by; restoring it; jobs at the
+   * station and the mine, thousands. Absent in older runs: no coal, no power.
+   */
+  coalEnabled?: boolean;
+  powerCoalPerDay?: number;
+  powerReachCells?: number;
+  powerBoost?: number;
+  powerRestoreCost?: number;
+  jobsPowerStation?: number;
+  jobsCoalMine?: number;
   steelPerThousandPerDay: number;
   steelWorksShare: number;
   steelImportShare: number;
@@ -806,6 +823,19 @@ export interface GameTuning {
   railOnRoadShare: number;
   /** Trains a piece of track carries, passenger and freight together (rail.ts lineSlots). */
   trackSlots: number;
+  /**
+   * Passes a day a piece of track takes, passenger and freight together: a train adds twice
+   * its round trips a day to each piece of its line (rail.ts lineSlots). Absent (older runs):
+   * `trackSlots` trains a piece.
+   */
+  trackPassesPerDay?: number;
+  /** Cars a train can run with, its engine's first among them (rail.ts addCar). Absent: one. */
+  trainMaxCars?: number;
+  /** A passenger carriage, and a freight wagon: its price, and its running cost a second. */
+  carriageCost?: number;
+  carriageOperatingCostPerSecond?: number;
+  wagonCost?: number;
+  wagonOperatingCostPerSecond?: number;
   /** Trips between two stops of the same passenger line rise by this share (rail.ts applyRailDemand). */
   railInducedDemand: number;
   /** A town a passenger train stops at can grow this share of townGrowthCap more (growth.ts). */
@@ -862,6 +892,8 @@ export interface GameWorld {
   cement: CementState | null;
   /** The steel chain (steel.ts); null until placed, with it off, or in a run file from before it. */
   steel: SteelState | null;
+  /** Coal and power (power.ts): the mine, the station; absent on a map or run without them. */
+  power?: PowerState | null;
   /** Each site's staffed days and the camp at its gate (workers.ts). */
   sites: SitesState;
   /** Bonds issued, paid off or not (bonds.ts). */

@@ -70,8 +70,8 @@ export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }
   ranch: { family: "food", name: "Cattle market (herds)", next: true },
   abattoir: { family: "food", name: "Abattoir", next: true },
   cocoa: { family: "food", name: "Cocoa farms", next: true },
-  coalmine: { family: "energy", name: "Coal mine", next: true },
-  powerstation: { family: "energy", name: "Power station", next: true },
+  coalmine: { family: "energy", name: "Coal mine" },
+  powerstation: { family: "energy", name: "Power station (Oji River)" },
   warehouse: { family: "trade", name: "Cargo depot (imports)", next: true },
 };
 

@@ -56,7 +56,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   },
   {
     id: "supplies", label: "Sites making goods", col: 1, row: 4, feeds: ["hauliers"], unit: "t/day",
-    keys: [/^cement/, /^steel/, /^fuel/, /^refinery/, /^crude/, /^works/, /^mine/, /^ore/, /^limestone/, /^quarry/, /^newRefinery/, /^flour/, /^food/, /^mill/, /^wheat/, /^staple/, /^farm/, /^field/, /^industr/, /^expand/, /^assembly/, /^jobs/, /^staff/, /^workers/, /^peoplePerJob$/, /^stone/, /^ridgeField/, /^supplies/, /^tanker/],
+    keys: [/^cement/, /^steel/, /^coal/, /^power/, /^fuel/, /^refinery/, /^crude/, /^works/, /^mine/, /^ore/, /^limestone/, /^quarry/, /^newRefinery/, /^flour/, /^food/, /^mill/, /^wheat/, /^staple/, /^farm/, /^field/, /^industr/, /^expand/, /^assembly/, /^jobs/, /^staff/, /^workers/, /^peoplePerJob$/, /^stone/, /^ridgeField/, /^supplies/, /^tanker/],
     measure: safe((w) => goodsFlows(w).reduce((t, f) => t + f.rate * D, 0)),
   },
   {
@@ -66,7 +66,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   // Who carries
   {
     id: "service", label: "Your vehicles", col: 2, row: 0, feeds: ["noSeat", "growth", "money"], unit: "/day",
-    keys: [/^bus/, /^minibus/, /^brt/, /^train/, /^metro/, /^fare/, /^halt/, /^station/, /^lane/, /^oldLine/, /^track/, /^rail/, /^growthCapLaneShare$/],
+    keys: [/^bus/, /^minibus/, /^brt/, /^train/, /^metro/, /^fare/, /^halt/, /^station/, /^lane/, /^oldLine/, /^track/, /^rail/, /^carriage/, /^growthCapLaneShare$/],
     measure: safe((w) => headline(w).yourRidersPerDay),
   },
   {
@@ -76,7 +76,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   },
   {
     id: "hauliers", label: "Hauliers and yards", col: 2, row: 3, feeds: ["cement", "fuel", "steel", "food", "money"], unit: "t/day",
-    keys: [/^trucker/, /^truck/, /^yard/, /^goods/, /^partLoad/, /^lorry/, /^noPlayerLorries$/, /^freight/, /^relayLimestone$/, /^loadingLevy/, /^servedTau/, /^importsOver/, /^seaport/, /^port/, /^border/, /^export/, /^exports/],
+    keys: [/^trucker/, /^truck/, /^yard/, /^goods/, /^partLoad/, /^lorry/, /^noPlayerLorries$/, /^freight/, /^relayLimestone$/, /^longHaulTail$/, /^wagon/, /^loadingLevy/, /^servedTau/, /^importsOver/, /^seaport/, /^port/, /^border/, /^export/, /^exports/],
     measure: safe((w) => [...w.goods.outcomes.values()].reduce((t, o) => t + (o.delivered + (o.trucked ?? 0)) * D, 0)),
   },
   // What's served
@@ -118,8 +118,10 @@ export function moveNode(action: ActionSpec): string | null {
       return "hauliers";
     case "park": case "settle": case "enforce": case "union":
       return "informal";
-    case "restoreWorks": case "restoreRefinery": case "restoreSteel": case "expand":
+    case "restoreWorks": case "restoreRefinery": case "restoreSteel": case "restorePower": case "expand":
       return "supplies";
+    case "car":
+      return action.routeId.startsWith("freight:") ? "hauliers" : "service";
     case "bond": case "sell": case "project":
       return "budget";
     case "console":

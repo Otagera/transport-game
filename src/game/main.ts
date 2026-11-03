@@ -1,5 +1,6 @@
+import { coalArriving, coalOutput, inPowerReach, powerActive, powerLift, powerShare, poweredSites } from "@engine/game/power";
 import { aWeekOnText, termVerdictText } from "@engine/game/term";
-import { Accumulator, SIM_DT } from "@engine/loop";
+import { SIM_DT } from "@engine/loop";
 import { gameTick } from "@engine/game/tick";
 import {
   checkBus,
@@ -40,7 +41,7 @@ import { planRoad, segmentPolyline, type Alignment, type RoadPlan } from "@engin
 import { corridorWear, roughCostPerDay, upkeepPerDay, wearSpeed } from "@engine/game/wear";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, type Receipt, type ReceiptSpec } from "@engine/game/receipts";
 import { growthTrend, roadFull, townGrowth } from "@engine/game/growth";
-import { checkHalt, checkTrack, checkTrain, derelictRun, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/game/rail";
+import { carPrice, carsOn, checkCar, checkHalt, checkTrack, checkTrain, derelictRun, haltCost, haltSite, isRailRoute, planRail, railPath, railRouteId, restoreCost, trackAction, lineSlots, onRoadCost, trackCost } from "@engine/game/rail";
 import { checkFreight, findLorryRoute, freightRouteId, isFreightRoute, lorryRouteId } from "@engine/game/goods";
 import { checkLorry, diagnoseLorryRoute, flowKey, goodsAlong, goodsFlows, isLorryRoute, lorryEstimate, lorrySummaries, townGoods, type LorryDiagnosis } from "@engine/game/goods";
 import type { RouteDiagnosis } from "@engine/game/world";
@@ -60,7 +61,7 @@ import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@e
 import { remittanceExpected } from "@engine/game/budget";
 import { carryOver, sweepDue } from "@engine/game/sweep";
 import { checkYard, hasYard, yardGain } from "@engine/game/yards";
-import { yardWouldBring } from "@engine/game/haulage";
+import { longHaul, yardWouldBring } from "@engine/game/haulage";
 import { assemblyGeneration, assemblyShare, vehiclePrice } from "@engine/game/assembly";
 import { siteProduction } from "@engine/game/production";
 import { stationOf, stationOpen } from "@engine/game/stations";
@@ -1502,7 +1503,7 @@ function ghost(): Ghost | null {
     const path = railPath(world, selectedTown, to)?.nodeIds;
     const along = path ? `${Math.round(demandAlong(world, selectedTown, to, path) * SECONDS_PER_GAME_DAY)} riders/day want trips along it` : "";
     const line = lineSlots(world, selectedTown, to);
-    const slots = path ? ` · line ${line.used + 1} of ${line.slots} trains` : "";
+    const slots = path ? ` · ${line.text}` : "";
     const label = `Train ${naira(world.tuning.trainPurchaseCost)} · ${along}${slots}`;
     const ghost = { from: selectedTown, to: end, ok: check.ok, path: shownPath(check, path), rail: true, label: refusedOr(check, label, `Train ${naira(world.tuning.trainPurchaseCost)}`) };
     return withForecast(ghost, { kind: "train", a: selectedTown, b: to }, { label: "a train", towns: [selectedTown, to] });
@@ -1510,8 +1511,8 @@ function ghost(): Ghost | null {
   if (tool === "freight") {
     const check = checkFreight(world, selectedTown, to);
     const goods = goodsAlong(world, selectedTown, to, true);
-    const line = lineSlots(world, selectedTown, to);
-    const label = `Freight train ${naira(world.tuning.freightPurchaseCost)} · goods along the track: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back · line ${line.used + 1} of ${line.slots} trains`;
+    const line = lineSlots(world, selectedTown, to, true);
+    const label = `Freight train ${naira(world.tuning.freightPurchaseCost)} · goods along the track: ${Math.round(goods.outbound)} t/day out, ${Math.round(goods.inbound)} back${railPath(world, selectedTown, to) ? ` · ${line.text}` : ""}`;
     const path = shownPath(check, railPath(world, selectedTown, to)?.nodeIds);
     const ghost = { from: selectedTown, to: end, ok: check.ok, path, rail: true, label: refusedOr(check, label, `Freight train ${naira(world.tuning.freightPurchaseCost)}`) };
     return withForecast(ghost, { kind: "freight", a: selectedTown, b: to }, { label: "a freight train", towns: [selectedTown, to] });
@@ -1637,7 +1638,7 @@ function renderToolbar(): void {
         renderToolbar();
       }),
       ...[1, 2, 4].map((s, i) =>
-        button(`${s}×`, String(i + 1), !paused && speed === s, () => {
+        button(!paused && speed === s && shownRunningAt ? `${s}× (${shownRunningAt}×)` : `${s}×`, String(i + 1), !paused && speed === s, () => {
           speed = s;
           paused = false;
           renderToolbar();
@@ -1842,6 +1843,7 @@ function renderIndustry(townId: string): void {
   if (isFuelSite(world.towns.get(townId))) return renderFuelSite(townId);
   if (isCementSite(world.towns.get(townId))) return renderCementSite(townId);
   if (isSteelSite(world.towns.get(townId))) return renderSteelSite(townId);
+  if (world.power && ["coalmine", "powerstation"].includes(world.towns.get(townId)?.industry ?? "")) return renderPowerSite(townId);
   if (world.towns.get(townId)?.industry === "mill") return renderMillSite(townId);
   if (world.towns.get(townId)?.industry === "flourmill") return renderFlourMillSite(townId);
   if (world.towns.get(townId)?.industry === "border") return renderBorder(townId);
@@ -1938,7 +1940,67 @@ function productionHtml(siteId: string): string {
   ];
   // An import's site: where its imports land, and how much of them gets here (gateways.ts).
   const imports = ["depot", "silo", "steelport", "flourmill"].includes(world.towns.get(siteId)?.industry ?? "") ? seaportText() + portHtml() : "";
-  return `${imports}<div class="production">${rows.join("")}${expandHtml(siteId)}</div>`;
+  return `${imports}<div class="production">${rows.join("")}${expandHtml(siteId)}</div>${powerHtml(siteId)}`;
+}
+
+// Power at a site (power.ts): on the grid and what it adds, or what a working station would.
+function powerHtml(siteId: string): string {
+  const power = world.power;
+  if (!power || !powerActive(world) || !inPowerReach(world, siteId)) return "";
+  const station = townName(power.stationId);
+  const most = pct(world.tuning.powerBoost ?? 0);
+  const lift = powerLift(world, siteId) - 1;
+  if (!power.working) return `<p class="townshare"><b>Power:</b> within reach of ${station}, idle. Restored and fed coal, it makes up to ${most} more here from the same input.</p>`;
+  return `<p class="townshare"><b>Power:</b> on ${station}'s grid: ${lift >= 0.005 ? `+${pct(lift)} from the same input` : "nothing yet, no coal reaching it"}${lift < (world.tuning.powerBoost ?? 0) - 0.005 ? `, of up to ${most} with all its coal` : ""}.</p>`;
+}
+
+// Coal and power's cards (power.ts): the station, its mine -- what each does, and the one thing
+// holding it back.
+function renderPowerSite(townId: string): void {
+  const power = world.power!;
+  const site = world.towns.get(townId)!;
+  const t = world.tuning;
+  const perDay = (rate: number) => Math.round(rate * SECONDS_PER_GAME_DAY);
+  const coal = t.powerCoalPerDay ?? 0;
+  const powered = poweredSites(world);
+  const names = powered.map((s) => s.name).join(", ");
+  let kicker = "";
+  let lines: string[] = [];
+  let problem = "";
+  let action = "";
+  if (site.industry === "coalmine") {
+    kicker = power.working ? `Coal mine · ${perDay(coalOutput(world))} t a day` : "Coal mine · waiting on the power station";
+    lines = [
+      `Digs ${coal} t of coal a day for ${townName(power.stationId)} once it runs.`,
+      "A long haul from the station: hauliers take only a little that far by road. Track and freight trains (<kbd>K</kbd>, <kbd>G</kbd>) take it all.",
+    ];
+    if (!power.working) problem = `Nobody wants its coal while ${townName(power.stationId)} is idle. Restore the station first.`;
+    else if (!roadPath(world, townId, power.stationId) && !railPath(world, townId, power.stationId)) problem = `No way from here to ${townName(power.stationId)}: build a road (<kbd>R</kbd>) or lay track (<kbd>K</kbd>), and the coal can go.`;
+  } else {
+    const share = powerShare(world);
+    kicker = power.working ? `Power station · ${pct(share)} power` : "Power station · idle";
+    lines = [
+      `Burns ${coal} t of coal a day from ${townName(power.mineId)}: ${perDay(coalArriving(world))} t a day is reaching it.`,
+      powered.length ? `Its grid reaches ${t.powerReachCells} cells: ${names}. Each makes up to ${pct(t.powerBoost ?? 0)} more from the same input, by the share of power it gives.` : `Its grid reaches ${t.powerReachCells} cells, and no works or mill is in it.`,
+      "Built on coal and shut down (Oji River). The coal is in a far cluster: reaching it is a corridor.",
+    ];
+    if (!power.working) {
+      problem = `Idle. Restore it, and ${townName(power.mineId)} starts digging; your works run on generators until then.`;
+      action = `<span class="actions"><button data-restore-power="1">Restore it: ${naira(t.powerRestoreCost ?? 0)}</button></span>`;
+    } else if (!roadPath(world, power.mineId, townId) && !railPath(world, power.mineId, townId)) {
+      problem = `No way to it from ${townName(power.mineId)}: build a road (<kbd>R</kbd>) or lay track (<kbd>K</kbd>) between them, and the coal can come.`;
+    } else if (share < 0.6) {
+      problem = `Short of coal: ${perDay(coalArriving(world))} of ${coal} t a day. Carry it from the mine: track and a freight train (<kbd>G</kbd>), or a haulage yard there (<kbd>Y</kbd>) for a little more by road.`;
+    }
+  }
+  townEl.innerHTML = `
+    <div class="town-card">
+      <div class="k">${kicker}</div>
+      <div class="title">${site.name}</div>
+      ${productionHtml(townId)}
+      <ul>${lines.map((line) => `<li>${line}</li>`).join("")}${workersItem(townId)}</ul>
+      ${problem ? `<p class="callout hook"><span class="k">The problem here</span>${problem}${action}</p>` : action}
+    </div>`;
 }
 
 // The port's rungs (gateways.ts): what it lands of day 1's need, and the next rung with its button.
@@ -2004,6 +2066,9 @@ function siteProblem(siteId: string): string {
     const reach = fuelSite ? fuelReach(world, siteId) : Math.max(world.tuning.truckerMaxHaulCells, hasYard(world, siteId) ? world.tuning.yardReachCells : 0);
     const far = [...(world.goods.yards.get(siteId) ?? [])].filter(([, amount]) => amount > 0).map(([key]) => key.slice(0, key.indexOf("|")))
       .filter((to) => (roadPath(world, siteId, to)?.distance ?? Infinity) > reach && !railPath(world, siteId, to));
+    // A quarry's limestone to the works goes by road however far, a little of it (haulage.ts longHaul).
+    const long = far.filter((to) => longHaul(world, siteId, to, "supplies"));
+    if (long.length > 0) return `Most of its ${p.product} is waiting: ${townName(long[0]!)} is a long haul by road, past the hauliers' reach (${Math.round(reach)} cells), so they take only a little of it. A freight train takes the rest: lay track (<kbd>K</kbd>) from ${site.name} and run freight (<kbd>G</kbd>).`;
     if (far.length > 0) {
       const names = far.slice(0, 4).map(townName).join(", ") + (far.length > 4 ? ` and ${far.length - 4} more` : "");
       return `Most of its ${p.product} is waiting for towns past the ${fuelSite ? "tankers'" : "hauliers'"} reach (${Math.round(reach)} cells by road): ${names}. Only a freight train gets it there: lay track (<kbd>K</kbd>) from ${site.name} and run freight (<kbd>G</kbd>).`;
@@ -2658,7 +2723,7 @@ function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
       <div class="name"><span class="swatch" style="background:${routeColor(index)}"></span>${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}
         <span class="buttons"><button data-add="${s.id}" title="Add one">+</button><button data-remove="${s.id}" title="Sell one">−</button></span></div>
       ${strikeBadge(laneAlongRoute(s.a, s.b))}
-      <div class="verdict why-${d?.verdict ?? "healthy"}">${verdict}</div>
+      <div class="verdict why-${d?.verdict ?? "healthy"}">${verdict}</div>${carsRow(s.id)}
       ${bar}
       ${dev && d ? `<small>${forVehicle(`${Math.round(d.boardingsPerDay)} riders/day · buses ${pct(d.loadFactor)} full · ${pct(d.speed)} speed · ceiling ${naira(d.ceilingPerDay)}/day`, s.id)}</small>` : ""}
     </div>`;
@@ -2989,7 +3054,7 @@ function lorryRows(afterBuses: boolean): string {
           <i style="width:${pct(d.spoiled)};background:var(--home)"></i>
         </div>
         <div class="why why-${d.verdict === "healthy" ? "healthy" : d.verdict === "full" ? "full" : d.verdict === "worn" ? "worn" : "thin"}">${forGoodsVehicle(lorryReason(d, s.costPerDay / s.lorries), s.id)}</div>
-        <small>${forGoodsVehicle(`goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full`, s.id)}</small>${freightRateRow(s.id)}`
+        <small>${forGoodsVehicle(`goods along it: ${Math.round(d.outbound)} t/day ${townName(s.a)}→${townName(s.b)}, ${Math.round(d.inbound)} back · lorries ${pct(d.loadFactor)} full`, s.id)}</small>${freightRateRow(s.id)}${carsRow(s.id)}`
       : "";
     return `
       <div class="route" data-route="${s.id}">
@@ -3003,6 +3068,20 @@ function lorryRows(afterBuses: boolean): string {
   });
   const port = world.port ? `, supplies from ${townName(world.port)}, export to it` : "";
   return `<h2${afterBuses ? ' class="section"' : ""}>Your goods</h2><p class="hint">Goods go one way each: produce to market${port}. Bar: delivered · spoiled.</p>${rows.join("")}`;
+}
+
+// A rail line's trains lengthened (rail.ts addCar): how long they run, and a car more for each.
+function carsRow(routeId: string): string {
+  if (!isRailRoute(routeId) && !isFreightRoute(routeId)) return "";
+  const max = world.tuning.trainMaxCars ?? 1;
+  if (max <= 1) return "";
+  const cars = carsOn(world, routeId);
+  const freight = isFreightRoute(routeId);
+  const car = carPrice(world, routeId);
+  const check = checkCar(world, routeId);
+  const what = freight ? `${Math.round(car.capacity)} t` : `${Math.round(car.capacity)} seats`;
+  const button = cars < max ? ` <button data-car="${routeId}" ${check.ok ? "" : `disabled title="${check.reason}"`}>+ ${freight ? "wagon" : "carriage"} ${naira(check.amount ?? car.price)}</button>` : "";
+  return `<small>${cars} of ${max} cars a train, ${Math.round(car.capacity * cars)} ${freight ? "t" : "seats"} each.${button}${cars < max ? ` Each adds ${what} and ${naira(car.perSecond * SECONDS_PER_GAME_DAY)}/day running, and no more room on the track.` : ""}</small>`;
 }
 
 // A freight line's rate (freightrates.ts): cheap, standard or dear, and what it's doing --
@@ -3165,6 +3244,15 @@ function onPanelClick(event: MouseEvent): void {
     renderPanel();
     return;
   }
+  if (target.dataset.car) {
+    const routeId = target.dataset.car;
+    const freight = isFreightRoute(routeId);
+    const route = [...world.routes, ...world.lorryRoutes].find((candidate) => candidate.id === routeId);
+    const result = act({ label: `a ${freight ? "wagon" : "carriage"} on ${route ? pair(route.a, route.b) : "a line"}`, towns: route ? [route.a, route.b] : [], routeId }, { kind: "car", routeId });
+    say(result.ok ? `Every ${freight ? "freight train" : "train"} on the line a ${freight ? "wagon" : "carriage"} longer, for ${naira(result.amount ?? 0)}: ${carsOn(world, routeId)} cars each.` : `Can't: ${result.reason}`, !result.ok, 7);
+    renderPanel();
+    return;
+  }
   if (target.dataset.freightRate) {
     const [routeId, rate] = target.dataset.freightRate.split("|") as [string, FreightRate];
     const result = act({ label: `freight at the ${rate} rate`, towns: [], routeId }, { kind: "freightRate", routeId, rate });
@@ -3255,6 +3343,12 @@ function onPanelClick(event: MouseEvent): void {
   if (target.dataset.restoreWorks) {
     const result = act({ label: "restoring the cement works", towns: world.cement ? [world.cement.worksId] : [] }, { kind: "restoreWorks" });
     say(result.ok ? `Cement works restored for ${naira(result.amount ?? 0)}. A limestone quarry opens for it within days: connect it.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
+    renderPanel();
+    return;
+  }
+  if (target.dataset.restorePower) {
+    const result = act({ label: "restoring the power station", towns: world.power ? [world.power.stationId] : [] }, { kind: "restorePower" });
+    say(result.ok ? `Power station restored for ${naira(result.amount ?? 0)}. ${world.power ? townName(world.power.mineId) : "Its mine"} starts digging: get the coal to it, and every works in its reach makes more.` : `Can't restore it: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }
@@ -3416,7 +3510,17 @@ hintEl.addEventListener("click", (event) => {
 
 // --- Loop -------------------------------------------------------------
 
-const accumulator = new Accumulator(SIM_DT);
+// A frame's budget for the game (2026-11-02: a phone at day 200 drew 3 frames a second at 4x).
+// The game steps until STEP_BUDGET_MS is spent, then the frame draws; game time it couldn't step
+// is dropped, not carried, so a slow device runs the game slower rather than catching up in ever
+// longer frames (each slow frame owed more steps, which made the next slower). `runningAt` is the
+// speed it's really managing, game seconds a second: the time controls say so when it falls short.
+const STEP_BUDGET_MS = 10;
+/** The most wall-clock time one frame owes the game: a stalled tab resumes, it doesn't catch up. */
+const MAX_FRAME_TIME = 0.25;
+let owed = 0;
+let runningAt = 1;
+let shownRunningAt = 0;
 let last = performance.now();
 // The first term's pledges: asked for as play begins (the strip alone was missed).
 let askedFirstPledges = false;
@@ -3495,16 +3599,26 @@ function frame(now: number): void {
     void keep();
   }
   if (!paused) {
-    // Each speed step runs its own bounded advance, so 4x stays 4x rather
-    // than being clipped by the accumulator's per-frame catch-up cap.
-    for (let i = 0; i < speed; i += 1) {
-      accumulator.advance(elapsed, (dt) => {
-        const events = gameTick(world, dt);
-        recordTick(recorder, world, events);
-        for (const event of events) announce(event);
-        if (book.pending.length) for (const receipt of tickReceipts(world, book, dt)) say(receiptLine(receipt), receipt.moneyPerDay < -5, 8);
-      });
+    owed += speed * Math.min(elapsed, MAX_FRAME_TIME);
+    const start = performance.now();
+    let ran = 0;
+    while (owed >= SIM_DT) {
+      if (ran > 0 && performance.now() - start > STEP_BUDGET_MS) {
+        owed = 0;
+        break;
+      }
+      const events = gameTick(world, SIM_DT);
+      recordTick(recorder, world, events);
+      for (const event of events) announce(event);
+      if (book.pending.length) for (const receipt of tickReceipts(world, book, SIM_DT)) say(receiptLine(receipt), receipt.moneyPerDay < -5, 8);
+      owed -= SIM_DT;
+      ran += 1;
     }
+    // Over about two seconds, so one slow frame doesn't flicker the time controls.
+    if (elapsed > 0) runningAt += (Math.min(speed, (ran * SIM_DT) / Math.min(elapsed, MAX_FRAME_TIME)) - runningAt) * Math.min(1, elapsed / 2);
+  } else {
+    owed = 0;
+    runningAt = speed;
   }
   const picked = screen.focus;
   if (!in3d) renderCaption(now);
@@ -3519,8 +3633,16 @@ function frame(now: number): void {
   });
 
   panelTimer += elapsed;
-  if (panelTimer > 0.25) {
+  // Four times a second; once a second on a device that can't keep the speed asked, where
+  // rebuilding the panel took a fifth of the time (a phone at day 200).
+  if (panelTimer > (shownRunningAt ? 1 : 0.25)) {
     panelTimer = 0;
+    // The time controls say what the device manages, when it's well short of the speed asked.
+    const shown = !paused && runningAt < speed * 0.85 ? Math.round(runningAt * 10) / 10 : 0;
+    if (shown !== shownRunningAt) {
+      shownRunningAt = shown;
+      renderToolbar();
+    }
     keepSteady(world);
     renderStrip();
     // Not while a button in a panel is pressed: redrawing replaces the button under

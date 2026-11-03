@@ -9,6 +9,7 @@ import { flourCapacity, flourOutput, millCapacity, millOutput, stapleArriving, w
 import { siteJobs, staffFactor, staffing } from "./workers";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { assemblyArriving, assemblyNeeds, assemblyShare } from "./assembly";
+import { coalArriving, coalOutput, coalWanted, powerLift, powerShare } from "./power";
 
 // What a site makes and what holds it back (playtest, map 2411: "we need
 // indications for the factories in terms of production"). One reading for
@@ -154,6 +155,20 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
       inputs = [{ name: "steel", arriving: got.steel, needed: need.steel }, { name: "fuel", arriving: got.fuel, needed: need.fuel }];
       break;
     }
+    // Coal and power (power.ts): the station's product is the share of power it gives.
+    case "powerstation":
+      product = "power";
+      capacity = coalWanted(world) > 0 ? coalWanted(world) : (t.powerCoalPerDay ?? 0) / SECONDS_PER_GAME_DAY;
+      made = capacity * powerShare(world);
+      inputs = [{ name: "coal", arriving: coalArriving(world), needed: capacity }];
+      idle = !world.power?.working;
+      break;
+    case "coalmine":
+      product = "coal";
+      capacity = coalWanted(world);
+      made = coalOutput(world);
+      idle = !world.power?.working;
+      break;
     case "oilfield":
     case "terminal":
       product = "crude";
@@ -163,6 +178,8 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
       idle = capacity <= 0;
       break;
   }
+  // On the grid, a site makes more from the same input (power.ts): its capacity with it.
+  capacity *= powerLift(world, siteId);
   const jobs = siteJobs(world, site);
   const staff = t.workersEnabled && jobs > t.jobsIdle + 1e-9 ? staffing(world, siteId) : null;
   let away = 0;

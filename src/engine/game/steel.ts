@@ -10,6 +10,7 @@ import { canAfford, SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
 import { staffFactor } from "./workers";
 import { siteScale } from "./expand";
+import { powerLift } from "./power";
 import { assemblyActive, assemblyNeeds } from "./assembly";
 
 // The steel chain (docs/brief.md, More industries, more chains: steel first).
@@ -84,7 +85,7 @@ export function steelCapacity(world: GameWorld): number {
 export function steelOutput(world: GameWorld): number {
   const steel = world.steel;
   if (!steel?.working || !steel.worksId) return 0;
-  return Math.min(steelCapacity(world), oreArriving(world) / world.tuning.orePerSteel) * staffFactor(world, steel.worksId);
+  return Math.min(steelCapacity(world), oreArriving(world) / world.tuning.orePerSteel) * staffFactor(world, steel.worksId) * powerLift(world, steel.worksId);
 }
 
 /** What the mine digs, tonnes a second: nothing while the works is idle (nobody wants ore). */

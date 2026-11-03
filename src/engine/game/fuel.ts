@@ -1,3 +1,4 @@
+import { powerLift } from "./power";
 import type { GameTown, GameWorld } from "./types";
 import { borderFuelSite, importsArriving, portScale } from "./gateways";
 import { flowKey, type GoodsFlow } from "./goods";
@@ -121,7 +122,7 @@ export function newRefineryOutput(world: GameWorld): number {
   const site = newRefinery(world);
   if (!site) return 0;
   const t = world.tuning;
-  return Math.min(newRefineryCapacity(world), (crudeArriving(world, site.id) * t.newRefineryShare) / t.newRefineryCrudeShare) * staffFactor(world, site.id);
+  return Math.min(newRefineryCapacity(world), (crudeArriving(world, site.id) * t.newRefineryShare) / t.newRefineryCrudeShare) * staffFactor(world, site.id) * powerLift(world, site.id);
 }
 
 /** The most the refinery can make, tonnes a second, as built and expanded (expand.ts). */
@@ -134,7 +135,7 @@ export function refineryCapacity(world: GameWorld): number {
 export function refineryOutput(world: GameWorld): number {
   const fuel = world.fuel;
   if (!fuel?.restored) return 0;
-  return Math.min(refineryCapacity(world), crudeArriving(world)) * staffFactor(world, fuel.refineryId);
+  return Math.min(refineryCapacity(world), crudeArriving(world)) * staffFactor(world, fuel.refineryId) * powerLift(world, fuel.refineryId);
 }
 
 /**
@@ -250,6 +251,7 @@ export function cargoName(world: GameWorld, from: string, kind: "produce" | "sup
   if (site === "works" || site === "silo") return "cement";
   if (site === "steelworks" || site === "steelport") return "steel";
   if (site === "ironmine") return "iron ore";
+  if (site === "coalmine") return "coal";
   if (site === "quarry") return world.cement && world.tuning.cementEnabled ? "limestone" : "stone";
   return kind;
 }

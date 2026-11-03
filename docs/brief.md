@@ -449,6 +449,11 @@ Proposed, each a line where the player already looks, each naming one move:
 
 **Built 2026-10-19** (`rail.ts`): a piece of track carries 4 trains (`trackSlots`), passenger and freight together, so a freight train takes a passenger one's slot and a full line refuses the next ("the line is full: 4 of 4 trains"; the Train and Freight previews say "line N of 4"); between two stops of one passenger line, trips rise by a third (`railInducedDemand`, applied with each day's demand); a town a passenger train stops at can grow 0.3 of the growth cap more (`stationCapShare`). A spur to a quarry is the Track tool from a town to the site. Measured (corridor probe, real money): rail now buys 26 days of growth on seed 0 and 21 on seed 1, against 19 before (C1: 20-40), priced at 34.9 and 31.4 days of surplus (C2). C7 (a line is a choice) waits on play: the bots don't run freight.
 
+**Amended 2026-11-02, agreed** (your playtest, map 2327 day 183: *"the 4 trains are more dumb when on one stretch there is a train but I am going beyond it and the small bit still counts towards those 4"*; *"could we add more to an existing train"*). Two changes, and the choice stays (C7):
+
+- **A piece of track takes so many trains passing a day, not so many trains** (`trackPassesPerDay`). A train adds to each piece of its line as often as it goes over it -- twice a round trip -- so a train bound far crosses a shared stretch seldom and costs it little, and a short shuttle on it costs a lot. Long lines hold many trains; a busy stretch still fills. The first train on a line always fits. The message says what's left: "Kewama–Dikware: 34 of 40 passes a day".
+- **Carriages and wagons** (`trainMaxCars`): a line's trains can be lengthened, a car at a time, up to four: each car adds a train's seats or a freight train's tonnes, for less than a train and a third of its running cost, and takes no more of the track. More trains run more often; longer ones carry more each time.
+
 ### The second ladder: an industry's access
 
 | Rung | What it changes | Price (target) | What it costs you besides money |
@@ -797,6 +802,8 @@ Alongside: **a log of what happened** (strikes, sites opening and closing, miles
 
 4. **Goods get there over connected roads** (your playtest, map 949 to day 244, 2026-10-29: *"I always thought the system would be smart. In the sense that as long as roads are connected the goods will eventually get there and direct connections would be faster like roads with passengers"*). Hauliers past a leg's reach (40 cells, 120 from a yard) had left 17 of 26 towns with no cement or steel at all, and the cards kept offering yards already built. Now what a town waits on to grow -- cement, steel, fuel -- goes in legs, town to town, as riders change buses: it waits at a town on the way and hauliers there take it on; a yard stretches a town's legs to 120 cells, bridging the gaps between clusters; a freight train drops goods at the station nearest where they're going and hauliers carry them on. Fewer, quicker legs win, so a direct haul or a train is faster than a chain of hops. Cash crops and the port's general supplies still go straight: relaying every load, measured on your run, doubled the trucks on the roads and cut trips made by a fifth, for the sake of 15 trucks of cement and steel. The cards name what's really in the way: no road, a gap a yard at a named town would bridge, too many legs (freight track), or, for steel on a map without a works, the port. Imported steel there is sized from the towns as they are (70% of today's want, then the port's rungs), not day 1's. A town's cement and steel served is read over ten days, not one: a truck every few weeks to a small town had read as starving it. Hauliers send a part load of those after a week's wait, rather than leave a small far town's half tonne a day waiting for a full truck on every leg. Behind tuning keys; older runs replay as played.
 
+   **Amended 2026-11-02, agreed** (your playtest, map 2327 day 183: *"a limestone far away is not sending them to the factory, even when roads are connected"*). A quarry's limestone isn't relayed (relaying it, measured on map 3218, cost 6-16% of trips and ~30% more trucks), and past a haul's reach it had stopped dead: at 119 cells hauliers carried it, at 121 nothing. Now far means less, not none (`longHaulTail`): past half its reach, the share hauliers take falls off slowly -- a quarter at the reach, a tenth at two and a half times it -- and never to nothing while a road joins them. One truck a load, straight there, no waiting at towns on the way. A freight train is how you get all of it there, no longer the only way to get any. The ridge's limestone (below) still wants bringing: the road gives a trickle.
+
 Later, not in the first cut: the port's handling as a rung, coastal shipping and river barges (Open item 4). **Built 2026-10-29:** the port's two rungs (a berth 1.3×, a container terminal 1.7× day 1's imports) and fuel over the crossings to Benin and Niger (a fifth of day 1's need, informal); coastal shipping and barges still later, after a playtest of the gateways.
 
 ## More industries, more chains (agreed 2026-10-23)
@@ -908,6 +915,46 @@ Behind `remitOpens`, off in older runs (they replay as played); a new game start
 2. **Your playtest.**
 3. **A chain at each opening:** palm oil and cocoa first (More industries, The order 2), placed in
    the cluster opened.
+
+### A chain at each opening, first: coal and power (agreed 2026-11-02)
+
+Your playtest, 2026-11-02: *"playing after expansion it still feels the same and the industries don't
+feel more plus don't feel diversified ... connecting the out of bound sides later in game it feels more
+like new market not thing I am getting except limestone."* The order's step 3 had not been built: an
+opening brought towns and, at most, more of a chain you already ran (a limestone field, a farm belt).
+Your answer: **coal and power first**, because it changes how the industries you already have feel.
+
+- **A coal mine in a far cluster.** One far cluster, the nearest your home cluster that isn't the
+  limestone one, holds a coal mine in its gaps, where it reaches land nothing else does, with an old
+  road to its regional town. It digs only while a power station burns its coal. Past the hauliers'
+  reach from your sites: reaching it is a corridor, and rail's long haul is what it's for.
+- **An idle power station at home** (the Oji River story: Nigeria's coal-fired station, shut down and
+  left). In the home cluster, where the most of your processing sites are within its reach, by water
+  for cooling, with an old road. Restored like the steel works (`powerRestoreCost`); from then it
+  wants coal.
+- **Power lifts every site in its reach.** A cement works, steel works, refinery, mill or flour mill
+  within `powerReachCells` of a working station makes up to `powerBoost` (+30%) more from the same
+  input, by the share of the coal it wants that arrives: kilns, furnaces and mills on the grid, not
+  on diesel generators half the day. One chain lifts the others: the interlock.
+- **What the opening says.** The verdict's offer names it: "a coal mine (power for your works)". The
+  site cards say "on the grid: +N%", or, out of reach or unpowered, what a working station would add.
+
+Behind `coalEnabled`: older runs replay as played; a new game starts with it on. Numbers to measure
+with the strategist: 120 t of coal a day, a 60-cell reach, +30%, ₦60k to restore.
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C37 | Power is felt | In the strategist, a powered game's cement and steel served, and people at day 300, beat a twin with the station never restored, on 3 maps of 5 |
+| C38 | The coal is a project | The coal reaches the station mostly by your rail or a yard's long haul, not by hauliers by chance: under a third of it trucked at day 300 |
+
+**Built 2026-11-02, switched off 2026-11-03** (`power.ts`, `coalEnabled` false): measured with the
+strategist to day 300 on maps 2327, 3218 and 2411 against a twin with the station never restored.
+C37 fails: people 908k/929k, 935k/949k, 797k/798k, inside the ±6-12% one game moves by chance
+(a change too small to matter moved trips 6-8%). C38 fails the other way: no line was laid --
+the coal sat 139-244 road cells from the station, ₦600k+ of track -- and hauliers carried 68 and
+56 t of the 120 wanted from a yard at the mine (power 57%, 37%), or 3 t (2%). Being reworked: the
+mine on the side of its cluster facing home (60-80 road cells, a ₦250-350k line); coal that
+hauliers won't take past their reach; the lift wider, measured over five maps, two games each.
 
 ### Checks for the remit
 

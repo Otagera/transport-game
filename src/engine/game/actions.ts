@@ -5,7 +5,7 @@ import { commitPledge, consoleMove, noteAction, type ConsoleOp } from "./term";
 import type { GameWorld } from "./types";
 import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
-import { addTrain, buildHalt, buildTrack } from "./rail";
+import { addCar, addTrain, buildHalt, buildTrack } from "./rail";
 import { fixRoadNow, setRoadMaintained } from "./wear";
 import type { Alignment } from "./roads";
 import { setEnforcement, settleStrike, type Enforcement } from "./pushback";
@@ -14,6 +14,7 @@ import { restoreRoad, retireRoad } from "./retire";
 import { restoreRefinery } from "./fuel";
 import { restoreWorks } from "./cement";
 import { restoreSteel } from "./steel";
+import { restorePower } from "./power";
 import { expandSite } from "./expand";
 import { buildYard } from "./yards";
 import { buildPark } from "./parks";
@@ -47,6 +48,7 @@ export type ActionSpec =
   | { kind: "upgradePort" }
   | { kind: "restoreWorks" }
   | { kind: "restoreSteel" }
+  | { kind: "restorePower" }
   | { kind: "expand"; siteId: string }
   | { kind: "yard"; townId: string }
   | { kind: "park"; townId: string }
@@ -54,6 +56,7 @@ export type ActionSpec =
   | { kind: "freightRate"; routeId: string; rate: "cheap" | "standard" | "dear" }
   | { kind: "bond"; purpose: BondPurpose }
   | { kind: "sell"; routeId: string }
+  | { kind: "car"; routeId: string }
   | { kind: "pledge"; id: string }
   | { kind: "console"; op: ConsoleOp; amount?: number; key?: string; value?: number | boolean }
   | { kind: "union"; unionId: string; answer: "pay" | "concede" | "coop" | "refuse" }
@@ -171,6 +174,10 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       const result = restoreWorks(world);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
     }
+    case "restorePower": {
+      const result = restorePower(world);
+      return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };
+    }
     case "restoreSteel": {
       const result = restoreSteel(world);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
@@ -179,6 +186,8 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       const result = issueBond(world, spec.purpose);
       return result.ok ? { ok: true, amount: result.lent ?? 0 } : { ok: false, reason: result.reason };
     }
+    case "car":
+      return addCar(world, spec.routeId);
     case "sell": {
       const refund = isLorryRoute(spec.routeId) ? removeLorry(world, spec.routeId) : removeBus(world, spec.routeId);
       return refund > 0 ? { ok: true, amount: refund } : { ok: false, reason: "nothing to sell" };

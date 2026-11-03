@@ -1,3 +1,6 @@
+import { coalWanted, inPowerReach, powerFlows, powerLift, powerShare, poweredSites, restorePower } from "@engine/game/power";
+import { clusterBrings, remitRefusal } from "@engine/game/remit";
+import { longHaul } from "@engine/game/haulage";
 import { borderCountry } from "@engine/game/border";
 import { laneMood } from "@engine/game/union";
 import { LINE_COLOURS, labelOf, roadLabelKey, routeLabelKey } from "@engine/game/labels";
@@ -5,7 +8,7 @@ import { waysFor } from "@engine/game/crossings";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { SWITCHED_OFF } from "@engine/game/tuning";
 import { borderFuelSite, exportGateway, importsArriving, portScale, seaportLink } from "@engine/game/gateways";
-import { builtUp, homeBox } from "@engine/game/fuel";
+import { builtUp, homeBox, inHome } from "@engine/game/fuel";
 import { fordBridgeCost, highBridgeCost, isFlooded } from "@engine/game/floods";
 import { farmland } from "@engine/game/food";
 import { clusterOfferShare } from "@engine/game/clusters";
@@ -41,7 +44,7 @@ import { cropsFor, farmTowns, flourCapacity, flourOutput, flourWant, foodGrowth,
 import { jobsGrowth, siteJobs, staffFactor, updateSites, workforceShares } from "@engine/game/workers";
 import { foundGateTown, refreshDemand } from "@engine/game/settlement";
 import { cementDemand, cementFlows, cementImports, worksCapacity, worksOutput } from "@engine/game/cement";
-import { lineSlots, onRoadCost, stationTowns, trackCost } from "@engine/game/rail";
+import { addCar, carsOn, lineSlots, onRoadCost, passesPerTrain, railRouteId, stationTowns, trackCost, vehicleCostPerDay } from "@engine/game/rail";
 import { haulShare, truckersPickUp } from "@engine/game/truckers";
 import { cargoName, chargeFuelPremium, fuelFlows, refineryOutput, newRefinery, newRefineryOutput, newRefineryCapacity, updateNewRefinery } from "@engine/game/fuel";
 import { siteProduction as newRefinerySiteProduction } from "@engine/game/production";
@@ -91,7 +94,7 @@ import { costRate, planRoad, polylineLength, segmentLength, segmentPolyline } fr
 import { bridgeCellsOn, corridorWear, fixRoadNow, repairCost, setMaintained, upkeepPerDay, wearRate } from "@engine/game/wear";
 import { computeBurnRate } from "@engine/economy/report";
 import { bestRung, growthTrend, roadFull, townGrowth } from "@engine/game/growth";
-import { addFreightTrain, addLorry, diagnoseLorryRoute, goodsAlong, goodsFlows, lorryEstimate, removeLorry, lorrySummaries } from "@engine/game/goods";
+import { addFreightTrain, addLorry, checkFreight, diagnoseLorryRoute, freightRouteId, goodsAlong, goodsFlows, lorryEstimate, removeLorry, lorrySummaries } from "@engine/game/goods";
 import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, derelictRun, railPath, restoreCost, trackAction } from "@engine/game/rail";
 import { slowOrder } from "@engine/game/wear";
 import type { Vehicle } from "@engine/simulation/types";
@@ -2780,17 +2783,79 @@ describe("Revision 2: rail gets a job of its own", () => {
   const railWorld = (overrides: Partial<GameTuning> = {}) =>
     createGameWorld({ ...MAP, port: "big" }, { ...DEFAULT_GAME_TUNING, startingFunds: 1e7, maxEmergentTowns: 0, industryFirstDay: 999, ...overrides });
 
-  test("a line carries trackSlots trains, passenger and freight together: a freight train takes a passenger train's slot", () => {
-    const w = railWorld({ trackSlots: 3 });
+  test("a line carries trackSlots trains, passenger and freight together: a freight train takes a passenger train's slot (older runs)", () => {
+    const w = railWorld({ trackSlots: 3, trackPassesPerDay: undefined });
     expect(buildTrack(w, "big", "mid").ok).toBe(true);
     expect(addTrain(w, "big", "mid").ok).toBe(true);
     expect(addTrain(w, "big", "mid").ok).toBe(true);
     expect(addFreightTrain(w, "big", "mid").ok).toBe(true);
-    expect(lineSlots(w, "big", "mid")).toEqual({ used: 3, slots: 3 });
+    expect(lineSlots(w, "big", "mid")).toMatchObject({ used: 3, slots: 3, full: true });
     const refused = checkTrain(w, "big", "mid");
     expect(refused.ok).toBe(false);
     expect(!refused.ok && refused.reason).toContain("the line is full");
     expect(addFreightTrain(w, "big", "mid").ok).toBe(false);
+  });
+
+  test("a piece of track takes so many passes a day: a train bound far crosses a shared stretch seldom, a shuttle on it often", () => {
+    const w = railWorld();
+    expect(buildTrack(w, "big", "mid").ok).toBe(true);
+    expect(buildTrack(w, "mid", "far").ok).toBe(true);
+    const near = railPath(w, "big", "mid")!.distance;
+    const through = railPath(w, "big", "far")!.distance;
+    // Twice a round trip, a day.
+    expect(passesPerTrain(w, "big", "mid", false)).toBeCloseTo((SECONDS_PER_GAME_DAY * w.tuning.trainSpeed) / near, 6);
+    expect(passesPerTrain(w, "big", "far", false)).toBeLessThan(passesPerTrain(w, "big", "mid", false));
+    // Big–Mid is shared: a train through to Far uses less of it than one turning back at Mid.
+    expect(addTrain(w, "big", "far").ok).toBe(true);
+    const afterThrough = lineSlots(w, "big", "mid").used;
+    expect(afterThrough).toBeCloseTo(passesPerTrain(w, "big", "far", false), 6);
+    expect(addTrain(w, "big", "mid").ok).toBe(true);
+    expect(lineSlots(w, "big", "mid").used - afterThrough).toBeCloseTo((SECONDS_PER_GAME_DAY * w.tuning.trainSpeed) / near, 6);
+    expect(through).toBeGreaterThan(near);
+  });
+
+  test("a full line refuses the train that would go past its passes, says so, and the first train on a line always fits", () => {
+    const w = railWorld({ trackPassesPerDay: 1 });
+    expect(buildTrack(w, "big", "mid").ok).toBe(true);
+    expect(passesPerTrain(w, "big", "mid", false)).toBeGreaterThan(1);
+    expect(addTrain(w, "big", "mid").ok).toBe(true);
+    const refused = checkFreight(w, "big", "mid");
+    expect(refused.ok).toBe(false);
+    expect(!refused.ok && refused.reason).toContain("passes a day");
+    expect(lineSlots(w, "big", "mid", true)).toMatchObject({ unit: "passes", full: true });
+  });
+
+  test("a carriage or wagon makes every train on the line a car longer: more seats or tonnes, its price and running cost, no more room on the track", () => {
+    const w = railWorld({ trackPassesPerDay: 1000 });
+    buildTrack(w, "big", "mid");
+    addTrain(w, "big", "mid");
+    addTrain(w, "big", "mid");
+    const routeId = railRouteId("big", "mid");
+    const passes = lineSlots(w, "big", "mid").used;
+    const funds = w.economy.funds;
+    const result = addCar(w, routeId);
+    expect(result.ok).toBe(true);
+    expect(result.amount).toBe(2 * w.tuning.carriageCost!);
+    expect(w.economy.funds).toBe(funds - 2 * w.tuning.carriageCost!);
+    const trains = w.simulation.vehicles.filter((v) => w.routes.find((r) => r.id === routeId)!.vehicleIds.includes(v.id));
+    for (const train of trains) {
+      expect(train.capacity).toBe(2 * w.tuning.trainCapacity);
+      expect(w.economy.vehicleEconomics.get(train.id)!.operatingCostPerSecond).toBe(w.tuning.trainOperatingCostPerSecond + w.tuning.carriageOperatingCostPerSecond!);
+    }
+    expect(lineSlots(w, "big", "mid").used).toBeCloseTo(passes, 9);
+    expect(vehicleCostPerDay(w, routeId, SECONDS_PER_GAME_DAY)).toBeCloseTo((w.tuning.trainOperatingCostPerSecond + w.tuning.carriageOperatingCostPerSecond!) * SECONDS_PER_GAME_DAY, 6);
+    // A train bought now comes as long as the line's.
+    addTrain(w, "big", "mid");
+    const added = w.simulation.vehicles.find((v) => v.id === w.routes.find((r) => r.id === routeId)!.vehicleIds.at(-1))!;
+    expect(added.capacity).toBe(2 * w.tuning.trainCapacity);
+    // A freight line's wagons.
+    addFreightTrain(w, "big", "mid");
+    expect(addCar(w, freightRouteId("big", "mid")).amount).toBe(w.tuning.wagonCost);
+    // Up to trainMaxCars.
+    while (carsOn(w, routeId) < w.tuning.trainMaxCars!) expect(addCar(w, routeId).ok).toBe(true);
+    const refused = addCar(w, routeId);
+    expect(refused.ok).toBe(false);
+    expect(!refused.ok && refused.reason).toContain("as long as they go");
   });
 
   test("a passenger line makes trips that weren't made before, and its towns can grow past the rail rung", () => {
@@ -2821,6 +2886,13 @@ describe("Revision 2: private truckers, the informal freight rival", () => {
     expect(haulShare(w, w.tuning.truckerMaxHaulCells / 2)).toBeCloseTo(0.5, 6);
     expect(haulShare(w, w.tuning.truckerMaxHaulCells)).toBe(0);
     expect(haulShare(w, 999)).toBe(0);
+    // A long haul (limestone to the works) tails off past half its reach, never to none.
+    const max = w.tuning.truckerMaxHaulCells;
+    expect(haulShare(w, max / 4, max, 0.25)).toBeCloseTo(0.75, 6);
+    expect(haulShare(w, max / 2, max, 0.25)).toBeCloseTo(0.5, 6);
+    expect(haulShare(w, max, max, 0.25)).toBeCloseTo(0.25, 6);
+    expect(haulShare(w, 2.5 * max, max, 0.25)).toBeCloseTo(0.1, 6);
+    expect(haulShare(w, 100 * max, max, 0.25)).toBeGreaterThan(0);
   });
 
   test("they carry goods you don't, on trucks on the road, paying tolls and loading levies; it's their money, not yours", () => {
@@ -3175,8 +3247,8 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
       const info = regionInfo(GAME_MAP, seed);
       expect(w.port).toBe(info.home.map.port!); // inland, a dry port
       // Steel's works and mine are placed over the whole region on purpose (steel.ts: a long haul),
-      // and so are the far clusters' limestone fields (clusters.ts).
-      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field" && t.industry !== "border" && t.industry !== "gateway" && t.industry !== "station"); // the far fields, the border crossing, the coast road and the old line's stations are out there by design (clusters.ts, crossings.ts, border.ts, stations.ts)
+      // and so are the far clusters' limestone fields (clusters.ts) and the coal mine (power.ts).
+      const sites = [...w.towns.values()].filter((t) => t.industry && t.id !== "steel-works" && t.id !== "iron-mine" && t.id !== "coal-mine" && !t.id.startsWith("field-") && t.id !== "ridge-field" && t.industry !== "border" && t.industry !== "gateway" && t.industry !== "station"); // the far fields, the border crossing, the coast road and the old line's stations are out there by design (clusters.ts, crossings.ts, border.ts, stations.ts)
       expect(sites.length).toBeGreaterThanOrEqual(4);
       for (const s of sites) expect(s.x >= box.x && s.x < box.x + box.width && s.y >= box.y && s.y < box.y + box.height).toBe(true);
     }
@@ -3216,6 +3288,70 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     expect(addBus(w, info.home.trunk[0], info.home.trunk[1]).ok).toBe(true);
     run(w, 2 * SECONDS_PER_GAME_DAY);
     expect(averageHeadline(w).yourRidersPerDay).toBeGreaterThan(0);
+  }, 60_000);
+});
+
+describe("coal and power (power.ts; brief, A chain at each opening, first: coal and power)", () => {
+  // Off by default until C37 and C38 pass (tuning.ts): on here.
+  const game = (seed: number, tuning: Partial<typeof DEFAULT_GAME_TUNING> = {}) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, coalEnabled: true, ...tuning });
+
+  test("a coal mine in the far cluster nearest home that isn't the limestone one, an idle station at home with works in its reach; every other site where it was", () => {
+    const w = game(2327);
+    const power = w.power!;
+    expect(power.working).toBe(false);
+    const mine = w.towns.get(power.mineId)!;
+    const station = w.towns.get(power.stationId)!;
+    expect([mine.industry, station.industry]).toEqual(["coalmine", "powerstation"]);
+    expect(inHome(w, station)).toBe(true);
+    const cluster = landOf(w, mine);
+    expect(cluster?.hub).toBe(power.clusterHub);
+    expect(cluster?.offer).not.toBe("limestone");
+    expect(poweredSites(w).length).toBeGreaterThan(0);
+    expect(clusterBrings(w, cluster!)).toContain("a coal mine (power for your works)");
+    // Placed after every other site: without it, the others sit where they do with it.
+    const without = game(2327, { coalEnabled: false });
+    expect(without.power ?? null).toBeNull();
+    for (const town of without.towns.values()) expect([w.towns.get(town.id)?.x, w.towns.get(town.id)?.y]).toEqual([town.x, town.y]);
+  }, 60_000);
+
+  test("idle, no coal is wanted and nothing is lifted; restored, coal is wanted, and a site in reach makes more by the share of it that arrives", () => {
+    const w = game(2327);
+    const power = w.power!;
+    const works = w.cement!.worksId;
+    expect(inPowerReach(w, works)).toBe(true);
+    expect(powerFlows(w)).toEqual([]);
+    expect(powerLift(w, works)).toBe(1);
+    w.economy.funds = w.tuning.powerRestoreCost!;
+    expect(restorePower(w).ok).toBe(true);
+    expect(w.economy.funds).toBe(0);
+    expect(restorePower(w).ok).toBe(false); // already working
+    const coal = powerFlows(w)[0]!;
+    expect([coal.from, coal.to]).toEqual([power.mineId, power.stationId]);
+    expect(coal.rate).toBeGreaterThan(0);
+    // No coal arriving yet: no power.
+    expect(powerLift(w, works)).toBe(1);
+    // Half the coal it wants: half the lift (times the station's shift).
+    const key = flowKey({ from: power.mineId, to: power.stationId, kind: "supplies" });
+    w.goods.outcomes.set(key, { delivered: coalWanted(w) / 2, spoiled: 0, trucked: 0 });
+    expect(powerShare(w)).toBeCloseTo(0.5 * staffFactor(w, power.stationId), 9);
+    expect(powerLift(w, works)).toBeCloseTo(1 + w.tuning.powerBoost! * powerShare(w), 9);
+    // The works' output carries it.
+    const lifted = worksOutput(w);
+    w.goods.outcomes.delete(key);
+    expect(lifted).toBeCloseTo(worksOutput(w) * (1 + w.tuning.powerBoost! * 0.5 * staffFactor(w, power.stationId)), 9);
+    // A site out of reach, or one that makes nothing from an input, isn't lifted.
+    expect(inPowerReach(w, power.mineId)).toBe(false);
+  }, 60_000);
+
+  test("the coal's long haul tails off by road, never to none; a freight line to the mine waits on its cluster opening", () => {
+    const w = game(2327, { remitOpens: true, pledgesEnabled: true });
+    const power = w.power!;
+    expect(longHaul(w, power.mineId, power.stationId, "supplies")).toBe(true);
+    expect(longHaul(w, power.mineId, w.cement!.worksId, "supplies")).toBe(false);
+    if (w.remit) {
+      expect(remitRefusal(w, { kind: "restorePower" })).toBeNull();
+      expect(remitRefusal(w, { kind: "freight", a: power.mineId, b: power.stationId })).not.toBeNull();
+    }
   }, 60_000);
 });
 

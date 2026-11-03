@@ -2,7 +2,7 @@ import { isFuelSite } from "./fuel";
 import { borderFuelSite } from "./gateways";
 import type { GameWorld } from "./types";
 import { parseRelayKey, type GoodsKind } from "./goods";
-import { legReach, nextStop, relayed } from "./haulage";
+import { legReach, longHaul, nextStop, relayed } from "./haulage";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { roadPath } from "./world";
 import { tollFor, type Takings } from "./budget";
@@ -36,9 +36,20 @@ const heldKey = (from: string, to: string, kind: GoodsKind) => `${from}|${to}|${
 /** A leg of a relayed load (haulage.ts): to this leg's stop, bound for `final`, from `origin`. */
 const legKey = (from: string, to: string, kind: GoodsKind, final: string, origin: string) => `${from}|${to}|${kind}|${final}|${origin}`;
 
-/** How keen truckers are on a haul of this many cells: 1 next door, 0 at `max` (truckerMaxHaulCells) and beyond. */
-export function haulShare(world: GameWorld, cells: number, max = world.tuning.truckerMaxHaulCells): number {
-  return max > 0 ? Math.max(0, 1 - cells / max) : 0;
+/**
+ * How keen truckers are on a haul of this many cells: 1 next door, 0 at `max` (truckerMaxHaulCells)
+ * and beyond -- or, for a long haul (`tail`, haulage.ts longHaul), falling off slowly past half of
+ * it and never to nothing: `tail / x` at x = cells / max, which meets the straight line at half
+ * (for a tail of 1/4, where both are 1/2): a quarter at the reach, a tenth at two and a half times.
+ */
+export function haulShare(world: GameWorld, cells: number, max = world.tuning.truckerMaxHaulCells, tail = 0): number {
+  if (max <= 0) return 0;
+  const x = cells / max;
+  if (tail <= 0) return Math.max(0, 1 - x);
+  // Where the tail meets the line (the larger root of x² - x + tail; at most a quarter, so they meet).
+  const t = Math.min(tail, 0.25);
+  const meet = (1 + Math.sqrt(1 - 4 * t)) / 2;
+  return x <= meet ? 1 - x : t / x;
 }
 
 /** Truckers take some of what's waiting at each yard, short hauls fastest. After goods arrive, before lorries load. */
@@ -72,7 +83,7 @@ export function truckersPickUp(world: GameWorld, dt: number): void {
     // hauliers held 4,214 t of cement for Katsina-Ala, delivering none -- it vanished).
     const k = to === final && origin === from ? heldKey(from, to, kind) : legKey(from, to, kind, final, origin);
     const room = Math.max(0, (tuning.truckerHoldLoads ?? Infinity) * tuning.truckLoad - (world.truckers.get(k) ?? 0));
-    const taken = Math.min(amount, room, amount * Math.min(1, pickup * pull) * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach));
+    const taken = Math.min(amount, room, amount * Math.min(1, pickup * pull) * (atYard ? tuning.yardPickupBoost : 1) * haulShare(world, path.distance, reach, to === final && longHaul(world, origin, final, kind) ? (tuning.longHaulTail ?? 0) : 0));
     if (taken <= 0) return;
     store.set(key, amount - taken);
     // When this load began to gather, for a part load (dispatchTrucks).

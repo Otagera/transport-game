@@ -22,6 +22,7 @@
 //   GAME_TUNING='{"goodsFarePerTonneCell":0.15}' ...  # tuning overrides
 //   LOG=1 ...                                           # every move as it's made
 
+import { powerShare } from "../src/engine/game/power";
 import { GAME_MAP } from "../src/game/map";
 import { startRun } from "../src/engine/game/runlog";
 import { applyAction, type ActionSpec } from "../src/engine/game/actions";
@@ -37,7 +38,7 @@ import { roadFull } from "../src/engine/game/growth";
 import { rungPrice } from "../src/engine/game/project";
 import { headline, isCutOff, paveCost, roadPath, routeSummaries, roadCost, tripsFrom } from "../src/engine/game/world";
 import { averageNet } from "../src/engine/game/history";
-import { flowKey, goodsFlows, lorryEstimate, lorrySummaries } from "../src/engine/game/goods";
+import { flowKey, freightRouteId, goodsFlows, lorryEstimate, lorrySummaries } from "../src/engine/game/goods";
 import { siteProduction } from "../src/engine/game/production";
 import { expandCost } from "../src/engine/game/expand";
 import { bondAmount, checkBond as gameCheckBond } from "../src/engine/game/bonds";
@@ -350,6 +351,24 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
       else if (checkBond(world, "steel").ok) did(act(world, day, { kind: "bond", purpose: "steel" }, "steel short: borrow for the steel works"));
     }
   }
+  // Coal and power (power.ts): once the coal's cluster is open to you, the station restored, then
+  // track and a freight train for its coal; a wagon more while it's short. Off: NO_POWER.
+  const power = world.power;
+  if (power && !process.env.NO_POWER && inRemit(world, power.mineId)) {
+    if (!power.working) {
+      if (spend(world, world.tuning.powerRestoreCost ?? 0)) did(act(world, day, { kind: "restorePower" }, "the coal is ours to reach: restore the power station"));
+    } else {
+      if (!railPath(world, power.mineId, power.stationId) && spend(world, trackCost(world, power.mineId, power.stationId))) {
+        did(act(world, day, { kind: "track", a: power.mineId, b: power.stationId, alignment: "cheapest" }, "coal to the power station: rail"));
+      }
+      const line = world.lorryRoutes.find((r) => r.id === freightRouteId(power.mineId, power.stationId));
+      if (railPath(world, power.mineId, power.stationId) && !line && spend(world, world.tuning.freightPurchaseCost)) {
+        did(act(world, day, { kind: "freight", a: power.mineId, b: power.stationId }, "a freight train for coal"));
+      } else if (line && day % 10 === 0 && powerShare(world) < 0.8 && spend(world, (world.tuning.wagonCost ?? 0) * line.vehicleIds.length)) {
+        did(act(world, day, { kind: "car", routeId: line.id }, "coal short: a wagon on the coal trains"));
+      }
+    }
+  }
   // Every working site and open quarry gets a road to the network.
   for (const site of [...world.towns.values()].filter((t) => t.industry && t.industry !== "oilfield" && t.industry !== "terminal")) siteRoads(world, day, site.id, did);
 
@@ -413,7 +432,17 @@ function play(seed: number): { seed: number; days: Day[]; world: GameWorld } {
     buildsToday = 0;
     const { moves, waiting } = decide(world, day, losing);
     const builds = buildsToday;
+    const tickStart = performance.now();
     for (let i = 0; i < ticksPerDay; i += 1) gameTick(world, SIM_DT);
+    // TICK_MS: what a step of the game costs as it fills up (the page runs one to four a frame).
+    // SAVE_AT=day SAVE_TO=file: the world as it stands that day, for a profile of a late game.
+    if (process.env.SAVE_AT && day === Number(process.env.SAVE_AT)) {
+      const { serialize } = require("bun:jsc") as typeof import("bun:jsc");
+      require("node:fs").writeFileSync(process.env.SAVE_TO!, new Uint8Array(serialize(world)));
+      console.log(`  day ${day}: world saved to ${process.env.SAVE_TO}`);
+      process.exit(0);
+    }
+    if (process.env.TICK_MS && day % 25 === 0) console.log(`  day ${day}: ${((performance.now() - tickStart) / ticksPerDay).toFixed(2)} ms a step, ${world.simulation.vehicles.length} vehicles, ${world.towns.size} towns and sites`);
     const b = world.budget;
     const fares = b.fares - last.fares;
     const goods = b.goods - last.goods;
@@ -532,6 +561,12 @@ for (const seed of SEEDS) {
   const lines = world.lorryRoutes.filter((r) => r.id.startsWith("freight:"));
   const split = lines.reduce((sum, r) => { const x = freightLineSplit(world, r.id); return { yours: sum.yours + x.yours, hauliers: sum.hauliers + x.hauliers, spoiled: sum.spoiled + x.spoiled }; }, { yours: 0, hauliers: 0, spoiled: 0 });
   const trucks = world.simulation.vehicles.filter((v) => String(v.id).startsWith("truck-")).length;
+  if (world.power) {
+    const pw = world.power;
+    const o = world.goods.outcomes.get(flowKey({ from: pw.mineId, to: pw.stationId, kind: "supplies" }));
+    const opened = pw.clusterHub && world.remit ? (world.remit.open.includes(pw.clusterHub) ? "open" : "closed") : "-";
+    console.log(`  power: coal cluster ${opened}, station ${pw.working ? "working" : "idle"}, power ${Math.round(powerShare(world) * 100)}%; coal a day by your trains ${Math.round((o?.delivered ?? 0) * D)} t, hauliers ${Math.round((o?.trucked ?? 0) * D)} t`);
+  }
   console.log(`  freight (rate ${world.tuning.freightRateDefault ?? "standard"}): ${lines.length} line(s); along them your trains ${Math.round(split.yours)} t/day, hauliers ${Math.round(split.hauliers)}, spoiling ${Math.round(split.spoiled)}; trucks on the road now ${trucks}; goods income ₦${Math.round(world.budget.goods / 1000)}k all game`);
   console.log(`  metros (Revision 4, 6): ${[...world.metros].map(([id, lines]) => `${world.towns.get(id)?.name} ${lines} line(s), ${Math.round(metroRiders(world, id).riders)} riders/day`).join("; ") || "none"}; metro fares ₦${Math.round(world.budget.metro / 1000)}k all game`);
   console.log(`  motor parks (Revision 4, 5): ${world.parks.size} (${[...world.parks].map((id) => world.towns.get(id)?.name).join(", ")}); levies last 20 days ₦${Math.round(window(DAYS - 20, DAYS).reduce((s, d) => s + d.levies, 0) / 20)}/day`);

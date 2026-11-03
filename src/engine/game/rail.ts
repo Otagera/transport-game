@@ -4,7 +4,7 @@ import type { Segment, TerrainField } from "../map/types";
 import type { PathResult, RoutingContext, Vehicle } from "../simulation/types";
 import { buildRoutingContext, findPath } from "../simulation/routing";
 import { createVehicle } from "../simulation/vehicle";
-import { canAfford, registerPurchase } from "../economy/state";
+import { canAfford, registerPurchase, SECONDS_PER_GAME_DAY } from "../economy/state";
 import { BASE_COST_PER_CELL } from "../pathing/cost";
 import type { GameWorld } from "./types";
 import { SWITCHED_OFF } from "./tuning";
@@ -351,16 +351,67 @@ export function trainsBySegment(world: GameWorld): Map<string, number> {
   return count;
 }
 
+/** A train's passes a day over each piece of its line: twice a round trip (`trackPassesPerDay`). */
+export function passesPerTrain(world: GameWorld, a: string, b: string, freight: boolean): number {
+  const length = railPath(world, a, b)?.distance ?? 0;
+  if (length <= 0) return 0;
+  const speed = freight ? world.tuning.freightSpeed : world.tuning.trainSpeed;
+  return (SECONDS_PER_GAME_DAY * speed) / length;
+}
+
+/** Passes a day over each piece of track: every passenger and freight train, as often as it goes over it. */
+export function passesBySegment(world: GameWorld): Map<string, number> {
+  const passes = new Map<string, number>();
+  const routes = [...world.routes.filter((route) => isRailRoute(route.id)), ...world.lorryRoutes.filter((route) => route.id.startsWith("freight:"))];
+  for (const route of routes) {
+    const path = railPath(world, route.a, route.b);
+    if (!path) continue;
+    const each = passesPerTrain(world, route.a, route.b, route.id.startsWith("freight:")) * route.vehicleIds.length;
+    for (const id of new Set(path.segmentIds)) passes.set(id, (passes.get(id) ?? 0) + each);
+  }
+  return passes;
+}
+
+export interface LineRoom {
+  /** On the fullest piece of the line: trains, or passes a day. */
+  used: number;
+  slots: number;
+  /** What one more train here adds to it. */
+  adds: number;
+  unit: "trains" | "passes";
+  full: boolean;
+  /** "line 3 of 4 trains" / "34 of 40 passes a day on its busiest stretch": with one more. */
+  text: string;
+}
+
 /**
- * How full the line between two towns is (`trackSlots` trains a piece of
- * track, passenger and freight together): a freight train takes a passenger
- * train's slot, so where both want a line you choose, or build a second.
+ * How full the line between two towns is, passenger and freight together: a freight train
+ * takes a passenger train's room, so where both want a line you choose, or build a second.
+ * By passes a day (`trackPassesPerDay`, 2026-11-02): a train bound far crosses a shared
+ * stretch seldom and costs it little. Without it (older runs), `trackSlots` trains a piece.
  */
-export function lineSlots(world: GameWorld, a: string, b: string): { used: number; slots: number } {
+export function lineSlots(world: GameWorld, a: string, b: string, freight = false): LineRoom {
   const path = railPath(world, a, b);
+  const perDay = world.tuning.trackPassesPerDay;
+  if (perDay) {
+    const by = passesBySegment(world);
+    const used = path ? Math.max(0, ...path.segmentIds.map((id) => by.get(id) ?? 0)) : 0;
+    const adds = passesPerTrain(world, a, b, freight);
+    // The first train on a line always fits, however short the line.
+    const full = used > 0 && used + adds > perDay + 1e-9;
+    return { used, slots: perDay, adds, unit: "passes", full, text: `${Math.round(used + adds)} of ${perDay} passes a day on its busiest stretch` };
+  }
   const by = trainsBySegment(world);
   const used = path ? Math.max(0, ...path.segmentIds.map((id) => by.get(id) ?? 0)) : 0;
-  return { used, slots: world.tuning.trackSlots };
+  const slots = world.tuning.trackSlots;
+  return { used, slots, adds: 1, unit: "trains", full: used >= slots, text: `line ${used + 1} of ${slots} trains` };
+}
+
+/** Why a full line refuses another train. */
+export function lineFullReason(line: LineRoom): string {
+  return line.unit === "passes"
+    ? `the line is full: ${Math.round(line.used)} of ${line.slots} passes a day on its busiest stretch, and this train adds ${Math.round(line.adds)}. Longer trains carry more without taking more room`
+    : `the line is full: ${line.used} of ${line.slots} trains`;
 }
 
 /** The towns a passenger train stops at: every stop on a running rail route's path. */
@@ -398,8 +449,9 @@ export function checkTrain(world: GameWorld, a: string, b: string): ActionResult
   if (a === b) return { ok: false, reason: "pick two different towns" };
   if (!railPath(world, a, b)) return { ok: false, reason: "no working track between them" };
   const line = lineSlots(world, a, b);
-  if (line.used >= line.slots) return { ok: false, reason: `the line is full: ${line.used} of ${line.slots} trains` };
-  if (!canAfford(world.economy, world.tuning.trainPurchaseCost)) return { ok: false, reason: "can't afford a train" };
+  if (line.full) return { ok: false, reason: lineFullReason(line) };
+  const cars = world.routes.find((route) => route.id === railRouteId(a, b))?.cars ?? 1;
+  if (!canAfford(world.economy, world.tuning.trainPurchaseCost + (cars - 1) * carPrice(world, railRouteId(a, b)).price)) return { ok: false, reason: "can't afford a train" };
   return { ok: true };
 }
 
@@ -418,22 +470,82 @@ export function addTrain(world: GameWorld, a: string, b: string): ActionResult {
   const { tuning } = world;
   const vehicleId = `train-${world.nextId++}`;
   // Road space 0: a train is never on a road.
-  const vehicle = createVehicle(vehicleId, [route.a, route.b], world.railRouting, tuning.trainSpeed, tuning.trainCapacity, undefined, "passengers", 0);
+  const cars = route.cars ?? 1;
+  const vehicle = createVehicle(vehicleId, [route.a, route.b], world.railRouting, tuning.trainSpeed, tuning.trainCapacity * cars, undefined, "passengers", 0);
   world.railVehicles.add(vehicleId);
   const others = route.vehicleIds
     .map((otherId) => world.simulation.vehicles.find((candidate) => candidate.id === otherId))
     .filter((candidate): candidate is Vehicle => candidate !== undefined);
   placeAtCycleFraction(world, vehicle, largestGapMidpoint(others.map((other) => cycleFraction(world, other))));
   world.simulation.vehicles.push(vehicle);
-  registerPurchase(world.economy, vehicleId, tuning.trainPurchaseCost, tuning.trainOperatingCostPerSecond, TRAIN_DEF_ID);
+  const car = carPrice(world, route.id);
+  registerPurchase(world.economy, vehicleId, tuning.trainPurchaseCost + (cars - 1) * car.price, tuning.trainOperatingCostPerSecond + (cars - 1) * car.perSecond, TRAIN_DEF_ID);
   route.vehicleIds.push(vehicleId);
   return { ok: true };
 }
 
-/** Running cost a day of one vehicle on a route: a train's or a bus's. */
+/** Running cost a day of one vehicle on a route: a train's (its cars too) or a bus's. */
 export function vehicleCostPerDay(world: GameWorld, routeId: string, secondsPerDay: number): number {
   const t = world.tuning;
-  const perSecond = isRailRoute(routeId) ? t.trainOperatingCostPerSecond : routeId.startsWith("mini:") ? t.minibusOperatingCostPerSecond : t.busOperatingCostPerSecond;
+  const perSecond = isRailRoute(routeId) ? t.trainOperatingCostPerSecond + (carsOn(world, routeId) - 1) * carPrice(world, routeId).perSecond : routeId.startsWith("mini:") ? t.minibusOperatingCostPerSecond : t.busOperatingCostPerSecond;
   return perSecond * secondsPerDay;
 }
 
+
+// --- Carriages and wagons (brief, Rail gets a job of its own, amended 2026-11-02) --------
+
+const isFreightLine = (routeId: string) => routeId.startsWith("freight:");
+
+/** A rail line's route, passenger or freight. */
+function railLine(world: GameWorld, routeId: string) {
+  return isFreightLine(routeId) ? world.lorryRoutes.find((route) => route.id === routeId) : isRailRoute(routeId) ? world.routes.find((route) => route.id === routeId) : undefined;
+}
+
+/** Cars a train on this line runs with, its engine's first among them. */
+export function carsOn(world: GameWorld, routeId: string): number {
+  return railLine(world, routeId)?.cars ?? 1;
+}
+
+/** One more car: a carriage on a passenger line, a wagon on a freight one. */
+export function carPrice(world: GameWorld, routeId: string): { price: number; perSecond: number; capacity: number } {
+  const t = world.tuning;
+  return isFreightLine(routeId)
+    ? { price: t.wagonCost ?? 0, perSecond: t.wagonOperatingCostPerSecond ?? 0, capacity: t.freightCapacity }
+    : { price: t.carriageCost ?? 0, perSecond: t.carriageOperatingCostPerSecond ?? 0, capacity: t.trainCapacity };
+}
+
+export function checkCar(world: GameWorld, routeId: string): ActionResult & { amount?: number } {
+  const line = railLine(world, routeId);
+  if (!line) return { ok: false, reason: "not a rail line" };
+  const max = world.tuning.trainMaxCars ?? 1;
+  const cars = line.cars ?? 1;
+  if (cars >= max) return { ok: false, reason: max <= 1 ? SWITCHED_OFF : `its trains are as long as they go: ${max} cars` };
+  if (line.vehicleIds.length === 0) return { ok: false, reason: "no trains on it" };
+  const amount = carPrice(world, routeId).price * line.vehicleIds.length;
+  if (!canAfford(world.economy, amount)) return { ok: false, reason: `can't afford a car for each of its ${line.vehicleIds.length} trains` };
+  return { ok: true, amount };
+}
+
+/**
+ * Every train on a line a car longer: its seats or tonnes up by one car's, its price and running
+ * cost by a car's (so selling a train returns its cars too), and no more of the track: a longer
+ * train passes as often as a short one.
+ */
+export function addCar(world: GameWorld, routeId: string): ActionResult & { amount?: number } {
+  const check = checkCar(world, routeId);
+  if (!check.ok) return check;
+  const line = railLine(world, routeId)!;
+  const car = carPrice(world, routeId);
+  for (const id of line.vehicleIds) {
+    const vehicle = world.simulation.vehicles.find((candidate) => candidate.id === id);
+    if (vehicle) vehicle.capacity += car.capacity;
+    const econ = world.economy.vehicleEconomics.get(id);
+    if (econ) {
+      econ.purchaseCost += car.price;
+      econ.operatingCostPerSecond += car.perSecond;
+    }
+  }
+  world.economy.funds -= check.amount!;
+  line.cars = (line.cars ?? 1) + 1;
+  return { ok: true, amount: check.amount };
+}

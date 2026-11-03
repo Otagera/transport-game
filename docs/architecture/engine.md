@@ -972,6 +972,14 @@ starved. With the key, outcomes also roll `arrived` (yours and the truckers') ov
 the served shares read that. The same lesson as "roll lumpy earnings over longer"
 (principles.md §3), for what goods do rather than what they earn.
 
+**Far limestone tails off** (2026-11-02, `longHaulTail`, haulage.ts `longHaul`). A quarry's
+limestone to the works isn't relayed (`relayLimestone`, off: map 3218's cost), and past a haul's
+reach it had stopped dead -- at 119 cells hauliers carried it, at 121 nothing, roads all the
+way. For that haul, `haulShare(cells, max, tail)` follows the straight line to where `tail / x`
+meets it (x = cells / max; half, for a tail of a quarter) and then `tail / x`: a quarter at the
+reach, a tenth at two and a half times it, never none. One truck a load, straight there. The
+site's line and the problem card say "a long haul by road ... a freight train takes the rest".
+
 **Part loads** (2026-10-29, `partLoadDays`, truckers.ts). A hold of cement, steel or fuel
 (`relayed`) dispatches once it has gathered for 7 days, part full, not only at `truckLoad`
 (`world.truckerSince`: when each hold began). Map 949's far small towns want ~0.5 t of steel a
@@ -984,6 +992,19 @@ piece's count against `trackSlots`, and `checkTrain` / `checkFreight` refuse a f
 `stationCapShare` for them, and `applyRailDemand` (called from `settlement.ts`
 `refreshDemand`, so daily) multiplies demand between two stops of one line by
 `1 + railInducedDemand`.
+
+**A line's room by passes a day, and longer trains** (2026-11-02). Counting trains a piece
+made a train bound far fill a short shared stretch as if it lived there (map 2327's playtest).
+With `trackPassesPerDay`, `passesPerTrain(a, b, freight)` is `SECONDS_PER_GAME_DAY × speed /
+path length` (twice a round trip), `passesBySegment` sums it over every rail and freight route's
+trains on each piece of its path, and `lineSlots` returns a `LineRoom`: the fullest piece's
+passes, what one more train adds, `full` (the first train on a line always fits), and the
+preview's text; `lineFullReason` is the refusal. Older runs (no key) keep `trackSlots` trains.
+`addCar(routeId)` lengthens every train on a line by a car (`trainMaxCars`; a carriage on a
+passenger line, a wagon on a freight one): each vehicle's `capacity` by one car's, its
+`vehicleEconomics` purchase price and running cost by the car's (so resale returns the cars
+too), the route's `cars` count, which new trains take. A longer train passes no more often:
+it takes no more room. `vehicleCostPerDay` / `goodsVehicleCostPerDay` read the cars.
 
 ### The warm-up, and day numbers
 
@@ -1499,6 +1520,35 @@ design console's drawer); `whatIf` runs it through for a script.
 - 2D/3D: the `station` glyph (a canopy over rails) open when the line to it is restored
   (`stationOpen`), hollow while it isn't; in 3D a station building, platform and water tower; its
   card and the Sites list say what it was built for, how far off, and who changes trains there.
+
+### Coal and power (2026-11-02; brief, The remit opens, A chain at each opening)
+
+`power.ts`, behind `coalEnabled` (absent in older runs: no coal, no power; **off by default since
+2026-11-03** until C37 and C38 pass -- brief, the measured results). The first chain an
+opening brings, and an interlock: it lifts the chains you already run.
+
+- **Placed** by `placePower` after every other site (start.ts), so nothing else moves (a test
+  holds every other site's position with it off). The mine goes in `coalCluster`: the far cluster
+  nearest the home box that isn't the limestone one, 8-18 cells from its regional town, as far
+  from any town as it gets, with an old road to that town. The station goes in the home box where
+  the most `POWERED` sites (works, steel works, both refineries, mill, flour mill) fall within
+  `powerReachCells`, by water a little better, near the network, with an old road. On the five
+  maps checked the coal is 139-244 road cells from the station: past any haul, so rail's.
+- **Idle at the start**, restored by `restorePower` (`powerRestoreCost`, the `restorePower`
+  action; in your remit, at home). From then `coalWanted` is `powerCoalPerDay` and the mine digs
+  it (`coalOutput`, times its shift); `powerFlows` is one flow, mine to station, added in
+  `goodsFlows` after steel's. Coal is "coal" by its site (fuel.ts `cargoName`); not relayed, but a
+  long haul (haulage.ts `longHaul`), so hauliers take a tailing share of it past their reach.
+- **Power** is `powerShare`: coal arriving over coal wanted, times the station's shift.
+  `powerLift(siteId)` is `1 + powerBoost × powerShare` for a `POWERED` site within reach of a
+  working station, else 1. Each such site's output function multiplies by it (cement.ts
+  `worksOutput`, steel.ts `steelOutput`, fuel.ts `refineryOutput` / `newRefineryOutput`, food.ts
+  `millOutput` / `flourOutput`): more from the same input. production.ts multiplies the site's
+  capacity by it after reading its inputs, so "made of capacity" stays a share and the input
+  needed doesn't move.
+- **Remit:** the mine is in a far cluster, so a line to it waits on that cluster opening;
+  `clusterBrings` names "a coal mine (power for your works)" in the verdict's offer.
+- **Jobs:** `jobsPowerStation`, `jobsCoalMine` while working; an idle one's caretakers, as steel's.
 
 ### The steel chain (2026-10-23; brief, More industries, more chains)
 

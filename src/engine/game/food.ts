@@ -1,3 +1,4 @@
+import { powerLift } from "./power";
 import { inFarmBelt } from "./clusters";
 import { exportGateway, importsArriving, portScale } from "./gateways";
 import type { GameTown, GameWorld } from "./types";
@@ -123,7 +124,7 @@ export function millCapacity(world: GameWorld): number {
 export function millOutput(world: GameWorld): number {
   const food = world.food;
   if (!food) return 0;
-  return Math.min(millCapacity(world), stapleArriving(world) / world.tuning.staplePerFood) * staffFactor(world, food.millId);
+  return Math.min(millCapacity(world), stapleArriving(world) / world.tuning.staplePerFood) * staffFactor(world, food.millId) * powerLift(world, food.millId);
 }
 
 /**
@@ -182,7 +183,7 @@ export function flourCapacity(world: GameWorld): number {
 export function flourOutput(world: GameWorld): number {
   const food = world.food;
   if (!food?.flourMillId) return 0;
-  return Math.min(flourCapacity(world), wheatArriving(world) / world.tuning.wheatPerFlour) * staffFactor(world, food.flourMillId);
+  return Math.min(flourCapacity(world), wheatArriving(world) / world.tuning.wheatPerFlour) * staffFactor(world, food.flourMillId) * powerLift(world, food.flourMillId);
 }
 
 /** Of the flour a market town wants, the share delivered, 0..1. */

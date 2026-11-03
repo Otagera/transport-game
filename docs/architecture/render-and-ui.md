@@ -311,7 +311,10 @@ terrain isn't applied: the map still draws shaded hills.
   against what full output takes, its shift, and the share carried away, a gauge each, the
   binding one marked "holding it back"; with no more pressing problem, the bottleneck is "The
   problem here" (short of its input, naming where from; or most of it waiting). On the map, a
-  gauge under each site's square (green ≥80%, amber ≥40%, red below; grey idle). The map
+  gauge under each site's square (green ≥80%, amber ≥40%, red below; grey idle). Under the
+  gauges, a site in a power station's reach says what the grid adds or would (`powerHtml`); the
+  station and its coal mine have their own card (`renderPowerSite`), the station's restore in
+  "The problem here" while it's idle. The map
   passes `goodsFlows` in once a frame (playtest, map 2411: "we need indications for the
   factories in terms of production"). **Keep passing it:** `siteProduction` works the flows
   out itself when not handed them, and the site icons' redraw had dropped the argument -- on
@@ -733,7 +736,9 @@ legible at a glance"). Each reads a rule the game already has; nothing new is si
   stockpile, conveyor, preheater tower, kiln on its piers, clinker shed and silos; a steelworks'
   blast furnace and stoves, ore heaps, steel shop, rolling mill and slag tip; the steel terminal's
   overhead crane and shed; a mill's silos, elevator and gallery, mill house and bagging shed; the
-  motor plant's sawtooth hall, office and boiler house. What changes with how it's doing: **its
+  motor plant's sawtooth hall, office and boiler house; a coal mine's pit as an iron mine's, dark;
+  a power station's two waisted cooling towers (steaming), boiler house and tall stack, coal heaps
+  and conveyor, switchyard. What changes with how it's doing: **its
   stock** (`SITE_STOCK`: sacks, a heap, steel coils, finished cars) piles up as much as it makes and
   can't get away -- `siteProduction`'s shipped share -- none while it's idle; **its lorries at the
   bay** (`SITE_BAY`: tankers or trucks), one to three as much as it ships; **the excavator** swings

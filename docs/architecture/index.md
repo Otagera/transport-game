@@ -108,10 +108,17 @@ test/              game.test.ts (the game) + one file per engine foundation modu
 
 `src/engine/loop.ts` exposes `SIM_DT = 1/30`. The page (`src/game/main.ts`) runs
 `gameTick(world, SIM_DT)` (`engine/game/tick.ts`) as many times a frame as the game speed
-asks; each call runs the whole game a step in a fixed order -- demand, your vehicles, the
-informal sector, goods and hauliers, money, lanes and strikes, growth, industries, sites --
-and returns the events of that step (strikes, sites opening, milestones...), which the page
-turns into toasts and the run file records. Detail in [engine.md](engine.md) §game/.
+asks, **within a budget** (`STEP_BUDGET_MS`, 10 ms a frame): past it the frame draws and the
+game time it couldn't step is dropped, not carried. Measured 2026-11-02 on map 3218's day 200
+at 4x, a phone's CPU (Chrome's 4x slowdown, 390x844 @3x): carried, each slow frame owed more
+steps than the last, and the page drew 3 frames a second with its buttons all but dead; with
+the budget, 46 frames a second and the game at 2.7x, which the time controls say ("4× (2.7×)").
+The side panel redraws once a second, not four times, while the device can't keep the speed.
+A step is ~2.7 ms on an M2 throughout a game, day 25 or day 200: what's dear is how many a
+frame, not a step that grows. Each call runs the whole game a step in a fixed order -- demand,
+your vehicles, the informal sector, goods and hauliers, money, lanes and strikes, growth,
+industries, sites -- and returns the events of that step (strikes, sites opening, milestones...),
+which the page turns into toasts and the run file records. Detail in [engine.md](engine.md) §game/.
 
 ## Build/verify pipeline
 

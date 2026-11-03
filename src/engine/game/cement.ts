@@ -1,3 +1,4 @@
+import { powerLift } from "./power";
 import type { GameTown, GameWorld } from "./types";
 import { importsArriving, portScale } from "./gateways";
 import { flowKey, servedRate, type GoodsFlow } from "./goods";
@@ -86,7 +87,7 @@ export function worksCapacity(world: GameWorld): number {
 /** What the works makes now, tonnes a second: its capacity, or what the limestone arriving makes, whichever is less. */
 export function worksOutput(world: GameWorld): number {
   if (!world.cement?.working) return 0;
-  return Math.min(worksCapacity(world), limestoneArriving(world) / world.tuning.limestonePerCement) * staffFactor(world, world.cement.worksId);
+  return Math.min(worksCapacity(world), limestoneArriving(world) / world.tuning.limestonePerCement) * staffFactor(world, world.cement.worksId) * powerLift(world, world.cement.worksId);
 }
 
 /** Imported cement through the terminal, tonnes a second (idle-works maps only). */
