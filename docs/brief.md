@@ -966,6 +966,32 @@ when offered, coal first for money, a bond for the station): C38 holds -- where 
 and then carried 19-41 t of the 120 wanted: power 14-20%. **Still off.** Next: whether towns are
 short of cement or steel late in a game at all -- if not, no lift on the works can show.
 
+### Towns grow where you serve them (agreed 2026-11-03)
+
+Your playtest: after an opening *"it still feels the same"*. Measured on the strategist's games
+(map 3218 day 207, map 2327 day 287): the median town hadn't grown past its start at all; only 5
+of 21 towns grew, and those you carried 29-41% of trips for filled 7-29% of their room; cement and
+steel held back 1.5-2% of people, because no town reached +40%. Too little growth for any chain to
+matter. Your answer: **first, towns grow more where you serve them; then see it, before goods
+decide how much of that room gets built** (step 2, below).
+
+1. **The development curve rises sooner** (`growthServiceFloor` 0.25 -> 0.15, `growthServiceFull`
+   0.75 -> 0.55): your service still gates growth (principles §3, Growth), but a town you carry a
+   third of fills most of its room, not a tenth.
+2. *(Next, after you've seen 1.)* Goods count in development from the start: a town short of
+   cement fills part of its room, one supplied all of it.
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C39 | Served towns grow | Strategist, five maps to day 300: the towns you carry a fifth or more of trips for grow a median +20-40% past their start; money and trips within reason against today's rules |
+
+**Step 1 built 2026-11-03.** Measured, five maps to day 300 against the old curve: the towns you
+carry a fifth or more of trips for grew a median +32%, +38%, +55%, +47%, +24% (maps 2327, 3218,
+2411, 543, 949; old +21%, +14%, +12%, +3%, +4%); people +8 to +21%, trips and money a day up on all
+five; towns you don't serve still don't grow. C39 holds on three maps, overshoots on two (the
+fastest towns +52 to +87%): a full point at 0.6, not 0.55, if play finds it quick. Step 2 waits on
+your playtest.
+
 ### Checks for the remit
 
 | # | Check | Passes when |

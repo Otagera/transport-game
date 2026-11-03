@@ -615,8 +615,12 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   townGrowthCap: 1.25,
   growthCapDirtShare: 0.4,
   growthMinPlayerShare: 0.1,
-  growthServiceFloor: 0.25,
-  growthServiceFull: 0.75,
+  // Where a town's development starts and where it fills its room, by its service (your share
+  // of its trips and half the informal). 0.25 to 0.75 until 2026-11-03: on map 2327 at day 287
+  // only 5 of 21 towns grew, those you carried 29-41% of filled 7-29% of their room, and the
+  // region went from ~730k to 774k -- too little growth for any chain to gate or lift.
+  growthServiceFloor: 0.15,
+  growthServiceFull: 0.55,
   townGrowthTauSeconds: 300,
   // Wear (step 4, wear.ts). Tuned with the probe's wear strategies, a
   // 2+2-bus chain over 40 days (no wear at all: +305/day):

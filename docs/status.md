@@ -72,7 +72,12 @@ measured, power wasn't felt and no line reached the coal. **Reworked, not yet co
 45-76 cells from the station (₦271-493k of track), coal bulk (hauliers 40 cells, a yard or not),
 +40%, and a freight line you can save for; being measured on five maps to day 300. Diagrams now in
 the docs: the frame and the step (architecture/index.md); the chains, hauliers' reach, a line's
-room, the remit opening, coal and power (engine.md).
+room, the remit opening, coal and power (engine.md). Coal's rework was committed off: C38 held,
+C37 didn't -- and the reason was bigger than coal: **towns barely grew** (median 0% past their start
+at day 287; cement and steel held back 2% of people). **Towns now grow where you serve them**
+(brief, same name; `growthServiceFloor` 0.15, `growthServiceFull` 0.55): served towns +24 to +55%
+by day 300, people +8 to +21%. **Open for you:** play it; then step 2 (goods decide how much of
+that room gets built), then cotton.
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

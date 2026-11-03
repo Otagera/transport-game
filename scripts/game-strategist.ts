@@ -572,6 +572,14 @@ for (const seed of SEEDS) {
   const lines = world.lorryRoutes.filter((r) => r.id.startsWith("freight:"));
   const split = lines.reduce((sum, r) => { const x = freightLineSplit(world, r.id); return { yours: sum.yours + x.yours, hauliers: sum.hauliers + x.hauliers, spoiled: sum.spoiled + x.spoiled }; }, { yours: 0, hauliers: 0, spoiled: 0 });
   const trucks = world.simulation.vehicles.filter((v) => String(v.id).startsWith("truck-")).length;
+  // C39: how far the towns you serve have grown past their start (brief, Towns grow where you serve them).
+  {
+    const growth = [...world.basePopulation.keys()].filter((id) => world.towns.has(id)).map((id) => ({ g: townGrowth(world, id), grown: world.towns.get(id)!.population / world.basePopulation.get(id)! - 1 }));
+    const served = growth.filter((x) => (x.g?.playerShare ?? 0) >= 0.2).map((x) => x.grown).sort((a, b) => a - b);
+    const all = growth.map((x) => x.grown).sort((a, b) => a - b);
+    const median = (xs: number[]) => (xs.length ? xs[Math.floor((xs.length - 1) / 2)]! : 0);
+    console.log(`  C39 towns you carry 20%+ of trips for: ${served.length} of ${all.length}, median +${Math.round(median(served) * 100)}% past their start (all towns +${Math.round(median(all) * 100)}%, most +${Math.round((all.at(-1) ?? 0) * 100)}%)`);
+  }
   if (world.power) {
     const pw = world.power;
     const o = world.goods.outcomes.get(flowKey({ from: pw.mineId, to: pw.stationId, kind: "supplies" }));
