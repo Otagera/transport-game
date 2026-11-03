@@ -203,6 +203,18 @@ export function roadFull(world: GameWorld, townId: string): { rung: CorridorRung
 }
 
 /**
+ * Thousands of people a town's next rung would make room for, at the service it gets now
+ * (roadFull's next; brief, Where next): 0 when its road isn't what stops it.
+ */
+export function nextRungRoom(world: GameWorld, townId: string): number {
+  const full = roadFull(world, townId);
+  const growth = townGrowth(world, townId);
+  if (!full || full.thin || !growth || growth.cap <= growth.base) return 0;
+  const developed = (growth.target - growth.base) / (growth.cap - growth.base);
+  return growth.base * world.tuning.townGrowthCap * Math.max(0, rungShare(world, full.next) - rungShare(world, full.rung)) * developed;
+}
+
+/**
  * The busiest whole road at a town on a given rung, by trips a day wanted
  * along it (both ends on it, through any roadside towns): the road its next
  * rung would go on.

@@ -33,7 +33,7 @@ import { stationOf, stationOpen } from "@engine/game/stations";
 import { handoverNote, termLetter, type Letter } from "./correspondent";
 import { thenAndNowSvg } from "./thenandnow";
 import { railPath } from "@engine/game/rail";
-import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
+import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, townNoSeat, shrinkCause, whereNext, wornRoadAt, type NamedMove, type Opening } from "@engine/game/problems";
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
 import { assemblyGeneration } from "@engine/game/assembly";
@@ -325,6 +325,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const name = what === "works" ? "the cement works" : what === "refinery" ? "the refinery" : "the steel works";
     return `<button data-restore-${what}="1">Restore ${name} · ${nairaK(cost)}</button>${world.economy.funds < cost ? hooks.bond(what) : ""}`;
   }
+  /** The works makes all it can (cement.ts cementBreak "capacity"): what it makes against what's wanted, and its expansion. */
+  function worksFull(b: { made: number; wanted: number; expandCost: number | null }): { why: string; button: string } {
+    const works = nameOf(world.cement!.worksId);
+    const why = `${works} makes all it can: ${int(b.made * D)} t a day with imports, of ${int(b.wanted * D)} wanted`;
+    const button = b.expandCost === null ? `<span class="muted">Expanded as far as it goes</span>`
+      : `<button data-expand="${world.cement!.worksId}">Expand ${esc(works)} · ${nairaK(b.expandCost)}</button>`;
+    return { why, button };
+  }
 
   // --- Waiting on you (brief, Revision 5, step 1) --------------------------------------
   // Every move with a consequence, pinned at the top of the panel: the chain breaks that hold
@@ -350,6 +358,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const who = `${int(cement.people)}k people held back in ${plural(cement.towns.length, "town")}`;
       if (b?.kind === "idle") items.push({ id: "cement", text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
       else if (b?.kind === "quarry") items.push({ id: "cement", text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`), at: [b.quarryId], weight: cement.people });
+      else if (b?.kind === "capacity") {
+        const f = worksFull(b);
+        items.push({ id: "cement", text: `Cement short, ${who}: ${f.why}`, button: f.button, at: [world.cement.worksId], weight: cement.people });
+      }
       else if (b?.kind === "carry") {
         const c = carryWhy("cement", world.cement.worksId, mostHeld(cement.towns, (t) => t.cementHeld).id);
         items.push({ id: "cement", text: `Cement short, ${who}: ${c.why}`, button: c.button, at: c.at, weight: cement.people });
@@ -498,6 +510,31 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"${item.at.length > 0 ? ` data-at="${esc(item.at.join(","))}"` : ""}><span>${esc(item.text)}${age(item)}</span>${item.button}</div>`).join("")}</div>`;
   }
 
+  // --- Where next (brief, Where next; map 8703: "difficult knowing what to connect") ---------
+  // The towns in your remit with the most people to gain, each with what's in the way and its
+  // move (problems.ts whereNext). Ranked as a day begins or when you make a move, as Waiting on
+  // you is: whereNext walks every pair's outcomes, and a list that reshuffled under the pointer
+  // couldn't be clicked.
+  let nextRanked = "";
+  let nextShown: Opening[] = [];
+  function whereNextHtml(): string {
+    const at = `${gameDay(world)}|${recorder.file.actions.length}`;
+    if (at !== nextRanked) {
+      nextRanked = at;
+      nextShown = whereNext(world, (id) => inRemit(world, id)).slice(0, 4);
+    }
+    if (nextShown.length === 0) return "";
+    const rows = nextShown.map((o) => {
+      const name = nameOf(o.townId);
+      const show = `<button data-pick="town|${esc(o.townId)}">Show ${esc(name)}</button>`;
+      const move = !o.move ? toolButton("road", "Road <kbd>R</kbd>", [o.townId])
+        : Number.isFinite(o.move.price) ? moveButton(o.move, "")
+        : `<span class="muted">${esc(o.move.label)}</span>`;
+      return `<div class="problem" data-at="${esc(o.townId)}"><span><b>${esc(name)}</b> · +${int(o.people)}k: ${esc(o.why.replace(/(; (served|carrying more)[^;]*|,? room for \+\d+k|: [^:]* makes room for \+\d+k)$/, ""))}</span>${move}${show}</div>`;
+    });
+    return `<div class="pane waiting where-next"><h2>Where next · people to gain</h2>${rows.join("")}</div>`;
+  }
+
   function townProblem(t: Town): Problem {
     // Outside your remit (remit.ts): running without you until a verdict opens its cluster.
     const closed = closedClusterOf(world, t.id);
@@ -507,14 +544,20 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const next = t.roadFull.next;
       return { text: "Can't grow: its road is full", button: next === "rail" ? toolButton("track", "Track <kbd>K</kbd>") : toolButton("road", next === "paved" ? "Pave its road <kbd>R</kbd>" : "A bus lane <kbd>R</kbd>") };
     }
+    // Losing people comes first: a town short of cement that is shrinking is shrinking for
+    // another reason (map 8703, day 400: Eligo's card said cement while your share fell 48% -> 36%).
+    const shrink = shrinkCause(world, t.id);
+    if (shrink) return { text: `Shrinking: ${shrink.why}`, button: moveButton(shrink.move ?? undefined, "") };
     // Cement past its first 40%: a problem only when it costs the town 5% of its size or more.
     if (t.cementHeld >= Math.max(5, 0.05 * t.population)) {
       const b = cementBreak(world);
+      const full = b?.kind === "capacity" ? worksFull(b) : null;
       const button = b?.kind === "no-quarry" ? `<span class="muted">Next quarry ~day ${b.nextDay}</span>`
         : b?.kind === "quarry" ? toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`)
         : b?.kind === "idle" ? restoreButton("works")
+        : full ? full.button
         : carryWhy("cement", world.cement!.worksId, t.id).button;
-      return { text: `Short of cement (${pct(t.cement ?? 0)} of what it needs): ${int(t.cementHeld)}k fewer people than your service would grow it to`, button };
+      return { text: `Short of cement (${pct(t.cement ?? 0)} of what it needs): ${int(t.cementHeld)}k fewer people than your service would grow it to${full ? `. ${full.why}` : ""}`, button };
     }
     // Steel past +80% (steel.ts): the big towns' last growth.
     if (t.steelHeld >= Math.max(5, 0.05 * t.population)) {
@@ -528,8 +571,6 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     // Short by the network and within a source's reach: else a yard at the tank farm does nothing
     // for it (Ota, with no road at all, was sent there).
     if (t.fuel !== null && t.fuel < 0.6 && (fuelPlanned(world, t.id) ?? 1) < 0.6 && fuelReachable(world, t.id)) return { text: `Fuel short: ${pct(t.fuel)} supplied`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>") };
-    const shrink = shrinkCause(world, t.id);
-    if (shrink) return { text: `Shrinking: ${shrink.why}`, button: moveButton(shrink.move ?? undefined, "") };
     const worn = wornRoadAt(world, t.id);
     if (worn) return { text: `Its road ${nameOf(worn.a)}–${nameOf(worn.b)} is worn: ${pct(worn.speed)} speed, ${naira(worn.roughPerDay)}/day more for your vehicles`, button: moveButton(worn.move, "") };
     const seat = townNoSeat(world, t.id);
@@ -770,7 +811,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     } else {
       const tabs = `<div class="tabs">${TABS.map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${TAB_NAME[t]}</button>`).join("")}</div>`;
       const list = tab === "network" ? hooks.moneyNote() + networkList() + pipesList() + fold("forecasts", "More: the forecasts", hooks.routesMore()) : tab === "towns" ? townsTable() : sitesTable();
-      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${list}</div>`);
+      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${whereNextHtml()}${tabs}<div class="pane">${list}</div>`);
     }
     panelEl.scrollTop = scroll;
   }

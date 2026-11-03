@@ -1,7 +1,7 @@
 import type { GameWorld } from "./types";
 import type { ActionSpec } from "./actions";
 import { diagnoseRoute, findRoute, isBrtRoute, isMinibusRoute, laneCost, pairDemand, paveCost, roadPath, routeSummaries } from "./world";
-import { growthTrend, roadFull, townGrowth } from "./growth";
+import { growthTrend, nextRungRoom, roadFull, townGrowth } from "./growth";
 import { corridorsAlong } from "./corridors";
 import { laneEncroachment, lanesBySegment } from "./pushback";
 import { isRailRoute, railPath } from "./rail";
@@ -78,10 +78,7 @@ export function seatMove(world: GameWorld, a: string, b: string): NamedMove {
     if (!full?.road || full.thin || !path) continue;
     const along = corridorsAlong(world, path.segmentIds);
     if (![...corridorsAlong(world, roadPath(world, full.road.a, full.road.b)?.segmentIds ?? [])].some((key) => along.has(key))) continue;
-    const road = `${nameOf(world, full.road.a)}–${nameOf(world, full.road.b)}`;
-    if (full.next === "paved") return { action: { kind: "pave", a: full.road.a, b: full.road.b }, price: paveCost(world, full.road.a, full.road.b), label: `Pave ${road} (R)` };
-    if (full.next === "lane") return { action: { kind: "lane", a: full.road.a, b: full.road.b }, price: laneCost(world, full.road.a, full.road.b), label: `A bus lane on ${road} (R)` };
-    return { action: { kind: "track", a: full.road.a, b: full.road.b, alignment: "cheapest" }, price: rungPrice(world, full.road.a, full.road.b, "rail"), label: `Rail on ${road} (K)` };
+    return rungMove(world, full.next, full.road);
   }
   const pair = `${nameOf(world, a)} ↔ ${nameOf(world, b)}`;
   const t = world.tuning;
@@ -109,6 +106,14 @@ export function seatMove(world: GameWorld, a: string, b: string): NamedMove {
   return thin
     ? { action: { kind: "minibus", a, b }, price: vehiclePrice(world, "minibus"), label: `Run a minibus ${pair} (M)` }
     : { action: { kind: "bus", a, b }, price: vehiclePrice(world, "bus"), label: `Run a bus ${pair} (B)` };
+}
+
+/** The next rung on a whole road, priced: paved, a lane, or rail. */
+function rungMove(world: GameWorld, next: "paved" | "lane" | "rail", on: { a: string; b: string }): NamedMove {
+  const road = `${nameOf(world, on.a)}–${nameOf(world, on.b)}`;
+  if (next === "paved") return { action: { kind: "pave", a: on.a, b: on.b }, price: paveCost(world, on.a, on.b), label: `Pave ${road} (R)` };
+  if (next === "lane") return { action: { kind: "lane", a: on.a, b: on.b }, price: laneCost(world, on.a, on.b), label: `A bus lane on ${road} (R)` };
+  return { action: { kind: "track", a: on.a, b: on.b, alignment: "cheapest" }, price: rungPrice(world, on.a, on.b, "rail"), label: `Rail on ${road} (K)` };
 }
 
 export interface NoSeatPair {
@@ -209,6 +214,11 @@ export function shrinkCause(world: GameWorld, townId: string): ShrinkCause | nul
     }
     return { why: `its road allows less than on day ${dayOf(world, peak.atSeconds)}`, move: null };
   }
+  // Your share fell as it grew: a bigger town makes more trips than your lines carry
+  // (map 8703: Eligo 48% -> 36% over days 360-400 with two lines into it full).
+  if (peak && peak.playerShare - now.playerShare > 0.05) {
+    return { why: `you carry ${pct(now.playerShare)} of its trips, down from ${pct(peak.playerShare)} on day ${dayOf(world, peak.atSeconds)}: grown, it makes more trips than your lines take`, move: serviceMove };
+  }
   if (peak && peak.service - now.service > 0.02) {
     return { why: `its service fell from ${pct(peak.service)} to ${pct(now.service)} since day ${dayOf(world, peak.atSeconds)} (yours ${pct(now.playerShare)})`, move: serviceMove };
   }
@@ -305,4 +315,125 @@ export function namedMoves(world: GameWorld): NamedMove[] {
 /** Whether a named move is affordable now: within funds plus AFFORDABLE_DAYS of the 5-day net. */
 export function affordable(world: GameWorld, move: NamedMove): boolean {
   return move.price <= world.economy.funds + AFFORDABLE_DAYS * Math.max(0, averageNet(world));
+}
+
+/** A town with people to gain, what's in the way, and the move that answers it (brief, Where next). */
+export interface Opening {
+  townId: string;
+  /** Thousands of people it has room for, past where it's heading now. */
+  people: number;
+  /** unserved: you carry under growthMinPlayerShare; service: more of its trips carried; road: its rung's limit. */
+  kind: "unserved" | "service" | "road";
+  why: string;
+  /** Null where nothing can be bought for it yet (a town no road reaches: build one). */
+  move: NamedMove | null;
+}
+
+/** Below this many thousand people to gain, or this share of its size, a town isn't listed. */
+const OPENING_MIN_PEOPLE = 3;
+const OPENING_MIN_SHARE = 0.05;
+
+/**
+ * Where next (brief, Where next; map 8703: "difficult knowing what to connect"): every original
+ * town `inScope` (your remit) with room to grow, by what stops it -- its road at its rung's limit,
+ * else your share of its trips -- most people first. Room is a town's growth target at the best
+ * service against where it's heading now (townGrowth), so it's what better service can win, not a
+ * forecast; cement and steel aren't here (Waiting on you has them, with their people).
+ */
+export function whereNext(world: GameWorld, inScope: (townId: string) => boolean = () => true): Opening[] {
+  const openings: Opening[] = [];
+  const min = world.tuning.growthMinPlayerShare;
+  for (const townId of world.basePopulation.keys()) {
+    const town = world.towns.get(townId);
+    if (!town || town.industry || !inScope(townId)) continue;
+    const growth = townGrowth(world, townId);
+    if (!growth) continue;
+    const enough = (people: number) => people >= OPENING_MIN_PEOPLE && people >= OPENING_MIN_SHARE * town.population;
+    const k = (people: number) => `+${Math.round(people)}k`;
+    const rung = nextRungRoom(world, townId);
+    const full = roadFull(world, townId);
+    if (full?.road && enough(rung)) {
+      const now = full.rung === "dirt" ? "dirt road" : full.rung === "paved" ? "paved road" : "bus lane";
+      openings.push({ townId, people: rung, kind: "road", why: `its ${now} is full: ${full.next === "paved" ? "paving" : full.next === "lane" ? "a bus lane" : "rail"} makes room for ${k(rung)}`, move: rungMove(world, full.next, full.road) });
+      continue;
+    }
+    const room = growth.cap - growth.target;
+    if (!enough(room)) continue;
+    // The trip most of its people make that you don't carry: where more service wins most.
+    const trip = mostUncarried(world, townId);
+    const move = trip ? openingMove(world, townId, trip.other, trip.perDay) : null;
+    const toward = trip ? `, most toward ${nameOf(world, trip.other)} (${Math.round(trip.perDay)} a day)` : "";
+    // Below where growth starts -- your share under growthMinPlayerShare, or its service (yours
+    // and half the danfos') under growthServiceFloor -- a move is only a step until it's past:
+    // say how many more trips a day get it there (map 8703: Oshidi's one minibus took you from
+    // 7% to 12-15%, its service to 14%, and it didn't grow).
+    const t = world.tuning;
+    const trips = tripsBetweenTowns(world, townId);
+    // Half again over the gap: what you carry takes some riders from the danfos (half a point of
+    // service each), and carried, more set out (Oshidi: 18 a day short, a minibus's ~19 left it at 14%).
+    const short = 1.5 * Math.max((t.growthServiceFloor - growth.service) * trips, (min - growth.playerShare) * trips, 0);
+    if (!trip) {
+      openings.push({ townId, people: room, kind: "unserved", why: `no road reaches it; served, room for ${k(room)}`, move: null });
+    } else if (short > 0) {
+      openings.push({ townId, people: room, kind: "unserved", why: `you carry ${pct(growth.playerShare)} of its trips${toward}: carry about ${Math.max(5, Math.ceil(short / 5) * 5)} more a day and it starts to grow, room for ${k(room)}`, move });
+    } else {
+      openings.push({ townId, people: room, kind: "service", why: `you carry ${pct(growth.playerShare)} of its trips${toward}; carrying more makes room for ${k(room)}`, move });
+    }
+  }
+  // Most people first; a row with nothing to buy (another vehicle wouldn't pay) after those with a move.
+  const buyable = (o: Opening) => (o.move && Number.isFinite(o.move.price) ? 1 : 0);
+  return openings.sort((p, q) => buyable(q) - buyable(p) || q.people - p.people);
+}
+
+/** Below this many uncarried trips a day, a trip is a road vehicle's, not a train's. */
+const TRAIN_TRIPS_PER_DAY = 150;
+
+/**
+ * Where next's move for a trip: a train where track joins the two, no line of yours runs between
+ * them and the trip could fill one (a bus the length of Olono-Otido loses), else the seat move.
+ */
+function openingMove(world: GameWorld, a: string, b: string, perDay: number): NamedMove {
+  const route = world.routes.find((r) => (r.a === a && r.b === b) || (r.a === b && r.b === a)) ?? findRoute(world, a, b);
+  if (!route && perDay >= TRAIN_TRIPS_PER_DAY && railPath(world, a, b)) {
+    return { action: { kind: "train", a, b }, price: vehiclePrice(world, "train"), label: `Run a train ${nameOf(world, a)} ↔ ${nameOf(world, b)} (T)` };
+  }
+  return seatMove(world, a, b);
+}
+
+/** Trips a day a town's people set out on to other towns (not commutes to sites), made or not. */
+function tripsBetweenTowns(world: GameWorld, townId: string): number {
+  let total = 0;
+  for (const [key, rates] of world.pairOutcomes) {
+    const at = key.indexOf(":");
+    const from = key.slice(0, at);
+    const to = key.slice(at + 1);
+    const other = from === townId ? to : to === townId ? from : null;
+    if (!other || world.towns.get(other)?.industry) continue;
+    total += rates.player + rates.poached + rates.gaveUp + rates.lost;
+  }
+  return total * SECONDS_PER_GAME_DAY;
+}
+
+/**
+ * The town a town's people travel to that you carry least of, by trips a day not yours (both
+ * ways, between towns a road or track joins): where more service makes the most difference.
+ */
+export function mostUncarried(world: GameWorld, townId: string): { other: string; perDay: number } | null {
+  const byOther = new Map<string, number>();
+  for (const [key, rates] of world.pairOutcomes) {
+    const at = key.indexOf(":");
+    const from = key.slice(0, at);
+    const to = key.slice(at + 1);
+    const other = from === townId ? to : to === townId ? from : null;
+    if (!other || world.towns.get(other)?.industry || !world.towns.has(other)) continue;
+    const notYours = rates.poached + rates.gaveUp + rates.lost;
+    byOther.set(other, (byOther.get(other) ?? 0) + notYours);
+  }
+  let best: { other: string; perDay: number } | null = null;
+  for (const [other, rate] of byOther) {
+    if (best && rate * SECONDS_PER_GAME_DAY <= best.perDay) continue;
+    if (!roadPath(world, townId, other) && !railPath(world, townId, other)) continue;
+    best = { other, perDay: rate * SECONDS_PER_GAME_DAY };
+  }
+  return best;
 }

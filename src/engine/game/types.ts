@@ -265,6 +265,8 @@ export interface GameTuning {
    */
   trucksFreeOfDanfoBudget: boolean;
   truckerHoldLoads: number;
+  /** Goods bound for a stop your freight line serves from where they wait are left for your trains (truckers.ts); absent in older run files. */
+  freightFirst?: boolean;
   /**
    * Towns expect better service as they grow (growth.ts expectedShare, Revision 4, 2): on; from
    * what size (thousands); the share expected there; added a thousand people; at most.

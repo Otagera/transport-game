@@ -391,7 +391,20 @@ terrain isn't applied: the map still draws shaded hills.
   `townNoSeat`: "212 of its trips a day find no seat, most toward Ikire on the Ikire–Ado road.
   **Add a bus to Ikire ↔ Ido (+)** · ₦500" (`moveText`: the move named and priced, never a
   buy button). A shrinking town's growth line becomes a "Why it's shrinking" callout
-  (`shrinkCause`) with its move. The Corridors section lists corridors with no seat first
+  (`shrinkCause`) with its move. A shrinking town says so before anything else on its problem
+  line, cement included (map 8703, day 400: Eligo's line said cement while your share of its
+  trips fell 48% -> 36%); when your share is what fell by more than five points, it says that,
+  with both shares and the day ("grown, it makes more trips than your lines take"). Cement at
+  the works' capacity (`cementBreak` "capacity") reads "X makes all it can: N t a day with
+  imports, of M wanted" with **Expand X · ₦** (`data-expand`), on the town's line, its callout
+  and Waiting on you, instead of advice to carry it.
+- **Where next** (brief, Where next; screen.ts `whereNextHtml`, problems.ts `whereNext`) -- a pane
+  under the pledges: the four towns in your remit with the most people to gain, each "**Olono** ·
+  +90k: you carry 23% of its trips, most toward Otido (181 a day)" with its move (priced, or the
+  reason another wouldn't pay, or the Road tool for a town no road reaches) and Show. Ranked as a
+  day begins or a move is made, as Waiting on you is (whereNext walks every pair's outcomes, ~40
+  ms on map 8703 at day 481). A town below where growth starts says how many more trips a day
+  start it growing instead of promising its room. The Corridors section lists corridors with no seat first
   (≥ 20 a day), worst first, each with "No seat N/day, most A ↔ B: <move>". The map draws
   each such corridor's no seat as a grey band beside the road, 2-12 px by trips a day
   (`drawNoSeat`, `strokeOffset`: offset along the polyline's normals; cached once a sim

@@ -7,7 +7,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { roadPath } from "./world";
 import { tollFor, type Takings } from "./budget";
 import { hasYard } from "./yards";
-import { haulierPull } from "./freightrates";
+import { freightRate, haulierPull } from "./freightrates";
 import { createOneShotVehicle } from "../simulation/vehicle";
 import { tankerFactor } from "./pipelines";
 
@@ -53,16 +53,39 @@ export function haulShare(world: GameWorld, cells: number, max = world.tuning.tr
   return x <= meet ? 1 - x : t / x;
 }
 
+/**
+ * `from|to` for every stop a freight train of yours calls at and every stop it goes on to:
+ * the goods your line can carry, which hauliers leave to it (tuning freightFirst). Not a line
+ * you've set dear (freightrates.ts): priced up, its shippers go to the hauliers, as the rate says.
+ */
+function freightServes(world: GameWorld): Set<string> {
+  const served = new Set<string>();
+  const byId = new Map(world.simulation.vehicles.map((v) => [v.id, v]));
+  for (const route of world.lorryRoutes) {
+    if (!route.id.startsWith("freight:") || freightRate(world, route.id) === "dear") continue;
+    for (const id of route.vehicleIds) {
+      const path = byId.get(id)?.path;
+      if (!path) continue;
+      const stops = [...new Set(path.filter((node) => world.towns.has(node)))];
+      for (const a of stops) for (const b of stops) if (a !== b) served.add(`${a}|${b}`);
+    }
+  }
+  return served;
+}
+
 /** Truckers take some of what's waiting at each yard, short hauls fastest. After goods arrive, before lorries load. */
 export function truckersPickUp(world: GameWorld, dt: number): void {
   const { tuning, goods } = world;
   if (!tuning.truckersEnabled) return;
   const pickup = 1 - Math.exp(-dt / tuning.truckerPickupSeconds);
   const relay = !!tuning.goodsRelay;
+  const yours = tuning.freightFirst ? freightServes(world) : null;
   // Goods at `from` bound for `final`, from `origin` (here, unless they're between legs):
   // what hauliers take of them now toward this leg's stop.
   const take = (store: Map<string, number>, key: string, amount: number, from: string, final: string, kind: GoodsKind, origin: string) => {
     // With goods relayed (haulage.ts), a load past this leg's reach goes to a town on the way.
+    // Bound where your freight line goes from here: your trains' to carry, not theirs.
+    if (yours?.has(`${from}|${final}`)) return;
     const to = relay && relayed(world, origin, kind) ? nextStop(world, from, final, legReach(world, from, kind)) : final;
     if (!to) return;
     const path = roadPath(world, from, to);

@@ -51,7 +51,7 @@ import { siteProduction as newRefinerySiteProduction } from "@engine/game/produc
 import { flowKey } from "@engine/game/goods";
 import { restoreRoad, retireRoad } from "@engine/game/retire";
 import { isYourRoad } from "@engine/game/upkeep";
-import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, wornRoadAt } from "@engine/game/problems";
+import { affordable, corridorNoSeat, mostUncarried, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, whereNext, wornRoadAt } from "@engine/game/problems";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/game/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/game/score";
 import { variedGameMap } from "@engine/game/variation";
@@ -2685,6 +2685,42 @@ describe("Revision 2, step 1: the problems the late game already has, with their
   });
 });
 
+describe("where next (problems.ts whereNext; brief, Where next)", () => {
+  test("the towns with most room first, each with what's in the way and a move toward the trips you don't carry", () => {
+    const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0, startingFunds: 1e6 });
+    run(w, 2 * SECONDS_PER_GAME_DAY);
+    const list = whereNext(w);
+    expect(list.length).toBeGreaterThan(0);
+    for (let i = 1; i < list.length; i += 1) {
+      const buyable = (o: (typeof list)[number]) => (o.move && Number.isFinite(o.move.price) ? 1 : 0);
+      expect(buyable(list[i - 1]!) * 1e9 + list[i - 1]!.people).toBeGreaterThanOrEqual(buyable(list[i]!) * 1e9 + list[i]!.people);
+    }
+    // Nobody served yet: every town with a road is below where growth starts, and says how much to carry.
+    for (const o of list.filter((x) => x.move)) {
+      expect(o.kind).toBe("unserved");
+      expect(o.why).toMatch(/carry about \d+ more a day and it starts to grow/);
+      const trip = mostUncarried(w, o.townId)!;
+      expect([o.move!.action as { a: string; b: string }].some((a) => [a.a, a.b].includes(trip.other))).toBe(true);
+    }
+    // The cut-off town: no road reaches it, and nothing to buy for it but the road.
+    const cut = list.find((o) => o.townId === "cut");
+    if (cut) expect(cut).toMatchObject({ move: null, why: expect.stringMatching(/^no road reaches it/) });
+    // Out of scope (your remit), not listed.
+    expect(whereNext(w, (id) => id !== list[0]!.townId).some((o) => o.townId === list[0]!.townId)).toBe(false);
+  });
+
+  test("served past where growth starts, a town reads as more to carry, not as unserved", () => {
+    const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0, startingFunds: 1e6 });
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    run(w, 6 * SECONDS_PER_GAME_DAY);
+    const mid = whereNext(w).find((o) => o.townId === "mid");
+    if (mid && townGrowth(w, "mid")!.service > w.tuning.growthServiceFloor) {
+      expect(mid.kind).not.toBe("unserved");
+      expect(mid.why).toMatch(/you carry \d+% of its trips/);
+    }
+  });
+});
+
 describe("Revision 2: wear returns, per corridor", () => {
   test("a corridor's wear is one decision: its worst piece, kept as a whole, fixed as a whole", () => {
     const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0, startingFunds: 1e6 });
@@ -4335,6 +4371,75 @@ describe("a cement shortage names where the chain breaks (cement.ts cementBreak,
     expect(opened).not.toBeNull();
     expect(cementBreak(w)).toEqual({ kind: "quarry", quarryId: (opened as { townId: string }).townId });
   });
+
+  test("at capacity and short overall, it says expand the works, not carry (map 8703: never expanded, the card said carry)", () => {
+    const w = startGame(generatedGameMap(GAME_MAP, 543), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, workersEnabled: false });
+    const cement = w.cement!;
+    cement.working = true;
+    w.industrySchedule.nextAtSeconds = 0;
+    const quarry = (openQuarry(w) as { townId: string }).townId;
+    // Twice the limestone the works can use arriving: it makes all it can.
+    const full = worksCapacity(w) * w.tuning.limestonePerCement * 2;
+    w.goods.outcomes.set(flowKey({ from: quarry, to: cement.worksId, kind: "supplies" }), { delivered: full, spoiled: 0 });
+    expect(worksOutput(w)).toBeCloseTo(worksCapacity(w), 9);
+    // Towns that want far more than it and the imports make.
+    for (const id of w.basePopulation.keys()) w.towns.get(id)!.population *= 4;
+    const b = cementBreak(w)!;
+    expect(b.kind).toBe("capacity");
+    const short = b as { made: number; wanted: number; expandCost: number | null };
+    expect(short.made).toBeLessThan(short.wanted);
+    expect(short.expandCost).toBe(expandCost(w, cement.worksId));
+    expect(short.expandCost).not.toBeNull();
+    // Expanded as far as it goes: still capacity, with nothing to buy.
+    w.expansions.set(cement.worksId, w.tuning.expandMaxLevel);
+    w.goods.outcomes.set(flowKey({ from: quarry, to: cement.worksId, kind: "supplies" }), { delivered: worksCapacity(w) * w.tuning.limestonePerCement * 2, spoiled: 0 });
+    expect(cementBreak(w)).toMatchObject({ kind: "capacity", expandCost: null });
+    // Towns back to their size: the works makes enough, and getting it there is the problem.
+    for (const id of w.basePopulation.keys()) w.towns.get(id)!.population /= 4;
+    expect(cementBreak(w)?.kind).toBe("carry");
+  });
+});
+
+describe("your freight line's goods are yours (truckers.ts freightFirst; map 8703, your playtest)", () => {
+  const MAP3: GameMapDef = {
+    width: 60,
+    height: 20,
+    towns: [
+      { id: "big", name: "Big", x: 5, y: 10, population: 120 },
+      { id: "mid", name: "Mid", x: 18, y: 10, population: 40 },
+      { id: "far", name: "Far", x: 30, y: 10, population: 30 },
+    ],
+    roads: [{ a: "big", b: "mid" }, { a: "mid", b: "far" }],
+    port: "big",
+    rails: [{ a: "big", b: "far" }],
+  };
+  const taken = (freightFirst: boolean | undefined, train: boolean) => {
+    const tuning = { ...DEFAULT_GAME_TUNING, ...ALL_SYSTEMS_ON, startingFunds: 1e6, maxEmergentTowns: 0, townGrowthCap: 0, freightFirst };
+    if (freightFirst === undefined) delete tuning.freightFirst; // a run file's tuning from before it
+    const w = createGameWorld(MAP3, tuning);
+    buildTrack(w, "big", "far");
+    if (train) expect(addFreightTrain(w, "big", "far").ok).toBe(true);
+    w.yards.add("big");
+    w.goods.yards.set("big", new Map([["far|supplies", 100], ["mid|supplies", 100]]));
+    for (let i = 0; i < 20; i += 1) truckersPickUp(w, 1);
+    const held = (to: string) => w.truckers.get(`big|${to}|supplies`) ?? 0;
+    return { far: held("far"), mid: held("mid") };
+  };
+
+  test("hauliers leave goods bound where your freight train goes from there, and take the rest as before", () => {
+    const before = taken(false, true);
+    expect(before.far).toBeGreaterThan(0); // they took the train's goods: it ran empty
+    const now = taken(true, true);
+    expect(now.far).toBe(0);
+    expect(now.mid).toBeCloseTo(before.mid, 9); // Mid isn't a stop of the line's: theirs as ever
+    // No train on it, nothing reserved.
+    expect(taken(true, false).far).toBeGreaterThan(0);
+  });
+
+  test("on for new games; a run file from before it has none, and replays as played", () => {
+    expect(DEFAULT_GAME_TUNING.freightFirst).toBe(true);
+    expect(taken(undefined, true).far).toBeCloseTo(taken(false, true).far, 9);
+  });
 });
 
 describe("freight rates (freightrates.ts, 2026-10-23)", () => {
@@ -4374,8 +4479,9 @@ describe("freight rates (freightrates.ts, 2026-10-23)", () => {
   });
 
   test("dear, the hauliers take more of the goods waiting at its station; cheap, less", () => {
-    const taken = (rate: "cheap" | "standard" | "dear") => {
+    const taken = (rate: "cheap" | "standard" | "dear", freightFirst = false) => {
       const w = world();
+      w.tuning.freightFirst = freightFirst;
       const line = w.lorryRoutes.find((r) => r.id.startsWith("freight:"))!.id;
       applyAction(w, { kind: "freightRate", routeId: line, rate });
       w.goods.yards.set("big", new Map([["far|supplies", 300]]));
@@ -4384,6 +4490,10 @@ describe("freight rates (freightrates.ts, 2026-10-23)", () => {
     };
     expect(taken("dear")).toBeGreaterThan(taken("standard"));
     expect(taken("standard")).toBeGreaterThan(taken("cheap"));
+    // Your line's goods are yours (freightFirst) -- unless you've priced it dear: then its shippers go to the hauliers.
+    expect(taken("standard", true)).toBe(0);
+    expect(taken("cheap", true)).toBe(0);
+    expect(taken("dear", true)).toBeCloseTo(taken("dear"), 9);
   });
 });
 

@@ -982,6 +982,32 @@ meets it (x = cells / max; half, for a tail of a quarter) and then `tail / x`: a
 reach, a tenth at two and a half times it, never none. One truck a load, straight there. The
 site's line and the problem card say "a long haul by road ... a freight train takes the rest".
 
+**Where next** (2026-11-03; problems.ts `whereNext`, growth.ts `nextRungRoom`; brief, Where
+next). For each original town in scope: if its road is at its rung's limit (`roadFull`), the room
+the next rung makes at today's service (`nextRungRoom`: start × `townGrowthCap` × the rungs'
+difference × how developed it is) and that rung's move; else the room better service can win
+(`cap - target` from `townGrowth`) and a move toward the town its people travel to that you carry
+least of (`mostUncarried`, from `pairOutcomes`): a train where track joins them, no line of yours
+runs between and 150+ a day go uncarried, else `seatMove`. Below where growth starts (your share
+under `growthMinPlayerShare` or service under `growthServiceFloor`) the room is out of reach until
+it's passed, so it says how many more trips a day get there: the gap × its trips × 1.5 (what you
+carry takes some riders from the danfos, and more set out; map 8703's Oshidi, 18 a day short,
+took a minibus carrying ~19 to 12-15% share and 14% service, and didn't grow). Rows with a move
+you can buy come first, then most people. Measured from map 8703's day-481 world, each of the top
+four moves against doing nothing for 30 days: Olono's train +4.7k people, Eligo's +5.4k, Idawo's
+bus +0.7k (within the runs' noise), Oshidi's minibus nothing (the case above).
+
+**Your freight line's goods are yours** (2026-11-03, `freightFirst`, truckers.ts
+`freightServes`). Goods waiting at a place, bound for a stop a freight train of yours calls at
+from there, are left to your trains: hauliers don't lift them -- unless you've set that line
+dear (freightrates.ts): priced up, its shippers go to the hauliers, as the rate says. Map 8703: yards at the works and
+the cement terminal (built on the cards' advice) let hauliers lift cement 120 cells out at twice
+the rate, and the freight trains built for it ran 3-20% full and lost money -- the cards had sent
+the player to both. From that world, 30 days with it on: money +₦146k (+6%), +13k people, the far
+towns' cement up (Eligo 61% -> 67%, Olono 61% -> 66%), the near ones' down a little (hauliers
+still carry those); most lines still run part empty, there being too little cement to fill them
+(the capacity break above). Run files without the key replay as played.
+
 How far hauliers go, by the share of what's waiting they take a second (`haulShare`, the
 pickup rate's multiplier: goods that keep while they wait still go in the end at a low one).
 Without a yard their reach is 40 cells, from one 120; limestone to the works tails off past half
@@ -1283,6 +1309,14 @@ flowchart LR
 - **On screen** (`main.ts`): the works' and terminal's cards (`renderCementSite`, with the
   Restore button), a Cement line on the town card (`cementText`), "can't grow: no cement" as
   the town's problem, the map footer saying how the works started; glyphs in `render.ts`.
+- **Where the chain breaks** (`cementBreak`, for the advice): idle; no quarry working; a
+  quarry whose limestone isn't arriving; **capacity** -- the works at 95% of what it can make
+  and the works and imports together under 95% of what the towns want, with `expandCost` (null
+  at `expandMaxLevel`); else carry. Capacity is checked before carry: no carrying makes more
+  cement. Map 8703 (your playtest, 2026-11-03): the works at capacity from day 280 to 481 with
+  twice the limestone it could use, the towns 60-73% served, the card saying carry it -- and
+  never expanded (₦36,000, millions held). From that world, expanding twice took the cement
+  held back from 367k to 295k people in 30 days, and the break moved on to the quarry.
 
 ### Speed: what a tick spends (2026-10-20)
 
