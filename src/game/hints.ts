@@ -17,7 +17,7 @@ import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 export type HintId = 1 | 2 | 3 | 4 | 5 | 6;
 
 export const HINT_TEXT: Record<HintId, string> = {
-  1: "Demand (top) shows where people want to go; hover a town to see its roads and routes.",
+  1: "Demand shows where people want to go; hover a town to see its roads and routes.",
   2: "A bus runs between two towns a road joins. Demand (top) shows where most people want to go: the thickest arc along a road is a good start.",
   3: "A town marked \"no road\" has nothing reaching it. Build one <kbd>R</kbd> and danfos will come; run a bus and you will.",
   4: "Your bus leaves full: riders left behind go to the danfos.",
