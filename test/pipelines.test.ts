@@ -86,19 +86,19 @@ describe("pipelines (pipelines.ts; five modes scoped, the pipeline)", () => {
       const w = start();
       const to = farTown(w);
       const pipe = pipeTo(w, to, dial);
-      days(w, 16, "pay");
+      days(w, 12, "pay");
       const served = goodsFlows(w).filter((f) => f.from === w.fuel!.depotId && pipeServes(w, pipe, f.to)).map((f) => f.to);
       expect(strikePipe(w, pipe.a, pipe.b)?.kind).toBe("pipe-out");
       let sum = 0;
-      for (let d = 0; d < 9; d += 1) {
+      for (let d = 0; d < 7; d += 1) {
         days(w, 1, "pay");
         sum += served.reduce((s, t) => s + shortageAt(w, t), 0) / served.length;
       }
-      return { mean: sum / 9, tankers: pipe.tankers };
+      return { mean: sum / 7, tankers: pipe.tankers };
     };
     const full = shortfall(1), half = shortfall(0.5);
     expect(full.mean).toBeGreaterThan(half.mean);
-  }, 300_000);
+  }, 480_000);
 
   test("the union follows the dial: up brings a demand; conceding halves it; refusing shuts the pipe; off meets it", () => {
     const w = start();

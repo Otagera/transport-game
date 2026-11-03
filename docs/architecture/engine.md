@@ -1218,6 +1218,29 @@ flowchart LR
   pipe, the more a strike costs (test/pipelines.test.ts checks each). **Not yet:** the strategist
   builds no pipes, so the scope's 250-day check (the fuel chain still makes decisions) is open.
 
+### The airport (2026-11-03; five-modes.md, 2. Airport; brief, The region, The gateways)
+
+- **`airport.ts`** -- the third gateway, behind `airportEnabled` (absent in older runs). One a
+  region, placed last of the sites (`placeAirport`): on flat dry ground `airportMinCells`-
+  `airportMaxCells` (18-30) from the home city, as far from any town as it can be there, on a long
+  inherited dirt road to the home city -- out of the way, as Nigerian airports are. A site with no
+  people (industry "airport", population 0): it makes demand and grows nothing.
+- **Travellers** (`airportDemand`, in `refreshDemand`, so daily with the towns): each way
+  `airportTravellersPerThousand` (0.35) of the region's people a day -- 240-290 on maps 8703, 2418,
+  949, 3218, 7585 -- split over the towns by their people, fading over `airportReachCells` (40):
+  arrivals to the towns and departures from them, reciprocal (principles §3, Demand). Unserved they
+  show as wanted and not made (`pairOutcomes`, `airportSummary`): 73-88% stranded with its dirt road
+  and nothing of yours, the danfos taking the rest; a Waiting-on-you item and its card name the move.
+  Three buses from it to the home city (maps 8703, 2418, 10 days) carried 16-25% and netted
+  +₦121-352 a day; 500 trips a day want more.
+- **Air freight** (`airportFlows`, in `goodsFlows`): `airFreightPerThousand` (0.012) of the region's
+  people a day -- 8-10 t -- to the market towns by their people. Packed to travel, it keeps and goes
+  in legs (`keeps`, `relayed`): a few tonnes split six ways never filled a truck to each and rotted
+  waiting. The hauliers carry it by road, paying the loading levy at the airport (`levied`); your
+  freight train at `airFreightRate` (8x) the tonne (`fares.ts goodsFares`) if you lay track to it.
+  Named "air freight" (`cargoName`). **Not yet:** the scope's check that connecting it changes a
+  term's decision on 3 of 5 seeds waits on the strategist learning it.
+
 ### The building chain (Revision 3, step 2a)
 
 - **`cement.ts`** — one **cement works** per map, placed at start (`placeCementWorks`, from

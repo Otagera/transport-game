@@ -630,6 +630,15 @@ Waiting-on-you item; a union's pipeline demand offers "Turn the pipe down" as it
 3D a steel pipe on supports beside its road (rust and gaps where it's broken), a pumping station
 at its source; clicking it opens its card.
 
+**The airport on the screen** (2026-11-03; engine.md, The airport). A plane glyph (icons.ts, the
+trade family), always working. Its card: travellers a day (in and out), the share you carry and the
+danfos', the share stranded, air freight and who carries it; its problem line, when 30% or more are
+stranded, names the move (a bus line from it, <kbd>B</kbd>). The Sites table lists it; Waiting on
+you carries its stranded travellers at 50 a day or more. In 3D (shapes3d `site`, `SITE_YARD`
+124 by 64 m): a runway with its centre line and threshold bars, a taxiway to the apron, the terminal
+glazed toward it with its car park, the control tower, a hangar with its doors open, an airliner on
+the stand.
+
 **Stations and trains in their parts** (2026-11-03, `stations3d.ts`; your playtest, map 8703 day
 482: Otido's six lines and its freight in one heap in the town's middle). The game's trains have no
 platforms -- every line's track runs to its town's node, and a train loads the moment it's there

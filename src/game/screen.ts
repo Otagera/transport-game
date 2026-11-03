@@ -1,4 +1,5 @@
 import { projectName } from "@engine/game/project";
+import { airportStranded, airportSummary } from "@engine/game/airport";
 import { pipeSummaries } from "@engine/game/pipelines";
 import { routeAlong, stanceWord, unionOf } from "@engine/game/union";
 import { fordBridgeCost, fordById } from "@engine/game/floods";
@@ -440,6 +441,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ].join("");
       items.push({ id: `union:${union.id}`, text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
     }
+    // The airport's travellers stranded (airport.ts): demand at a point with no people, there to be reached.
+    const stranded = airportStranded(world);
+    if (world.airport && stranded >= 50) items.push({ id: "airport", text: `${int(stranded)} travellers a day can't get to or from ${nameOf(world.airport)}: a bus or a train from it to a town carries them on.`, button: `<button data-pick="site|${world.airport}">Its card</button>`, at: [world.airport], weight: 2e6 + stranded });
     // A pipeline shut by a strike or a tap (pipelines.ts): its fuel back on its tankers, as many as its dial kept.
     for (const p of pipeSummaries(world)) {
       if (!p.working || !p.outReason) continue;
@@ -547,6 +551,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
   }
   function siteProblem(s: Site): Problem {
+    // The airport (airport.ts): its travellers stranded, and the move -- a line from it to a town.
+    if (world.towns.get(s.id)?.industry === "airport") {
+      const a = airportSummary(world);
+      if (!a || a.stranded < 0.3) return null;
+      return { text: `${pct(a.stranded)} of its travellers are stranded: no way on from it. A bus or a train from it to ${nameOf(world.port ?? "")} carries them on`, button: toolButton("bus", "A bus line from it <kbd>B</kbd>") };
+    }
     if (world.towns.get(s.id)?.industry === "steelworks" && world.steel && !world.steel.working) {
       return { text: "Idle: built, never run. Restore it and its mine starts digging", button: `<button data-restore-steel="1">Restore it · ${nairaK(world.tuning.steelRestoreCost)}</button>` };
     }
@@ -891,10 +901,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const isBorder = (s: Site) => world.towns.get(s.id)?.industry === "border" || world.towns.get(s.id)?.industry === "gateway";
     // And the old line's stations (stations.ts): open or not, and how many change trains there.
     const isStation = (s: Site) => world.towns.get(s.id)?.industry === "station";
-    const rows = sortRows(sites().filter((s) => s.capacity > 0 || isBorder(s) || isStation(s)), "sites", { name: (s) => nameOf(s.id), use, made: (s) => s.made });
+    // And the airport (airport.ts): its travellers and how many of them you carry.
+    const isAirport = (s: Site) => world.towns.get(s.id)?.industry === "airport";
+    const rows = sortRows(sites().filter((s) => s.capacity > 0 || isBorder(s) || isStation(s) || isAirport(s)), "sites", { name: (s) => nameOf(s.id), use, made: (s) => s.made });
     return `<h2>Sites · what each makes of what it could</h2>
       ${rows.length ? `<table><thead><tr>${th("sites", "name", "Site")}${th("sites", "made", "t/day")}${th("sites", "use", "Of capacity")}</tr></thead><tbody>
-      ${rows.map((s) => isStation(s)
+      ${rows.map((s) => isAirport(s)
+        ? `<tr class="row" data-pick="site|${s.id}"><td>${esc(nameOf(s.id))}</td><td>${int(airportSummary(world)?.tripsPerDay ?? 0)} travel</td><td>you ${pct(airportSummary(world)?.you ?? 0)}</td></tr>`
+        : isStation(s)
         ? `<tr class="row" data-pick="site|${s.id}"><td>${esc(nameOf(s.id))}</td><td>${int((world.transferRateEMA.get(s.id) ?? 0) * D)} change</td><td>${stationOpen(world, s.id) ? "open" : "closed"}</td></tr>`
         : isBorder(s)
         ? `<tr class="row" data-pick="site|${s.id}"><td>${esc(nameOf(s.id))}</td><td>${int((exportsBy(world).find((e) => e.to === s.id)?.tonnes ?? 0) * D)}</td><td>open</td></tr>`
@@ -1088,6 +1102,16 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
                   ${tile("Fuel in", `${int((fuel?.arriving ?? 0) * D)} t`, `of ${int((fuel?.needed ?? 0) * D)} t a day${mark("fuel")}`)}
                   ${tile("Buses and minibuses", `${pct(world.assembly?.discount ?? 0)} off`, "while it runs")}
                   ${tile("Its line", `generation ${assemblyGeneration(world) + 1}`, `${int(world.assembly?.fullDays ?? 0)} days at full output`)}`;
+              })()
+            : t.industry === "airport"
+            // The airport (airport.ts): its travellers, who carries them, its air freight.
+            ? (() => {
+                const a = airportSummary(world);
+                if (!a) return "";
+                return `${tile("Travellers a day", int(a.tripsPerDay), `${int(a.travellersPerDay)} in, as many out`)}
+                  ${tile("You carry", pct(a.you), `danfos ${pct(a.informal)}`)}
+                  ${tile("Stranded", pct(a.stranded), a.stranded > 0.3 ? "no way on from it" : "")}
+                  ${tile("Air freight", `${a.freightPerDay.toFixed(1)} t/day`, `hauliers ${a.freightHauliers.toFixed(1)}, yours ${a.freightYours.toFixed(1)} (${world.tuning.airFreightRate ?? 8}× the rate)`)}`;
               })()
             : t.industry === "station"
             // A station on the old line (stations.ts): open or not, what it was built for, who changes trains here.

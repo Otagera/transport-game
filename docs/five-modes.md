@@ -4,7 +4,9 @@
 > scopes the coach, the okada rule and the urban ladder wait on), and `PROMPT-urban-ladder.md`
 > aren't in the repo yet. **Built so far:** the pipeline (2026-11-03; architecture/engine.md,
 > Pipelines), with two calls made with you: it carries refined fuel only, and the inherited line runs
-> from the tank farm up the old railway.
+> from the tank farm up the old railway. The airport (2026-11-03; engine.md, The airport), travellers
+> and air freight both; its freight by hauliers and, if you lay track, your freight train (your call:
+> the game has had no player lorries since Revision 4).
 
 Companion to `SCALES-AND-MODES.md`, which says where each one lives. This says what each
 one *is*. Target: `main` at `77e9fe7`.

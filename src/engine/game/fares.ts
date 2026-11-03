@@ -1,4 +1,5 @@
 import type { DeliveryEvent } from "../simulation/types";
+import { isAirCargo } from "./airport";
 import type { GameTuning, GameWorld } from "./types";
 import { roadPath } from "./world";
 import { railPath } from "./rail";
@@ -64,7 +65,9 @@ export function goodsFares(world: GameWorld, deliveries: DeliveryEvent[], rail =
     const a = world.towns.get(entry.from) ?? world.ruins.get(entry.from);
     const b = world.towns.get(entry.to) ?? world.ruins.get(entry.to);
     const cells = path?.distance ?? (a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0);
-    total += amount * cells * world.tuning.goodsFarePerTonneCell;
+    // Air freight is high value: its tonne pays airFreightRate times (airport.ts).
+    const air = isAirCargo(world, entry.trip?.origin ?? entry.from) ? world.tuning.airFreightRate ?? 1 : 1;
+    total += amount * cells * world.tuning.goodsFarePerTonneCell * air;
   }
   return total;
 }

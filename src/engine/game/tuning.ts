@@ -583,6 +583,16 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // (15% always stay); a strike 7 days, a tap 5, about one a hundred days on a 100-cell pipe; at
   // 250 t a day the union settles near -0.5 (stance fades over unionMemoryDays, 120: 250 x 120 x k).
   pipelinesEnabled: true,
+  // The airport (airport.ts; five-modes.md, 2. Airport): first guesses from the scope, to measure with
+  // the strategist. A few hundred travellers a day each way at the start (0.35 a thousand of ~750k);
+  // 5-15 t of air freight a day (0.012 a thousand) at 8x the goods rate; 18-30 cells from the home city.
+  airportEnabled: true,
+  airportTravellersPerThousand: 0.35,
+  airportReachCells: 40,
+  airportMinCells: 18,
+  airportMaxCells: 30,
+  airFreightPerThousand: 0.012,
+  airFreightRate: 8,
   pipeCostPerCell: 2000,
   pipeRestorePerCell: 700,
   pipeCapPerDay: 250,

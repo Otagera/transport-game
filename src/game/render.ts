@@ -1065,7 +1065,7 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   const perDay = (x: number) => x * SECONDS_PER_GAME_DAY;
   // A border crossing makes nothing: it's open (border.ts).
   // A station: open where the line to it is restored, else hollow (stations.ts).
-  const siteState: SiteState = site.industry === "station" ? (stationOpen(world, site.id) ? "working" : "idle") : site.industry === "border" || site.industry === "gateway" ? "working" : !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
+  const siteState: SiteState = site.industry === "station" ? (stationOpen(world, site.id) ? "working" : "idle") : site.industry === "border" || site.industry === "gateway" || site.industry === "airport" ? "working" : !made || made.capacity <= 0 || perDay(made.made) < 0.5 ? "idle" : made.made < 0.6 * made.capacity ? "short" : "working";
   const glyph = (site.industry && site.industry in GLYPHS ? site.industry : "quarry") as Glyph;
   // Zoomed out, a site draws where it fits or where the panel points at it (look.md, Map density).
   if (zoomTier === "far" && !lit && !state.problems?.has(site.id) && !state.pointed?.has(site.id) && !placed.has(`icon:${site.id}`)) {

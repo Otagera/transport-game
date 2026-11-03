@@ -256,6 +256,7 @@ export function cargoName(world: GameWorld, from: string, kind: "produce" | "sup
   if (food && to !== undefined && to === food.flourMillId) return "wheat";
   if (food && !site && kind === "produce") return to === world.port || (to !== undefined && to === world.border) ? food.crops.cash : to === food.millId ? food.crops.staple : `${food.crops.staple} and ${food.crops.cash}`;
   if (site === "oilfield" || site === "terminal") return "crude";
+  if (site === "airport") return "air freight";
   if (site === "border" && kind === "supplies") return "fuel"; // over the border (gateways.ts borderFuelSite)
   if (site === "depot" || site === "refinery" || site === "newrefinery") return "fuel";
   if (site === "works" || site === "silo") return "cement";

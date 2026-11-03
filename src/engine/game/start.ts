@@ -1,4 +1,5 @@
 import { placePower } from "./power";
+import { placeAirport } from "./airport";
 import { placeInheritedPipe } from "./pipelines";
 import { startUnions } from "./union";
 import { placeBorder, placeCoastRoad } from "./border";
@@ -79,6 +80,8 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeAssemblyPlant(world);
   // And the old line's stations (stations.ts): after every other site, so they sit where they did.
   placeStations(world);
+  // And the airport (airport.ts), the third gateway: after the others, so they sit where they did.
+  placeAirport(world);
   // And coal and power (power.ts): after every other site, so they sit where they did.
   placePower(world);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);

@@ -1,4 +1,5 @@
 import { commuteDemand } from "./workers";
+import { airportDemand } from "./airport";
 import { applyMarketTrade } from "./food";
 import type { Vehicle } from "../simulation/types";
 import type { GameTown, GameWorld } from "./types";
@@ -189,6 +190,8 @@ export function refreshDemand(world: GameWorld): void {
   world.simulation.demand = [
     ...gravityDemand([...world.towns.values()].filter((town) => !workers || !town.industry), world.tuning.demandK),
     ...commuteDemand(world),
+    // The airport's travellers, flying in and out (airport.ts).
+    ...airportDemand(world),
   ];
   applyRailDemand(world); // trips a passenger line makes that weren't made before
   applyMarketTrade(world); // trips a fed market draws (food.ts)

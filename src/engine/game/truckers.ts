@@ -114,7 +114,7 @@ export function truckersPickUp(world: GameWorld, dt: number): void {
 function levied(world: GameWorld, townId: string): boolean {
   if (townId === world.port) return true;
   const site = world.towns.get(townId)?.industry;
-  if (site === "depot" || site === "refinery" || site === "newrefinery" || site === "works" || site === "silo" || site === "mill" || site === "flourmill") return true;
+  if (site === "depot" || site === "refinery" || site === "newrefinery" || site === "works" || site === "silo" || site === "mill" || site === "flourmill" || site === "airport") return true;
   const town = world.towns.get(townId);
   return !!town && world.basePopulation.has(townId) && town.population >= world.tuning.marketPopulation;
 }

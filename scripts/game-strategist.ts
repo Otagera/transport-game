@@ -51,6 +51,10 @@ import { crudeArriving, fuelSupply, newRefinery, newRefineryCapacity, newRefiner
 import { townGrowth } from "../src/engine/game/growth";
 import { marketFed, marketTowns } from "../src/engine/game/food";
 import type { GameWorld } from "../src/engine/game/types";
+import { pipeId, pipePlan, pipeServes, pipeWouldCarry, restorePipeCost } from "../src/engine/game/pipelines";
+import { unionOf } from "../src/engine/game/union";
+import { haulDistance } from "../src/engine/game/haulage";
+import { airportSummary } from "../src/engine/game/airport";
 
 const SEEDS = (process.env.SEEDS ?? "0,543,2411").split(",").map(Number);
 const DAYS = Number(process.env.DAYS ?? 250);
@@ -111,12 +115,18 @@ const sold = new Map<string, number>();
 /** Every move made, by kind, and the building ones made today. */
 const made = new Map<string, number>();
 let buildsToday = 0;
+/** The fuel chain's decisions, by day (the pipeline's check: over 250 days it still makes them); its pipes shut, by why. */
+const fuelMoves: number[] = [];
+const pipeOuts = new Map<string, number>();
+/** The day a line of yours first ran to the airport (its check: connected on 3 of 5 maps, over something else). */
+let airportOn: number | null = null;
 const pairOf = (action: ActionSpec) => ("a" in action && "b" in action ? [action.a, action.b].sort().join("~") : null);
 
 function act(world: GameWorld, day: number, action: ActionSpec, why: string): boolean {
   const pair = pairOf(action);
   if (pair && ["bus", "minibus", "lorry"].includes(action.kind) && day - (sold.get(`${action.kind}:${pair}`) ?? -Infinity) < SOLD_DAYS) return false;
   const result = applyAction(world, action);
+  if (result.ok && (["pipe", "restorePipe", "pipeDial", "restoreRefinery"].includes(action.kind) || (action.kind === "union" && why.includes("pipe")))) fuelMoves.push(day);
   if (result.ok) {
     made.set(action.kind, (made.get(action.kind) ?? 0) + 1);
     if (!["lorry", "sell", "fix"].includes(action.kind)) buildsToday += 1;
@@ -285,7 +295,8 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   // With money to spare, the busiest trip nobody of yours carries, whoever does now: a player
   // reads the desire lines, not only the empty platforms.
   if (!pair && world.economy.funds > 20000) {
-    const towns = [...world.towns.values()].filter((t) => !t.industry && !isCutOff(world, t.id) && inRemit(world, t.id));
+    // The airport too (airport.ts): its travellers compete with the towns' trips on their numbers.
+    const towns = [...world.towns.values()].filter((t) => (!t.industry || t.id === world.airport) && !isCutOff(world, t.id) && inRemit(world, t.id));
     let best: { a: string; b: string; perDay: number } | null = null;
     for (let i = 0; i < towns.length; i += 1) for (let j = i + 1; j < towns.length; j += 1) {
       const a = towns[i]!.id, b = towns[j]!.id;
@@ -315,6 +326,54 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   // What else the screen names that builds: a worn road kept up, a road paved. One a day.
   for (const move of namedMoves(world).filter((m) => ["fix", "pave", "road"].includes(m.action.kind)).sort((p, q) => p.price - q.price).slice(0, 1)) {
     if (affordable(world, move) && spend(world, move.price)) did(act(world, day, move.action, move.label));
+  }
+
+  // Pipelines (pipelines.ts; five-modes.md, 1), every third day: a pipe where a source sends 40+ t
+  // a day of fuel 30+ road cells, the most tonnes a naira first, its dial at 60% -- tankers kept for
+  // a strike or a tap; the inherited line restored once two towns past its end run short; the dial
+  // up a tenth (to 80%) while its towns are short and the union isn't against you, down a tenth (to
+  // 30%) while he is. His demands over a pipe paid when they're cheap, else conceded.
+  for (const u of world.unions ?? []) {
+    if (u.demand?.kind !== "pipeline") continue;
+    const cheap = u.demand.price <= Math.max(0, world.economy.funds - RESERVE) * 0.1;
+    act(world, day, { kind: "union", unionId: u.id, answer: cheap ? "pay" : "concede" }, cheap ? "the union over a pipe: pay his members" : "the union over a pipe: turn it down");
+  }
+  if (world.pipelines && world.fuel && day % 3 === 0) {
+    const second = newRefinery(world);
+    const sources = [world.fuel.depotId, ...(world.fuel.restored ? [world.fuel.refineryId] : []), ...(second ? [second.id] : [])];
+    const cap = world.tuning.pipeCapPerDay ?? 250;
+    let best: { a: string; b: string; price: number; carry: number; value: number } | null = null;
+    for (const a of sources) {
+      if (world.pipelines.some((x) => x.a === a && !x.inherited)) continue;
+      for (const town of world.towns.values()) {
+        if (town.industry || !inRemit(world, town.id)) continue;
+        const d = roadPath(world, a, town.id)?.distance ?? Infinity;
+        if (!Number.isFinite(d) || d < 30) continue;
+        const carry = pipeWouldCarry(world, a, town.id) * D;
+        if (carry < 40) continue;
+        const plan = pipePlan(world, a, town.id);
+        if ("reason" in plan) continue;
+        const value = Math.min(carry, cap) / plan.price;
+        if (!best || value > best.value) best = { a, b: town.id, price: plan.price, carry, value };
+      }
+    }
+    if (best && allowed({ kind: "pipe", a: best.a, b: best.b }) && spend(world, best.price) && did(act(world, day, { kind: "pipe", a: best.a, b: best.b }, `a pipeline ${world.towns.get(best.a)!.name}-${world.towns.get(best.b)!.name}: ${Math.round(best.carry)} t/day of fuel goes its way`))) {
+      act(world, day, { kind: "pipeDial", id: pipeId(best.a, best.b), dial: 0.6 }, "the pipe to 60%, tankers kept for a strike or a tap");
+    }
+    const old = world.pipelines.find((x) => x.inherited && !x.working);
+    if (old && allowed({ kind: "restorePipe", id: old.id })) {
+      const shortThere = [...world.basePopulation.keys()].filter((id) => inRemit(world, id) && (fuelSupply(world, id)?.supplied ?? 1) < 0.6 && haulDistance(world, old.b, id) <= world.tuning.tankerMaxHaulCells).length;
+      if (shortThere >= 2 && spend(world, restorePipeCost(world, old)) && did(act(world, day, { kind: "restorePipe", id: old.id }, `restore the old pipeline: ${shortThere} towns past it short of fuel`))) {
+        act(world, day, { kind: "pipeDial", id: old.id, dial: 0.6 }, "the old pipe to 60%");
+      }
+    }
+    for (const x of world.pipelines) {
+      if (!x.working || x.outUntil > world.economy.elapsedSeconds) continue;
+      const union = unionOf(world, x.a);
+      const short = [...world.basePopulation.keys()].filter((id) => pipeServes(world, x, id) && (fuelSupply(world, id)?.supplied ?? 1) < 0.8).length;
+      if (union && union.stance <= -0.3 && x.dial > 0.3) act(world, day, { kind: "pipeDial", id: x.id, dial: x.dial - 0.1 }, `a pipe down a tenth: ${union.chairman} against you`);
+      else if (short > 0 && x.dial > 0 && x.dial < 0.8 && (!union || union.stance > -0.2)) act(world, day, { kind: "pipeDial", id: x.id, dial: x.dial + 0.1 }, `a pipe up a tenth: ${short} of its towns short of fuel`);
+    }
   }
 
   // Chains. The refinery: restored once three towns run short; a road out; crude by lorry.
@@ -444,7 +503,8 @@ function play(seed: number): { seed: number; days: Day[]; world: GameWorld } {
     const { moves, waiting } = decide(world, day, losing);
     const builds = buildsToday;
     const tickStart = performance.now();
-    for (let i = 0; i < ticksPerDay; i += 1) gameTick(world, SIM_DT);
+    for (let i = 0; i < ticksPerDay; i += 1) for (const e of gameTick(world, SIM_DT)) if (e.kind === "pipe-out") pipeOuts.set(e.reason, (pipeOuts.get(e.reason) ?? 0) + 1);
+    if (airportOn === null && world.airport && world.routes.some((r) => world.simulation.vehicles.find((v) => v.id === r.vehicleIds[0])?.path.includes(world.airport!))) airportOn = day;
     // TICK_MS: what a step of the game costs as it fills up (the page runs one to four a frame).
     // SAVE_AT=day SAVE_TO=file: the world as it stands that day, for a profile of a late game.
     if (process.env.SAVE_AT && day === Number(process.env.SAVE_AT)) {
@@ -590,4 +650,16 @@ for (const seed of SEEDS) {
   console.log(`  metros (Revision 4, 6): ${[...world.metros].map(([id, lines]) => `${world.towns.get(id)?.name} ${lines} line(s), ${Math.round(metroRiders(world, id).riders)} riders/day`).join("; ") || "none"}; metro fares ₦${Math.round(world.budget.metro / 1000)}k all game`);
   console.log(`  motor parks (Revision 4, 5): ${world.parks.size} (${[...world.parks].map((id) => world.towns.get(id)?.name).join(", ")}); levies last 20 days ₦${Math.round(window(DAYS - 20, DAYS).reduce((s, d) => s + d.levies, 0) / 20)}/day`);
   console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);
+  // The five modes' checks (five-modes.md): the fuel chain still decides over the game; the airport connected over something else.
+  if (world.pipelines) {
+    const by50 = Array.from({ length: Math.ceil(DAYS / 50) }, (_, i) => fuelMoves.filter((d) => d > i * 50 && d <= (i + 1) * 50).length);
+    const pipes = world.pipelines.map((x) => `${world.towns.get(x.a)?.name}-${world.towns.get(x.b)?.name}${x.inherited ? " (old)" : ""} ${x.working ? `${Math.round(x.dial * 100)}%, ${Math.round(x.carried * D)} t/day, tankers ${Math.round(x.tankers * 100)}%` : "broken"}`);
+    const union = world.fuel ? unionOf(world, world.fuel.depotId) : undefined;
+    console.log(`  pipelines: ${pipes.join("; ") || "none"} | fuel-chain decisions by 50 days ${by50.join(", ")} | shut by strikes ${pipeOuts.get("strike") ?? 0}, taps ${pipeOuts.get("tap") ?? 0} | home union ${union ? union.stance.toFixed(2) : "-"}`);
+  }
+  const air = airportSummary(world);
+  if (air) console.log(`  airport: ${airportOn === null ? "never served" : `first served day ${airportOn}`}; at the end you carry ${Math.round(air.you * 100)}% of its ${Math.round(air.tripsPerDay)} trips a day, ${Math.round(air.stranded * 100)}% stranded; air freight ${air.freightPerDay.toFixed(1)} t/day (hauliers ${air.freightHauliers.toFixed(1)})`);
+  fuelMoves.length = 0;
+  pipeOuts.clear();
+  airportOn = null;
 }

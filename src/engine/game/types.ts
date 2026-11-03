@@ -51,7 +51,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly" | "coalmine" | "powerstation";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly" | "coalmine" | "powerstation" | "airport";
 
 export interface GameRoadDef {
   a: string;
@@ -629,6 +629,19 @@ export interface GameTuning {
    * hauliers follow the work, days, and the least of them that stay; days a strike and a tap shut it;
    * a tap's chance a day for 100 cells of it. Absent in older runs: no pipelines.
    */
+  /**
+   * The airport (airport.ts; five-modes.md, 2. Airport): on; travellers a day each way per thousand
+   * of the region's people, and how their share falls off with distance from it, cells; air freight a
+   * day per thousand people, t, and its rate against the usual goods rate; how far from the home city
+   * it stands, cells. Absent in older runs: no airport.
+   */
+  airportEnabled?: boolean;
+  airportTravellersPerThousand?: number;
+  airportReachCells?: number;
+  airportMinCells?: number;
+  airportMaxCells?: number;
+  airFreightPerThousand?: number;
+  airFreightRate?: number;
   pipelinesEnabled?: boolean;
   pipeCostPerCell?: number;
   pipeRestorePerCell?: number;
@@ -1001,6 +1014,8 @@ export interface GameWorld {
   seaport?: string;
   /** The border crossing's site id (border.ts); absent without one. */
   border?: string;
+  /** The airport (airport.ts): the third gateway, a site with no people; absent when it's off. */
+  airport?: string;
   /** The port's rungs built (gateways.ts upgradePort): 0 as it was, 1 a deep-water berth, 2 a container terminal. */
   portLevel?: number;
   /** segmentId -> rolling road space entering per second from lorries alone (heavier wear). */

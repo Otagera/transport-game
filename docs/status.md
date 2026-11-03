@@ -99,9 +99,11 @@ drawn with its cars (render-and-ui.md, Stations and trains). And your scope of f
 ([five-modes.md](five-modes.md)): **the pipeline built** (engine.md, Pipelines) -- refined fuel from
 the tank farm or a refinery to a town, its dial what share goes by pipe, the union following the
 tonnes, the tankers drifting off its corridor and slow to return when a strike or a tap stops it;
-an inherited line broken up the old railway. Next: the airport (the third gateway); the coach, the
-okada rule and the urban ladder wait on `SCALES-AND-MODES.md`; water last. Open: the strategist
-builds no pipes yet (the scope's 250-day check).
+an inherited line broken up the old railway. **The airport built** (engine.md, The airport): there
+on day 1 on a long dirt road, a few hundred travellers a day each way stranded until you reach it,
+8-10 t of air freight a day by hauliers or your freight train. Next: the coach, the okada rule and
+the urban ladder wait on `SCALES-AND-MODES.md`; water last. Open: the strategist neither builds
+pipes nor serves the airport yet (the scope's 250-day and 3-of-5-seeds checks).
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

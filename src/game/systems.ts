@@ -46,7 +46,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   // Causes. A vehicle's capacity is its carrier's (below): roads take only what's about the road.
   {
     id: "demand", label: "Trips wanted", col: 1, row: 0, feeds: ["service", "informal", "noSeat"], unit: "/day",
-    keys: [/^demandK$/, /^commute/, /^localTrips/, /^market/, /^priceElasticity$/, /^railInducedDemand$/, /^populationPerFlow$/, /^flowTau/, /^outcomeTau/, /^patience/, /^walkable/, /^produce/, /^cashCrop/, /^gateTown/, /^growthIgnoresCommutes$/],
+    keys: [/^airport/, /^demandK$/, /^commute/, /^localTrips/, /^market/, /^priceElasticity$/, /^railInducedDemand$/, /^populationPerFlow$/, /^flowTau/, /^outcomeTau/, /^patience/, /^walkable/, /^produce/, /^cashCrop/, /^gateTown/, /^growthIgnoresCommutes$/],
     measure: safe((w) => { const h = headline(w); return h.tripsPerDay + h.noSeatPerDay + h.noRoadPerDay; }),
   },
   {
@@ -56,7 +56,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   },
   {
     id: "supplies", label: "Sites making goods", col: 1, row: 4, feeds: ["hauliers"], unit: "t/day",
-    keys: [/^cement/, /^steel/, /^coal/, /^power/, /^pipe/, /^fuel/, /^refinery/, /^crude/, /^works/, /^mine/, /^ore/, /^limestone/, /^quarry/, /^newRefinery/, /^flour/, /^food/, /^mill/, /^wheat/, /^staple/, /^farm/, /^field/, /^industr/, /^expand/, /^assembly/, /^jobs/, /^staff/, /^workers/, /^peoplePerJob$/, /^stone/, /^ridgeField/, /^supplies/, /^tanker/],
+    keys: [/^cement/, /^steel/, /^coal/, /^power/, /^pipe/, /^airFreight/, /^fuel/, /^refinery/, /^crude/, /^works/, /^mine/, /^ore/, /^limestone/, /^quarry/, /^newRefinery/, /^flour/, /^food/, /^mill/, /^wheat/, /^staple/, /^farm/, /^field/, /^industr/, /^expand/, /^assembly/, /^jobs/, /^staff/, /^workers/, /^peoplePerJob$/, /^stone/, /^ridgeField/, /^supplies/, /^tanker/],
     measure: safe((w) => goodsFlows(w).reduce((t, f) => t + f.rate * D, 0)),
   },
   {

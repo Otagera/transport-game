@@ -1,4 +1,5 @@
 import { forgetRoute, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
+import { airportFlows } from "./airport";
 import type { CargoKind, DeliveryEvent, Vehicle } from "../simulation/types";
 import { createVehicle, freeSeats, nodesAhead, type Loader } from "../simulation/vehicle";
 import { canAfford, registerPurchase, resaleValue, sellVehicle } from "../economy/state";
@@ -94,7 +95,8 @@ export function parseRelayKey(key: string): { to: string; kind: GoodsKind; origi
 /** Goods keep or spoil as their source's do: fuel, cement, steel and milled food keep. */
 function keeps(world: GameWorld, fromId: string): boolean {
   const from = world.towns.get(fromId);
-  return isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill";
+  // Air freight is packed to travel (airport.ts): it keeps as cement does.
+  return isFuelSite(from) || isCementSite(from) || isSteelSite(from) || from?.industry === "mill" || from?.industry === "flourmill" || from?.industry === "airport";
 }
 
 /**
@@ -151,6 +153,8 @@ export function goodsFlows(world: GameWorld): GoodsFlow[] {
   // The steel chain (steel.ts): ore to the works, steel to the towns.
   flows.push(...steelFlows(world));
   flows.push(...powerFlows(world));
+  // Air freight from the airport to the market towns (airport.ts).
+  flows.push(...airportFlows(world));
   return flows;
 }
 

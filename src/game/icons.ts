@@ -40,7 +40,7 @@ export type Glyph =
   | "oilfield" | "terminal" | "refinery" | "newrefinery" | "depot"
   | "quarry" | "works" | "silo"
   | "mill" | "flourmill"
-  | "border" | "gateway" | "station" | "assembly"
+  | "border" | "gateway" | "station" | "assembly" | "airport"
   // The chains agreed next.
   | "steelport"
   | "ironmine" | "steelworks" | "plantation" | "palmmill" | "cottonfarm" | "textilemill" | "ranch" | "abattoir" | "cocoa" | "coalmine" | "powerstation" | "warehouse";
@@ -60,6 +60,7 @@ export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }
   steelworks: { family: "building", name: "Steel works (Ajaokuta)" },
   steelport: { family: "building", name: "Steel import terminal" },
   border: { family: "trade", name: "Border crossing" },
+  airport: { family: "trade", name: "Airport (travellers, air freight)" },
   gateway: { family: "trade", name: "Coast road (imports, exports)" },
   station: { family: "trade", name: "Station on the old line" },
   assembly: { family: "building", name: "Assembly plant (buses, minibuses)" },
@@ -215,6 +216,11 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
       ctx.fillRect(3.8, -5, 2.2, 6);
       ctx.fillRect(-9, 3, 18, 1.6);
       ctx.fillRect(-9, 6.4, 18, 1.6);
+      break;
+    case "airport": // a plane, nose up the page
+      ctx.fillRect(-1.4, -8, 2.8, 15);
+      ctx.fillRect(-8, -2, 16, 2.6);
+      ctx.fillRect(-4, 5, 8, 1.8);
       break;
     case "border": // a barrier pole across the road, its post
     case "gateway":

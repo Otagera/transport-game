@@ -104,7 +104,9 @@ export function relayed(world: GameWorld, origin: string, kind: GoodsKind): bool
   // on, and left out, a quarry past a yard's reach could only be railed straight to the works (map
   // 3218, day 433). Crude (oilfield, terminal) and ore (the mine) are already fuel and steel sites.
   if (world.tuning.relayLimestone && site?.industry === "quarry") return true;
-  return isCementSite(site) || isSteelSite(site) || isFuelSite(site) || (kind === "supplies" && origin === borderFuelSite(world));
+  // Air freight too (airport.ts): a few tonnes a day split over the market towns never filled a
+  // truck to each, and waited; in legs, with part loads after a wait, it gets there.
+  return isCementSite(site) || isSteelSite(site) || isFuelSite(site) || site?.industry === "airport" || (kind === "supplies" && origin === borderFuelSite(world));
 }
 
 /**

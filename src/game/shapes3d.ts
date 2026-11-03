@@ -283,6 +283,7 @@ export const SITE_YARD: Record<string, { w: number; d: number; gate: number }> =
   steelworks: { w: 56, d: 42, gate: 0 }, steelport: { w: 54, d: 40, gate: 6 },
   mill: { w: 50, d: 40, gate: 6 }, flourmill: { w: 50, d: 40, gate: 6 }, silo: { w: 50, d: 40, gate: 6 },
   station: { w: 30, d: 22, gate: 0 }, border: { w: 36, d: 30, gate: 0 }, gateway: { w: 36, d: 30, gate: 0 },
+  airport: { w: 124, d: 64, gate: 30 },
 };
 const yardOf = (kind: string, kit: Kit) => {
   const y = SITE_YARD[kind]!;
@@ -351,6 +352,43 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     for (const x of [-5, 0, 5]) kit.box(0.4, 3, 0.4, paint("--paint-grey-20"), x, 2.6, 0.8);
     kit.cylinder(1.6, 3, paint("--paint-grey-17"), 13, -8, 5);
     kit.cylinder(0.3, 5, paint("--paint-grey-20"), 13, -8);
+    return;
+  }
+  // The airport (airport.ts): its runway with its markings, a taxiway to the apron, the terminal and
+  // its car park toward the gate, the control tower, a hangar, and an airliner on the stand.
+  if (kind === "airport") {
+    yardOf(kind, kit);
+    const tarmac = paint("--paint-grey-21"), line = paint("--paint-light-1"), grass = paint("--paint-green-20");
+    kit.box(122, 0.06, 62, grass, 0, 0);
+    kit.box(116, 0.12, 13, tarmac, 0, -20);
+    for (let x = -50; x <= 50; x += 9) kit.box(5, 0.04, 0.6, line, x, -20, 0.12);
+    for (const end of [-1, 1]) for (let z = -24.5; z <= -15.5; z += 1.5) kit.box(5, 0.04, 0.7, line, end * 53, z, 0.12);
+    kit.box(6, 0.1, 14, tarmac, -30, -7);
+    kit.box(70, 0.1, 6, tarmac, 0, -10);
+    kit.box(46, 0.1, 18, paint("--paint-grey-18"), 8, 4);
+    // The terminal, glazed toward the apron, its roof deep; the car park behind it.
+    kit.box(36, 7, 12, paint("--paint-light-4"), 8, 20);
+    kit.box(36.6, 1, 13.2, paint("--paint-grey-14"), 8, 20, 7);
+    for (let x = -8; x <= 24; x += 4) kit.box(3, 3.4, 12.1, paint("--paint-blue-17"), x, 20, 1.6);
+    kit.box(30, 0.08, 10, paint("--paint-grey-20"), 8, 29);
+    for (let x = -4; x <= 20; x += 4) kit.box(2.2, 1.3, 3.6, x % 8 ? paint("--paint-blue-11") : paint("--paint-earth-53"), x, 28.5);
+    // The control tower.
+    kit.cylinder(1.8, 16, paint("--paint-light-4"), 34, 14, 0, 10);
+    kit.box(5.2, 2.6, 5.2, paint("--paint-blue-17"), 34, 14, 16);
+    kit.box(6, 0.5, 6, paint("--paint-grey-14"), 34, 14, 18.6);
+    // A hangar, its doors open.
+    kit.box(20, 9, 14, paint("--paint-grey-11"), -34, 12);
+    kit.gable(20.6, 14.6, 3, paint("--paint-grey-14"), -34, 12, 9);
+    kit.box(14, 7, 0.2, paint("--paint-dark-2"), -34, 4.9, 0.2);
+    // An airliner on the stand, white with its line's stripe.
+    const white = paint("--paint-light-1"), stripe = paint("--paint-blue-9");
+    kit.box(26, 3.4, 3.4, white, 8, 2, 1.6);
+    kit.box(26.1, 0.5, 3.5, stripe, 8, 2, 3.1);
+    kit.box(3, 2.4, 3, white, 21.5, 2, 2.1);
+    kit.box(4, 0.4, 26, white, 8, 2, 2.4);
+    kit.box(2.4, 0.3, 9, white, -4, 2, 4.2);
+    kit.box(3.4, 5, 0.3, stripe, -4.2, 2, 4.2);
+    for (const z of [-5, 9]) kit.box(3, 1.4, 1.4, paint("--paint-grey-14"), 9, z, 1.2);
     return;
   }
   // A border crossing (border.ts): the customs post, its barrier across the road, lorries waiting, flags.
