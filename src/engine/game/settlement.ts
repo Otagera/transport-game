@@ -31,11 +31,11 @@ export type GameEvent =
   | { kind: "strike"; a: string; b: string }
   | { kind: "strike-over"; a: string; b: string; cost: number | null }
   // The named project (project.ts): built, or lapsed to the treasury.
-  | { kind: "project-done"; a: string; b: string; rung: "lane" | "rail" }
-  | { kind: "project-lapsed"; a: string; b: string; rung: "lane" | "rail"; taken: number }
+  | { kind: "project-done"; a: string; b: string; rung: "lane" | "rail" | "freight" }
+  | { kind: "project-lapsed"; a: string; b: string; rung: "lane" | "rail" | "freight"; taken: number }
   // ...affordable now: the 30-day clock starts; and a warning before it lapses.
-  | { kind: "project-affordable"; a: string; b: string; rung: "lane" | "rail"; lapsesAt: number }
-  | { kind: "project-lapse-warning"; a: string; b: string; rung: "lane" | "rail"; lapsesAt: number }
+  | { kind: "project-affordable"; a: string; b: string; rung: "lane" | "rail" | "freight"; lapsesAt: number }
+  | { kind: "project-lapse-warning"; a: string; b: string; rung: "lane" | "rail" | "freight"; lapsesAt: number }
   // The treasury's remittance (budget.ts): what a period's end took, 0 included.
   | { kind: "remitted"; amount: number }
   | { kind: "swept"; amount: number }

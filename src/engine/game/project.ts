@@ -2,6 +2,7 @@ import type { GameWorld } from "./types";
 import type { GameEvent } from "./settlement";
 import { laneCost, roadChain } from "./world";
 import { planRail, railPath, railRouteId } from "./rail";
+import { freightRouteId } from "./goods";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 
 // The named project (docs/brief.md, Revision 1: "the treasury leaves a named
@@ -17,7 +18,13 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 /** Days before a lapse that you're warned. */
 const LAPSE_WARNING_DAYS = 5;
 
-export type ProjectRung = "lane" | "rail";
+/** A bus lane, a rail line (track and its first train), or a freight line (track and its first freight train: the coal's, power.ts). */
+export type ProjectRung = "lane" | "rail" | "freight";
+
+/** What it's called in a sentence. */
+export function projectName(rung: ProjectRung): string {
+  return rung === "lane" ? "bus lane" : rung === "freight" ? "freight line" : "rail line";
+}
 
 export interface NamedProject {
   a: string;
@@ -35,13 +42,15 @@ export interface NamedProject {
 export function rungPrice(world: GameWorld, a: string, b: string, rung: ProjectRung): number {
   if (rung === "lane") return laneCost(world, a, b);
   const plan = planRail(world, a, b, "cheapest");
-  return plan ? plan.cost + world.tuning.trainPurchaseCost : Infinity;
+  return plan ? plan.cost + (rung === "freight" ? world.tuning.freightPurchaseCost : world.tuning.trainPurchaseCost) : Infinity;
 }
 
 /** Whether the rung is built on that corridor. */
 function built(world: GameWorld, project: NamedProject): boolean {
   if (project.rung === "lane") return (roadChain(world, project.a, project.b) ?? []).every((piece) => piece.busLane);
-  return railPath(world, project.a, project.b) !== null && world.routes.some((route) => route.id === railRouteId(project.a, project.b));
+  if (railPath(world, project.a, project.b) === null) return false;
+  if (project.rung === "freight") return world.lorryRoutes.some((route) => route.id === freightRouteId(project.a, project.b) && route.vehicleIds.length > 0);
+  return world.routes.some((route) => route.id === railRouteId(project.a, project.b));
 }
 
 export function nameProject(world: GameWorld, a: string, b: string, rung: ProjectRung): { ok: boolean; reason?: string } {

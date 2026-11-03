@@ -1,3 +1,4 @@
+import { projectName } from "@engine/game/project";
 import { routeAlong, stanceWord, unionOf } from "@engine/game/union";
 import { fordBridgeCost, fordById } from "@engine/game/floods";
 import { LINE_COLOURS, labelOf, roadLabelKeyOf, routeLabelKey } from "@engine/game/labels";
@@ -959,10 +960,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "corridor-taken": return { text: `You took ${ab(e)} from the danfos`, tone: "good", group: "corridors", select: { kind: "town", id: e.a } };
       case "corridor-released": return { text: `The danfos took ${ab(e)} back`, tone: "bad", group: "corridors", select: { kind: "town", id: e.a } };
       case "swept": return e.amount >= 1 ? { text: `The treasury swept ${nairaK(e.amount)}`, tone: "bad", group: "money", select: null } : null;
-      case "project-affordable": return { text: `${ab(e)}: the ${e.rung === "lane" ? "bus lane" : "rail"} is affordable now`, tone: "good", group: "money", select: { kind: "town", id: e.a } };
+      case "project-affordable": return { text: `${ab(e)}: the ${projectName(e.rung)} is affordable now`, tone: "good", group: "money", select: { kind: "town", id: e.a } };
       case "project-lapse-warning": return { text: `${ab(e)}: the project money lapses soon`, tone: "bad", group: "money", select: { kind: "town", id: e.a } };
       case "project-lapsed": return { text: `${ab(e)}: the project lapsed, the treasury took ${nairaK(e.taken)}`, tone: "bad", group: "money", select: null };
-      case "project-done": return { text: `${ab(e)}: the ${e.rung === "lane" ? "bus lane" : "rail"} is built`, tone: "good", group: "money", select: { kind: "town", id: e.a } };
+      case "project-done": return { text: `${ab(e)}: the ${projectName(e.rung)} is built`, tone: "good", group: "money", select: { kind: "town", id: e.a } };
       case "flood-warning": return { text: `The rains in ${e.inDays} days: ${e.fords.map((f) => f.name).join(", ")} will flood`, tone: "bad", group: "trouble", select: null };
       case "flood-rose": return { text: `Flooded: ${e.fords.map((f) => f.name).join(", ")}, for ${e.days} days`, tone: "bad", group: "trouble", select: null };
       case "flood-fell": return { text: `The water's down at ${e.fords.map((f) => f.name).join(", ")}`, tone: "good", group: "trouble", select: null };

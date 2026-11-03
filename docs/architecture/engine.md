@@ -581,8 +581,10 @@ growth, decay, ambient traffic, or `paratransit/spawn.ts`.
   and its takings in `sendInformal`) on up to 3 normal days before, into `lastStrike` and
   `world.budget.struck`. Emits `strike-announced`, `strike-called-off`, `strike`,
   `strike-over` (with the cost) for the page.
-- **The named project** (`project.ts`, `world.project`) — `nameProject(a, b, "lane" | "rail")`
-  at `rungPrice` (a lane's `laneCost`; rail's track plan plus a train); `remit` leaves
+- **The named project** (`project.ts`, `world.project`) — `nameProject(a, b, "lane" | "rail" |
+  "freight")` at `rungPrice` (a lane's `laneCost`; rail's track plan plus a train; a freight
+  line's track plan plus a freight train -- the coal's, power.ts, built once a freight train runs
+  on it; `projectName` says which in a sentence); `remit` leaves
   `heldForProject` alone (funds above the reserve, up to the price); `updateProject`, each tick
   before the remittance, ends it when built (`project-done`) or after `projectLapseDays`, when
   the treasury takes its share of what was held at once (`project-lapsed`).
@@ -980,6 +982,33 @@ meets it (x = cells / max; half, for a tail of a quarter) and then `tail / x`: a
 reach, a tenth at two and a half times it, never none. One truck a load, straight there. The
 site's line and the problem card say "a long haul by road ... a freight train takes the rest".
 
+How far hauliers go, by the share of what's waiting they take a second (`haulShare`, the
+pickup rate's multiplier: goods that keep while they wait still go in the end at a low one).
+Without a yard their reach is 40 cells, from one 120; limestone to the works tails off past half
+of it (`longHaulTail` 1/4), where it had stopped dead. Coal doesn't: it's bulk, 40 cells either way.
+
+Without a yard (reach 40 cells). Before: straight down to none at 40.
+
+```mermaid
+%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#c2410c"}}}}%%
+xychart-beta
+  title "Hauliers' share, limestone to the works, no yard"
+  x-axis "road cells" [0, 20, 40, 60, 80, 100, 120, 160, 200, 300]
+  y-axis "share" 0 --> 1
+  line [1, 0.5, 0.25, 0.17, 0.125, 0.1, 0.083, 0.063, 0.05, 0.033]
+```
+
+From a yard (reach 120 cells). Before: straight down to none at 120.
+
+```mermaid
+%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#c2410c"}}}}%%
+xychart-beta
+  title "Hauliers' share, limestone to the works, from a yard"
+  x-axis "road cells" [0, 20, 40, 60, 80, 100, 120, 160, 200, 300]
+  y-axis "share" 0 --> 1
+  line [1, 0.83, 0.67, 0.5, 0.375, 0.3, 0.25, 0.19, 0.15, 0.1]
+```
+
 **Part loads** (2026-10-29, `partLoadDays`, truckers.ts). A hold of cement, steel or fuel
 (`relayed`) dispatches once it has gathered for 7 days, part full, not only at `truckLoad`
 (`world.truckerSince`: when each hold began). Map 949's far small towns want ~0.5 t of steel a
@@ -1005,6 +1034,24 @@ passenger line, a wagon on a freight one): each vehicle's `capacity` by one car'
 `vehicleEconomics` purchase price and running cost by the car's (so resale returns the cars
 too), the route's `cars` count, which new trains take. A longer train passes no more often:
 it takes no more room. `vehicleCostPerDay` / `goodsVehicleCostPerDay` read the cars.
+
+A line's room, worked through (`trackPassesPerDay` 30; a train's speed 8 cells a second, a game
+day 30 s, so a train passes each piece of its line 240 ÷ its length times a day). Kewama–Dikware
+is shared: the through train to the far town uses little of it, the shuttle a lot.
+
+```mermaid
+flowchart LR
+  K((Kewama)) == "shared stretch, 20 cells:<br/>2 + 12 = 14 of 30 passes a day" === Dk((Dikware))
+  Dk -- "the through train runs on:<br/>120 cells Kewama to the far town" --- F((far town))
+```
+
+| Train | Its line | Passes a day on each piece of it |
+| --- | --- | --- |
+| Through train | Kewama to the far town, 120 cells | 240 ÷ 120 = 2 |
+| Shuttle | Kewama to Dikware, 20 cells | 240 ÷ 20 = 12 |
+
+Room left on the shared stretch: 16 passes, another shuttle (12) and change, or eight more
+through trains. A carriage or wagon (`addCar`) adds seats or tonnes and no passes.
 
 ### The warm-up, and day numbers
 
@@ -1040,6 +1087,35 @@ and "stayed home" rose as a share while more people travelled. Read by the bots
 route type (`mini:a~b`, `minibusRouteId`, `isMinibusRoute`), like trains are, so trip plans,
 transfers, diagnosis, debt advice, receipts and forecasts treat it as any passenger route.
 `vehicleCostPerDay` knows its running cost; `actions.ts` has a `minibus` action.
+
+### The chains at a glance (2026-11-03)
+
+What feeds what, and what each unlocks. Goods matter through growth, not money (brief, More
+industries): a town grows past +40% of its start only as far as its cement lets it, past +80% only
+as far as its steel does. Solid arrows are goods (hauliers', your lorries', your freight trains');
+the dotted ones are power's lift and the assembly plant's discount. Coal and power is built and off
+(`coalEnabled`) until C37 and C38 pass.
+
+```mermaid
+flowchart LR
+  Q[limestone quarries,<br/>far limestone fields] -- limestone --> W[cement works<br/>idle at the start]
+  IM[iron ore mine] -- ore --> SW[steel works<br/>idle at the start]
+  OF[oilfield or<br/>pipeline terminal] -- crude --> RF[refinery, idle;<br/>a private one later]
+  FT[farm towns,<br/>farm belts] -- staple --> ML[mill]
+  PT[the port] -- wheat --> FM[flour mill]
+  FT -- cash crop --> PT
+  W -- cement --> T["the towns:<br/>cement to grow past +40%,<br/>steel past +80%; fuel"]
+  SW -- steel --> T
+  RF -- fuel --> T
+  PT -- "imported cement,<br/>steel, fuel" --> T
+  ML -- food --> MK[market towns]
+  FM -- flour --> MK
+  SW -- steel --> AP[assembly plant]
+  RF -- fuel --> AP
+  AP -. "cheaper buses<br/>and minibuses" .-> Y((you))
+  CM[coal mine,<br/>a far cluster] -- coal --> PS[power station<br/>idle; off for now]
+  PS -. "up to +40% from<br/>the same input" .-> L[every works and mill<br/>within 60 cells of it]
+```
 
 ### The fuel chain (Revision 3, steps 1a–1b)
 
@@ -1445,6 +1521,21 @@ home cluster's second town, on an inherited road to it, kind `assembly`, `jobsAs
 `pledgesEnabled` and clusters. The far clusters run from day 1 as before; what's closed is what you
 may build there. `world.remit` is plain data -- `open` (regional towns, in the order opened) and
 `toOpen` (openings granted, not yet chosen) -- changed only at a verdict and by the `open` action.
+```mermaid
+stateDiagram-v2
+  [*] --> Home: a new game, the home cluster's land only
+  Home --> Granted: a verdict keeps a pledge (not a failed term)
+  Granted --> Offered: the two closed clusters nearest your towns
+  Offered --> Opened: you choose one (the open action)
+  Offered --> Granted: you leave it, and the opening waits
+  Opened --> Granted: the next verdict that keeps a pledge
+  Opened --> [*]: every cluster open
+  note right of Opened
+    Yours to build in: lines, yards, stations,
+    restores. Its sites and pledges are yours.
+  end note
+```
+
 - **Land** (`landOf`): inside the home box is home; outside, the nearest of the home box (by distance
   to its edge) and each far cluster's regional town. A town in a `ClusterDef` is that cluster's
   whatever its cell says; a site goes by its cell. The seaport, border posts and the coast road's
@@ -1527,20 +1618,43 @@ design console's drawer); `whatIf` runs it through for a script.
 2026-11-03** until C37 and C38 pass -- brief, the measured results). The first chain an
 opening brings, and an interlock: it lifts the chains you already run.
 
+```mermaid
+sequenceDiagram
+  participant V as A term's verdict
+  participant Y as You
+  participant S as Power station (home)
+  participant M as Coal mine (far cluster)
+  participant W as Works and mills in reach
+  V->>Y: offers the coal's cluster: "a coal mine (power for your works)"
+  Y->>V: opens it
+  Y->>S: restores it (₦60k)
+  S-->>M: wants 120 t a day: the mine digs
+  Note over M,S: 45-76 cells apart: hauliers take coal only 40
+  Y->>Y: saves for the coal line (a named freight-line project)
+  Y->>M: lays track, runs a freight train, adds wagons
+  M->>S: coal by your train
+  S-->>W: power = coal in ÷ coal wanted × its shift: up to +40% from the same input
+```
+
 - **Placed** by `placePower` after every other site (start.ts), so nothing else moves (a test
-  holds every other site's position with it off). The mine goes in `coalCluster`: the far cluster
-  nearest the home box that isn't the limestone one, 8-18 cells from its regional town, as far
-  from any town as it gets, with an old road to that town. The station goes in the home box where
-  the most `POWERED` sites (works, steel works, both refineries, mill, flour mill) fall within
-  `powerReachCells`, by water a little better, near the network, with an old road. On the five
-  maps checked the coal is 139-244 road cells from the station: past any haul, so rail's.
+  holds every other site's position with it off). The station first, in the home box where the
+  most `POWERED` sites (works, steel works, both refineries, mill, flour mill) fall within
+  `powerReachCells`, by water a little better, near the network, and among equals nearest the far
+  clusters' land; an old road. Then the mine: in each far cluster's land, the dry spot clear of
+  towns nearest the station past `coalMinCells` (scored within `coalMaxCells`); the cluster the
+  nearest that isn't the limestone one, unless that is 20+ cells nearer. An old road to the
+  cluster's nearest town. **Reworked 2026-11-03:** first placed in its cluster's far gaps, the coal
+  sat 139-244 road cells out (₦600k+ of track) and no line was laid; now 45-76 cells straight,
+  ₦271-493k of track on five maps.
 - **Idle at the start**, restored by `restorePower` (`powerRestoreCost`, the `restorePower`
   action; in your remit, at home). From then `coalWanted` is `powerCoalPerDay` and the mine digs
   it (`coalOutput`, times its shift); `powerFlows` is one flow, mine to station, added in
-  `goodsFlows` after steel's. Coal is "coal" by its site (fuel.ts `cargoName`); not relayed, but a
-  long haul (haulage.ts `longHaul`), so hauliers take a tailing share of it past their reach.
+  `goodsFlows` after steel's. Coal is "coal" by its site (fuel.ts `cargoName`); not relayed, and
+  **bulk**: `legReach` from a coal mine is `truckerMaxHaulCells`, a yard there or not, and no
+  tail past it -- the first build's yard at the mine had hauliers carry half the coal 159 road
+  cells, standing in for the line. Past 40 cells it's your freight train's.
 - **Power** is `powerShare`: coal arriving over coal wanted, times the station's shift.
-  `powerLift(siteId)` is `1 + powerBoost × powerShare` for a `POWERED` site within reach of a
+  `powerLift(siteId)` is `1 + powerBoost × powerShare` (0.4, from 0.3) for a `POWERED` site within reach of a
   working station, else 1. Each such site's output function multiplies by it (cement.ts
   `worksOutput`, steel.ts `steelOutput`, fuel.ts `refineryOutput` / `newRefineryOutput`, food.ts
   `millOutput` / `flourOutput`): more from the same input. production.ts multiplies the site's

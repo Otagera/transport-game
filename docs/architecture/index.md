@@ -120,6 +120,28 @@ your vehicles, the informal sector, goods and hauliers, money, lanes and strikes
 industries, sites -- and returns the events of that step (strikes, sites opening, milestones...),
 which the page turns into toasts and the run file records. Detail in [engine.md](engine.md) §game/.
 
+```mermaid
+flowchart TD
+  F([a frame: requestAnimationFrame]) --> O["owed += speed × elapsed<br/>(at most 0.25 s of it)"]
+  O --> Q{"owed ≥ one step<br/>(1/30 game s)?"}
+  Q -- no --> D
+  Q -- yes --> B{"10 ms spent<br/>this frame?"}
+  B -- "yes: drop what's owed" --> D
+  B -- no --> T["gameTick(world, 1/30)<br/>record it, announce its events"]
+  T --> Q
+  D["draw the map, or the 3D view"] --> P{"panel due?<br/>¼ s, or 1 s while the device<br/>can't keep the speed"}
+  P -- yes --> R["the strip, the side panel, the log"]
+  P -- no --> F
+  R --> F
+```
+
+One step, in its fixed order (each reads what the one before left):
+
+```mermaid
+flowchart LR
+  d[demand:<br/>riders arrive] --> v[your vehicles:<br/>board, move, fares] --> i[the informal sector:<br/>danfos, kekes, okadas] --> g[goods and hauliers:<br/>flows, yards, trucks] --> m[money:<br/>costs, levies, tolls] --> l[lanes and strikes] --> gr[growth] --> in[industries] --> s[sites:<br/>workers, output]
+```
+
 ## Build/verify pipeline
 
 - `bun run typecheck` — `tsc --noEmit`, pinned to TypeScript `^5.7` (the `latest` tag is

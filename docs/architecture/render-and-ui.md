@@ -306,6 +306,15 @@ terrain isn't applied: the map still draws shaded hills.
   a light hill wash, and "THE RIDGE" and "THE RIVER" on the ground where there's room.
   Route lines Mini Metro's way: a slot per route on every road, each drawn parallel to the
   road in its slot (`drawRouteLines`, `strokeParallel`).
+- **Rail lines' cards** (2026-11-02): a passenger line's card and a freight line's row say how
+  long their trains run ("2 of 4 cars a train, 160 seats each") with "+ carriage" or "+ wagon" and
+  its price for every train on the line (`carsRow`, rail.ts `addCar`): each car's seats or tonnes
+  and running cost, and "no more room on the track". The Train and Freight previews say a line's
+  room by passes ("34 of 40 passes a day on its busiest stretch", `LineRoom.text`), and a full line
+  refuses with what this train would add, pointing at longer trains.
+- **The time controls say the speed the device manages** (2026-11-02): while the game can't step
+  within its 10 ms a frame (index.md, The tick loop), the active speed reads "4× (2.7×)",
+  refreshed only when that changes by a tenth, so the toolbar isn't rebuilt every frame.
 - **Site production** (`production.ts siteProduction`; `main.ts productionHtml`,
   `siteProblem`): every site card opens with what it makes against capacity, each input
   against what full output takes, its shift, and the share carried away, a gauge each, the
@@ -314,7 +323,8 @@ terrain isn't applied: the map still draws shaded hills.
   gauge under each site's square (green ≥80%, amber ≥40%, red below; grey idle). Under the
   gauges, a site in a power station's reach says what the grid adds or would (`powerHtml`); the
   station and its coal mine have their own card (`renderPowerSite`), the station's restore in
-  "The problem here" while it's idle. The map
+  "The problem here" while it's idle; once working with no line from the coal, "Save for the coal
+  line" (a named freight-line project, project.ts) and its price, or why your remit refuses it. The map
   passes `goodsFlows` in once a frame (playtest, map 2411: "we need indications for the
   factories in terms of production"). **Keep passing it:** `siteProduction` works the flows
   out itself when not handed them, and the site icons' redraw had dropped the argument -- on

@@ -23,7 +23,7 @@ import { addBus, buildRoad, createGameWorld, largestGapMidpoint, networkShare, r
 import { informalBudget, gameTick } from "@engine/game/tick";
 import { laneOn, setEnforcement, settleStrike, settlementPrice, struckSegments } from "@engine/game/pushback";
 import { addBrt, addBusLane, brtRouteId, checkBrt, checkLane, laneCost } from "@engine/game/world";
-import { heldForProject, nameProject, updateProject } from "@engine/game/project";
+import { heldForProject, nameProject, projectName, rungPrice, updateProject } from "@engine/game/project";
 import { ALL_SYSTEMS_ON, DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 import type { GameMapDef, GameTuning, GameWorld } from "@engine/game/types";
 import { SIM_DT } from "@engine/loop";
@@ -95,7 +95,7 @@ import { bridgeCellsOn, corridorWear, fixRoadNow, repairCost, setMaintained, upk
 import { computeBurnRate } from "@engine/economy/report";
 import { bestRung, growthTrend, roadFull, townGrowth } from "@engine/game/growth";
 import { addFreightTrain, addLorry, checkFreight, diagnoseLorryRoute, freightRouteId, goodsAlong, goodsFlows, lorryEstimate, removeLorry, lorrySummaries } from "@engine/game/goods";
-import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, derelictRun, railPath, restoreCost, trackAction } from "@engine/game/rail";
+import { buildHalt, haltSite, addTrain, buildTrack, checkTrain, derelictRun, planRail, railPath, restoreCost, trackAction } from "@engine/game/rail";
 import { slowOrder } from "@engine/game/wear";
 import type { Vehicle } from "@engine/simulation/types";
 import { createHintState, dismissHint, updateHints } from "../src/game/hints";
@@ -3295,7 +3295,7 @@ describe("coal and power (power.ts; brief, A chain at each opening, first: coal 
   // Off by default until C37 and C38 pass (tuning.ts): on here.
   const game = (seed: number, tuning: Partial<typeof DEFAULT_GAME_TUNING> = {}) => startGame(gameMap(GAME_MAP, seed, { regionEnabled: true }), { ...DEFAULT_GAME_TUNING, warmUpDays: 0, coalEnabled: true, ...tuning });
 
-  test("a coal mine in the far cluster nearest home that isn't the limestone one, an idle station at home with works in its reach; every other site where it was", () => {
+  test("a coal mine in a far cluster's land 45+ cells from an idle station at home, works in the station's reach; every other site where it was", () => {
     const w = game(2327);
     const power = w.power!;
     expect(power.working).toBe(false);
@@ -3305,7 +3305,10 @@ describe("coal and power (power.ts; brief, A chain at each opening, first: coal 
     expect(inHome(w, station)).toBe(true);
     const cluster = landOf(w, mine);
     expect(cluster?.hub).toBe(power.clusterHub);
-    expect(cluster?.offer).not.toBe("limestone");
+    // Past the hauliers' reach, within a line you can save for (2026-11-03: it had sat 139-244 road cells out).
+    const straight = Math.hypot(mine.x - station.x, mine.y - station.y);
+    expect(straight).toBeGreaterThanOrEqual(w.tuning.coalMinCells!);
+    expect(straight).toBeLessThanOrEqual(110);
     expect(poweredSites(w).length).toBeGreaterThan(0);
     expect(clusterBrings(w, cluster!)).toContain("a coal mine (power for your works)");
     // Placed after every other site: without it, the others sit where they do with it.
@@ -3343,15 +3346,33 @@ describe("coal and power (power.ts; brief, A chain at each opening, first: coal 
     expect(inPowerReach(w, power.mineId)).toBe(false);
   }, 60_000);
 
-  test("the coal's long haul tails off by road, never to none; a freight line to the mine waits on its cluster opening", () => {
+  test("coal is bulk: hauliers take it only on short hauls, a yard or not; a freight line to the mine waits on its cluster opening", () => {
     const w = game(2327, { remitOpens: true, pledgesEnabled: true });
     const power = w.power!;
-    expect(longHaul(w, power.mineId, power.stationId, "supplies")).toBe(true);
-    expect(longHaul(w, power.mineId, w.cement!.worksId, "supplies")).toBe(false);
+    expect(longHaul(w, power.mineId, power.stationId, "supplies")).toBe(false);
+    w.yards.add(power.mineId);
+    expect(legReach(w, power.mineId, "supplies")).toBe(w.tuning.truckerMaxHaulCells);
+    w.yards.delete(power.mineId);
     if (w.remit) {
       expect(remitRefusal(w, { kind: "restorePower" })).toBeNull();
       expect(remitRefusal(w, { kind: "freight", a: power.mineId, b: power.stationId })).not.toBeNull();
+      expect(remitRefusal(w, { kind: "project", a: power.mineId, b: power.stationId, rung: "freight" })).not.toBeNull();
     }
+  }, 60_000);
+  test("a freight line can be saved for: track and its first freight train, built once a freight train runs on it", () => {
+    const w = game(2327);
+    const power = w.power!;
+    const price = rungPrice(w, power.mineId, power.stationId, "freight");
+    const track = planRail(w, power.mineId, power.stationId, "cheapest")!.cost;
+    expect(price).toBeCloseTo(track + w.tuning.freightPurchaseCost, 6);
+    expect(nameProject(w, power.mineId, power.stationId, "freight").ok).toBe(true);
+    expect(projectName("freight")).toBe("freight line");
+    w.economy.funds = 1e7;
+    expect(buildTrack(w, power.mineId, power.stationId).ok).toBe(true);
+    expect(addFreightTrain(w, power.mineId, power.stationId).ok).toBe(true);
+    const events = updateProject(w);
+    expect(events.some((e) => e.kind === "project-done")).toBe(true);
+    expect(w.project).toBeNull();
   }, 60_000);
 });
 

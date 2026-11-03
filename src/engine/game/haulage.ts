@@ -115,8 +115,6 @@ export function relayed(world: GameWorld, origin: string, kind: GoodsKind): bool
 export function longHaul(world: GameWorld, origin: string, to: string, kind: GoodsKind): boolean {
   if (!world.tuning.longHaulTail || kind !== "supplies") return false;
   const from = world.towns.get(origin)?.industry;
-  // ...and the coal mine's coal to the power station (power.ts), as far and as straight.
-  if (from === "coalmine") return world.towns.get(to)?.industry === "powerstation";
   return from === "quarry" && isCementSite(world.towns.get(to)) && !relayed(world, origin, kind);
 }
 
@@ -124,6 +122,8 @@ export function longHaul(world: GameWorld, origin: string, to: string, kind: Goo
 export function legReach(world: GameWorld, at: string, kind: GoodsKind): number {
   const t = world.tuning;
   const tanker = isFuelSite(world.towns.get(at)) || (kind === "supplies" && at === borderFuelSite(world));
+  // Coal is bulk (power.ts): hauliers take it on short hauls only, a yard or not; past that it's your freight train's.
+  if (world.towns.get(at)?.industry === "coalmine") return t.truckerMaxHaulCells;
   return Math.max(tanker ? t.tankerMaxHaulCells : t.truckerMaxHaulCells, t.yardsEnabled && hasYard(world, at) ? t.yardReachCells : 0);
 }
 

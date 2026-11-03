@@ -57,7 +57,7 @@ import { ago, listSaves, loadSave, saveKey, writeSave, type SaveKey, type SavedG
 import { vehicleMoves } from "@engine/game/moves";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/game/upkeep";
 import { isDirt } from "@engine/game/congestion";
-import { heldForProject, projectLapsesAt, rungPrice, type ProjectRung } from "@engine/game/project";
+import { heldForProject, projectLapsesAt, projectName, rungPrice, type ProjectRung } from "@engine/game/project";
 import { remittanceExpected } from "@engine/game/budget";
 import { carryOver, sweepDue } from "@engine/game/sweep";
 import { checkYard, hasYard, yardGain } from "@engine/game/yards";
@@ -813,13 +813,13 @@ function announce(event: GameEvent): void {
     say(`The danfo union calls a strike on ${corridor} from day ${gameDay(world, event.atSeconds)} over your bus lane.${relax}`, true, 10);
     pauseForStrike();
   } else if (event.kind === "project-done") {
-    say(`Your project is built: the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}. The treasury goes back to its usual share.`, false, 6);
+    say(`Your project is built: the ${projectName(event.rung)} on ${corridor}. The treasury goes back to its usual share.`, false, 6);
   } else if (event.kind === "project-affordable") {
     say(Number.isFinite(event.lapsesAt)
-      ? `You can afford the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor}: build it by day ${gameDay(world, event.lapsesAt)}, or the savings lapse to the treasury.`
-      : `You can afford the ${event.rung === "lane" ? "bus lane" : "rail line"} on ${corridor} now.`, false, 9);
+      ? `You can afford the ${projectName(event.rung)} on ${corridor}: build it by day ${gameDay(world, event.lapsesAt)}, or the savings lapse to the treasury.`
+      : `You can afford the ${projectName(event.rung)} on ${corridor} now.`, false, 9);
   } else if (event.kind === "project-lapse-warning") {
-    say(`Your ${event.rung === "lane" ? "bus lane" : "rail"} savings for ${corridor} lapse on day ${gameDay(world, event.lapsesAt)}: build it before then, or the treasury takes them.`, true, 9);
+    say(`Your ${projectName(event.rung)} savings for ${corridor} lapse on day ${gameDay(world, event.lapsesAt)}: build it before then, or the treasury takes them.`, true, 9);
     pauseForStrike();
   } else if (event.kind === "project-lapsed") {
     say(`Your project on ${corridor} lapsed unbuilt: the treasury took ${naira(event.taken)} of what you'd set aside.`, true, 8);
@@ -1986,9 +1986,16 @@ function renderPowerSite(townId: string): void {
     ];
     if (!power.working) {
       problem = `Idle. Restore it, and ${townName(power.mineId)} starts digging; your works run on generators until then.`;
-      action = `<span class="actions"><button data-restore-power="1">Restore it: ${naira(t.powerRestoreCost ?? 0)}</button></span>`;
-    } else if (!roadPath(world, power.mineId, townId) && !railPath(world, power.mineId, townId)) {
-      problem = `No way to it from ${townName(power.mineId)}: build a road (<kbd>R</kbd>) or lay track (<kbd>K</kbd>) between them, and the coal can come.`;
+      action = `<span class="actions"><button data-restore-power="1">Restore it: ${naira(t.powerRestoreCost ?? 0)}</button>${world.economy.funds < (t.powerRestoreCost ?? 0) ? bondButton("power") : ""}</span>`;
+    } else if (!railPath(world, power.mineId, townId)) {
+      // Coal is bulk: hauliers take it only on short hauls (haulage.ts legReach), so it's your line.
+      // Saving for it keeps the treasury off the money (project.ts), as for a rail rung.
+      const price = rungPrice(world, power.mineId, townId, "freight");
+      const saving = world.project?.rung === "freight" && world.project.a === power.mineId && world.project.b === townId;
+      const refused = remitRefusal(world, { kind: "project", a: power.mineId, b: townId, rung: "freight" });
+      problem = `No line from ${townName(power.mineId)}: coal is bulk, and hauliers won't take it ${t.truckerMaxHaulCells}+ cells. Lay track (<kbd>K</kbd>) and run a freight train (<kbd>G</kbd>)${Number.isFinite(price) ? `: about ${naira(price)} with its first train` : ""}.`;
+      if (Number.isFinite(price) && !saving && !refused) action = `<span class="actions"><button data-project="${power.mineId}|${townId}|freight">Save for the coal line</button>${bondButton("project")}</span>`;
+      else if (refused) problem += ` ${refused}.`;
     } else if (share < 0.6) {
       problem = `Short of coal: ${perDay(coalArriving(world))} of ${coal} t a day. Carry it from the mine: track and a freight train (<kbd>G</kbd>), or a haulage yard there (<kbd>Y</kbd>) for a little more by road.`;
     }
@@ -2824,7 +2831,7 @@ function budgetParts() {
   const project = world.project;
   const held = project ? heldForProject(world) : 0;
   const saving = project
-    ? `<p class="callout hook"><span class="k">Saving for</span>The ${project.rung === "lane" ? "bus lane" : "rail line"} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside${!world.tuning.remittanceEnabled ? `${project.affordableAt === null ? "." : ": you can afford it now."}` : `, safe from the treasury`}${!world.tuning.remittanceEnabled ? "" : project.affordableAt === null ? ` while you save. Once you can afford it, you have ${world.tuning.projectLapseDays} days to build it` : `: you can afford it, so build it by day ${gameDay(world, projectLapsesAt(world, project))} or the savings lapse`}.
+    ? `<p class="callout hook"><span class="k">Saving for</span>The ${projectName(project.rung)} on ${townName(project.a)} – ${townName(project.b)}: ${naira(held)} of ${naira(project.price)} set aside${!world.tuning.remittanceEnabled ? `${project.affordableAt === null ? "." : ": you can afford it now."}` : `, safe from the treasury`}${!world.tuning.remittanceEnabled ? "" : project.affordableAt === null ? ` while you save. Once you can afford it, you have ${world.tuning.projectLapseDays} days to build it` : `: you can afford it, so build it by day ${gameDay(world, projectLapsesAt(world, project))} or the savings lapse`}.
         <span class="bar project-bar" title="${pct(held / project.price)} set aside"><i style="width:${pct(Math.min(1, held / project.price))};background:var(--you)"></i></span>
         <span class="actions">${bondButton("project")}<button data-drop-project="1">Drop it</button></span></p>`
     : "";
@@ -3239,8 +3246,8 @@ function onPanelClick(event: MouseEvent): void {
   // The named project: name it from a town's road-full line, or drop it.
   if (target.dataset.project) {
     const [a, b, rung] = target.dataset.project.split("|") as [string, string, ProjectRung];
-    const result = act({ label: `saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, { kind: "project", a, b, rung });
-    say(result.ok ? `Saving for the ${rung === "lane" ? "bus lane" : "rail line"} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone while you save. Once you can afford it, build it within ${world.tuning.projectLapseDays} days, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
+    const result = act({ label: `saving for the ${projectName(rung)} on ${townName(a)} – ${townName(b)}`, towns: [a, b] }, { kind: "project", a, b, rung });
+    say(result.ok ? `Saving for the ${projectName(rung)} on ${townName(a)} – ${townName(b)}: the treasury leaves it alone while you save. Once you can afford it, build it within ${world.tuning.projectLapseDays} days, or it lapses.` : `Can't: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;
   }

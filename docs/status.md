@@ -68,7 +68,11 @@ trains a piece -- a train bound far costs a shared stretch little (`trackPassesP
 noise). **A phone at day 200 drew 3 frames a second at 4x:** the game now steps within 10 ms a
 frame and the time controls say the speed it manages (architecture/index.md, The tick loop).
 **Coal and power** (brief, A chain at each opening, first) is built and **off** (`coalEnabled`):
-measured, power wasn't felt and no line reached the coal; the mine's place is being reworked.
+measured, power wasn't felt and no line reached the coal. **Reworked, not yet committed:** the mine
+45-76 cells from the station (₦271-493k of track), coal bulk (hauliers 40 cells, a yard or not),
++40%, and a freight line you can save for; being measured on five maps to day 300. Diagrams now in
+the docs: the frame and the step (architecture/index.md); the chains, hauliers' reach, a line's
+room, the remit opening, coal and power (engine.md).
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.
 

@@ -955,6 +955,16 @@ the coal sat 139-244 road cells from the station, ₦600k+ of track -- and hauli
 56 t of the 120 wanted from a yard at the mine (power 57%, 37%), or 3 t (2%). Being reworked: the
 mine on the side of its cluster facing home (60-80 road cells, a ₦250-350k line); coal that
 hauliers won't take past their reach; the lift wider, measured over five maps, two games each.
+**Reworked 2026-11-03:** the mine in the far cluster whose land comes nearest the station, 45-76
+cells straight (₦271-493k of track on five maps); coal bulk -- hauliers take it 40 cells, a yard
+or not; +40%; and a **freight line** joins the named projects (save for the coal line, the
+treasury leaves it alone; the station's card offers it).
+**Measured again 2026-11-03** (five maps to day 300, the strategist opening the coal's cluster
+when offered, coal first for money, a bond for the station): C38 holds -- where a line was built
+(3 of 5), all the coal came by train. C37 still fails: people 770k/775k, 985k/1,014k, 769k/776k,
+915k/915k, 791k/811k. The line took months of saving (₦300-500k, all other building held back)
+and then carried 19-41 t of the 120 wanted: power 14-20%. **Still off.** Next: whether towns are
+short of cement or steel late in a game at all -- if not, no lift on the works can show.
 
 ### Checks for the remit
 

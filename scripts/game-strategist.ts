@@ -89,7 +89,10 @@ interface Day {
 
 const ticksPerDay = Math.round(D / SIM_DT);
 const pop = (world: GameWorld) => [...world.towns.values()].filter((t) => !t.industry).reduce((s, t) => s + t.population, 0);
-const spend = (world: GameWorld, price: number) => world.economy.funds - price >= RESERVE;
+// While saving for the coal line (a named freight-line project), other buys leave what's saved
+// alone, as a player saving for it would; the line itself spends it (`forLine`).
+const saved = (world: GameWorld) => (world.project?.rung === "freight" ? Math.min(world.project.price, Math.max(0, world.economy.funds - RESERVE)) : 0);
+const spend = (world: GameWorld, price: number, forLine = false) => world.economy.funds - price >= RESERVE + (forLine ? 0 : saved(world));
 
 // A bond only where its repayments fit in half of what it nets a day (2026-10-29): the game lends
 // up to 30% of income, and on region maps the bot borrowed ₦60k for a refinery at ₦1,200 a day
@@ -172,8 +175,10 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
       }
     }
   }
-  // An opening of the remit (remit.ts), spent on the nearest cluster offered.
-  const offer = remitOffers(world)[0];
+  // An opening of the remit (remit.ts), spent on the coal's cluster when it's offered (with or
+  // without NO_POWER, so a twin opens the same land), else the nearest cluster offered.
+  const offers = remitOffers(world);
+  const offer = offers.find((c) => world.power && c.hub === world.power.clusterHub) ?? offers[0];
   if (offer) act(world, day, { kind: "open", hub: offer.hub }, `the remit opens: ${world.towns.get(offer.hub)!.name}'s cluster`);
 
   // Prune: a route a week in the red, past its first fortnight (riders take days to find a
@@ -195,6 +200,30 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   // Losing money overall: only pruning until it's back above water.
   if (averageNet(world) < 0 && world.economy.funds < 3 * RESERVE) return { moves, waiting };
 
+  // Coal and power (power.ts), before the rest of the day's buying, so it isn't spent first: once the coal's cluster is open to you, the station restored, then
+  // the coal line saved for (a named freight-line project, so the treasury leaves it alone) and
+  // built with its first freight train; a wagon more while coal runs short. Off: NO_POWER.
+  const power = world.power;
+  if (power && !process.env.NO_POWER && inRemit(world, power.mineId)) {
+    const line = world.lorryRoutes.find((r) => r.id === freightRouteId(power.mineId, power.stationId));
+    if (!power.working) {
+      if (spend(world, world.tuning.powerRestoreCost ?? 0)) did(act(world, day, { kind: "restorePower" }, "the coal is ours to reach: restore the power station"));
+      else if (checkBond(world, "power").ok) did(act(world, day, { kind: "bond", purpose: "power" }, "borrow to restore the power station"));
+    } else if (!railPath(world, power.mineId, power.stationId)) {
+      const price = trackCost(world, power.mineId, power.stationId) + world.tuning.freightPurchaseCost;
+      if (spend(world, price, true)) {
+        if (did(act(world, day, { kind: "track", a: power.mineId, b: power.stationId, alignment: "cheapest" }, "coal to the power station: rail"))) act(world, day, { kind: "freight", a: power.mineId, b: power.stationId }, "a freight train for coal");
+      } else if (Number.isFinite(price)) {
+        waiting = true;
+        if (!world.project) act(world, day, { kind: "project", a: power.mineId, b: power.stationId, rung: "freight" }, "save for the coal line");
+        else if (world.project.rung === "freight" && checkBond(world, "project").ok) did(act(world, day, { kind: "bond", purpose: "project" }, "borrow the rest of the coal line"));
+      }
+    } else if (!line && spend(world, world.tuning.freightPurchaseCost)) {
+      did(act(world, day, { kind: "freight", a: power.mineId, b: power.stationId }, "a freight train for coal"));
+    } else if (line && day % 10 === 0 && powerShare(world) < 0.8 && spend(world, (world.tuning.wagonCost ?? 0) * line.vehicleIds.length)) {
+      did(act(world, day, { kind: "car", routeId: line.id }, "coal short: a wagon on the coal trains"));
+    }
+  }
   // Climb: the first town grown to all its road allows gets the next rung.
   const full = [...world.basePopulation.keys()].map((id) => roadFull(world, id)).find((f) => f?.road && !f.thin && allowed({ kind: f.next === "lane" ? "lane" : f.next === "paved" ? "pave" : "track", a: f.road.a, b: f.road.b } as ActionSpec));
   if (full?.road) {
@@ -349,24 +378,6 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
     if (held >= 10) {
       if (spend(world, world.tuning.steelRestoreCost)) did(act(world, day, { kind: "restoreSteel" }, "steel short: restore the steel works"));
       else if (checkBond(world, "steel").ok) did(act(world, day, { kind: "bond", purpose: "steel" }, "steel short: borrow for the steel works"));
-    }
-  }
-  // Coal and power (power.ts): once the coal's cluster is open to you, the station restored, then
-  // track and a freight train for its coal; a wagon more while it's short. Off: NO_POWER.
-  const power = world.power;
-  if (power && !process.env.NO_POWER && inRemit(world, power.mineId)) {
-    if (!power.working) {
-      if (spend(world, world.tuning.powerRestoreCost ?? 0)) did(act(world, day, { kind: "restorePower" }, "the coal is ours to reach: restore the power station"));
-    } else {
-      if (!railPath(world, power.mineId, power.stationId) && spend(world, trackCost(world, power.mineId, power.stationId))) {
-        did(act(world, day, { kind: "track", a: power.mineId, b: power.stationId, alignment: "cheapest" }, "coal to the power station: rail"));
-      }
-      const line = world.lorryRoutes.find((r) => r.id === freightRouteId(power.mineId, power.stationId));
-      if (railPath(world, power.mineId, power.stationId) && !line && spend(world, world.tuning.freightPurchaseCost)) {
-        did(act(world, day, { kind: "freight", a: power.mineId, b: power.stationId }, "a freight train for coal"));
-      } else if (line && day % 10 === 0 && powerShare(world) < 0.8 && spend(world, (world.tuning.wagonCost ?? 0) * line.vehicleIds.length)) {
-        did(act(world, day, { kind: "car", routeId: line.id }, "coal short: a wagon on the coal trains"));
-      }
     }
   }
   // Every working site and open quarry gets a road to the network.

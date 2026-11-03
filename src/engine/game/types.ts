@@ -624,6 +624,9 @@ export interface GameTuning {
   coalEnabled?: boolean;
   powerCoalPerDay?: number;
   powerReachCells?: number;
+  /** The coal mine's distance from the station, straight, cells: past the hauliers' reach, within a line you can save for. */
+  coalMinCells?: number;
+  coalMaxCells?: number;
   powerBoost?: number;
   powerRestoreCost?: number;
   jobsPowerStation?: number;
