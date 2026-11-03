@@ -51,7 +51,7 @@ import { siteProduction as newRefinerySiteProduction } from "@engine/game/produc
 import { flowKey } from "@engine/game/goods";
 import { restoreRoad, retireRoad } from "@engine/game/retire";
 import { isYourRoad } from "@engine/game/upkeep";
-import { affordable, corridorNoSeat, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, wornRoadAt } from "@engine/game/problems";
+import { affordable, corridorNoSeat, mostUncarried, namedMoves, noSeatPairs, seatMove, shrinkCause, townNoSeat, whereNext, wornRoadAt } from "@engine/game/problems";
 import { CORRIDOR_TAG_DAYS, corridorChanges, corridorSummaries, takenCorridors } from "@engine/game/corridors";
 import { MILESTONE_BADGE_DAYS, TREND_DAYS, freshMilestone, milestoneLabel, peopleSinceStart, tripsTrend, updateMilestones } from "@engine/game/score";
 import { variedGameMap } from "@engine/game/variation";
@@ -2682,6 +2682,42 @@ describe("Revision 2, step 1: the problems the late game already has, with their
     expect(cause!.move).not.toBeNull();
     // C5's measure: the screen names a move, and one this rich player can afford.
     expect(namedMoves(w).some((move) => affordable(w, move))).toBe(true);
+  });
+});
+
+describe("where next (problems.ts whereNext; brief, Where next)", () => {
+  test("the towns with most room first, each with what's in the way and a move toward the trips you don't carry", () => {
+    const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0, startingFunds: 1e6 });
+    run(w, 2 * SECONDS_PER_GAME_DAY);
+    const list = whereNext(w);
+    expect(list.length).toBeGreaterThan(0);
+    for (let i = 1; i < list.length; i += 1) {
+      const buyable = (o: (typeof list)[number]) => (o.move && Number.isFinite(o.move.price) ? 1 : 0);
+      expect(buyable(list[i - 1]!) * 1e9 + list[i - 1]!.people).toBeGreaterThanOrEqual(buyable(list[i]!) * 1e9 + list[i]!.people);
+    }
+    // Nobody served yet: every town with a road is below where growth starts, and says how much to carry.
+    for (const o of list.filter((x) => x.move)) {
+      expect(o.kind).toBe("unserved");
+      expect(o.why).toMatch(/carry about \d+ more a day and it starts to grow/);
+      const trip = mostUncarried(w, o.townId)!;
+      expect([o.move!.action as { a: string; b: string }].some((a) => [a.a, a.b].includes(trip.other))).toBe(true);
+    }
+    // The cut-off town: no road reaches it, and nothing to buy for it but the road.
+    const cut = list.find((o) => o.townId === "cut");
+    if (cut) expect(cut).toMatchObject({ move: null, why: expect.stringMatching(/^no road reaches it/) });
+    // Out of scope (your remit), not listed.
+    expect(whereNext(w, (id) => id !== list[0]!.townId).some((o) => o.townId === list[0]!.townId)).toBe(false);
+  });
+
+  test("served past where growth starts, a town reads as more to carry, not as unserved", () => {
+    const w = startGame(MAP, { ...DEFAULT_GAME_TUNING, maxEmergentTowns: 0, startingFunds: 1e6 });
+    for (let i = 0; i < 3; i += 1) addBus(w, "big", "mid");
+    run(w, 6 * SECONDS_PER_GAME_DAY);
+    const mid = whereNext(w).find((o) => o.townId === "mid");
+    if (mid && townGrowth(w, "mid")!.service > w.tuning.growthServiceFloor) {
+      expect(mid.kind).not.toBe("unserved");
+      expect(mid.why).toMatch(/you carry \d+% of its trips/);
+    }
   });
 });
 

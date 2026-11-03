@@ -982,6 +982,21 @@ meets it (x = cells / max; half, for a tail of a quarter) and then `tail / x`: a
 reach, a tenth at two and a half times it, never none. One truck a load, straight there. The
 site's line and the problem card say "a long haul by road ... a freight train takes the rest".
 
+**Where next** (2026-11-03; problems.ts `whereNext`, growth.ts `nextRungRoom`; brief, Where
+next). For each original town in scope: if its road is at its rung's limit (`roadFull`), the room
+the next rung makes at today's service (`nextRungRoom`: start × `townGrowthCap` × the rungs'
+difference × how developed it is) and that rung's move; else the room better service can win
+(`cap - target` from `townGrowth`) and a move toward the town its people travel to that you carry
+least of (`mostUncarried`, from `pairOutcomes`): a train where track joins them, no line of yours
+runs between and 150+ a day go uncarried, else `seatMove`. Below where growth starts (your share
+under `growthMinPlayerShare` or service under `growthServiceFloor`) the room is out of reach until
+it's passed, so it says how many more trips a day get there: the gap × its trips × 1.5 (what you
+carry takes some riders from the danfos, and more set out; map 8703's Oshidi, 18 a day short,
+took a minibus carrying ~19 to 12-15% share and 14% service, and didn't grow). Rows with a move
+you can buy come first, then most people. Measured from map 8703's day-481 world, each of the top
+four moves against doing nothing for 30 days: Olono's train +4.7k people, Eligo's +5.4k, Idawo's
+bus +0.7k (within the runs' noise), Oshidi's minibus nothing (the case above).
+
 **Your freight line's goods are yours** (2026-11-03, `freightFirst`, truckers.ts
 `freightServes`). Goods waiting at a place, bound for a stop a freight train of yours calls at
 from there, are left to your trains: hauliers don't lift them -- unless you've set that line

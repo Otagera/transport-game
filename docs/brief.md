@@ -1021,6 +1021,32 @@ held back 358k -> 295k, and the advice moves on to the quarry the bigger works n
 | --- | --- | --- |
 | C40 | Advice names the limit | Where a chain is short, the card's move is the one that raises what arrives: expand at capacity, never carry; a freight line's goods reach its trains |
 
+### Where next (agreed 2026-11-03)
+
+The same playtest: late on, *"it became difficult knowing what to connect."* The engine already
+knows, town by town, how many people each could gain and what stops it -- you carry too little of
+its trips (or none: never served), or its road is full -- but the screen showed only problems,
+never the room. Agreed next, before cotton and the textile mill:
+
+1. **Where next**, under Waiting on you: the few towns in your remit with the most people to gain,
+   most first, each with what's in the way and the move that answers it, priced -- a town you
+   barely serve ("you carry 6% of its trips; served, room for +15k"), a road at its rung's limit
+   ("its paved road is full: a lane makes room for +22k"). Ranked as a day begins, steady between,
+   as Waiting on you is. Cement and steel stay in Waiting on you, with their people.
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C41 | Where next points somewhere real | On your map 8703 at day 481 and two strategist games at day 300, every town listed gains people within 30 days of its move, and the list is never empty while a town in your remit has 5k or more to gain |
+
+**Built 2026-11-03.** On your day-481 world, each of the top four moves against doing nothing for
+30 days: Olono's train +4.7k people, Eligo's +5.4k; Idawo's bus +0.7k (inside the noise between
+runs, a few thousand); Oshidi's minibus nothing -- it took your share from 7% to 12-15%, but its
+service (yours and half the danfos', who barely run there) stayed at 14%, under the 15% where
+growth starts. So a town below that line now says how many more trips a day start it growing
+("carry about 25 more a day"), not its room alone. C41 holds for two of four; the strategist
+games are still to measure. One bus is a small step on a town of 240k: the list says where, not
+how much.
+
 ### Checks for the remit
 
 | # | Check | Passes when |

@@ -31,7 +31,7 @@ import { stationOf, stationOpen } from "@engine/game/stations";
 import { handoverNote, termLetter, type Letter } from "./correspondent";
 import { thenAndNowSvg } from "./thenandnow";
 import { railPath } from "@engine/game/rail";
-import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, townNoSeat, shrinkCause, wornRoadAt, type NamedMove } from "@engine/game/problems";
+import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, townNoSeat, shrinkCause, whereNext, wornRoadAt, type NamedMove, type Opening } from "@engine/game/problems";
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
 import { assemblyGeneration } from "@engine/game/assembly";
@@ -499,6 +499,31 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"${item.at.length > 0 ? ` data-at="${esc(item.at.join(","))}"` : ""}><span>${esc(item.text)}${age(item)}</span>${item.button}</div>`).join("")}</div>`;
   }
 
+  // --- Where next (brief, Where next; map 8703: "difficult knowing what to connect") ---------
+  // The towns in your remit with the most people to gain, each with what's in the way and its
+  // move (problems.ts whereNext). Ranked as a day begins or when you make a move, as Waiting on
+  // you is: whereNext walks every pair's outcomes, and a list that reshuffled under the pointer
+  // couldn't be clicked.
+  let nextRanked = "";
+  let nextShown: Opening[] = [];
+  function whereNextHtml(): string {
+    const at = `${gameDay(world)}|${recorder.file.actions.length}`;
+    if (at !== nextRanked) {
+      nextRanked = at;
+      nextShown = whereNext(world, (id) => inRemit(world, id)).slice(0, 4);
+    }
+    if (nextShown.length === 0) return "";
+    const rows = nextShown.map((o) => {
+      const name = nameOf(o.townId);
+      const show = `<button data-pick="town|${esc(o.townId)}">Show ${esc(name)}</button>`;
+      const move = !o.move ? toolButton("road", "Road <kbd>R</kbd>", [o.townId])
+        : Number.isFinite(o.move.price) ? moveButton(o.move, "")
+        : `<span class="muted">${esc(o.move.label)}</span>`;
+      return `<div class="problem" data-at="${esc(o.townId)}"><span><b>${esc(name)}</b> · +${int(o.people)}k: ${esc(o.why.replace(/(; (served|carrying more)[^;]*|,? room for \+\d+k|: [^:]* makes room for \+\d+k)$/, ""))}</span>${move}${show}</div>`;
+    });
+    return `<div class="pane waiting where-next"><h2>Where next · people to gain</h2>${rows.join("")}</div>`;
+  }
+
   function townProblem(t: Town): Problem {
     // Outside your remit (remit.ts): running without you until a verdict opens its cluster.
     const closed = closedClusterOf(world, t.id);
@@ -769,7 +794,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     } else {
       const tabs = `<div class="tabs">${TABS.map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${TAB_NAME[t]}</button>`).join("")}</div>`;
       const list = tab === "network" ? hooks.moneyNote() + networkList() + fold("forecasts", "More: the forecasts", hooks.routesMore()) : tab === "towns" ? townsTable() : sitesTable();
-      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${tabs}<div class="pane">${list}</div>`);
+      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${whereNextHtml()}${tabs}<div class="pane">${list}</div>`);
     }
     panelEl.scrollTop = scroll;
   }

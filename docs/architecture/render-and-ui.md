@@ -397,7 +397,14 @@ terrain isn't applied: the map still draws shaded hills.
   with both shares and the day ("grown, it makes more trips than your lines take"). Cement at
   the works' capacity (`cementBreak` "capacity") reads "X makes all it can: N t a day with
   imports, of M wanted" with **Expand X · ₦** (`data-expand`), on the town's line, its callout
-  and Waiting on you, instead of advice to carry it. The Corridors section lists corridors with no seat first
+  and Waiting on you, instead of advice to carry it.
+- **Where next** (brief, Where next; screen.ts `whereNextHtml`, problems.ts `whereNext`) -- a pane
+  under the pledges: the four towns in your remit with the most people to gain, each "**Olono** ·
+  +90k: you carry 23% of its trips, most toward Otido (181 a day)" with its move (priced, or the
+  reason another wouldn't pay, or the Road tool for a town no road reaches) and Show. Ranked as a
+  day begins or a move is made, as Waiting on you is (whereNext walks every pair's outcomes, ~40
+  ms on map 8703 at day 481). A town below where growth starts says how many more trips a day
+  start it growing instead of promising its room. The Corridors section lists corridors with no seat first
   (≥ 20 a day), worst first, each with "No seat N/day, most A ↔ B: <move>". The map draws
   each such corridor's no seat as a grey band beside the road, 2-12 px by trips a day
   (`drawNoSeat`, `strokeOffset`: offset along the polyline's normals; cached once a sim
