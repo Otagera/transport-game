@@ -15,6 +15,6 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun test
+      - run: bun test --timeout 30000 # the runner is ~1.5x slower than a laptop: several tests sit near bun's 5 s default there
       - run: bun run build
       - run: bun run verify:bundle
