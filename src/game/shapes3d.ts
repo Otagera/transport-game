@@ -284,8 +284,32 @@ export const SITE_YARD: Record<string, { w: number; d: number; gate: number }> =
   mill: { w: 50, d: 40, gate: 6 }, flourmill: { w: 50, d: 40, gate: 6 }, silo: { w: 50, d: 40, gate: 6 },
   textile: { w: 60, d: 44, gate: 10 },
   station: { w: 30, d: 22, gate: 0 }, border: { w: 36, d: 30, gate: 0 }, gateway: { w: 36, d: 30, gate: 0 },
-  airport: { w: 124, d: 64, gate: 30 },
+  airport: { w: 236, d: 128, gate: 0 },
 };
+/** The airport's layout (metres, in its yard, +z toward its gate): what view3d.ts needs to know of it too. */
+export const AIRPORT = { runwayZ: -46, runwayLength: 226, runwayWidth: 26, taxiZ: -22, apronZ: 4, stands: [-24, 24] as const };
+/** An airliner (about twice a bus as drawn, VEHICLE_SCALE's): its nose toward +z turned by `ry`, standing at (x, z). */
+export function airliner(kit: Kit, x: number, z: number, ry: number): void {
+  const k = new Kit();
+  const white = paint("--paint-light-1"), stripe = paint("--paint-blue-9"), grey = paint("--paint-grey-14");
+  const along = (geo: THREE.BufferGeometry, colour: string | number, at: { x?: number; y?: number; z?: number }) => k.add(geo, colour, { ...at, rx: Math.PI / 2 });
+  along(new THREE.CylinderGeometry(2.1, 2.1, 30, 14), white, { y: 3.4 });
+  along(new THREE.ConeGeometry(2.1, 4, 14), white, { y: 3.4, z: 17 });
+  along(new THREE.CylinderGeometry(2.1, 0.5, 6, 14), white, { y: 3.9, z: -18 });
+  k.box(4.3, 0.5, 30, stripe, 0, 0, 4.2);
+  k.box(1.4, 0.6, 1, paint("--paint-dark-2"), 0, 17.2, 4.4);
+  // The wings, a little swept; the engines under them.
+  for (const side of [-1, 1]) {
+    k.box(16, 0.5, 5.5, white, side * 9.5, 0.6, 2.3, side * 0.18);
+    along(new THREE.CylinderGeometry(1.1, 1, 4.4, 12), grey, { x: side * 6.5, y: 1.6, z: 2.6 });
+  }
+  // The tail: its plane and its fin in the line's colour.
+  k.box(13, 0.35, 3.4, white, 0, -18.5, 4.6);
+  k.box(0.45, 6.5, 5, stripe, 0, -19, 5.2);
+  // Its wheels.
+  for (const [wx, wz] of [[0, 13], [-2.6, 0], [2.6, 0]] as const) k.box(0.7, 1.6, 1, paint("--paint-dark-2"), wx, wz);
+  kit.place(k.merged(), x, 0, z, ry);
+}
 const yardOf = (kind: string, kit: Kit) => {
   const y = SITE_YARD[kind]!;
   yard(kit, y.w, y.d, y.gate);
@@ -355,41 +379,65 @@ export function site(kit: Kit, rand: Rand, kind: string): void {
     kit.cylinder(0.3, 5, paint("--paint-grey-20"), 13, -8);
     return;
   }
-  // The airport (airport.ts): its runway with its markings, a taxiway to the apron, the terminal and
-  // its car park toward the gate, the control tower, a hangar, and an airliner on the stand.
+  // The airport (airport.ts), to scale with what drives to it (your look, 2026-11-04: the plane had
+  // been barely longer than a bus, and its runway left out wherever a road came near): an airliner
+  // twice a bus, a runway half a dozen planes long, its markings; a taxiway and its links; the apron
+  // and its stands, a jet bridge to one; the terminal and its forecourt and car park toward the gate
+  // (+z), where the road comes in round its roundabout; the control tower, a hangar a plane fits in,
+  // a fuel farm.
   if (kind === "airport") {
     yardOf(kind, kit);
-    const tarmac = paint("--paint-grey-21"), line = paint("--paint-light-1"), grass = paint("--paint-green-20");
-    kit.box(122, 0.06, 62, grass, 0, 0);
-    kit.box(116, 0.12, 13, tarmac, 0, -20);
-    for (let x = -50; x <= 50; x += 9) kit.box(5, 0.04, 0.6, line, x, -20, 0.12);
-    for (const end of [-1, 1]) for (let z = -24.5; z <= -15.5; z += 1.5) kit.box(5, 0.04, 0.7, line, end * 53, z, 0.12);
-    kit.box(6, 0.1, 14, tarmac, -30, -7);
-    kit.box(70, 0.1, 6, tarmac, 0, -10);
-    kit.box(46, 0.1, 18, paint("--paint-grey-18"), 8, 4);
-    // The terminal, glazed toward the apron, its roof deep; the car park behind it.
-    kit.box(36, 7, 12, paint("--paint-light-4"), 8, 20);
-    kit.box(36.6, 1, 13.2, paint("--paint-grey-14"), 8, 20, 7);
-    for (let x = -8; x <= 24; x += 4) kit.box(3, 3.4, 12.1, paint("--paint-blue-17"), x, 20, 1.6);
-    kit.box(30, 0.08, 10, paint("--paint-grey-20"), 8, 29);
-    for (let x = -4; x <= 20; x += 4) kit.box(2.2, 1.3, 3.6, x % 8 ? paint("--paint-blue-11") : paint("--paint-earth-53"), x, 28.5);
+    const tarmac = paint("--paint-grey-21"), line = paint("--paint-light-1"), concrete = paint("--paint-grey-18");
+    const { w, d } = SITE_YARD.airport!;
+    kit.box(w - 2, 0.06, d - 2, paint("--paint-green-20"), 0, 0);
+    // The runway, along the back of the yard.
+    const rz = AIRPORT.runwayZ, rl = AIRPORT.runwayLength, rw = AIRPORT.runwayWidth;
+    kit.box(rl, 0.14, rw, tarmac, 0, rz);
+    for (let x = -rl / 2 + 26; x <= rl / 2 - 26; x += 14) kit.box(7, 0.04, 0.8, line, x, rz, 0.14);
+    for (const side of [-1, 1]) kit.box(rl - 4, 0.04, 0.5, line, 0, rz + side * (rw / 2 - 1.2), 0.14);
+    for (const end of [-1, 1]) for (let k = 0; k < 8; k += 1) kit.box(11, 0.04, 1.3, line, end * (rl / 2 - 8), rz - rw / 2 + 3.5 + k * ((rw - 7) / 7), 0.14);
+    // The taxiway, its links to the runway's ends, and the apron off it.
+    const tz = AIRPORT.taxiZ;
+    kit.box(rl - 30, 0.12, 11, tarmac, 0, tz);
+    for (const end of [-1, 1]) kit.box(11, 0.12, tz - rz, tarmac, end * (rl / 2 - 20), (tz + rz) / 2);
+    kit.box(rl - 34, 0.04, 0.35, line, 0, tz, 0.12);
+    kit.box(124, 0.1, 40, concrete, 0, AIRPORT.apronZ);
+    // Stand markings, lead-in lines to each.
+    for (const x of AIRPORT.stands) kit.box(0.35, 0.04, 36, line, x, AIRPORT.apronZ, 0.1);
+    // The terminal: glazed toward the apron, a deep roof; a jet bridge out to the first stand.
+    kit.box(88, 10, 16, paint("--paint-light-4"), 0, 32);
+    kit.box(90, 1.2, 18, paint("--paint-grey-14"), 0, 32, 10);
+    for (let x = -40; x <= 40; x += 5) kit.box(4, 5.5, 16.1, paint("--paint-blue-17"), x, 32, 2.6);
+    kit.box(12, 3, 3, paint("--paint-grey-14"), 0, 33, 11.2);
+    const bridge = AIRPORT.stands[0]!;
+    kit.box(3, 3.2, 12, paint("--paint-grey-11"), bridge + 4.5, 18.5, 4.2);
+    kit.box(0.6, 4.2, 0.6, paint("--paint-grey-14"), bridge + 4.5, 14);
+    // The forecourt, its kerb road along the terminal, and the drive from the gate.
+    kit.box(100, 0.1, 9, tarmac, 0, 44.5);
+    kit.box(11, 0.1, d / 2 - 49, tarmac, 0, (d / 2 + 49) / 2);
+    kit.box(90, 0.3, 1.2, paint("--paint-grey-6"), 0, 40.4);
+    // The car parks either side of the drive; cars in rows.
+    for (const side of [-1, 1]) kit.box(48, 0.08, 14, paint("--paint-grey-20"), side * 40, 56);
+    const cars = ["--paint-blue-11", "--paint-earth-53", "--paint-light-1", "--paint-red-3", "--paint-grey-11"];
+    for (const side of [-1, 1]) for (let row = 0; row < 2; row += 1) for (let i = 0; i < 9; i += 1) {
+      if (rand() < 0.25) continue;
+      kit.box(2.2, 1.4, 4, paint(cars[Math.floor(rand() * cars.length)]!), side * 40 - 20 + i * 5, 52.5 + row * 7);
+    }
     // The control tower.
-    kit.cylinder(1.8, 16, paint("--paint-light-4"), 34, 14, 0, 10);
-    kit.box(5.2, 2.6, 5.2, paint("--paint-blue-17"), 34, 14, 16);
-    kit.box(6, 0.5, 6, paint("--paint-grey-14"), 34, 14, 18.6);
-    // A hangar, its doors open.
-    kit.box(20, 9, 14, paint("--paint-grey-11"), -34, 12);
-    kit.gable(20.6, 14.6, 3, paint("--paint-grey-14"), -34, 12, 9);
-    kit.box(14, 7, 0.2, paint("--paint-dark-2"), -34, 4.9, 0.2);
-    // An airliner on the stand, white with its line's stripe.
-    const white = paint("--paint-light-1"), stripe = paint("--paint-blue-9");
-    kit.box(26, 3.4, 3.4, white, 8, 2, 1.6);
-    kit.box(26.1, 0.5, 3.5, stripe, 8, 2, 3.1);
-    kit.box(3, 2.4, 3, white, 21.5, 2, 2.1);
-    kit.box(4, 0.4, 26, white, 8, 2, 2.4);
-    kit.box(2.4, 0.3, 9, white, -4, 2, 4.2);
-    kit.box(3.4, 5, 0.3, stripe, -4.2, 2, 4.2);
-    for (const z of [-5, 9]) kit.box(3, 1.4, 1.4, paint("--paint-grey-14"), 9, z, 1.2);
+    kit.cylinder(2.6, 24, paint("--paint-light-4"), 78, 18, 0, 10);
+    kit.box(8, 3.4, 8, paint("--paint-blue-17"), 78, 18, 24);
+    kit.box(9, 0.6, 9, paint("--paint-grey-14"), 78, 18, 27.4);
+    kit.box(0.2, 4, 0.2, paint("--paint-grey-14"), 78, 18, 28);
+    kit.box(12, 7, 10, paint("--paint-light-4"), 78, 31);
+    // A hangar a plane fits in, its doors open to the taxiway; a plane's tail inside.
+    kit.box(44, 13, 32, paint("--paint-grey-11"), -86, 5);
+    kit.gable(44.6, 32.6, 4, paint("--paint-grey-14"), -86, 5, 13);
+    kit.box(36, 11, 0.2, paint("--paint-dark-2"), -86, -11.05, 0.2);
+    // The fuel farm by the hangar.
+    for (const x of [-104, -96]) kit.cylinder(3.2, 5, paint("--paint-light-2"), x, 30, 0, 14);
+    // The airliners on their stands, noses to the terminal; one more taxiing out.
+    for (const x of AIRPORT.stands) airliner(kit, x, AIRPORT.apronZ, 0);
+    airliner(kit, 64, tz, -Math.PI / 2);
     return;
   }
   // A border crossing (border.ts): the customs post, its barrier across the road, lorries waiting, flags.
@@ -1043,6 +1091,88 @@ export function motorPark(kit: Kit, rand: Rand, ry: number): void {
   k.box(0.3, 5, 0.3, paint("--paint-grey-20"), 14, 9);
   k.box(3, 1.4, 0.2, paint("--paint-green-24"), 14, 9, 5);
   kit.place(k.merged(), 0, 0, 0, ry);
+}
+/** A town's roundabout (view3d.ts syncRings), in metres: its island, its ring's outer edge, where its traffic drives round, and how far each way along its roads that traffic is bent round it. */
+export const RING_ISLAND = 6, RING_OUTER = 14, RING_DRIVE = 9.5, RING_ZONE = 44;
+/**
+ * A town's roundabout: its ring of road (top at 0.62, down `depth` below as a plinth on a slope), a
+ * dashed line round it, the island's kerb in black and white, its grass, and its monument -- an
+ * obelisk or a clock tower -- with shrubs round it.
+ */
+export function roundabout(kit: Kit, rand: Rand, depth = 0.3): void {
+  const top = 0.62;
+  kit.cylinder(RING_OUTER, top + depth, paint("--paint-grey-21"), 0, 0, -depth, 40);
+  const mid = (RING_ISLAND + RING_OUTER) / 2 + 0.6;
+  for (let k = 0; k < 22; k += 1) {
+    const a = (k / 22) * Math.PI * 2;
+    kit.box(2, 0.04, 0.3, paint("--paint-light-1"), Math.cos(a) * mid, Math.sin(a) * mid, top, Math.PI / 2 - a);
+  }
+  const kerbs = 26;
+  for (let k = 0; k < kerbs; k += 1) {
+    const a = (k / kerbs) * Math.PI * 2;
+    kit.box((Math.PI * 2 * RING_ISLAND) / kerbs + 0.05, 0.45, 0.6, k % 2 ? paint("--paint-light-1") : paint("--paint-dark-2"), Math.cos(a) * RING_ISLAND, Math.sin(a) * RING_ISLAND, top, Math.PI / 2 - a);
+  }
+  kit.cylinder(RING_ISLAND - 0.25, 0.4, paint("--paint-green-20"), 0, 0, top, 24);
+  const base = top + 0.4;
+  if (rand() < 0.5) {
+    // An obelisk on its steps.
+    kit.box(4.2, 0.6, 4.2, paint("--paint-light-4"), 0, 0, base);
+    kit.box(3, 0.8, 3, paint("--paint-light-4"), 0, 0, base + 0.6);
+    kit.box(1.3, 8, 1.3, paint("--paint-light-1"), 0, 0, base + 1.4);
+    kit.cone(0.95, 1.4, paint("--paint-light-1"), 0, 0, base + 9.4);
+  } else {
+    // A clock tower, its faces each way.
+    kit.box(2.6, 9, 2.6, paint("--paint-earth-47"), 0, 0, base);
+    kit.box(3, 0.4, 3, paint("--paint-light-4"), 0, 0, base + 9);
+    kit.cone(2.2, 1.8, paint("--paint-grey-14"), 0, 0, base + 9.4);
+    for (const [x, z] of [[1.32, 0], [-1.32, 0], [0, 1.32], [0, -1.32]] as const) kit.box(x ? 0.1 : 1.6, 1.6, z ? 0.1 : 1.6, paint("--paint-light-1"), x, z, base + 7);
+  }
+  for (let k = 0; k < 6; k += 1) {
+    const a = (k / 6) * Math.PI * 2 + rand() * 0.4;
+    kit.cylinder(0.9 + rand() * 0.4, 0.9, paint("--paint-green-24"), Math.cos(a) * 4, Math.sin(a) * 4, base, 7);
+  }
+}
+/**
+ * A town's bus park (busparks3d.ts, view3d.ts syncParks), in its own frame: x along its island,
+ * +z toward the town (its lane runs out that way to the junction, `gap` metres). Its paving (top
+ * at 0.5, a plinth `depth` below on a slope), the lane, the island with its kerb and under a
+ * canopy -- benches, its fascia in your colour -- each bay marked at the kerb with its route's
+ * colour on a sign, a ticket office by the mouth and the park's name board over it.
+ */
+export function busPark(kit: Kit, rand: Rand, at: { straight: number; gap: number; ringed: boolean; depth: number; bays: Array<{ s: number; o: number; colour: string | number }>; you: string | number }): void {
+  const { straight, gap } = at;
+  const pave = 13, island = 4.2, top = 0.5, ground = paint("--paint-grey-18"), line = paint("--paint-light-1");
+  // The paving, rounded at its ends, and the lane out to the junction (to the roundabout's edge).
+  kit.box(straight, top + at.depth, pave * 2, ground, 0, 0, -at.depth);
+  for (const end of [-1, 1]) kit.cylinder(pave, top + at.depth, ground, end * straight / 2, 0, -at.depth, 28);
+  const laneEnd = pave + gap - (at.ringed ? 13 : 3);
+  kit.box(8, top + at.depth, laneEnd - pave + 1, paint("--paint-grey-21"), 0, (pave - 1 + laneEnd) / 2, -at.depth);
+  kit.box(0.25, 0.04, laneEnd - pave - 1, line, 0, (pave + laneEnd) / 2, top);
+  // The island: kerbed, paved, its ends round.
+  kit.box(straight, 0.45, island * 2, paint("--paint-light-4"), 0, 0, top);
+  for (const end of [-1, 1]) kit.cylinder(island, 0.45, paint("--paint-light-4"), end * straight / 2, 0, top, 20);
+  for (const side of [-1, 1]) kit.box(straight, 0.5, 0.35, paint("--paint-grey-6"), 0, side * island, top);
+  // Its canopy on two rows of posts, the fascia in your colour; benches under it.
+  const roofY = top + 0.45 + 4.4;
+  for (let x = -straight / 2 - 2; x <= straight / 2 + 2.01; x += 5.5) for (const z of [-2.2, 2.2]) kit.box(0.25, 4.4, 0.25, paint("--paint-grey-20"), x, z, top + 0.45);
+  kit.box(straight + 8, 0.35, 7, paint("--paint-light-2"), 0, 0, roofY);
+  for (const side of [-1, 1]) kit.box(straight + 8, 0.7, 0.2, at.you, 0, side * 3.5, roofY - 0.35);
+  for (let x = -straight / 2; x <= straight / 2 + 0.01; x += 6) kit.box(2.6, 0.45, 0.6, paint("--paint-earth-26"), x, 0, top + 0.45);
+  // Each bay: its outline at the kerb, its sign in its route's colour.
+  for (const bay of at.bays) {
+    const z = -bay.o, side = Math.sign(z) || 1;
+    const edge = side * (island + 0.3), out = side * (island + 6.2);
+    for (const x of [bay.s - 10, bay.s + 10]) kit.box(0.25, 0.04, 5.9, line, x, (edge + out) / 2, top);
+    kit.box(20, 0.04, 0.25, line, bay.s, out, top);
+    kit.box(0.15, 3.2, 0.15, paint("--paint-grey-20"), bay.s - 8, side * (island - 0.5), top + 0.45);
+    kit.box(1.4, 1, 0.12, bay.colour, bay.s - 8, side * (island - 0.5), top + 0.45 + 2.6);
+  }
+  // The ticket office by the mouth, and the name board over it.
+  kit.box(5, 3, 3.6, paint("--paint-earth-47"), -10, pave - 3.5, top);
+  kit.box(5.6, 0.3, 4.2, paint("--paint-red-6"), -10, pave - 3.5, top + 3);
+  for (const x of [-5, 5]) kit.box(0.35, 6, 0.35, paint("--paint-grey-20"), x, pave + 0.6, top);
+  kit.box(10.6, 1.5, 0.3, at.you, 0, pave + 0.6, top + 5.2);
+  void rand;
 }
 /** A bus stop: a shelter (a roof on two posts, a back, a bench) and its sign in `sign`; its front toward +z. */
 export function busShelter(kit: Kit, ry: number, sign: string): void {

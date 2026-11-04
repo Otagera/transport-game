@@ -106,7 +106,7 @@ that still come and go at a day's turn (their shortages' lines want a band), and
 cars once the other session's carriages land.
 
 **Layers, 3D you can click, stations, and the first of five modes** (2026-11-03; branches
-`layers` → `stations` → `pipeline`, not yet merged). Roads and rail apart in both views, the
+`layers` → `stations` → `pipeline`, merged 2026-11-04). Roads and rail apart in both views, the
 scenery off in 3D, the overlays as arcs in 3D, and a click on anything in 3D opens its card
 (render-and-ui.md, Layers; Click anything in 3D). Each rail town's station laid out from the network
 -- a platform track a line, the throats fanning in -- so a hub's trains stand side by side, each
@@ -121,6 +121,15 @@ the urban ladder wait on `SCALES-AND-MODES.md`; water last. The strategist taugh
 the scope's checks measured): the fuel chain keeps deciding after a pipe on 4 of 5 maps, but the
 union's price is mild when you can pay; the airport is served on day 1-2 everywhere, so its check
 ("rather than always") is open -- a capital decision only if reaching it costs more than a bus.
+
+**Bus parks, roundabouts, the airport to scale** (2026-11-04; branch `terminus`; your look on map 5059
+day 654: the airport's scale, and the buses "reaching and turning back ... just looks weird"). Where a
+road route of yours ends at a town, a bus park beside its heart, laid out the way a station is -- its
+lane in from the junction, a drive round an island under a canopy, a bay a route with its riders --
+and its buses come off the road to their bay and back out; a roundabout where three roads or more
+meet, its traffic going round it; the airport a field to scale, an airliner twice a bus, its runway
+whole, its own bus park before the terminal (render-and-ui.md, Bus parks and roundabouts). Drawn
+only: the engine's buses still turn at the town's point.
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

@@ -654,10 +654,46 @@ at its source; clicking it opens its card.
 trade family), always working. Its card: travellers a day (in and out), the share you carry and the
 danfos', the share stranded, air freight and who carries it; its problem line, when 30% or more are
 stranded, names the move (a bus line from it, <kbd>B</kbd>). The Sites table lists it; Waiting on
-you carries its stranded travellers at 50 a day or more. In 3D (shapes3d `site`, `SITE_YARD`
-124 by 64 m): a runway with its centre line and threshold bars, a taxiway to the apron, the terminal
-glazed toward it with its car park, the control tower, a hangar with its doors open, an airliner on
-the stand.
+you carries its stranded travellers at 50 a day or more. In 3D, to scale with what drives
+to it (2026-11-04: its plane had been barely longer than a bus, and its runway left out wherever a
+road came near; shapes3d `site`, `AIRPORT`, `SITE_YARD` 236 by 128 m): an airliner twice a bus (40
+m) on each of two stands and one taxiing, a runway half a dozen planes long with its markings, the
+taxiway and its links, the apron, the terminal with a jet bridge, its forecourt and car parks, the
+tower, a hangar a plane fits in, a fuel farm. It's a field, not a yard (view3d `siteKit`): searched
+over a wider ground, any of 16 ways round, its gate toward its point and set back behind its bus
+park as far as it must be (a drive out to the point); its big pieces tested along their length
+(`footprintOf`), not as one disc as wide as they're long; towns shy it rather than block it (their
+houses then keep off it, as off any yard); graded level at its highest ground on a grass bank, so
+its thin slabs don't sink where the ground rises; trees and compounds kept off the whole field.
+
+**Bus parks and roundabouts** (2026-11-04, `busparks3d.ts`; your look, map 5059 day 654: the buses
+"reaching and turning back ... just looks weird" -- "a bus park like the rail stations"). The game's
+buses have no park: a route's buses run to its end town's point and straight back, loading the
+moment they're there (vehicle.ts, no dwell). Drawn as they ran, a bus drove into the middle of the
+town, jumped across the road (its keep-right flipped with its heading) and spun on the spot, and
+whatever else was there bunched on that one point. Now:
+
+- **A bus park at each end of your road routes** (`layBusParks`, laid with the stations, before the
+  towns, whose houses keep off it as off a station; a town rebuilds when its park changes). Beside
+  the town's heart, turned whichever of 24 ways keeps it off the roads into the town, water, yards,
+  stations and other parks: its lane in from the junction, paving round an island under a canopy
+  (its fascia your colour, benches), a bay at the island's edge for each route ending there -- two a
+  side at most, more routes share -- marked at the kerb, its sign in the route's colour, that
+  route's share of the town's riders waiting there (they were at a shelter by the road); a ticket
+  office and the name board over its mouth. Its buses (`onPark`) come off the road down its lane on
+  the right, round the island keeping it on their left, along to their bay, stand there a moment
+  (`PARK_DWELL`, 12% of their time through it), and back out the way they came: their way through it
+  (`passageThrough`, cached) is bent from up to `PARK_ZONE` (120 m) either side along the roads, so
+  they go round it a little faster than on the road to make up the time the engine never gave them.
+  The airport has its own, before its terminal, turned with its field.
+- **A roundabout where three roads or more meet in a town** (`syncRings`), and at a route's end where
+  no park could be laid: a kerbed island (black and white) with its obelisk or clock tower, a ring of
+  road round it. Whatever drives through goes round it keeping right (`onRing`, the last and first 44
+  m of the roads either side bent round it); a bus park's buses go round it to their park's lane.
+  Every town's heart is kept clear for one (houses, stations and pipes keep off it), so one can come
+  when a road does.
+
+Drawn only, as the stations are: the engine's vehicles still pass through the town's point.
 
 **Stations and trains in their parts** (2026-11-03, `stations3d.ts`; your playtest, map 8703 day
 482: Otido's six lines and its freight in one heap in the town's middle). The game's trains have no
