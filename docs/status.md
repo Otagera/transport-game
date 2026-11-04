@@ -89,7 +89,13 @@ and the move -- C41 holds on two of four on map 8703. **Cotton and the textile m
 name; textile.ts) built after it: an idle mill at home on every map, cotton from a northern map's far
 farm towns or over the border, cloth to the markets (trade) and the rest exported, the biggest
 employer. C42 mostly holds on five maps, C43 fails (the strategist builds no cotton line). **Open for
-you:** play it; then the south's oil palms and palm-oil mill.
+you:** play it; then the south's oil palms and palm-oil mill. **Your map 5059 playtest** (2026-11-04, day 653,
+1.34M people): the airport's card said "can't get to or from it" over 18 vehicles on seven lines to
+it -- now it says why they're not carried and names the move that pays (problems.ts `airportAdvice`;
+engine.md, The airport). Replaced on day 361 and nothing changed: parked as story or sandbox at the
+start (brief, Ideas parked). **Your bus station** agreed (brief, same name): people change there,
+the depot, the board of its lines; measured on your replay, 9% of those who give up do so at a
+change, 40% of changers at Odun; on three more saved games 4-19%, about half of changers lost at two to four hub towns. Next: building it.
 
 **The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
 you aim and The network): from your "to click on some things are difficult ... between tick the

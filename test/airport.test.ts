@@ -8,6 +8,7 @@ import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
 import { goodsFares } from "@engine/game/fares";
 import { roadPath, routeSummaries } from "@engine/game/world";
 import { airportDemand, airportFlows, airportSummary, airportTravellersPerDay } from "@engine/game/airport";
+import { airportAdvice } from "@engine/game/problems";
 import type { GameTuning, GameWorld } from "@engine/game/types";
 
 // The airport (airport.ts; five-modes.md, 2. Airport): the third gateway, demand at a point with
@@ -74,6 +75,28 @@ describe("the airport (airport.ts; five modes scoped, the airport)", () => {
     const dAir = roadPath(w, w.airport!, to)?.distance ?? 1, dUsual = roadPath(w, w.port!, to)?.distance ?? 1;
     if (dUsual > 0) expect(air / dAir).toBeCloseTo((usual / dUsual) * (w.tuning.airFreightRate ?? 8), 6);
   }, 120_000);
+
+  test("its card says why its travellers aren't carried, and the move for that (map 5059 playtest)", () => {
+    // Unserved: no line of yours, and the move is a line from it.
+    const left = start();
+    days(left, 3);
+    const none = airportAdvice(left)!;
+    expect(none.lines).toBe(0);
+    expect(none.why).toContain("no line of yours");
+    expect(["bus", "minibus", "train"]).toContain(none.move!.action.kind);
+    // Served by a bus: the lost have a road and found no seat, and the card says what the line makes.
+    const w = start();
+    expect(applyAction(w, { kind: "bus", a: w.airport!, b: w.port! }).ok).toBe(true);
+    days(w, 4);
+    const advice = airportAdvice(w)!;
+    expect(advice.lines).toBe(1);
+    expect(advice.why).toContain("no seat");
+    expect(advice.why).toMatch(/1 vehicle on 1 line to it (makes|loses) ₦\d+ a day/);
+    // A train is named only where it would carry enough: to the town at the track's end, or on
+    // from it by your lines. Its travellers spread over the region (40 a day the most to any one
+    // town here), so with no line on from the home city a train there isn't the move.
+    expect(advice.move!.action.kind).not.toBe("train");
+  }, 240_000);
 
   test("absent in games played before it", () => {
     const w = start({ airportEnabled: false });

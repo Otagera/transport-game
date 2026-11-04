@@ -1128,7 +1128,7 @@ export function isCutOff(world: GameWorld, townId: string): boolean {
 }
 
 /** Whether anything could carry people between two towns: a road, or working track. */
-function canTravel(world: GameWorld, a: string, b: string): boolean {
+export function canTravel(world: GameWorld, a: string, b: string): boolean {
   return roadPath(world, a, b) !== null || railPath(world, a, b) !== null;
 }
 

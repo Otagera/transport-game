@@ -1095,6 +1095,70 @@ on 2411 no cotton arrived. Next: the strategist's cotton line, then C43 again; a
 income fell to 0% on three maps with the mill (10-13% without: the restore and its bond spent
 first, not yet checked). Cotton supply is the limit everywhere: your playtest decides the numbers.
 
+### Your bus station (agreed 2026-11-04, from your map 5059 playtest)
+
+**What the playtest showed.** On day 653 you ran 108 passenger lines, and 59 of them lost money
+(₦4.4k a day between them). You never sold a vehicle; the network's +₦40k a day hid the losses.
+Airport travellers, and trips generally, spread over many towns, so carrying them well means people
+change between your lines. The game already models that (transfers.ts: riders take the fewest
+lines, each leg pays a fare, a chain or hub earns about twice one route, principles §3, Vehicles).
+But nowhere can you see it or build for it: a rider changing waits at the roadside like anyone
+else, and gives up at the same rate. Your answer: the station work, as gameplay.
+
+**The station.** A building you put at a town, yours as the motor park is the danfos'. One a town,
+priced like a park. It does three things, each one a decision and each one measured before its
+number is set:
+
+1. **People change there.** Riders on a later leg of their trip wait under cover at a station:
+   they give up more slowly there than at the roadside (their patience a multiple, measured). So
+   *where your lines meet* becomes a choice: a station at the town your lines already share keeps
+   the riders who change there; at a town no two lines meet it does almost nothing. It's the
+   hub-and-spoke decision the transfers made possible but never asked for.
+2. **It's the depot.** Your vehicles on the lines that end at a station are serviced there: they
+   run cheaper on rough roads (a share of the wear's cost back, measured). This is the parked
+   "bus stations and repair shops" idea folded into one building, so a station is where you'd put
+   the ends of your lines anyway.
+3. **It's where you see your lines.** Its card is the station's board: every line through it, what
+   it makes or loses a day and its problem shown (full, jammed, worn, thin), riders changing there a
+   day, and where they're going. A losing line has its Sell button there. This is the regular
+   network review the playtest lacked, tied to a place rather than a list of 108.
+
+**On the map.** A station mark at the town, your colours (look.md); the riders changing there
+drawn on the Demand view. Waiting on you names a town where many riders change and there's no
+station ("300 a day change lines at Odun with nowhere to wait"), with its button.
+
+**Not in it, for now.**
+- Upkeep run from the depot (the 92 Fix clicks): wanted, but it's a change to Fix and its
+  findings (principles §3, Decay), so a step after this one if the station plays well.
+- The 3D bus parks (another session, branch `terminus`): how it looks, not its rules; merged on
+  their own.
+- Station towns growing (rail stations do, stations.ts `stationTownRiders`): only if the station
+  plays well first.
+
+**Measured first** (your map 5059 replayed to day 653, one day's queues): of 6,796 riders a day
+who gave up waiting, 623 (9.2%) gave up at a change, after paying for their first leg. Small
+overall, and concentrated: at Odun 270 gave up changing against 407 who changed (40% of them lost
+at the change), Etofo 115 against 136, Ifena 69 against 90, Esewan 59 against 65; elsewhere a few
+dozen or fewer. So the change effect matters at two to four hub towns and nowhere else, which is
+the placement choice this wants. The depot and the board carry the station everywhere else.
+
+The same on three more saved games, one day each: your map 8703 at day 481, 1,901 of 9,776
+(19%), Otido 438 lost against 527 changed and Idawo 349 against 359; the strategist's 2327 at day
+280, 238 of 4,284 (6%), Mayo Ngaruma 132 against 123 and Baluwa 100 against 90; its 3218 at day
+200, 162 of 4,491 (4%), Iwimen 113 against 109. Everywhere two to four towns, and at each about
+half of those changing give up: a hub's riders waiting at the roadside are the leak.
+
+**The order.** (1) That measure, done above (agreed 2026-11-04). (2) The station
+with the change and the depot, behind `stationsEnabled` (absent in older runs). (3) Its card, the
+board, and its Waiting-on-you line. (4) The strategist builds stations by its own rules (checks
+below).
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C44 | A station is a choice | In the strategist on five maps, a station at its busiest change town pays back (fares kept plus wear saved) within 60 days on at least 3, and one at a town where no two lines meet doesn't on any |
+| C45 | Not always, not never | The strategist, choosing by what each would save, builds 1-4 stations by day 300 on at least 3 of 5 maps (not one at every town, not none) |
+| C46 | The board is read | On your next playtest, you sell or move at least one losing line from a station's board (your verdict) |
+
 ### Checks for the remit
 
 | # | Check | Passes when |
@@ -1404,6 +1468,11 @@ His letter becomes the term's full screen, ahead of the revenue screen; `termVer
   - an assembly plant in a town (Innoson, Nnewi) that steel feeds and your orders grow.
 
   It's a chain that grows a place, plus a trade-off (cheap and local, or imported and proven). Offered as a pledge kind, not a new system.
+- **Story or sandbox, chosen at the start** (yours, 2026-11-04, after the map 5059 playtest). Two failed terms "replaced" you on day 361, and nothing changed: you kept playing, kept pledges in terms 4 and 5, and the header still read REPLACED on day 653. Your answer was not to fix the consequence but to let the player choose:
+  - **Story:** the terms, the pledges, the grant, the correspondent, being replaced, as now, with a real consequence and a way back.
+  - **Sandbox:** the same map and economy with no terms or pledges (and no grant from them), for building.
+
+  It's one choice on the new-game screen, with the term system switched off in sandbox, so it adds no system. What "replaced" does in story mode is decided with it.
 
 ### Checks for Revision 5
 

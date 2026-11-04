@@ -1269,6 +1269,21 @@ flowchart LR
   One bus from it to the home city (maps 8703, 2418, 10 days) carries 10-14% of its 350-370 trips a
   day and nets +₦56-87 a day; a second, +₦23-57 between them; a third loses on one of the two -- a
   line that pays, thinly, while most of its travellers want to go on past the city.
+- **Its card's advice** (`problems.ts airportAdvice`; your map 5059 playtest, day 653). "468
+  travellers a day can't get to or from the airport: a bus or a train carries them on" stood 247
+  days over 18 vehicles on seven lines to it, three losing: every lost trip read as no way on, and
+  the move was more buses. Now the lost split by why (`canTravel`: no road or track to the town at
+  the other end, or a road and no seat), what your lines to it make or lose, and one move: a train
+  where your track reaches a town and it would carry 50+ a day of the lost (to that town, or on
+  from it by your lines -- `routesOnTrip`); the road kept up where worn and a line loses; another
+  vehicle where one would pay (`seatMove`); else track. Measured: on map 8703 (one bus out, track
+  to the home city) a train there cut 295 lost a day to 286 -- the travellers spread over the
+  region, 40 a day the most to any town -- hence counting the riders it could hand on. On the
+  5059 replay (379 lost, 6 with no way) the card names a train to Ojamu: over 10 days the airport
+  lines' net -₦988 -> +₦60 a day and the network +₦440 a day after the ₦20k train, lost
+  unchanged (389). Two more buses on the two full lines that paid (₦170-188 a bus against ₦78)
+  cut lost 378 -> 371 and lost money. The lost there are a big region's travellers to many towns
+  a few dozen each; no single move carries them, so the card's job is the cheapest move that pays.
 - **Air freight** (`airportFlows`, in `goodsFlows`): `airFreightPerThousand` (0.012) of the region's
   people a day -- 8-10 t -- to the market towns by their people. Packed to travel, it keeps and goes
   in legs (`keeps`, `relayed`): a few tonnes split six ways never filled a truck to each and rotted
