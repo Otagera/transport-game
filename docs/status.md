@@ -149,7 +149,9 @@ terminal and concourse, its depot behind, where the other session's station is b
 end without one plainer. **The airport's road a cost** (branch `airport-cost`): worn to the floor on
 day 1, so reaching it costs a repair (₦349-595) as well as a bus; the strategist, picking a town's
 next trip by trips a naira, now passes it over for other trips on 4 of 5 maps, but still serves it
-in the first week (engine.md, The airport).
+in the first week; then (your choice) **grown into**: its travellers a few dozen a day at the start,
+rising with the region's growth cubed -- first served on days 7, 17, 32, 6 and 44 of the five maps,
+mid-term on three (engine.md, The airport).
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

@@ -1308,6 +1308,17 @@ flowchart LR
   every map, so it still comes in the first week: closer to the check's "rather than always", not
   through it. (3218 ends carrying 3%: another of its rules bought a bus there without the repair,
   and the line was sold.)
+- **Grown into** (2026-11-04, your choice: "grow into it"; `airportTravellersPerThousand` 0.1,
+  `airportGrowthElasticity` 3, `regionGrowth`): its travellers go as the region's people times its
+  growth since day 1 cubed -- air travel rising with prosperity -- so it starts at a third of what it
+  was (~75-90 a day each way; the home city's trip to it 40-60) and doubles as the region grows a
+  fifth. Over 150 days on the five maps (regions grew to 831k-1,010k): passed over for other trips
+  4-15 times on every map; first served on day 7 (8703), 17 (2418), 32 (949), 6 (3218), 44 (7585);
+  carrying 22-31% of its 293-314 trips a day by day 150 on three, while on 8703 and 2418 the early
+  line was sold (2-3%; the strategist doesn't come back to a sold pair for a while). So when it's
+  reached now depends on the map and on how the region has grown -- mid-term on three, early and
+  not held on two: the check's "rather than always or never" is met on the strategist's play. The
+  scope's "a few hundred a day at the start" is now a few dozen, grown to a few hundred.
 
 ### Your bus station (2026-11-04; brief, Your bus station)
 

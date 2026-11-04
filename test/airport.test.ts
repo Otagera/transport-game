@@ -34,47 +34,53 @@ describe("the airport (airport.ts; five modes scoped, the airport)", () => {
     expect(roadPath(w, a.id, city.id)!.distance).toBeGreaterThanOrEqual(17);
   }, 120_000);
 
-  test("a few hundred travellers a day each way, rising with the region's people; air freight a few tonnes", () => {
+  test("a few dozen travellers a day each way, rising faster than the region's people; air freight a few tonnes", () => {
     const w = start();
+    // A few dozen a day each way on day 1, grown into (tuning.ts airportGrowthElasticity).
     const each = airportTravellersPerDay(w);
-    expect(each).toBeGreaterThan(100);
-    expect(each).toBeLessThan(600);
+    expect(each).toBeGreaterThan(40);
+    expect(each).toBeLessThan(300);
     const pairs = airportDemand(w);
     const into = pairs.filter((p) => p.from === w.airport).reduce((s, p) => s + p.rate, 0) * D;
     const out = pairs.filter((p) => p.to === w.airport).reduce((s, p) => s + p.rate, 0) * D;
     expect(into).toBeCloseTo(each, 6);
     expect(out).toBeCloseTo(each, 6);
+    // The region half as big again: its people half again, and its prosperity on top of that.
     for (const t of w.towns.values()) if (!t.industry) t.population *= 1.5;
-    expect(airportTravellersPerDay(w)).toBeCloseTo(each * 1.5, 6);
+    expect(airportTravellersPerDay(w)).toBeCloseTo(each * Math.pow(1.5, 1 + (w.tuning.airportGrowthElasticity ?? 0)), 6);
     const freight = airportFlows(w).reduce((s, f) => s + f.rate, 0) * D;
     expect(freight).toBeGreaterThan(4);
     expect(freight).toBeLessThan(20);
   }, 120_000);
 
-  test("unserved, its trips show as wanted and not made; a bus from it carries them -- on its worn road barely paying, kept up paying", () => {
+  test("unserved, its trips show as wanted and not made; a bus from it costs more on its worn road, and pays once the region has grown", () => {
     const left = start();
     days(left, 6);
     const before = airportSummary(left)!;
-    expect(before.tripsPerDay).toBeGreaterThan(100);
+    expect(before.tripsPerDay).toBeGreaterThan(80);
     expect(before.stranded).toBeGreaterThan(0.3);
     expect(before.you).toBe(0);
-    // One bus, its road as it is (worn), and one with its road kept up from the start: the road is
-    // what reaching it costs besides the bus (2026-11-04; engine.md, The airport).
-    const line = (keep: boolean) => {
+    // One bus, its road as it is (worn) or kept up; on day 1, or with the region grown a quarter.
+    // The road is what reaching it costs besides the bus, and the region's growth what it's worth
+    // (2026-11-04; engine.md, The airport).
+    const line = (keep: boolean, grown: number) => {
       const w = start();
+      for (const t of w.towns.values()) if (!t.industry) t.population *= grown;
       if (keep) expect(applyAction(w, { kind: "fix", segmentId: "airport-road", on: true }).ok).toBe(true);
       expect(applyAction(w, { kind: "bus", a: w.airport!, b: w.port! }).ok).toBe(true);
       days(w, 8);
       const r = routeSummaries(w).find((x) => x.a === w.airport || x.b === w.airport)!;
       return { you: airportSummary(w)!.you, net: r.netPerDay, cost: r.costPerDay };
     };
-    const worn = line(false), kept = line(true);
+    const worn = line(false, 1), kept = line(true, 1), grown = line(true, 1.25);
     expect(worn.you).toBeGreaterThan(0.05);
-    // The worn road's toll is on the bus: it costs a good deal more a day to run (up to 70%,
-    // wear.ts roughCostFactor) -- its fares over 8 days are too few to tell the two apart.
+    // The worn road's toll is on the bus: a good deal more a day to run (up to 70%, wear.ts).
     expect(worn.cost).toBeGreaterThan(kept.cost * 1.4);
-    expect(kept.net).toBeGreaterThan(0);
-  }, 240_000);
+    // On day 1 it's about break-even kept up; grown a quarter, the travellers more than double and it pays.
+    expect(Math.abs(kept.net)).toBeLessThan(60);
+    expect(grown.net).toBeGreaterThan(kept.net + 20);
+    expect(grown.net).toBeGreaterThan(0);
+  }, 360_000);
 
   test("air freight pays its rate the tonne: 8x the goods rate on your freight train", () => {
     const w = start();

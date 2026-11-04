@@ -79,10 +79,23 @@ export function placeAirport(world: GameWorld): void {
   refreshDemand(world);
 }
 
-/** Travellers a day, each way, the region's people as they are now. */
+/**
+ * Travellers a day, each way: by the region's people as they are now, and faster still as it grows
+ * (`airportGrowthElasticity`: air travel rises with prosperity) -- a few dozen a day each way to the
+ * home city on day 1, a line worth its road once the region has grown.
+ */
 export function airportTravellersPerDay(world: GameWorld): number {
   if (!on(world)) return 0;
-  return (world.tuning.airportTravellersPerThousand ?? 0.25) * people(world).reduce((sum, t) => sum + t.population, 0);
+  const now = people(world).reduce((sum, t) => sum + t.population, 0);
+  const t = world.tuning;
+  return (t.airportTravellersPerThousand ?? 0.25) * now * Math.pow(regionGrowth(world, now), t.airportGrowthElasticity ?? 0);
+}
+
+/** The region's people now over its towns' people on day 1 (basePopulation): 1 at the start. */
+export function regionGrowth(world: GameWorld, now = people(world).reduce((sum, t) => sum + t.population, 0)): number {
+  let then = 0;
+  for (const size of world.basePopulation.values()) then += size;
+  return then > 0 ? now / then : 1;
 }
 
 /** How the airport's travellers split over the towns: by their people, the near ones more. */

@@ -640,6 +640,12 @@ export interface GameTuning {
    */
   airportEnabled?: boolean;
   airportTravellersPerThousand?: number;
+  /**
+   * How much faster than the region's people its travellers grow (airport.ts): air travel rises
+   * with prosperity, so the travellers go as people x (people now / people on day 1) to this power.
+   * Absent (older runs): with the people alone.
+   */
+  airportGrowthElasticity?: number;
   airportReachCells?: number;
   airportMinCells?: number;
   airportMaxCells?: number;

@@ -592,7 +592,13 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // the strategist. A few hundred travellers a day each way at the start (0.35 a thousand of ~750k);
   // 5-15 t of air freight a day (0.012 a thousand) at 8x the goods rate; 18-30 cells from the home city.
   airportEnabled: true,
-  airportTravellersPerThousand: 0.25,
+  // Grown into (2026-11-04, your choice): at 0.25 a thousand, its road kept up, the home city's
+  // trip to it was among the best on every map and served in the first week. At 0.1 and growing
+  // as people x growth^3, it starts at a third of that (~75-90 a day each way) and doubles as the
+  // region grows a fifth -- a line worth its road and bus mid-term where the region grows (by day
+  // 150 the strategist's regions had grown 5-18%, one shrunk), not on day 1 everywhere.
+  airportTravellersPerThousand: 0.1,
+  airportGrowthElasticity: 3,
   airportReachCells: 100,
   airportMinCells: 18,
   airportMaxCells: 30,
