@@ -645,6 +645,11 @@ export interface GameTuning {
   airportMaxCells?: number;
   airFreightPerThousand?: number;
   airFreightRate?: number;
+  /**
+   * How worn the airport's old road is on day 1, 0.3-1 (wear.ts): the scope's "a poor road" -- a
+   * bus on it costs up to 70% more to run until you keep it up. Absent: as any inherited road.
+   */
+  airportRoadCondition?: number;
   pipelinesEnabled?: boolean;
   pipeCostPerCell?: number;
   pipeRestorePerCell?: number;

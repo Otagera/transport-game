@@ -146,7 +146,10 @@ labels that find room round their mark or along their road instead of vanishing,
 towns and the lines; vehicles smaller from the region zoom, the other side's dots (render-and-ui.md,
 The 2D map's core, its labels, its zooms). And (branch `busstation3d`) your bus station in 3D: its
 terminal and concourse, its depot behind, where the other session's station is built; a route's
-end without one plainer.
+end without one plainer. **The airport's road a cost** (branch `airport-cost`): worn to the floor on
+day 1, so reaching it costs a repair (₦349-595) as well as a bus; the strategist, picking a town's
+next trip by trips a naira, now passes it over for other trips on 4 of 5 maps, but still serves it
+in the first week (engine.md, The airport).
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

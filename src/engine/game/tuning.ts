@@ -598,6 +598,12 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   airportMaxCells: 30,
   airFreightPerThousand: 0.012,
   airFreightRate: 8,
+  // Its old road worn to the floor on day 1 (the scope: "with a poor road"; 2026-11-04). At 0.95
+  // one bus to it paid from day 1 on all five maps (+₦23-100 a day), so reaching it was never a
+  // decision. At the floor that bus runs at break-even (-₦12 to +₦69), and kept up -- ₦349-595 to
+  // repair, about a bus -- it makes +₦78-154: the airport costs a road as well as a bus, and
+  // competes for an early term's money with the lines to towns.
+  airportRoadCondition: 0.3,
   pipeCostPerCell: 2000,
   pipeRestorePerCell: 700,
   pipeCapPerDay: 250,

@@ -18,7 +18,7 @@ const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 8703, 
 const days = (w: GameWorld, n: number) => { for (let i = 0; i < Math.round((n * D) / SIM_DT); i += 1) gameTick(w, SIM_DT); };
 
 describe("the airport (airport.ts; five modes scoped, the airport)", () => {
-  test("there on day 1, well outside the home city, on a long dirt road; no people of its own", () => {
+  test("there on day 1, well outside the home city, on a long dirt road worn to the floor; no people of its own", () => {
     const w = start();
     const a = w.towns.get(w.airport!)!;
     const city = w.towns.get(w.port!)!;
@@ -29,6 +29,8 @@ describe("the airport (airport.ts; five modes scoped, the airport)", () => {
     expect(away).toBeLessThanOrEqual(31);
     const road = w.simulation.map.segments.find((s) => s.id === "airport-road")!;
     expect(road.surface).toBe("dirt");
+    // A poor road (the scope's brownfield): worn, as no other inherited road starts.
+    expect(road.condition).toBeCloseTo(w.tuning.airportRoadCondition ?? 0.3, 6);
     expect(roadPath(w, a.id, city.id)!.distance).toBeGreaterThanOrEqual(17);
   }, 120_000);
 
@@ -49,20 +51,29 @@ describe("the airport (airport.ts; five modes scoped, the airport)", () => {
     expect(freight).toBeLessThan(20);
   }, 120_000);
 
-  test("unserved, its trips show as wanted and not made; a bus from it carries them, and pays", () => {
+  test("unserved, its trips show as wanted and not made; a bus from it carries them -- on its worn road barely paying, kept up paying", () => {
     const left = start();
     days(left, 6);
     const before = airportSummary(left)!;
     expect(before.tripsPerDay).toBeGreaterThan(100);
     expect(before.stranded).toBeGreaterThan(0.3);
     expect(before.you).toBe(0);
-    const served = start();
-    // One bus: a line that pays, thinly (a second pays less, a third can lose: engine.md, The airport).
-    expect(applyAction(served, { kind: "bus", a: served.airport!, b: served.port! }).ok).toBe(true);
-    days(served, 8);
-    const after = airportSummary(served)!;
-    expect(after.you).toBeGreaterThan(0.05);
-    expect(routeSummaries(served).find((r) => r.a === served.airport || r.b === served.airport)!.netPerDay).toBeGreaterThan(0);
+    // One bus, its road as it is (worn), and one with its road kept up from the start: the road is
+    // what reaching it costs besides the bus (2026-11-04; engine.md, The airport).
+    const line = (keep: boolean) => {
+      const w = start();
+      if (keep) expect(applyAction(w, { kind: "fix", segmentId: "airport-road", on: true }).ok).toBe(true);
+      expect(applyAction(w, { kind: "bus", a: w.airport!, b: w.port! }).ok).toBe(true);
+      days(w, 8);
+      const r = routeSummaries(w).find((x) => x.a === w.airport || x.b === w.airport)!;
+      return { you: airportSummary(w)!.you, net: r.netPerDay, cost: r.costPerDay };
+    };
+    const worn = line(false), kept = line(true);
+    expect(worn.you).toBeGreaterThan(0.05);
+    // The worn road's toll is on the bus: it costs a good deal more a day to run (up to 70%,
+    // wear.ts roughCostFactor) -- its fares over 8 days are too few to tell the two apart.
+    expect(worn.cost).toBeGreaterThan(kept.cost * 1.4);
+    expect(kept.net).toBeGreaterThan(0);
   }, 240_000);
 
   test("air freight pays its rate the tonne: 8x the goods rate on your freight train", () => {

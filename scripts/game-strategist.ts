@@ -31,7 +31,8 @@ import { MAX_COMMITTED, pledgeMove, pledgeProgress } from "../src/engine/game/te
 import { gameTick } from "../src/engine/game/tick";
 import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY as D } from "../src/engine/economy/state";
-import { affordable, namedMoves, noSeatPairs } from "../src/engine/game/problems";
+import { WORN_SPEED, affordable, namedMoves, noSeatPairs } from "../src/engine/game/problems";
+import { corridorWear } from "../src/engine/game/wear";
 import { diagnoseRoute, pairDemand } from "../src/engine/game/world";
 import { isRailRoute, railPath, trackCost } from "../src/engine/game/rail";
 import { roadFull } from "../src/engine/game/growth";
@@ -122,6 +123,8 @@ const fuelMoves: number[] = [];
 const pipeOuts = new Map<string, number>();
 /** The day a line of yours first ran to the airport (its check: connected on 3 of 5 maps, over something else). */
 let airportOn: number | null = null;
+/** The times the airport was among a town's next trips and another won, and which (its check: over something else). */
+let airportPassed: string[] = [];
 // The textile mill's restore day by seed, and the seed being played (C42).
 const restoredDay = new Map<number, number>();
 let seedNow = 0;
@@ -323,9 +326,25 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
     .filter((x) => x.g && x.g.expected > 0 && x.g.playerShare < x.g.expected)
     .sort((p, q) => q.g!.expected - q.g!.playerShare - (p.g!.expected - p.g!.playerShare))[0];
   if (wanting) {
-    const trip = tripsFrom(world, wanting.id).find((t) => t.reachable && !served(wanting.id, t.to) && inRemit(world, t.to));
+    // Of its few biggest trips nobody of yours carries, the most trips a naira -- a worn road under
+    // one, not kept up, costing its repair too, bought with the bus (2026-11-04: the airport's road
+    // worn on day 1; picked by size alone, the airport was every map's first line, by day 2).
+    const options = tripsFrom(world, wanting.id)
+      .filter((t) => t.reachable && !served(wanting.id, t.to) && inRemit(world, t.to))
+      .slice(0, 4)
+      .map((t) => {
+        const wear = corridorWear(world, wanting.id, t.to);
+        const repair = wear && !wear.kept && wear.speed < WORN_SPEED ? wear.repair : 0;
+        return { to: t.to, repair, pieces: wear?.pieceIds ?? [], perNaira: (t.demand * D) / (world.tuning.busPurchaseCost + repair) };
+      })
+      .sort((p, q) => q.perNaira - p.perNaira);
+    const trip = options[0];
+    if (trip && world.airport && trip.to !== world.airport && options.some((o) => o.to === world.airport)) airportPassed.push(`day ${day}: ${world.towns.get(trip.to)?.name}`);
     const through = world.routes.find((r) => !isRailRoute(r.id) && world.simulation.vehicles.find((v) => v.id === r.vehicleIds[0])?.path.includes(wanting.id));
-    if (trip && spend(world, world.tuning.busPurchaseCost)) did(act(world, day, { kind: "bus", a: wanting.id, b: trip.to }, `${world.towns.get(wanting.id)!.name} expects ${Math.round(wanting.g!.expected * 100)}% (you ${Math.round(wanting.g!.playerShare * 100)}%): a bus`));
+    if (trip && spend(world, world.tuning.busPurchaseCost + trip.repair)) {
+      if (trip.repair > 0) act(world, day, { kind: "fix", segmentId: trip.pieces[0]!, on: true }, `the road to ${world.towns.get(trip.to)!.name} kept up first: worn, a bus on it costs more to run`);
+      did(act(world, day, { kind: "bus", a: wanting.id, b: trip.to }, `${world.towns.get(wanting.id)!.name} expects ${Math.round(wanting.g!.expected * 100)}% (you ${Math.round(wanting.g!.playerShare * 100)}%): a bus`));
+    }
     else if (through && spend(world, world.tuning.busPurchaseCost)) did(act(world, day, { kind: through.id.startsWith("mini:") ? "minibus" : "bus", a: through.a, b: through.b }, `${world.towns.get(wanting.id)!.name} expects more: another vehicle`));
   }
   // What else the screen names that builds: a worn road kept up, a road paved. One a day.
@@ -689,8 +708,10 @@ for (const seed of SEEDS) {
     console.log(`  pipelines: ${pipes.join("; ") || "none"} | fuel-chain decisions by 50 days ${by50.join(", ")} | shut by strikes ${pipeOuts.get("strike") ?? 0}, taps ${pipeOuts.get("tap") ?? 0} | home union ${union ? union.stance.toFixed(2) : "-"}`);
   }
   const air = airportSummary(world);
+  if (air) console.log(`  airport: passed over ${airportPassed.length} times${airportPassed.length ? ` (first ${airportPassed.slice(0, 3).join(", ")})` : ""}`);
   if (air) console.log(`  airport: ${airportOn === null ? "never served" : `first served day ${airportOn}`}; at the end you carry ${Math.round(air.you * 100)}% of its ${Math.round(air.tripsPerDay)} trips a day, ${Math.round(air.stranded * 100)}% stranded; air freight ${air.freightPerDay.toFixed(1)} t/day (hauliers ${air.freightHauliers.toFixed(1)})`);
   fuelMoves.length = 0;
   pipeOuts.clear();
   airportOn = null;
+  airportPassed = [];
 }

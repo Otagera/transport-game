@@ -6,6 +6,7 @@ import { inheritedRoad } from "./cement";
 import { rebuildNetworks } from "./rail";
 import { refreshDemand } from "./settlement";
 import { SECONDS_PER_GAME_DAY as D } from "../economy/state";
+import { MIN_CONDITION } from "../map/decay";
 
 // The airport (docs/five-modes.md, 2. Airport; brief, The region, The gateways -- the third
 // gateway, after the seaport and the border crossings). One a region. You don't run flights: it's
@@ -20,8 +21,10 @@ import { SECONDS_PER_GAME_DAY as D } from "../economy/state";
 //   - Air freight: high value, low tonnage (`airFreightPerThousand`: 5-15 t a day), to the market
 //     towns; the hauliers carry it by road, paying the loading levy, and your freight train at
 //     `airFreightRate` (8x) the tonne if you lay track to it.
-//   - Brownfield: it's there on day 1, well outside the home city, with a long dirt road to it --
-//     as Nigerian airports usually are. Nobody has to build it.
+//   - Brownfield: it's there on day 1, well outside the home city, with a long dirt road to it worn
+//     to the floor (`airportRoadCondition`) -- as Nigerian airports usually are. Nobody has to build
+//     it; reaching it well costs a road kept up as well as a bus (wear.ts), so it competes for a
+//     term's money with the lines to towns rather than paying from day 1 on any bus.
 //   - Unserved, it shows as a loss: its travellers who can't make the trip are counted as wanted
 //     and not made, as a site's workers are (pairOutcomes).
 //
@@ -68,6 +71,9 @@ export function placeAirport(world: GameWorld): void {
   addSite(world, AIRPORT_ID, `${city.name} Airport`, "airport", best).population = 0;
   world.airport = AIRPORT_ID;
   inheritedRoad(world, "airport-road", AIRPORT_ID, city.id);
+  // Its road a poor one (the scope's brownfield): worn, until you keep it up.
+  const road = world.simulation.map.segments.find((s) => s.id === "airport-road");
+  if (road && t.wearEnabled && t.airportRoadCondition !== undefined) road.condition = Math.max(MIN_CONDITION, Math.min(1, t.airportRoadCondition));
   rebuildNetworks(world);
   world.plans = null;
   refreshDemand(world);

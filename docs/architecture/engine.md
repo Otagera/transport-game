@@ -1296,6 +1296,18 @@ flowchart LR
   day 120, 71-77% stranded. So "on 3 of 5, rather than always" doesn't pass as written: reaching it
   isn't a capital decision while a bus does it; paving its long road or a rail link would be, and the
   strategist doesn't weigh those for it. Open.
+- **Its road a cost** (2026-11-04, `airportRoadCondition`, 0.3): the scope's "a poor road" -- its old
+  road starts worn to the floor, so a bus on it pays up to 70% more to run (wear.ts). Measured, one
+  bus airport-home city over 20 days on the five maps: as it was (0.95) +₦23-100 a day; worn
+  -₦12 to +₦69; kept up from day 0 (₦349-595 to repair, about a bus) +₦78-154. So reaching it costs
+  a road kept up as well as a bus, ₦850-1,100 against a town line's ₦500. The strategist now picks a
+  town's next trip of its four biggest by trips a naira, a worn road's repair bought with the bus
+  (game-strategist.ts; by size alone the airport was every map's first). Over 150 days: passed over
+  for other trips on 4 of 5 maps (8703 3 times, 949 4, 3218 2, 7585 once), first served day 2, 1,
+  6, 3, 1. It competes now -- it isn't bought blindly -- but kept up it's among the best trips on
+  every map, so it still comes in the first week: closer to the check's "rather than always", not
+  through it. (3218 ends carrying 3%: another of its rules bought a bus there without the repair,
+  and the line was sold.)
 
 ### Your bus station (2026-11-04; brief, Your bus station)
 
