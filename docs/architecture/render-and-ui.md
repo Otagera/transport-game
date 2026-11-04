@@ -666,7 +666,14 @@ over a wider ground, any of 16 ways round, its gate toward its point and set bac
 park as far as it must be (a drive out to the point); its big pieces tested along their length
 (`footprintOf`), not as one disc as wide as they're long; towns shy it rather than block it (their
 houses then keep off it, as off any yard); graded level at its highest ground on a grass bank, so
-its thin slabs don't sink where the ground rises; trees and compounds kept off the whole field.
+its thin slabs don't sink where the ground rises; trees and compounds kept off the whole field. Its airliners aren't
+the kit's (2026-11-04: shapes3d `airportArrival`, `airportDeparture`, `airAt`; view3d
+`animateAirport`): one comes down the approach from the east, touches down, rolls out, turns off
+at the west link and taxis to the stand the last one left; the one at the other stand is pushed
+back, taxis east, lines up and takes off west, climbing away -- a pair every 50, 75, 100 or 150
+seconds of play as its travellers a day pass 400, 250, 120 (in steps, so a day's change doesn't
+jump them), on the game's clock (stopped when paused, hurried when fast); their runway and taxiway
+times never overlap.
 
 **Bus parks and roundabouts** (2026-11-04, `busparks3d.ts`; your look, map 5059 day 654: the buses
 "reaching and turning back ... just looks weird" -- "a bus park like the rail stations"). The game's

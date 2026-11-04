@@ -133,7 +133,8 @@ only: the engine's buses still turn at the town's point. Then (branch `sites`) *
 scale**: each plant 1.5-2x, with the lorries and the airport, its fence and vehicles their own size;
 placed as the airport is, a **lorry park** before each gate that hauliers and your freight lorries
 go through to a bay; the 3D overlay arcs fade out close in -- they were the dark bands across every
-close view (render-and-ui.md, Sites to scale, and their lorry parks).
+close view (render-and-ui.md, Sites to scale, and their lorry parks). And (branch `airport-life`) the
+airport's airliners land, taxi, stand and take off, the busier it is the more often.
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

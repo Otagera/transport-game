@@ -42,6 +42,8 @@ import { carsOn } from "@engine/game/rail";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
 import { RING_DRIVE, RING_OUTER, RING_ZONE, busPark, hasLorryPark, lorryPark, roundabout, siteScale, yardFence } from "./shapes3d";
+import { AIRPORT, airAt, airliner, airportArrival, airportDeparture } from "./shapes3d";
+import { airportTravellersPerDay } from "@engine/game/airport";
 import { BUS_PARK, inPark, layBusParks, parkDrive, parkEnds, parkPoint, siteParkGround, type BusPark } from "./busparks3d";
 
 const M = 8; // metres a map cell
@@ -3149,6 +3151,50 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     return null;
   }
+  // --- The airport's airliners (shapes3d airportArrival, airportDeparture; your look, 2026-11-04)
+  // One lands, rolls out, turns off and taxis to the stand the last one left; the one at the other
+  // stand is pushed back, taxis out and takes off; and again -- each pair the sooner the more
+  // travellers the airport has (`airportTravellersPerDay`, in steps, so a day's change doesn't jump
+  // them), on the game's clock: they stop when it's paused, hurry when it's fast. Their runway and
+  // taxiway times never overlap. Children of the airport's mesh, in its frame.
+  let airliners: { site: THREE.Mesh; planes: THREE.Mesh[] } | null = null;
+  let airlinerShape: THREE.BufferGeometry | null = null;
+  function animateAirport(w: GameWorld): void {
+    const id = w.airport;
+    const site = id && w.towns.get(id)?.industry === "airport" ? towns.get(id)?.mesh : undefined;
+    if (!site) {
+      if (airliners) for (const plane of airliners.planes) plane.visible = false;
+      return;
+    }
+    if (!airliners || airliners.site !== site) {
+      if (!airlinerShape) {
+        const kit = new Kit();
+        airliner(kit, 0, 0, 0);
+        airlinerShape = own(kit.merged());
+      }
+      const planes = [0, 1].map(() => {
+        const plane = new THREE.Mesh(airlinerShape!, material);
+        plane.castShadow = true;
+        plane.rotation.order = "YXZ";
+        site.add(plane);
+        return plane;
+      });
+      airliners = { site, planes };
+    }
+    const travellers = airportTravellersPerDay(w);
+    const period = travellers >= 400 ? 50 : travellers >= 250 ? 75 : travellers >= 120 ? 100 : 150;
+    const now = w.economy.elapsedSeconds, k = Math.floor(now / period), into = now - k * period;
+    const arrival = airportArrival(AIRPORT.stands[k % 2]!), departure = airportDeparture(AIRPORT.stands[(k + 1) % 2]!);
+    const put = (plane: THREE.Mesh, at: ReturnType<typeof airAt> | null) => {
+      plane.visible = !!at;
+      if (!at) return;
+      plane.position.set(at.x, at.y + 0.1, at.z);
+      plane.rotation.set(-at.pitch, at.ry, 0);
+    };
+    put(airliners.planes[0]!, airAt(arrival, into));
+    const leaving = into - period / 2, last = departure[departure.length - 1]!.t;
+    put(airliners.planes[1]!, leaving >= last ? null : airAt(departure, Math.max(0, leaving)));
+  }
   const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), scale = new THREE.Vector3().setScalar(VEHICLE_SCALE), up = new THREE.Vector3(0, 1, 0);
   const headings = new Map<string, number>();
   let placedAt = performance.now();
@@ -4664,6 +4710,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         }
       }
       placeVehicles(w);
+      animateAirport(w);
     },
     dispose() {
       arcs([]);

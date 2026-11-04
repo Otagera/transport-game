@@ -288,6 +288,60 @@ export const SITE_YARD: Record<string, { w: number; d: number; gate: number }> =
 };
 /** The airport's layout (metres, in its yard, +z toward its gate): what view3d.ts needs to know of it too. */
 export const AIRPORT = { runwayZ: -46, runwayLength: 226, runwayWidth: 26, taxiZ: -22, apronZ: 4, stands: [-24, 24] as const };
+/**
+ * An airliner's way, in the airport's frame: where it is (x, height y, z), which way it faces (ry,
+ * as `airliner` turns it), at each moment (t, seconds of play from its start), and how it gets to
+ * the next ("in": slowing into it, "out": speeding away from it). Between them it goes straight,
+ * turning as it goes; at one place, it turns on the spot (pushed back by a tug, lining up).
+ */
+export interface AirKey { t: number; x: number; y: number; z: number; ry: number; ease?: "in" | "out" }
+/** Where an airliner on its way is at `t` (seconds from its start), facing which way, nose up how far. */
+export function airAt(keys: readonly AirKey[], t: number): { x: number; y: number; z: number; ry: number; pitch: number } {
+  let j = 1;
+  while (j < keys.length - 1 && keys[j]!.t <= t) j += 1;
+  const a = keys[j - 1]!, b = keys[j]!;
+  const span = b.t - a.t || 1;
+  let u = Math.max(0, Math.min(1, (t - a.t) / span));
+  // "in": slowing into the later key; "out": speeding up toward it.
+  if (b.ease === "in") u = 1 - (1 - u) * (1 - u);
+  else if (b.ease === "out") u = u * u;
+  const turn = Math.atan2(Math.sin(b.ry - a.ry), Math.cos(b.ry - a.ry));
+  const y = a.y + (b.y - a.y) * u;
+  // Nose up climbing away, a little up coming in to land, level on the ground.
+  const pitch = y < 0.3 ? 0 : b.y > a.y ? 0.16 : 0.05;
+  return { x: a.x + (b.x - a.x) * u, y, z: a.z + (b.z - a.z) * u, ry: a.ry + turn * u, pitch };
+}
+const W_ = -Math.PI / 2, E_ = Math.PI / 2, N_ = 0, S_ = Math.PI;
+/** Arriving: down the approach from the east to touch down, the roll, off at the west link, along the taxiway to its stand. */
+export function airportArrival(stand: number): AirKey[] {
+  const { runwayZ: rz, taxiZ: tz, apronZ: az } = AIRPORT;
+  return [
+    { t: 0, x: 620, y: 62, z: rz, ry: W_ },
+    { t: 7, x: 100, y: 0, z: rz, ry: W_ },
+    { t: 11.4, x: -62, y: 0, z: rz, ry: W_, ease: "in" },
+    { t: 12.8, x: -88, y: 0, z: rz, ry: W_ },
+    { t: 14.6, x: -93, y: 0, z: tz - 6, ry: N_ },
+    { t: 15.6, x: -84, y: 0, z: tz, ry: E_ },
+    { t: 19.6, x: stand - 6, y: 0, z: tz, ry: E_ },
+    { t: 20.8, x: stand, y: 0, z: tz + 7, ry: N_ },
+    { t: 22.9, x: stand, y: 0, z: az, ry: N_, ease: "in" },
+  ];
+}
+/** Leaving: pushed back from its stand to the taxiway, turned, along it east, onto the runway, lined up west, the roll and the climb. */
+export function airportDeparture(stand: number): AirKey[] {
+  const { runwayZ: rz, taxiZ: tz, apronZ: az } = AIRPORT;
+  return [
+    { t: 0, x: stand, y: 0, z: az, ry: N_ },
+    { t: 3, x: stand, y: 0, z: tz, ry: N_ },
+    { t: 4.5, x: stand, y: 0, z: tz, ry: E_ },
+    { t: 9.5, x: 84, y: 0, z: tz, ry: E_ },
+    { t: 10.6, x: 93, y: 0, z: tz - 7, ry: S_ },
+    { t: 12, x: 93, y: 0, z: rz, ry: S_ },
+    { t: 13.4, x: 93, y: 0, z: rz, ry: W_ },
+    { t: 18, x: -34, y: 0, z: rz, ry: W_, ease: "out" },
+    { t: 24.5, x: -540, y: 84, z: rz, ry: W_ },
+  ];
+}
 /** An airliner (about twice a bus as drawn, VEHICLE_SCALE's): its nose toward +z turned by `ry`, standing at (x, z). */
 export function airliner(kit: Kit, x: number, z: number, ry: number): void {
   const k = new Kit();
@@ -466,9 +520,7 @@ function siteParts(kit: Kit, rand: Rand, kind: string): void {
     kit.box(36, 11, 0.2, paint("--paint-dark-2"), -86, -11.05, 0.2);
     // The fuel farm by the hangar.
     for (const x of [-104, -96]) kit.cylinder(3.2, 5, paint("--paint-light-2"), x, 30, 0, 14);
-    // The airliners on their stands, noses to the terminal; one more taxiing out.
-    for (const x of AIRPORT.stands) airliner(kit, x, AIRPORT.apronZ, 0);
-    airliner(kit, 64, tz, -Math.PI / 2);
+    // Its airliners aren't the kit's: they land, taxi, stand and take off (view3d.ts, AIRPORT_ARRIVAL).
     return;
   }
   // A border crossing (border.ts): the customs post, its barrier across the road, lorries waiting, flags.
