@@ -1,8 +1,9 @@
 # Scopes: the five modes
 
 > Saved as given (2026-11-03). Its companion, `SCALES-AND-MODES.md` (the trunk, feeder and inside
-> scopes the coach, the okada rule and the urban ladder wait on), and `PROMPT-urban-ladder.md`
-> aren't in the repo yet. **Built so far:** the pipeline (2026-11-03; architecture/engine.md,
+> scopes the coach, the okada rule and the urban ladder wait on), isn't in the repo yet;
+> [PROMPT-urban-ladder.md](PROMPT-urban-ladder.md) is (2026-11-04, saved as given, its rationale
+> still to be rewritten on the inside scope). **Built so far:** the pipeline (2026-11-03; architecture/engine.md,
 > Pipelines), with two calls made with you: it carries refined fuel only, and the inherited line runs
 > from the tank farm up the old railway. The airport (2026-11-03; engine.md, The airport), travellers
 > and air freight both; its freight by hauliers and, if you lay track, your freight train (your call:
