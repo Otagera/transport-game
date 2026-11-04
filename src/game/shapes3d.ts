@@ -1255,7 +1255,7 @@ export function busPark(kit: Kit, rand: Rand, at: { straight: number; gap: numbe
   void rand;
 }
 /**
- * Your bus station (the other session's busstations.ts; brief, Your bus station) on a bus park, in
+ * Your bus station (busstations.ts; brief, Your bus station) on a bus park, in
  * its frame: the terminal beyond the island's end -- two floors, glazed, your colour on its fascia,
  * its name board -- a covered way from it to the island; the ticket office and the name board over
  * the mouth; behind the park its depot, where the lines ending here are serviced: its yard, the

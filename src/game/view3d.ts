@@ -2880,13 +2880,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   let parks = new Map<string, BusPark>();
   let parksInput = "";
   const parkMeshes = new Map<string, { key: string; mesh: THREE.Mesh; top: number }>();
-  /**
-   * The towns with your bus station (the other session's busstations.ts, world.busStations, behind
-   * busStationsEnabled): read as it's saved until its types are merged here.
-   */
-  function builtStations(w: GameWorld): Set<string> {
-    const built = (w as unknown as { busStations?: Set<string> }).busStations;
-    return (w.tuning as unknown as { busStationsEnabled?: boolean }).busStationsEnabled && built ? built : new Set();
+  /** The towns with your bus station (busstations.ts): none where they're off or none is built. */
+  function builtStations(w: GameWorld): ReadonlySet<string> {
+    return w.tuning.busStationsEnabled && w.busStations ? w.busStations : new Set();
   }
   function syncParks(w: GameWorld): void {
     const ends = parkEnds(w);

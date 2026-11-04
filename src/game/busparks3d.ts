@@ -33,7 +33,7 @@ export interface BusPark {
   /** A bus park (a town's, the airport's) or a lorry park (a site's): what it's drawn as. */
   kind: "bus" | "lorry";
   /**
-   * Your bus station built here (the other session's busstations.ts; brief, Your bus station): the
+   * Your bus station built here (busstations.ts; brief, Your bus station): the
    * park drawn as the station -- its terminal and concourse, its depot behind -- on more ground.
    */
   station: boolean;

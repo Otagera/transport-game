@@ -1297,6 +1297,24 @@ flowchart LR
   isn't a capital decision while a bus does it; paving its long road or a rail link would be, and the
   strategist doesn't weigh those for it. Open.
 
+### Your bus station (2026-11-04; brief, Your bus station)
+
+- **`busstations.ts`** -- behind `busStationsEnabled` (absent in older runs, and `busStations`
+  absent in worlds saved before it). A station of yours at a town, one a town, `busStationCost`
+  (₦20k, a motor park's price); `ActionSpec` `busStation`, inside your remit.
+- **People change there** (tick.ts, giving up): at a town with your station, a queued rider whose
+  origin isn't the town -- changing lines -- gives up at `busStationPatience` (3) times the usual
+  patience; riders starting there as anywhere. Before it, at two to four hub towns on each of four
+  saved games about half of those changing gave up there (brief, the same section).
+- **The depot** (wear.ts `chargeRoughRoads`): a line with an end at your station pays
+  1 - `busStationDepotShare` (half) of what rough roads add to its running cost.
+- **Measured** (your map 5059 replay from day 653, 10 days, against none: +₦87.1k, 3,974 trips a
+  day). At Odun, the busiest change (445 a day, 296 giving up changing): +32 trips a day, +₦754 a
+  day after the station -- paid back in 27 days; changing riders lost 296 -> 238 a day (the seats on
+  the lines out of Odun are the limit past that: at 6x patience, 212 and +44 trips). Of the ₦754,
+  the depot ₦537, the change ₦218. At Etofo (134 change): +10 trips, +₦350 a day, 57 days. At Ofabo,
+  two lines ending and nobody changing: +₦19 a day -- never pays back. C44's shape holds on one map.
+
 ### The building chain (Revision 3, step 2a)
 
 - **`cement.ts`** — one **cement works** per map, placed at start (`placeCementWorks`, from

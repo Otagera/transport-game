@@ -67,6 +67,7 @@ import { assemblyGeneration, assemblyShare, vehiclePrice } from "@engine/game/as
 import { siteProduction } from "@engine/game/production";
 import { stationOf, stationOpen } from "@engine/game/stations";
 import { checkPark, parkLevyGain, parkReport } from "@engine/game/parks";
+import { checkBusStation, stationBoard } from "@engine/game/busstations";
 import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/metro";
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
 import { corridorSummaries } from "@engine/game/corridors";
@@ -112,7 +113,7 @@ import type { View3D } from "./view3d";
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "park" | "track" | "train" | "freight" | "fix" | "pipe";
+type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "park" | "station" | "track" | "train" | "freight" | "fix" | "pipe";
 
 // Which systems run (tuning.ts). `?systems=all` turns every one on, for
 // comparing; `?goods=off` and `?wear=off` turn those off, so a playtest can
@@ -673,6 +674,7 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
     case "fix":
     case "yard":
     case "park":
+    case "station":
       return null;
   }
 }
@@ -1010,6 +1012,7 @@ function toolOn(candidate: Tool): boolean {
   if (candidate === "lorry") return t.goodsEnabled && !t.noPlayerLorries;
   if (candidate === "yard") return t.goodsEnabled && t.yardsEnabled;
   if (candidate === "park") return t.parksEnabled;
+  if (candidate === "station") return !!t.busStationsEnabled;
   if (candidate === "freight") return t.goodsEnabled && t.railEnabled;
   if (candidate === "track" || candidate === "train") return t.railEnabled;
   if (candidate === "fix") return t.wearEnabled;
@@ -1103,6 +1106,15 @@ canvas.addEventListener("click", (event) => {
     const result = act({ label: "a motor park", towns: [town] }, { kind: "park", townId: town });
     if (result.ok) say(`Motor park built at ${townName(town)} for ${naira(result.amount ?? world.tuning.parkCost)}: its danfos load there, not on the road -- the roads into it carry ${pct(world.tuning.parkCapacityBoost)} more -- and the agberos keep ${pct(world.tuning.parkAgberoCut)} of their levy, not ${pct(world.tuning.agberoCut)}.`);
     else say(`Can't build a park: ${result.reason}`, true);
+    selectedTown = null;
+    renderPanel();
+    return;
+  }
+  // Your bus station is one click on a town (busstations.ts): riders changing lines wait there, and it services the lines ending there.
+  if (tool === "station") {
+    const result = act({ label: "a bus station", towns: [town] }, { kind: "busStation", townId: town });
+    if (result.ok) say(`Bus station built at ${townName(town)} for ${naira(result.amount ?? world.tuning.busStationCost ?? 0)}: riders changing lines there wait ${world.tuning.busStationPatience ?? 1}x as long before they give up, and your lines ending there pay ${pct(world.tuning.busStationDepotShare ?? 0)} less for rough roads. Its card is the board of your lines through it.`);
+    else say(`Can't build a bus station: ${result.reason}`, true);
     selectedTown = null;
     renderPanel();
     return;
@@ -1292,6 +1304,7 @@ window.addEventListener("keydown", (event) => {
   else if (event.key === "o" || event.key === "O") {
     if (world.tuning.parksEnabled) setTool("park");
   }
+  else if ((event.key === "s" || event.key === "S") && toolOn("station")) setTool("station");
   else if (event.key === "k" || event.key === "K") setTool("track");
   else if ((event.key === "i" || event.key === "I") && toolOn("pipe")) setTool("pipe");
   else if (event.key === "t" || event.key === "T") setTool("train");
@@ -1469,6 +1482,14 @@ function ghost(): Ghost | null {
     const at = toScreen(view, world.towns.get(hoverTown)!.x, world.towns.get(hoverTown)!.y);
     const label = `Motor park ${naira(world.tuning.parkCost)} · roads into it +${pct(world.tuning.parkCapacityBoost)} · levies ~+${naira(parkLevyGain(world, hoverTown))}/day`;
     return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Motor park ${naira(world.tuning.parkCost)}`) };
+  }
+  if (tool === "station") {
+    if (!hoverTown) return null;
+    const check = checkBusStation(world, hoverTown);
+    const at = toScreen(view, world.towns.get(hoverTown)!.x, world.towns.get(hoverTown)!.y);
+    const board = stationBoard(world, hoverTown);
+    const label = `Bus station ${naira(world.tuning.busStationCost ?? 0)} · ${board ? `${board.lines.length} line${board.lines.length === 1 ? "" : "s"} of yours here, ${Math.round(board.changingPerDay)} change a day, ${Math.round(board.givingUpPerDay)} give up changing` : "no line of yours here"}`;
+    return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Bus station ${naira(world.tuning.busStationCost ?? 0)}`) };
   }
   if (!selectedTown || !mouse) return null;
   // Track tool, back over the selected town: offer the halt if a line passes it.
@@ -1695,7 +1716,7 @@ function renderToolbar(): void {
         ...on(t.goodsEnabled, button("Freight", "G", tool === "freight", () => setTool("freight"))),
       ),
     ),
-    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track"))), ...on(toolOn("pipe"), button("Pipe", "I", tool === "pipe", () => setTool("pipe")))),
+    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))), ...on(!!t.busStationsEnabled, button("Station", "S", tool === "station", () => setTool("station"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track"))), ...on(toolOn("pipe"), button("Pipe", "I", tool === "pipe", () => setTool("pipe")))),
     ...on(t.straightAlignmentEnabled, group(t.railEnabled ? "Line (road, track)" : "Line", "setting", lineSwitch)),
     ...on(t.wearEnabled, group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix")))),
     group(
@@ -1731,7 +1752,7 @@ function renderStrip(): void {
 let panelTown: string | null = null;
 function renderPanel(): void {
   const town = hoverTown ?? null;
-  const placing = selectedTown !== null && tool !== "fix" && tool !== "yard" && tool !== "park";
+  const placing = selectedTown !== null && tool !== "fix" && tool !== "yard" && tool !== "park" && tool !== "station";
   if (town && town !== panelTown && !placing && world.towns.has(town)) {
     panelTown = town;
     screen.select({ kind: world.towns.get(town)!.industry ? "site" : "town", id: town }, true);

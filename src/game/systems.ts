@@ -110,7 +110,7 @@ export function placeOf(key: string): { node: string } | { notDrawn: string } | 
 /** The node a move enters by. */
 export function moveNode(action: ActionSpec): string | null {
   switch (action.kind) {
-    case "bus": case "minibus": case "brt": case "train": case "lane": case "metro": case "halt":
+    case "bus": case "minibus": case "brt": case "train": case "lane": case "metro": case "halt": case "busStation":
       return "service";
     case "road": case "pave": case "fix": case "retire": case "restore": case "repair": case "bridgeFord": case "track":
       return "roads";

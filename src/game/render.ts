@@ -1057,6 +1057,7 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   // Additions the lab had no need of: a yard, a park, a metro (small marks at the town's edge).
   if (world.yards.has(town.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
   if (world.parks.has(town.id)) drawParkMark(ctx, p.x + r - 1, p.y - r - 6);
+  if (world.busStations?.has(town.id)) drawStationMark(ctx, p.x + r - 1, p.y + r - 3);
   if ((world.metros.get(town.id) ?? 0) > 0) drawMetroMark(ctx, p.x - r - 7, p.y + r - 3, world.metros.get(town.id)!);
   // Waiting on you here: an amber mark on its top-right.
   if (state.problems?.has(town.id)) drawWaitingMark(ctx, p.x + r * 0.8, p.y - r * 0.8);
@@ -1610,6 +1611,21 @@ function drawParkMark(ctx: CanvasRenderingContext2D, x: number, y: number): void
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("P", x + 4.5, y + 5);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+/** Your bus station (busstations.ts): your colour, an S, at the town's bottom-right. */
+function drawStationMark(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = COLORS.player;
+  ctx.strokeStyle = COLORS.kept;
+  ctx.lineWidth = 1;
+  ctx.fillRect(x, y, 9, 9);
+  ctx.strokeRect(x + 0.5, y + 0.5, 8, 8);
+  ctx.fillStyle = COLORS.kept;
+  ctx.font = `700 ${FS.tiny} ui-monospace, monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("S", x + 4.5, y + 5);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }

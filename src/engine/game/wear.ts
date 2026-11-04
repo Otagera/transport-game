@@ -1,4 +1,5 @@
 import type { Segment } from "../map/types";
+import { busStationsOn, depotFactor } from "./busstations";
 import { MIN_CONDITION, conditionSpeedFactor } from "../map/decay";
 import { BASE_COST_PER_CELL, BRIDGE_PREMIUM_PER_CELL, maintenanceCost } from "../pathing/cost";
 import { canAfford } from "../economy/state";
@@ -214,6 +215,9 @@ export function chargeRoughRoads(world: GameWorld, dt: number, routeOf: Readonly
   const byRoute = new Map<string, number>();
   const bySegment = new Map<string, number>();
   let total = 0;
+  const depots = busStationsOn(world);
+  const routeEnds = new Map<string, { a: string; b: string }>();
+  if (depots) for (const route of world.routes) routeEnds.set(route.id, route);
   for (const vehicle of world.simulation.vehicles) {
     const routeId = routeOf.get(vehicle.id);
     const econ = world.economy.vehicleEconomics.get(vehicle.id);
@@ -222,7 +226,9 @@ export function chargeRoughRoads(world: GameWorld, dt: number, routeOf: Readonly
     const segmentId = leg.slice(0, leg.lastIndexOf("#"));
     const segment = world.simulation.map.segments.find((candidate) => candidate.id === segmentId);
     if (!segment) continue;
-    const extra = econ.operatingCostPerSecond * roughCostFactor(world, segment) * dt;
+    // Serviced at your bus station's depot, a line ending there pays less of it (busstations.ts).
+    const ends = depots ? routeEnds.get(routeId) : undefined;
+    const extra = econ.operatingCostPerSecond * roughCostFactor(world, segment) * dt * (ends ? depotFactor(world, ends.a, ends.b) : 1);
     if (extra <= 0) continue;
     total += extra;
     byRoute.set(routeId, (byRoute.get(routeId) ?? 0) + extra);

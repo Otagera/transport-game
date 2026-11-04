@@ -721,8 +721,7 @@ whatever else was there bunched on that one point. Now:
   (`passageThrough`, cached) is bent from up to `PARK_ZONE` (120 m) either side along the roads, so
   they go round it a little faster than on the road to make up the time the engine never gave them.
   The airport has its own, before its terminal, turned with its field.
-- **Your bus station** (2026-11-04; the other session's busstations.ts, `world.busStations`, read
-  defensively until its types are merged here): where you've built one, that town's park is drawn as
+- **Your bus station** (2026-11-04; busstations.ts, `world.busStations`; engine.md, Your bus station): where you've built one, that town's park is drawn as
   the station (busparks3d.ts `station`, `STATION`; shapes3d `busStation`) whether or not a line ends
   there -- the terminal beyond the island's end, two floors glazed, your colour on its fascia and its
   name board; a covered way from it to the island, the riders changing lines there waiting under it
@@ -758,6 +757,20 @@ through it (`onPark`): your freight's to its route's bay, a haulier's to a bay b
 trip that ends there stands at its bay till it's gone, one that starts there pulls out of one, a
 round trip turns there as a bus does. The airport's park is its bus park, and its air freight's
 lorries use it too.
+
+**Your bus station on the screen** (2026-11-04; engine.md, Your bus station). The Station tool
+(<kbd>S</kbd>, Build, beside Park) is one click on a town; its quote names your lines there, riders
+changing a day and those giving up changing. On the map, an S in your colour at the town's
+bottom-right (render.ts `drawStationMark`). On the town's card: with a station, its tiles (change
+lines here, give up changing, its depot's lines) and the routes table becomes **the board** --
+each line's problem (VERDICT_WORDS) and, where it loses, a Sell one button (`data-remove`, let past
+screen.ts's row pick); without one, an offer where 80+ a day give up changing
+(`STATION_OFFER_PER_DAY`). Waiting on you names the two worst such towns with the station's button,
+weighted with the airport's (2e6 + the number): ranked once a game day like the rest, so it
+appears from the next day (`changeGiveUpEMA`, rolling a game day). Headless on your 5059 replay:
+Odun offered at ~205 a day giving up, bought from the card; the board listed 25 lines, losing
+first. In 3D, that town's park drawn as your station: its terminal, concourse and depot (Bus parks
+and roundabouts, Your bus station).
 
 **Stations and trains in their parts** (2026-11-03, `stations3d.ts`; your playtest, map 8703 day
 482: Otido's six lines and its freight in one heap in the town's middle). The game's trains have no

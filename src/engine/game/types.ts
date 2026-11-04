@@ -687,6 +687,15 @@ export interface GameTuning {
   cottonImportShare?: number;
   clothTripBoost?: number;
   clothExportPay?: number;
+  /**
+   * Your bus stations (busstations.ts; brief, Your bus station): on; what one costs; how many times
+   * longer riders changing lines wait there before giving up; the share of the rough roads' extra
+   * running cost a station's depot takes back on the lines that end there. Absent in older runs.
+   */
+  busStationsEnabled?: boolean;
+  busStationCost?: number;
+  busStationPatience?: number;
+  busStationDepotShare?: number;
   steelPerThousandPerDay: number;
   steelWorksShare: number;
   steelImportShare: number;
@@ -971,6 +980,8 @@ export interface GameWorld {
   yards: Set<string>;
   /** Towns with a motor park (parks.ts). */
   parks: Set<string>;
+  /** Towns with your bus station (busstations.ts); absent in worlds saved before them. */
+  busStations?: Set<string>;
   /** At each parked town, the park levy a second, rolling: yours, and the agberos' (parks.ts, the town card). */
   parkTakings: Map<string, { yours: number; agberos: number }>;
   /** Metro lines built, by town (metro.ts). */
@@ -1055,6 +1066,8 @@ export interface GameWorld {
   roughCostRateEMA: Map<string, number>;
   /** townId -> rolling riders per second changing buses there. */
   transferRateEMA: Map<string, number>;
+  /** Riders a second giving up waiting at a town while changing lines, rolling (busstations.ts stationBoard); absent in older saves. */
+  changeGiveUpEMA?: Map<string, number>;
   /** How riders cross your network (transfers.ts). Null = stale; rebuilt on next use. */
   plans: TripPlans | null;
   /** The assembly plant (assembly.ts): absent without one. */

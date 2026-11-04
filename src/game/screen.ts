@@ -33,6 +33,7 @@ import { stationOf, stationOpen } from "@engine/game/stations";
 import { handoverNote, termLetter, type Letter } from "./correspondent";
 import { thenAndNowSvg } from "./thenandnow";
 import { railPath } from "@engine/game/rail";
+import { STATION_OFFER_PER_DAY, hasBusStation, stationBoard } from "@engine/game/busstations";
 import { NO_SEAT_MIN_PER_DAY, airportAdvice, corridorNoSeat, townNoSeat, shrinkCause, whereNext, wornRoadAt, type NamedMove, type Opening } from "@engine/game/problems";
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
@@ -460,6 +461,16 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const stranded = airportStranded(world);
     const advice = world.airport && stranded >= 50 ? airportAdvice(world) : null;
     if (world.airport && advice) items.push({ id: "airport", text: `${int(stranded)} travellers a day to or from ${nameOf(world.airport)} aren't carried: ${advice.why}.`, button: `${advice.move && Number.isFinite(advice.move.price) ? moveButton(advice.move, "") : ""}<button data-pick="site|${world.airport}">Its card</button>`, at: [world.airport], weight: 2e6 + stranded });
+    // Riders giving up changing lines at a town with no station of yours (busstations.ts): the worst two.
+    if (world.tuning.busStationsEnabled) {
+      // From the rolling rate alone (a board diagnoses every line through a town: only for the two shown).
+      const hubs = [...(world.changeGiveUpEMA ?? new Map<string, number>())]
+        .filter(([id, rate]) => rate * D >= STATION_OFFER_PER_DAY && world.towns.has(id) && !world.towns.get(id)!.industry && !hasBusStation(world, id))
+        .sort((p, q) => q[1] - p[1])
+        .slice(0, 2)
+        .map(([id, rate]) => ({ id, board: { givingUpPerDay: rate * D, changingPerDay: (world.transferRateEMA.get(id) ?? 0) * D } }));
+      for (const h of hubs) items.push({ id: `station:${h.id}`, text: `${int(h.board!.givingUpPerDay)} a day give up changing lines at ${nameOf(h.id)}, with nowhere to wait (${int(h.board!.changingPerDay)} change there).`, button: `${moveButton(stationMove(h.id), "")}<button data-pick="town|${h.id}">Show ${esc(nameOf(h.id))}</button>`, at: [h.id], weight: 2e6 + h.board!.givingUpPerDay });
+    }
     // A pipeline shut by a strike or a tap (pipelines.ts): its fuel back on its tankers, as many as its dial kept.
     for (const p of pipeSummaries(world)) {
       if (!p.working || !p.outReason) continue;
@@ -539,6 +550,34 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `<div class="pane waiting where-next"><h2>Where next · people to gain</h2>${rows.join("")}</div>`;
   }
 
+  // Your bus station (busstations.ts; brief, Your bus station): riders changing lines there, and
+  // those giving up changing; without one, the offer where enough change to matter.
+  function stationHtml(townId: string): string {
+    if (!world.tuning.busStationsEnabled) return "";
+    const board = stationBoard(world, townId);
+    if (hasBusStation(world, townId)) {
+      const depot = board?.lines.filter((l) => l.ends).length ?? 0;
+      return `<h2>Your bus station</h2><div class="tiles">
+        ${tile("Change lines here", `${int(board?.changingPerDay ?? 0)}/day`, `${world.tuning.busStationPatience ?? 1}x as patient under cover`)}
+        ${tile("Give up changing", `${int(board?.givingUpPerDay ?? 0)}/day`)}
+        ${tile("Its depot", plural(depot, "line"), `ending here pay ${pct(world.tuning.busStationDepotShare ?? 0)} less for rough roads`)}
+      </div>`;
+    }
+    if (!board || board.givingUpPerDay < STATION_OFFER_PER_DAY) return "";
+    const move = stationMove(townId);
+    return `<div class="problem"><span>${int(board.givingUpPerDay)} a day give up changing lines here, with nowhere to wait (${int(board.changingPerDay)} change)</span>${moveButton(move, "")}</div>`;
+  }
+  function stationMove(townId: string): NamedMove {
+    return { action: { kind: "busStation", townId }, price: world.tuning.busStationCost ?? 0, label: `A bus station at ${nameOf(townId)} (S)` };
+  }
+  // A line on a town's card; with your station there, the board's row: its problem, and Sell where it loses.
+  function boardRow(townId: string, r: ReturnType<typeof routes>[number]): string {
+    const station = hasBusStation(world, townId);
+    const verdict = station ? diagnoseRoute(world, r.id)?.verdict : undefined;
+    const word = verdict && verdict !== "healthy" ? ` <span class="warnword">${esc(VERDICT_WORDS[verdict] ?? verdict)}</span>` : "";
+    const sell = station && r.netPerDay < 0 ? `<button data-remove="${esc(r.id)}" title="Sell one of its vehicles">Sell one</button>` : "";
+    return `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}${word}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td>${station ? `<td>${sell}</td>` : ""}</tr>`;
+  }
   function townProblem(t: Town): Problem {
     // Outside your remit (remit.ts): running without you until a verdict opens its cluster.
     const closed = closedClusterOf(world, t.id);
@@ -1045,8 +1084,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="chart"><div class="t"><span>People, thousands</span><span>${t.target ? `heading for ${int(t.target)}k` : ""}</span></div>${chartSvg([{ name: "People (k)", color: css("--ink-2"), values: pop }], { height: 90 })}</div>
         ${t.fuel !== null || t.cement !== null ? `<div class="tiles">${t.fuel !== null ? tile("Fuel supplied", pct(t.fuel)) : ""}${t.cement !== null ? tile("Cement supplied", pct(t.cement), t.cementHeld > 1 ? `${int(t.cementHeld)}k fewer people for it` : "") : ""}${t.steel !== null ? tile("Steel supplied", pct(t.steel), t.steelHeld > 1 ? `${int(t.steelHeld)}k fewer people for it` : "past +80% of its start") : ""}</div>` : ""}
         ${onTheWayHtml(t.id)}
-        <h2>Your routes here · ${here.length}</h2>
-        <table><tbody>${here.map((r) => `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td></tr>`).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
+        ${stationHtml(t.id)}
+        <h2>${hasBusStation(world, t.id) ? "The board: your lines here" : "Your routes here"} · ${here.length}</h2>
+        <table><tbody>${here.map((r) => boardRow(t.id, r)).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
         ${fold("town", "More: its trips, parks, metro, strikes", hooks.townMore(t.id))}`;
     }
     if (sel.kind === "route" && world.lorryRoutes.some((x) => x.id === sel.id)) {
@@ -1616,6 +1656,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   /** A click the screen handles itself: true when it did. Moves and old-card buttons are the page's. */
   function onClick(target: HTMLElement): boolean {
+    // A button inside a pickable row (the board's Sell) is its own: main.ts takes it.
+    if (target.closest("[data-remove]")) return false;
     const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename],[data-chip]");
     if (!el || el.closest("details.more .panel-body")) return false;
     if (el.dataset.rename) {

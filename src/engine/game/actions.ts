@@ -19,6 +19,7 @@ import { restorePower } from "./power";
 import { restoreTextile } from "./textile";
 import { expandSite } from "./expand";
 import { buildYard } from "./yards";
+import { buildBusStation } from "./busstations";
 import { buildPark } from "./parks";
 import { buildMetro } from "./metro";
 import { setFreightRate } from "./freightrates";
@@ -59,6 +60,7 @@ export type ActionSpec =
   | { kind: "expand"; siteId: string }
   | { kind: "yard"; townId: string }
   | { kind: "park"; townId: string }
+  | { kind: "busStation"; townId: string }
   | { kind: "metro"; townId: string }
   | { kind: "freightRate"; routeId: string; rate: "cheap" | "standard" | "dear" }
   | { kind: "bond"; purpose: BondPurpose }
@@ -165,6 +167,10 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
     }
     case "park": {
       const result = buildPark(world, spec.townId);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
+    case "busStation": {
+      const result = buildBusStation(world, spec.townId);
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
     }
     case "freightRate":

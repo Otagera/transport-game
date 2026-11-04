@@ -632,6 +632,12 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   cottonImportShare: 0.7,
   clothTripBoost: 0.15,
   clothExportPay: 40,
+  // Your bus stations (busstations.ts; brief, agreed 2026-11-04): priced as a motor park; first
+  // guesses for the rest, measured on your map 5059 replay (engine.md, Your bus station).
+  busStationsEnabled: true,
+  busStationCost: 20000,
+  busStationPatience: 3,
+  busStationDepotShare: 0.5,
   freightRateCheap: 0.6,
   freightRateDear: 1.6,
   freightHaulierPull: 0.5,

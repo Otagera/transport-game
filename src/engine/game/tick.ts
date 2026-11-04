@@ -32,6 +32,7 @@ import { allocationPerDay, remit, tollFor, treasuryLevy, type Takings } from "./
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
+import { changePatience } from "./busstations";
 import { isDirt, updateRoadSpeeds, yourSpeeds } from "./congestion";
 import { creditLanes, laneEncroachment, lanesBySegment, struckSegments, updateLanes } from "./pushback";
 import { updateProject } from "./project";
@@ -157,16 +158,22 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   }
 
   // 2. Giving up.
+  const givingUpChanging = new Map<string, number>();
   const leaveFraction = emaAlpha(dt, tuning.patienceSeconds);
   for (const [at, queue] of simulation.queues) {
     // Where fuel is short, danfos are dear and few: riders wait longer for you (fuel.ts).
     const short = shortageAt(world, at);
-    const leaveFractionHere = short > 0 ? emaAlpha(dt, tuning.patienceSeconds * (1 + tuning.fuelPatience * short)) : leaveFraction;
+    const patienceHere = short > 0 ? tuning.patienceSeconds * (1 + tuning.fuelPatience * short) : tuning.patienceSeconds;
+    const leaveFractionHere = short > 0 ? emaAlpha(dt, patienceHere) : leaveFraction;
+    // At your bus station, riders changing lines wait under cover (busstations.ts).
+    const station = changePatience(world, at);
+    const leaveChanging = station > 1 ? emaAlpha(dt, patienceHere * station) : leaveFractionHere;
     for (const [key, amount] of queue) {
       if (amount <= 0) continue;
-      const leaving = amount * leaveFractionHere;
-      queue.set(key, amount - leaving);
       const { destination, origin } = parseQueueKey(key);
+      const leaving = amount * (origin !== at ? leaveChanging : leaveFractionHere);
+      queue.set(key, amount - leaving);
+      if (origin !== at) givingUpChanging.set(at, (givingUpChanging.get(at) ?? 0) + leaving);
       bump(informal.pool, poolKeyFor(at, key, origin, destination), leaving);
     }
   }
@@ -400,9 +407,12 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
     route.loadFactorEMA += (routeLoadFactor(world, route.vehicleIds) - route.loadFactorEMA) * alpha;
     route.speedEMA += (routeSpeed(world, route.vehicleIds) - route.speedEMA) * alpha;
   }
+  const changeGiveUp = (world.changeGiveUpEMA ??= new Map());
   for (const townId of world.towns.keys()) {
     const previous = world.transferRateEMA.get(townId) ?? 0;
     world.transferRateEMA.set(townId, previous + ((changing.get(townId) ?? 0) / dt - previous) * alpha);
+    const gaveUp = changeGiveUp.get(townId) ?? 0;
+    changeGiveUp.set(townId, gaveUp + ((givingUpChanging.get(townId) ?? 0) / dt - gaveUp) * alpha);
   }
   for (const [key, rates] of world.pairOutcomes) {
     rates.player += ((arrived.get(key) ?? 0) / dt - rates.player) * alpha;
