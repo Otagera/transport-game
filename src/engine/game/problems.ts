@@ -1,6 +1,6 @@
 import type { GameWorld } from "./types";
 import type { ActionSpec } from "./actions";
-import { diagnoseRoute, findRoute, isBrtRoute, isMinibusRoute, laneCost, pairDemand, paveCost, roadPath, routeSummaries } from "./world";
+import { canTravel, diagnoseRoute, findRoute, isBrtRoute, isMinibusRoute, laneCost, pairDemand, paveCost, roadPath, routeSummaries } from "./world";
 import { growthTrend, nextRungRoom, roadFull, townGrowth } from "./growth";
 import { corridorsAlong } from "./corridors";
 import { laneEncroachment, lanesBySegment } from "./pushback";
@@ -11,6 +11,7 @@ import { corridorWear } from "./wear";
 import { chainOf } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { vehiclePrice } from "./assembly";
+import { routesOnTrip } from "./transfers";
 
 // Revision 2, step 1 (docs/brief.md, agreed 2026-10-19): show the problems
 // the late game already has. At day 210 of the R1 7 playtest, 2,865 trips a
@@ -436,4 +437,91 @@ export function mostUncarried(world: GameWorld, townId: string): { other: string
     best = { other, perDay: rate * SECONDS_PER_GAME_DAY };
   }
   return best;
+}
+
+// The airport's card (playtest, map 5059, day 653): "468 travellers a day can't get to or from
+// the airport: a bus or a train carries them on" stood for 247 days over 18 buses on seven lines
+// to it, four of them losing money. Every lost trip read as no way on, so the card kept asking
+// for the one thing that was losing: more buses. The trips had a road; they found no seat, on
+// buses worn, jammed or too long to pay -- and track already reached the airport, for freight.
+// So the card splits the lost by why, says what the lines to it make, and names the move that
+// answers that: a train where track reaches it; the road kept up where it's worn; another
+// vehicle only where one would pay; else track.
+
+export interface AirportAdvice {
+  /** Trips a day to or from the airport that weren't made. */
+  lostPerDay: number;
+  /** Of those, with no road or track to the town at the other end. */
+  noWayPerDay: number;
+  /** Your passenger lines with an end at it: vehicles, how many lines lose money, their net a day. */
+  lines: number;
+  vehicles: number;
+  losing: number;
+  netPerDay: number;
+  /** Why they're lost, in a clause: "no way on from it", "no seat: your 18 buses to it lose ₦807 a day". */
+  why: string;
+  move: NamedMove | null;
+}
+
+export function airportAdvice(world: GameWorld): AirportAdvice | null {
+  const id = world.airport;
+  if (!id || !world.towns.has(id)) return null;
+  const D = SECONDS_PER_GAME_DAY;
+  let lost = 0, noWay = 0;
+  const lostWith = new Map<string, number>();
+  for (const [key, rates] of world.pairOutcomes) {
+    const at = key.indexOf(":");
+    const from = key.slice(0, at), to = key.slice(at + 1);
+    const other = from === id ? to : to === id ? from : null;
+    if (!other || rates.lost <= 0) continue;
+    lost += rates.lost;
+    if (!canTravel(world, id, other)) noWay += rates.lost;
+    lostWith.set(other, (lostWith.get(other) ?? 0) + rates.lost);
+  }
+  const summaries = routeSummaries(world).filter((r) => r.a === id || r.b === id);
+  const lines = summaries.length;
+  const vehicles = summaries.reduce((s, r) => s + r.buses, 0);
+  const losing = summaries.filter((r) => r.netPerDay < 0).length;
+  const netPerDay = summaries.reduce((s, r) => s + r.netPerDay, 0);
+  const base = { lostPerDay: lost * D, noWayPerDay: noWay * D, lines, vehicles, losing, netPerDay };
+  // The town at the other end with most lost, among those a road or track joins it to (or any).
+  const ranked = [...lostWith.entries()].sort((p, q) => q[1] - p[1]);
+  const top = (ok: (other: string) => boolean) => ranked.find(([other]) => world.towns.has(other) && !world.towns.get(other)!.industry && ok(other))?.[0] ?? null;
+  const nameAt = nameOf(world, id);
+  if (lines === 0) {
+    const to = top(() => true) ?? world.port ?? null;
+    return { ...base, why: "no line of yours runs from it", move: to ? openingMove(world, id, to, (lostWith.get(to) ?? 0) * D) : null };
+  }
+  const fleet = `your ${vehicles} vehicle${vehicles === 1 ? "" : "s"} on ${lines} line${lines === 1 ? "" : "s"} to it`;
+  const verb = (many: string, one: string) => (vehicles === 1 ? one : many);
+  const result = netPerDay < 0 ? `${fleet} ${verb("lose", "loses")} ₦${Math.round(-netPerDay)} a day` : `${fleet} ${verb("make", "makes")} ₦${Math.round(netPerDay)} a day`;
+  const why = noWay > lost / 2 ? `most have no road or track to their town; ${result}` : `they have a road, but no seat: ${result}`;
+  // Track reaches it, and no train of yours carries people from it: a train, to the town with most lost.
+  // Travellers spread over the region, a few dozen to each town (map 8703: 296 lost, 40 the
+  // most to any one), so a train is judged by all it could carry: the lost to the town at its
+  // far end, and to the towns your lines run on to from there, changing. Measured on 8703 with
+  // one bus out: a train to the home city, where no line of yours ran on, cut 295 lost to 286.
+  const trained = world.routes.some((r) => isRailRoute(r.id) && (r.a === id || r.b === id));
+  const carriedOnFrom = (end: string) => ranked.reduce((sum, [other, rate]) => sum + (other === end || routesOnTrip(world, end, other).size > 0 ? rate : 0), 0) * D;
+  let byTrack: string | null = null, onTrack = 0;
+  if (!trained) for (const t of world.towns.values()) {
+    if (t.industry || railPath(world, id, t.id) === null) continue;
+    const n = carriedOnFrom(t.id);
+    if (n > onTrack) [byTrack, onTrack] = [t.id, n];
+  }
+  if (byTrack && onTrack >= TRAIN_TRIPS_PER_DAY / 3) {
+    return { ...base, why, move: { action: { kind: "train", a: id, b: byTrack }, price: vehiclePrice(world, "train"), label: `Run a train ${nameAt} ↔ ${nameOf(world, byTrack)}: your track already reaches it (T)` } };
+  }
+  // Its road worn: kept up, the buses on it run faster and cheaper.
+  const worn = wornRoadAt(world, id);
+  if (worn && losing > 0) return { ...base, why, move: worn.move };
+  // Another vehicle where one would pay (seatMove says when it wouldn't).
+  const byRoad = top((other) => roadPath(world, id, other) !== null);
+  const seat = byRoad ? seatMove(world, id, byRoad) : null;
+  if (seat && Number.isFinite(seat.price)) return { ...base, why, move: seat };
+  // More wouldn't pay: track, then a train, to the town with most lost.
+  if (byRoad && (lostWith.get(byRoad) ?? 0) * D >= TRAIN_TRIPS_PER_DAY / 3) {
+    return { ...base, why: `${why}; another wouldn't pay`, move: { action: { kind: "track", a: id, b: byRoad, alignment: "cheapest" }, price: rungPrice(world, id, byRoad, "rail"), label: `Track ${nameAt}–${nameOf(world, byRoad)}, then a train on it (K)` } };
+  }
+  return { ...base, why, move: seat };
 }

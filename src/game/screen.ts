@@ -33,7 +33,7 @@ import { stationOf, stationOpen } from "@engine/game/stations";
 import { handoverNote, termLetter, type Letter } from "./correspondent";
 import { thenAndNowSvg } from "./thenandnow";
 import { railPath } from "@engine/game/rail";
-import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, townNoSeat, shrinkCause, whereNext, wornRoadAt, type NamedMove, type Opening } from "@engine/game/problems";
+import { NO_SEAT_MIN_PER_DAY, airportAdvice, corridorNoSeat, townNoSeat, shrinkCause, whereNext, wornRoadAt, type NamedMove, type Opening } from "@engine/game/problems";
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
 import { assemblyGeneration } from "@engine/game/assembly";
@@ -456,8 +456,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       items.push({ id: `union:${union.id}`, text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
     }
     // The airport's travellers stranded (airport.ts): demand at a point with no people, there to be reached.
+    // Split by why (problems.ts airportAdvice): no way on, or no seat on lines that lose -- and the move for that.
     const stranded = airportStranded(world);
-    if (world.airport && stranded >= 50) items.push({ id: "airport", text: `${int(stranded)} travellers a day can't get to or from ${nameOf(world.airport)}: a bus or a train from it to a town carries them on.`, button: `<button data-pick="site|${world.airport}">Its card</button>`, at: [world.airport], weight: 2e6 + stranded });
+    const advice = world.airport && stranded >= 50 ? airportAdvice(world) : null;
+    if (world.airport && advice) items.push({ id: "airport", text: `${int(stranded)} travellers a day to or from ${nameOf(world.airport)} aren't carried: ${advice.why}.`, button: `${advice.move && Number.isFinite(advice.move.price) ? moveButton(advice.move, "") : ""}<button data-pick="site|${world.airport}">Its card</button>`, at: [world.airport], weight: 2e6 + stranded });
     // A pipeline shut by a strike or a tap (pipelines.ts): its fuel back on its tankers, as many as its dial kept.
     for (const p of pipeSummaries(world)) {
       if (!p.working || !p.outReason) continue;
@@ -598,7 +600,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (world.towns.get(s.id)?.industry === "airport") {
       const a = airportSummary(world);
       if (!a || a.stranded < 0.3) return null;
-      return { text: `${pct(a.stranded)} of its travellers are stranded: no way on from it. A bus or a train from it to ${nameOf(world.port ?? "")} carries them on`, button: toolButton("bus", "A bus line from it <kbd>B</kbd>") };
+      const advice = airportAdvice(world);
+      if (!advice) return null;
+      const move = advice.move;
+      return { text: `${pct(a.stranded)} of its travellers aren't carried: ${advice.why}${move && !Number.isFinite(move.price) ? `. ${move.label}` : ""}`, button: move && Number.isFinite(move.price) ? moveButton(move, "") : "" };
     }
     if (world.towns.get(s.id)?.industry === "steelworks" && world.steel && !world.steel.working) {
       return { text: "Idle: built, never run. Restore it and its mine starts digging", button: `<button data-restore-steel="1">Restore it · ${nairaK(world.tuning.steelRestoreCost)}</button>` };
@@ -1156,7 +1161,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
                 if (!a) return "";
                 return `${tile("Travellers a day", int(a.tripsPerDay), `${int(a.travellersPerDay)} in, as many out`)}
                   ${tile("You carry", pct(a.you), `danfos ${pct(a.informal)}`)}
-                  ${tile("Stranded", pct(a.stranded), a.stranded > 0.3 ? "no way on from it" : "")}
+                  ${tile("Not carried", pct(a.stranded), a.stranded > 0.3 ? ((airportAdvice(world)?.noWayPerDay ?? 0) > a.tripsPerDay * a.stranded / 2 ? "no way on from it" : "no seat on your lines") : "")}
                   ${tile("Air freight", `${a.freightPerDay.toFixed(1)} t/day`, `hauliers ${a.freightHauliers.toFixed(1)}, yours ${a.freightYours.toFixed(1)} (${world.tuning.airFreightRate ?? 8}× the rate)`)}`;
               })()
             : t.industry === "station"

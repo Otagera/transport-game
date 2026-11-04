@@ -652,9 +652,10 @@ at its source; clicking it opens its card.
 
 **The airport on the screen** (2026-11-03; engine.md, The airport). A plane glyph (icons.ts, the
 trade family), always working. Its card: travellers a day (in and out), the share you carry and the
-danfos', the share stranded, air freight and who carries it; its problem line, when 30% or more are
-stranded, names the move (a bus line from it, <kbd>B</kbd>). The Sites table lists it; Waiting on
-you carries its stranded travellers at 50 a day or more. In 3D, to scale with what drives
+danfos', the share not carried ("no way on from it" or "no seat on your lines"), air freight and who
+carries it; its problem line, when 30% or more aren't carried, says why and names the move
+(problems.ts `airportAdvice`, engine.md The airport). The Sites table lists it; Waiting on you
+carries its uncarried travellers at 50 a day or more, with why and the move's button. In 3D, to scale with what drives
 to it (2026-11-04: its plane had been barely longer than a bus, and its runway left out wherever a
 road came near; shapes3d `site`, `AIRPORT`, `SITE_YARD` 236 by 128 m): an airliner twice a bus (40
 m) on each of two stands and one taxiing, a runway half a dozen planes long with its markings, the
