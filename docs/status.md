@@ -129,7 +129,11 @@ lane in from the junction, a drive round an island under a canopy, a bay a route
 and its buses come off the road to their bay and back out; a roundabout where three roads or more
 meet, its traffic going round it; the airport a field to scale, an airliner twice a bus, its runway
 whole, its own bus park before the terminal (render-and-ui.md, Bus parks and roundabouts). Drawn
-only: the engine's buses still turn at the town's point.
+only: the engine's buses still turn at the town's point. Then (branch `sites`) **the sites to
+scale**: each plant 1.5-2x, with the lorries and the airport, its fence and vehicles their own size;
+placed as the airport is, a **lorry park** before each gate that hauliers and your freight lorries
+go through to a bay; the 3D overlay arcs fade out close in -- they were the dark bands across every
+close view (render-and-ui.md, Sites to scale, and their lorry parks).
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

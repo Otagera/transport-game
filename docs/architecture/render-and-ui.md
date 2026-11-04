@@ -628,7 +628,9 @@ people stay -- they're the game. The overlays are both views' now: in 3D each ma
 (`overlayMarks`, exported from render.ts, the 2D map's own) an arc over the land town to town,
 its top about a seventh of its span up (an Informal share corridor lower), as thick as its value, in
 its colour, unlit and through the haze; rebuilt when the marks are (once a second). The caption
-under the buttons shows in 3D too.
+under the buttons shows in 3D too. They're for the overview: closer than 600 m they fade out, gone
+by 600 and whole from 1500 (`fadeArcs`) -- zoomed in on a town, its arcs to every neighbour, high
+above it, had crossed the view as broad dark bands over everything (2026-11-04).
 
 **Click anything in 3D** (2026-11-03; `Built.pickAt`, `Pick3D`). The 3D view was watch-only but
 for towns and sites; a click now picks, smallest first: a vehicle drawn within 12 px (its line's
@@ -694,6 +696,26 @@ whatever else was there bunched on that one point. Now:
   when a road does.
 
 Drawn only, as the stations are: the engine's vehicles still pass through the town's point.
+
+**Sites to scale, and their lorry parks** (2026-11-04; your look: a refinery's tank narrower than
+the tanker it filled, a yard a quarter of the airport's; lorries at sites turned on the spot as the
+buses had). Each kind's plant is drawn `SITE_SCALE` larger than its tables (shapes3d.ts: 2 for a
+refinery, power station or steelworks; 1.8 a cement works, tank farm or quarry; 1.6 an oilfield,
+car plant or steel terminal; 1.5 a mill or the textile mill), the whole site mesh scaled, its
+tables (`SITE_YARD`, `SITE_BAY`, `SITE_LIFE`, `SITE_STOCK`) with it -- but not what's made for
+people or the roads: its fence is drawn apart at its own size round the scaled yard (`yardFence`),
+the lorries at its bay, its digger and its sacks, coils and cars scaled back (a quarry's heap
+stays the plant's). Every such site is placed as the airport is (`siteKit`): a field, its gate
+toward its point, behind its park's ground (`PARK_FRONT`) and pushed back as far as it must be,
+any of 16 ways round, its pieces tested along their length, graded level on a bank, a drive from
+the park to its gate; a placed site's park is ground the next keeps off (`siteParkGround`), and
+the towns build after the sites' parks are laid. Before each gate a **lorry park** (busparks3d.ts,
+kind "lorry"; shapes3d `lorryPark`): laterite worn into ruts, the island with the weighbridge
+office and its plate, four bays at the kerb, a barrier at its mouth. A lorry at a site goes
+through it (`onPark`): your freight's to its route's bay, a haulier's to a bay by its number; a
+trip that ends there stands at its bay till it's gone, one that starts there pulls out of one, a
+round trip turns there as a bus does. The airport's park is its bus park, and its air freight's
+lorries use it too.
 
 **Stations and trains in their parts** (2026-11-03, `stations3d.ts`; your playtest, map 8703 day
 482: Otido's six lines and its freight in one heap in the town's middle). The game's trains have no

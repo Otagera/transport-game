@@ -41,8 +41,8 @@ import { PLATFORM_WIDTH, THROAT, layStations, onStation, reachAlong, stationAt, 
 import { carsOn } from "@engine/game/rail";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
 import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, site, vehicleGeometry, type VehicleKind3D } from "./shapes3d";
-import { RING_DRIVE, RING_OUTER, RING_ZONE, busPark, roundabout } from "./shapes3d";
-import { BUS_PARK, inPark, layBusParks, parkDrive, parkEnds, parkPoint, type BusPark } from "./busparks3d";
+import { RING_DRIVE, RING_OUTER, RING_ZONE, busPark, hasLorryPark, lorryPark, roundabout, siteScale, yardFence } from "./shapes3d";
+import { BUS_PARK, inPark, layBusParks, parkDrive, parkEnds, parkPoint, siteParkGround, type BusPark } from "./busparks3d";
 
 const M = 8; // metres a map cell
 // Metres an elevation unit. The map's cells stand for far more than the 8 m they're drawn at,
@@ -53,8 +53,8 @@ const HEIGHT = 3.2;
 const VEHICLE_SCALE = 1.6; // a little larger than life, to be seen from above
 /** How far right of its road's line a road vehicle drives (metres): the two ways don't overlap. */
 const KEEP_RIGHT = 2.4;
-/** From the airport's point to its yard's front (metres): its bus park's lane and ground between (busparks3d.ts). */
-const AIRPORT_FRONT = 12 + 2 * 13 + 4;
+/** From a site's point to its yard's front (metres): its park's lane and ground between (busparks3d.ts). */
+const PARK_FRONT = 12 + 2 * 13 + 4;
 // Haze as distance does it (aerial perspective), not a flat fog: colour drains first, then the land
 // goes to a warm harmattan haze near and a cool blue far off. Patched into three's fog chunk once;
 // three.js is this module's alone (main.ts loads it on demand).
@@ -1612,9 +1612,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   /** Within `pad` metres of this site's yard (SITE_YARD, turned as it's drawn). */
   function yardHas(site: GameTown, cx: number, cy: number, pad: number): boolean {
     const at = siteAt.get(site.id) ?? { x: site.x, y: site.y, ry: 0 };
-    const yard = SITE_YARD[site.industry ?? ""] ?? { w: 40, d: 30 };
+    const yard = SITE_YARD[site.industry ?? ""] ?? { w: 40, d: 30 }, S = siteScale(site.industry ?? "");
     const wx = (cx - at.x) * M, wz = (cy - at.y) * M, c = Math.cos(at.ry), sn = Math.sin(at.ry);
-    return Math.abs(wx * c - wz * sn) < yard.w / 2 + pad && Math.abs(wx * sn + wz * c) < yard.d / 2 + pad;
+    return Math.abs(wx * c - wz * sn) < (yard.w * S) / 2 + pad && Math.abs(wx * sn + wz * c) < (yard.d * S) / 2 + pad;
   }
   /** Within `pad` metres of any site's yard: the towns build round them. */
   function inYard(cx: number, cy: number, pad: number): boolean {
@@ -1897,45 +1897,59 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     return kit;
   }
   // Where a site goes (your look, 2026-11-02: a quarry left as two strips of wall, a road through its
-  // pit). The roads into it run to its middle; its yard is set beside them, turned whichever of four
-  // ways and moved up to 46 m, to lose the least to roads and water (each piece left out counts by
-  // its size) with its gate toward where the road ends. Its pieces are surveyed once, dry, and
-  // tried at each place against a map of how far the roads are; the kit is built once, at the best.
-  function siteKit(town: GameTown): { kit: Kit; x: number; z: number; ry: number; floor: number; clear: (x: number, z: number, r: number) => boolean } {
-    // The airport (your look, 2026-11-04: its runway left out wherever a road came near) is a
-    // field, not a yard: searched for over a wider ground, its pieces tested along their length,
-    // set back from its point behind its bus park (syncParks) with its gate toward it, any way round.
-    const airport = town.industry === "airport";
-    const local = roadLines.filter((line) => line.some((p) => Math.hypot(p.x - town.x, p.y - town.y) < (airport ? 60 : 30)));
-    const wet = wetAround(town, airport ? 70 : 40);
-    const STEP = airport ? 4 : 2, HALF = airport ? 80 : 48, SIDE = HALF * 2 + 1;
-    const roadDist = new Float32Array(SIDE * SIDE);
-    for (let gy = 0; gy < SIDE; gy += 1) for (let gx = 0; gx < SIDE; gx += 1) {
-      const x = town.x + ((gx - HALF) * STEP) / M, y = town.y + ((gy - HALF) * STEP) / M;
-      let d = Infinity;
-      for (const line of local) for (let k = 1; k < line.length; k += 1) d = Math.min(d, distToSegment(x, y, line[k - 1]!, line[k]!));
-      roadDist[gy * SIDE + gx] = d * M;
-    }
+  // pit; 2026-11-04: its plant to scale, a lorry park before its gate). A site with a lorry park (and
+  // the airport, its bus park) is set like a field: its gate toward its point, behind the park's
+  // ground (PARK_FRONT) and pushed back as far as it must be, any of 16 ways round, off the road in;
+  // its plant drawn SITE_SCALE larger, its pieces tested along their length, graded level on a bank,
+  // its fence and the drive to its gate at their own size. The rest (a border post, a station) as
+  // before: beside its roads, whichever of four ways loses least to roads and water. Its pieces are
+  // surveyed once, dry, and tried at each place against a map of how far the roads are.
+  function siteKit(town: GameTown): { kit: Kit; extras: Kit | null; scale: number; x: number; z: number; ry: number; floor: number; clear: (x: number, z: number, r: number) => boolean } {
+    const kind = town.industry!;
+    const airport = kind === "airport", field = airport || hasLorryPark(kind), S = siteScale(kind);
+    const local = roadLines.filter((line) => line.some((p) => Math.hypot(p.x - town.x, p.y - town.y) < (field ? 60 : 30)));
+    const wet = wetAround(town, field ? 70 : 40);
+    const STEP = field ? 4 : 2, HALF = field ? (airport ? 80 : 64) : 48, SIDE = HALF * 2 + 1;
+    // How far the roads are, a grid round its point (metres), each cell worked out when first asked.
+    const roadDist = new Float32Array(SIDE * SIDE).fill(-1);
+    const roadAt = (gx: number, gy: number) => {
+      const i = gy * SIDE + gx;
+      if (roadDist[i]! < 0) {
+        const x = town.x + ((gx - HALF) * STEP) / M, y = town.y + ((gy - HALF) * STEP) / M;
+        let d = Infinity;
+        for (const line of local) for (let k = 1; k < line.length; k += 1) d = Math.min(d, distToSegment(x, y, line[k - 1]!, line[k]!));
+        roadDist[i] = d * M;
+      }
+      return roadDist[i]!;
+    };
     // And the yards already placed near it (sites are placed one by one): a neighbour's is taken ground.
-    const neighbours = sites.filter((s) => s.id !== town.id && siteAt.has(s.id) && Math.hypot(siteAt.get(s.id)!.x - town.x, siteAt.get(s.id)!.y - town.y) < (airport ? 45 : 20));
-    // The airport keeps off the stations; it shies from the towns (their houses then keep off it, as off any yard).
-    const nearTowns = airport ? people.filter((t) => Math.hypot(t.x - town.x, t.y - town.y) < 70).map((t) => ({ x: t.x, y: t.y, reach: reachOf(t, tierOf(t.population, false), people).radius / M })) : [];
+    const neighbours = sites.filter((s) => s.id !== town.id && siteAt.has(s.id) && Math.hypot(siteAt.get(s.id)!.x - town.x, siteAt.get(s.id)!.y - town.y) < (field ? 45 : 20));
+    // And their parks' ground, before their gates (laid once every site is set: syncParks).
+    const neighbourParks = neighbours.filter((s) => s.industry === "airport" || hasLorryPark(s.industry ?? "")).map((s) => {
+      const at = siteAt.get(s.id)!;
+      return siteParkGround(s.id, { x: s.x, y: s.y }, Math.atan2(-Math.cos(at.ry), -Math.sin(at.ry)));
+    });
+    // A field keeps off the stations; it shies from the towns (their houses then keep off it, as off any yard).
+    const nearTowns = field ? people.filter((t) => Math.hypot(t.x - town.x, t.y - town.y) < 70).map((t) => ({ x: t.x, y: t.y, reach: reachOf(t, tierOf(t.population, false), people).radius / M })) : [];
     /** Clear to stand a piece of radius r at (wx, wz) metres from the site's point. */
     const clearAt = (wx: number, wz: number, r: number) => {
       const gx = Math.round(wx / STEP) + HALF, gy = Math.round(wz / STEP) + HALF;
-      const road = gx >= 0 && gy >= 0 && gx < SIDE && gy < SIDE ? roadDist[gy * SIDE + gx]! : Infinity;
+      const road = gx >= 0 && gy >= 0 && gx < SIDE && gy < SIDE ? roadAt(gx, gy) : Infinity;
       if (road < r + 5) return false;
       const cx = town.x + wx / M, cy = town.y + wz / M;
-      if (airport && onStationGround(cx, cy, r)) return false;
-      return !wet(cx, cy, r / M) && !neighbours.some((s) => yardHas(s, cx, cy, r + 2));
+      if (field && onStationGround(cx, cy, r)) return false;
+      return !wet(cx, cy, r / M) && !neighbours.some((s) => yardHas(s, cx, cy, r + 2)) && !neighbourParks.some((p) => inPark(p, { x: cx, y: cy }, r + 2));
     };
     const placed = (ox: number, oz: number, ry: number) => {
       const c = Math.cos(ry), sn = Math.sin(ry);
       return (x: number, z: number, r: number) => clearAt(ox + x * c + z * sn, oz - x * sn + z * c, r);
     };
-    const survey = new SurveyKit(airport);
-    site(survey, seeded(town.id), town.industry!);
-    const yard = SITE_YARD[town.industry!] ?? { w: 40, d: 30, gate: 0 };
+    // Surveyed in its tables' metres, tried at its drawn size.
+    const survey = new SurveyKit(field);
+    site(survey, seeded(town.id), kind, !field);
+    const pieces = survey.pieces.map(([x, z, r]) => [x * S, z * S, r * S] as const);
+    const table = SITE_YARD[kind] ?? { w: 40, d: 30, gate: 0 };
+    const yard = { w: table.w * S, d: table.d * S, gate: table.gate * S };
     // The ground under the yard, in metres: 5 by 5 points over it. Set at their mean, and a site
     // on a slope half buried, so flat ground counts in the choosing (2026-11-02: a quarry moved up
     // a hillside sank its crusher and dump truck into it).
@@ -1952,9 +1966,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       return { mean: sum / 25, rise: high - low, high };
     };
     let best = { ox: 0, oz: 0, ry: 0, score: Infinity };
-    if (airport) {
-      // Its gate toward its point, the yard behind the bus park's ground (AIRPORT_FRONT) and
-      // pushed back as far as it must be; off the road in, which comes to the point.
+    if (field) {
       const arms = local.filter((line) => Math.hypot(line[0]!.x - town.x, line[0]!.y - town.y) < 0.5 || Math.hypot(line[line.length - 1]!.x - town.x, line[line.length - 1]!.y - town.y) < 0.5)
         .map((line) => { const from = Math.hypot(line[0]!.x - town.x, line[0]!.y - town.y) < 0.5 ? line : [...line].reverse(); const q = from[Math.min(from.length - 1, 3)]!; return Math.atan2(q.y - town.y, q.x - town.x); });
       for (let k = 0; k < 16; k += 1) {
@@ -1964,16 +1976,17 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         let turn = 0;
         for (const a of arms) { const off = Math.abs(Math.atan2(Math.sin(axis - a), Math.cos(axis - a))); if (off < 1) turn += 60 * (1 - off); }
         for (const push of [0, 16, 32, 48, 64, 88, 112]) {
-          const L = AIRPORT_FRONT + yard.d / 2 + push, ox = -L * sn, oz = -L * c;
+          // Its gate on the line out from the point: the yard set back, and aside by where its gate is.
+          const L = PARK_FRONT + yard.d / 2 + push, ox = -L * sn - yard.gate * c, oz = -L * c + yard.gate * sn;
           const clear = placed(ox, oz, ry);
           let lost = 0;
-          for (const [x, z, r] of survey.pieces) {
+          for (const [x, z, r] of pieces) {
             if (!clear(x, z, r)) lost += 1 + r;
             const cx = town.x + (ox + x * c + z * sn) / M, cy = town.y + (oz - x * sn + z * c) / M;
             if (nearTowns.some((t) => Math.hypot(cx - t.x, cy - t.y) < t.reach + r / M)) lost += 0.5;
           }
-          // Its bus park's ground and the drive to the gate, in front.
-          for (let f = 14; f < AIRPORT_FRONT + push; f += 8) for (const x of [-30, -15, 0, 15, 30]) if (Math.abs(x) < 10 || f < AIRPORT_FRONT) if (!clear(x, yard.d / 2 + f, 4)) lost += 3;
+          // Its park's ground and the drive to the gate, in front.
+          for (let f = 14; f < PARK_FRONT + push; f += 8) for (const x of [-30, -15, 0, 15, 30]) if (Math.abs(x) < 10 || f < PARK_FRONT) if (!clear(yard.gate + x, yard.d / 2 + f, 4)) lost += 3;
           const score = lost + turn + push * 0.12 + groundUnder(ox, oz, ry).rise * 2;
           if (score < best.score) best = { ox, oz, ry, score };
         }
@@ -1981,34 +1994,41 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     const offsets: Array<[number, number]> = [[0, 0]];
     for (const reach of [12, 22, 34, 46]) for (let k = 0; k < 12; k += 1) offsets.push([Math.cos((k / 12) * Math.PI * 2) * reach, Math.sin((k / 12) * Math.PI * 2) * reach]);
-    for (const ry of airport ? [] : [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
+    for (const ry of field ? [] : [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
       const c = Math.cos(ry), sn = Math.sin(ry);
       for (const [ox, oz] of offsets) {
         const clear = placed(ox, oz, ry);
         let lost = 0;
-        for (const [x, z, r] of survey.pieces) if (!clear(x, z, r)) lost += 1 + r;
+        for (const [x, z, r] of pieces) if (!clear(x, z, r)) lost += 1 + r;
         const gx = ox + yard.gate * c + (yard.d / 2) * sn, gz = oz - yard.gate * sn + (yard.d / 2) * c;
         const score = lost + Math.hypot(gx, gz) * 0.08 + groundUnder(ox, oz, ry).rise * 2;
         if (score < best.score) best = { ox, oz, ry, score };
       }
     }
-    const clear = placed(best.ox, best.oz, best.ry);
-    const kit = new ClearKit(clear, airport);
-    site(kit, seeded(town.id), town.industry!);
+    const placedAt = placed(best.ox, best.oz, best.ry);
+    // In its tables' metres (its kit's), as the plant is drawn: scaled to the ground.
+    const clear = (x: number, z: number, r: number) => placedAt(x * S, z * S, r * S);
+    const kit = new ClearKit(clear, field);
+    site(kit, seeded(town.id), kind, !field);
     const under = groundUnder(best.ox, best.oz, best.ry);
     let floor = under.mean - 0.1;
-    if (airport) {
-      // Graded level at its highest ground, on a bank down to its lowest: a runway's slab is too
-      // thin to lie on rolling ground at its mean (it sank out of sight wherever the ground rose).
+    let extras: Kit | null = null;
+    if (field) {
+      // Graded level at its highest ground, on a bank down to its lowest: a thin slab (a runway, a
+      // yard's paving) on rolling ground at its mean sank out of sight wherever the ground rose.
+      // At its own size, in the yard's metres: the bank, the drive out to its point, its fence.
       floor = under.high - 0.05;
       const bank = under.rise + 0.6;
-      kit.always((k) => k.box(yard.w + 2, bank, yard.d + 2, tokenPaint("--paint-green-20"), 0, 0, -bank + 0.02));
-      // The drive from its point (past the bus park's ground) to its gate.
-      const L = Math.hypot(best.ox, best.oz), reach = L - yard.d / 2 - 3;
-      kit.always((k) => k.box(9, 0.12 + bank, reach, tokenPaint("--paint-grey-21"), 0, yard.d / 2 + reach / 2 - 1, -bank));
+      extras = new Kit();
+      extras.box(yard.w + 2, bank, yard.d + 2, tokenPaint(airport ? "--paint-green-20" : "--paint-earth-17"), 0, 0, -bank + 0.02);
+      // From its gate out to the back of its park (which stands PARK_FRONT - 4 from its point).
+      const push = Math.max(0, Math.hypot(best.ox + yard.gate * Math.cos(best.ry), best.oz - yard.gate * Math.sin(best.ry)) - yard.d / 2 - PARK_FRONT);
+      const reach = push + 5;
+      extras.box(9, 0.12 + bank, reach, tokenPaint("--paint-grey-21"), yard.gate, yard.d / 2 + reach / 2 - 1, -bank);
+      yardFence(extras, yard.w, yard.d, yard.gate);
     }
     siteAt.set(town.id, { x: town.x + best.ox / M, y: town.y + best.oz / M, ry: best.ry });
-    return { kit, x: best.ox, z: best.oz, ry: best.ry, floor, clear };
+    return { kit, extras, scale: S, x: best.ox, z: best.oz, ry: best.ry, floor, clear };
   }
   // --- A site at work (the fidelity list, 2026-11-01: "sites that show their state") --------------
   // What a working site gives off (shapes3d.ts SITE_LIFE): a stack's smoke, a refinery's flare, a
@@ -2150,6 +2170,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       if (built) {
         const pile = new THREE.Mesh(own(built.geo), material);
         pile.position.set(storeAt[0], 0, storeAt[1]);
+        // A heap is the plant's (scaled with it); sacks, coils and cars are their own size.
+        if (kind !== "quarry" && kind !== "ironmine" && kind !== "coalmine") pile.scale.setScalar(1 / mesh.scale.x);
         pile.castShadow = true;
         pile.receiveShadow = true;
         mesh.add(pile);
@@ -2164,7 +2186,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const built = pieces(3, (kit, i) => kit.place(lorry, (i - 1) * 3.4, 0.35 / VEHICLE_SCALE, 0, Math.PI / 2));
       lorry.dispose();
       if (built) {
-        built.geo.scale(VEHICLE_SCALE, VEHICLE_SCALE, VEHICLE_SCALE);
+        // As the vehicles on the roads are, whatever the plant's scale.
+        const k = VEHICLE_SCALE / mesh.scale.x;
+        built.geo.scale(k, k, k);
         const lorries = new THREE.Mesh(own(built.geo), material);
         lorries.position.set(bayAt[0], 0, bayAt[1]);
         lorries.rotation.y = bay.ry;
@@ -2191,7 +2215,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         upper.position.y = 1.4;
         digger.add(base, upper);
         digger.position.set(e.x, e.y, e.z);
-        digger.scale.setScalar(VEHICLE_SCALE);
+        digger.scale.setScalar(VEHICLE_SCALE / mesh.scale.x);
         digger.rotation.y = rand() * Math.PI * 2;
         mesh.add(digger);
         life.diggers.push(upper);
@@ -2205,11 +2229,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         const n = e.what === "dust" ? 18 : e.what === "steam" ? 14 : 26;
         if (puffsUsed + n > PUFFS) continue;
         const kind = e.what === "smoke" ? 0 : e.what === "darkSmoke" ? 1 : e.what === "steam" ? 2 : 3;
-        const c = Math.cos(mesh.rotation.y), sn = Math.sin(mesh.rotation.y);
-        const ex = e.x * c + e.z * sn, ez = -e.x * sn + e.z * c;
+        const c = Math.cos(mesh.rotation.y), sn = Math.sin(mesh.rotation.y), S = mesh.scale.x;
+        const ex = (e.x * c + e.z * sn) * S, ez = (-e.x * sn + e.z * c) * S;
         for (let i = 0; i < n; i += 1) {
           const k = puffsUsed + i;
-          puffBase.set([mesh.position.x + ex + (rand() - 0.5) * (kind === 3 ? 8 : 1), mesh.position.y + e.y, mesh.position.z + ez + (rand() - 0.5) * (kind === 3 ? 8 : 1)], k * 3);
+          puffBase.set([mesh.position.x + ex + (rand() - 0.5) * (kind === 3 ? 8 : 1), mesh.position.y + e.y * S, mesh.position.z + ez + (rand() - 0.5) * (kind === 3 ? 8 : 1)], k * 3);
           puffPhase[k] = i / n + rand() * 0.02;
           puffKind[k] = kind;
           puffOn[k] = 0;
@@ -2685,8 +2709,14 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     people = [...w.towns.values()].filter((t) => !t.industry);
     sites = [...w.towns.values()].filter((t) => t.industry);
     const cityId = people.reduce<GameTown | null>((big, t) => (!big || t.population > big.population ? t : big), null)?.id;
-    // Sites first: the towns' buildings keep clear of where they've been set.
+    // Sites first: the towns' buildings keep clear of where they've been set -- and of their parks,
+    // laid as soon as the sites are (syncParks: a site's park is turned with its yard).
+    let parksLaid = false;
     for (const town of [...sites, ...people]) {
+      if (!town.industry && !parksLaid) {
+        parksLaid = true;
+        syncParks(w);
+      }
       const tier = town.industry ? "village" : tierOf(town.population, town.id === cityId);
       // A step every fifth of its size (or a tier change): a growing town rebuilds now and then.
       const boom = !town.industry && growthTrend(w, town.id) === "growing";
@@ -2698,12 +2728,21 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         towns.delete(town.id);
       }
       if (!towns.has(town.id)) {
-        const built = town.industry ? siteKit(town) : { kit: townKit(town, tier, boom), x: 0, z: 0, ry: 0, floor: null, clear: null };
+        const built = town.industry ? siteKit(town) : { kit: townKit(town, tier, boom), extras: null, scale: 1, x: 0, z: 0, ry: 0, floor: null, clear: null };
         const { kit, x, z } = built;
         const mesh = new THREE.Mesh(kit.merged(), material);
         mesh.position.copy(ground(town.x, town.y)).add(new THREE.Vector3(x, 0, z));
         mesh.rotation.y = built.ry;
         if (built.floor !== null) mesh.position.y = built.floor;
+        // A site's plant at its scale (SITE_SCALE); its bank, drive and fence at their own.
+        mesh.scale.setScalar(built.scale);
+        if (built.extras && !built.extras.empty) {
+          const extra = new THREE.Mesh(built.extras.merged(), material);
+          extra.scale.setScalar(1 / built.scale);
+          extra.castShadow = true;
+          extra.receiveShadow = true;
+          mesh.add(extra);
+        }
         if (!town.industry && fabric.length) mesh.add(...houses(fabric));
         if (!town.industry) {
           marketsAt.set(town.id, markets.map((m) => ({ x: mesh.position.x + m.x, z: mesh.position.z + m.z, big: m.big })));
@@ -2840,16 +2879,20 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const parkMeshes = new Map<string, { key: string; mesh: THREE.Mesh; top: number }>();
   function syncParks(w: GameWorld): void {
     const ends = parkEnds(w);
-    const input = `${network}|${[...ends].map(([id, r]) => `${id}:${[...r].sort().join(",")}`).sort().join("|")}|${stationsInput.length}|${siteAt.size}`;
+    const freight = w.lorryRoutes.filter((r) => r.vehicleIds[0] && !w.railVehicles.has(r.vehicleIds[0])).map((r) => r.id).sort().join(",");
+    const input = `${network}|${[...ends].map(([id, r]) => `${id}:${[...r].sort().join(",")}`).sort().join("|")}|${freight}|${stationsInput.length}|${siteAt.size}`;
     if (input === parksInput) return;
     parksInput = input;
     passages.clear();
     const degree = roadDegree(w);
     const roadsOnly = w.simulation.map.segments.filter((x) => x.retiredAt === undefined).map((x) => segmentPolyline(w.simulation.map, x));
     const blocked = (x: number, y: number) => x < 1 || y < 1 || x > W - 2 || y > H - 2 || terrain.water[Math.round(y) * W + Math.round(x)] === 1 || inYard(x, y, 6) || onQuay(x, y, 1) || onStationGround(x, y, 3);
-    // The airport's, in front of its terminal: turned the way its yard was set (siteKit).
+    // A site's, before its gate (the airport's, its terminal): turned the way its yard was set (siteKit).
     const fixed = new Map<string, number>();
-    for (const [id, at] of siteAt) if (w.towns.get(id)?.industry === "airport") fixed.set(id, Math.atan2(-Math.cos(at.ry), -Math.sin(at.ry)));
+    for (const [id, at] of siteAt) {
+      const kind = w.towns.get(id)?.industry ?? "";
+      if (kind === "airport" || hasLorryPark(kind)) fixed.set(id, Math.atan2(-Math.cos(at.ry), -Math.sin(at.ry)));
+    }
     parks = layBusParks(w, roadsOnly, blocked, (id) => (degree.get(id) ?? 0) >= 3, RING_OUTER, fixed);
     for (const [id, built] of parkMeshes) {
       if (parks.get(id)?.key === built.key) continue;
@@ -2871,7 +2914,9 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const colours = [...park.bays].map(([routeId, bay]) => {
         return { ...bay, colour: labelOf(w, routeLabelKey(routeId))?.colour || tokenPaint("--you") };
       });
-      busPark(kit, seeded(`buspark-${park.id}`), { straight: park.straight, gap: park.gap, ringed: rings.has(park.id) || (degree.get(park.id) ?? 0) >= 3, depth: high - low + 0.3, bays: colours, you: tokenPaint("--you") });
+      const ringed = rings.has(park.id) || (degree.get(park.id) ?? 0) >= 3;
+      if (park.kind === "lorry") lorryPark(kit, seeded(`lorrypark-${park.id}`), { straight: park.straight, gap: park.gap, ringed, depth: high - low + 0.3, bays: park.spots });
+      else busPark(kit, seeded(`buspark-${park.id}`), { straight: park.straight, gap: park.gap, ringed, depth: high - low + 0.3, bays: colours, you: tokenPaint("--you") });
       const mesh = new THREE.Mesh(kit.merged(), material);
       mesh.position.set(park.centre.x * M, high, park.centre.y * M);
       mesh.rotation.y = Math.atan2(-Math.cos(park.axis), -Math.sin(park.axis));
@@ -2880,13 +2925,18 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       scene.add(mesh);
       parkMeshes.set(park.id, { key: park.key, mesh, top: high });
     }
+    if (planted) clearTrees((cell) => onParkGround(cell % W, Math.floor(cell / W), 0.6));
   }
   function onParkGround(x: number, y: number, clear: number): boolean {
     for (const park of parks.values()) if (inPark(park, { x, y }, clear * M)) return true;
     return false;
   }
-  /** A bus's way through a park, from the road in to the road out (cells), how long, and where its bay is along it. */
-  interface Passage { points: Point[]; along: number[]; total: number; bay: number | null }
+  /**
+   * A bus's (or a lorry's) way through a park, from the road in to the road out (cells), how long,
+   * and where its bay is along it; where its trip ends at the park, from the road to its bay; where
+   * it starts there, from its bay to the road.
+   */
+  interface Passage { points: Point[]; along: number[]; total: number; bay: number | null; ends: boolean; starts: boolean }
   const passages = new Map<string, Passage | null>();
   /** The way from one arm of a town's junction to another (cells): round its roundabout, or a curve through its point. */
   function junctionWay(at: Point, inn: { line: Point[]; length: number }, out: { line: Point[]; length: number }, ringed: boolean): Point[] {
@@ -2913,67 +2963,106 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     }
     return way;
   }
-  function passageThrough(park: BusPark, routeId: string, inn: { line: Point[]; length: number }, out: { line: Point[]; length: number }, z1: number, z2: number): Passage | null {
+  function passageThrough(park: BusPark, bay: { s: number; o: number } | undefined, inn: { line: Point[]; length: number } | null, out: { line: Point[]; length: number } | null, z1: number, z2: number): Passage | null {
     const ringed = rings.has(park.id);
     const R = (ringed ? RING_DRIVE : 6) / M;
-    if (z1 < R + 0.3 || z2 < R + 0.3) return null;
+    if ((inn && z1 < R + 0.3) || (out && z2 < R + 0.3) || (!inn && !out)) return null;
     const lane = { line: [park.node, parkPoint(park, 0, -BUS_PARK.pave)], length: park.gap / M };
     const back = { line: [lane.line[1]!, park.node], length: lane.length };
+    // The drive round the island (the lane's ends join the junction's ways, R out along it); cut at
+    // its bay where the trip ends or starts there.
+    let drive = parkDrive(park, R * M).map((q) => parkPoint(park, q.s, q.o));
+    if (bay && (!inn || !out)) {
+      const target = parkPoint(park, bay.s, bay.o);
+      let at = 0, best = Infinity;
+      drive.forEach((q, i) => { const d = Math.hypot(q.x - target.x, q.y - target.y); if (d < best) { best = d; at = i; } });
+      drive = out ? drive.slice(at) : drive.slice(0, at + 1);
+    }
     const points: Point[] = [];
-    for (let d = inn.length - z1; d < inn.length - R; d += 0.25) points.push(keptRight(inn.line, d));
-    points.push(...junctionWay(park.node, inn, lane, ringed));
-    const drive = parkDrive(park, R * M);
-    // The lane's ends join the junction's ways: the drive starts and ends R out along it.
-    points.push(...drive.map((q) => parkPoint(park, q.s, q.o)));
-    points.push(...junctionWay(park.node, back, out, ringed));
-    for (let d = R + 0.25; d <= z2; d += 0.25) points.push(keptRight(out.line, d));
+    if (inn) {
+      for (let d = inn.length - z1; d < inn.length - R; d += 0.25) points.push(keptRight(inn.line, d));
+      points.push(...junctionWay(park.node, inn, lane, ringed));
+    }
+    points.push(...drive);
+    if (out) {
+      points.push(...junctionWay(park.node, back, out, ringed));
+      for (let d = R + 0.25; d <= z2; d += 0.25) points.push(keptRight(out.line, d));
+    }
     const along = [0];
     for (let i = 1; i < points.length; i += 1) along.push(along[i - 1]! + Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y));
     // Its bay: the point of the drive nearest it.
-    const bay = park.bays.get(routeId);
     let at: number | null = null;
     if (bay) {
       const target = parkPoint(park, bay.s, bay.o);
       let best = Infinity;
       points.forEach((q, i) => { const d = Math.hypot(q.x - target.x, q.y - target.y); if (d < best) { best = d; at = along[i]!; } });
     }
-    return { points, along, total: along[along.length - 1]!, bay: at };
+    return { points, along, total: along[along.length - 1]!, bay: at, ends: !out, starts: !inn };
   }
   /** Of the time a bus spends going through a park, the share it stands at its bay. */
   const PARK_DWELL = 0.12;
-  /** A bus at its route's end, drawn going through the town's bus park; null where it's elsewhere. */
+  /**
+   * A bus at its route's end, drawn going through the town's bus park -- or a lorry at a site,
+   * through its lorry park (the airport's bus park): your freight's to its route's bay, a haulier's
+   * to a bay by its number, its trip ending there (it stands at the bay till it's gone) or starting
+   * (it pulls out of one). Null where it's elsewhere.
+   */
   function onPark(w: GameWorld, v: Vehicle, routeId: string | undefined): { x: number; y: number; angle: number } | null {
     const n = v.path.length;
-    if (!parks.size || !routeId || n < 2 || v.pathIndex >= n || v.lifecycle !== "cyclic") return null;
-    const route = w.routes.find((r) => r.id === routeId);
-    if (!route) return null;
+    if (!parks.size || n < 2 || v.pathIndex >= n) return null;
+    const cyclic = v.lifecycle === "cyclic";
+    const lorry = v.carries === "goods" || (!cyclic && v.id.startsWith("truck-"));
+    const route = routeId ? w.routes.find((r) => r.id === routeId) ?? w.lorryRoutes.find((r) => r.id === routeId) : undefined;
+    if (!lorry && (!route || !cyclic)) return null;
+    // Where it may go through a park: a bus at its route's ends, a lorry at any site's.
+    const here = (id: string) => {
+      const park = parks.get(id);
+      if (!park) return undefined;
+      if (lorry) return w.towns.get(id)?.industry ? park : undefined;
+      return route && (id === route.a || id === route.b) ? park : undefined;
+    };
     const i = v.pathIndex;
     const from = v.path[(i - 1 + n) % n]!, to = v.path[i]!;
     const edge = roadEdge(w, from, to, v);
     const along = edge.length * v.edgeProgress;
     const zone = (length: number) => Math.min(PARK_ZONE / M, length / 2 - 0.05);
-    let park: BusPark | undefined, inn: { line: Point[]; length: number }, out: { line: Point[]; length: number }, s: number, innKey: string, outKey: string;
-    if ((to === route.a || to === route.b) && (park = parks.get(to)) && edge.length - along < zone(edge.length)) {
-      const next = v.path[(i + 1) % n]!;
-      inn = edge; out = roadEdge(w, to, next, v);
-      innKey = `${from}>${to}`; outKey = `${to}>${next}`;
+    let park: BusPark | undefined, inn: { line: Point[]; length: number } | null, out: { line: Point[]; length: number } | null, s: number, innKey: string, outKey: string;
+    if ((park = here(to)) && edge.length - along < zone(edge.length)) {
+      const next = i + 1 < n ? v.path[i + 1] : cyclic ? v.path[(i + 1) % n] : undefined;
+      inn = edge; out = next !== undefined ? roadEdge(w, to, next, v) : null;
+      innKey = `${from}>${to}`; outKey = next !== undefined ? `${to}>${next}` : "";
       s = zone(edge.length) - (edge.length - along);
-    } else if ((from === route.a || from === route.b) && (park = parks.get(from)) && along < zone(edge.length)) {
-      const prev = v.path[(i - 2 + n) % n]!;
-      inn = roadEdge(w, prev, from, v); out = edge;
-      innKey = `${prev}>${from}`; outKey = `${from}>${to}`;
-      s = zone(inn.length) + along;
+    } else if ((park = here(from)) && along < zone(edge.length)) {
+      const prev = i - 2 >= 0 ? v.path[i - 2] : cyclic ? v.path[(i - 2 + n) % n] : undefined;
+      inn = prev !== undefined ? roadEdge(w, prev, from, v) : null; out = edge;
+      innKey = prev !== undefined ? `${prev}>${from}` : ""; outKey = `${from}>${to}`;
+      s = (inn ? zone(inn.length) : 0) + along;
     } else return null;
-    const z1 = zone(inn.length), z2 = zone(out.length);
-    const key = `${park.id}|${innKey}|${outKey}|${routeId}`;
+    const z1 = inn ? zone(inn.length) : 0, z2 = out ? zone(out.length) : 0;
+    // Its bay: its route's, or one of the park's by its number.
+    let bayKey = routeId && park.bays.has(routeId) ? routeId : "";
+    let bay = bayKey ? park.bays.get(bayKey) : undefined;
+    if (!bay && park.spots.length) {
+      let h = 0;
+      for (let c = 0; c < v.id.length; c += 1) h = (h * 31 + v.id.charCodeAt(c)) | 0;
+      const k = Math.abs(h) % park.spots.length;
+      bay = park.spots[k];
+      bayKey = `#${k}`;
+    }
+    const key = `${park.id}|${innKey}|${outKey}|${bayKey}`;
     let passage = passages.get(key);
-    if (passage === undefined) passages.set(key, (passage = passageThrough(park, routeId, inn, out, z1, z2)));
+    if (passage === undefined) passages.set(key, (passage = passageThrough(park, bay, inn, out, z1, z2)));
     if (!passage) return null;
-    // Through it at an even pace, but for a moment at its bay.
+    // Through it at an even pace, but for a moment at its bay (on arriving, or before setting off).
     const t = Math.max(0, Math.min(1, s / (z1 + z2)));
-    const dwell = passage.bay === null ? 0 : PARK_DWELL, moving = 1 - dwell;
-    const reach = passage.bay ?? 0, reachAt = (reach / passage.total) * moving;
-    const q = t < reachAt ? (t / moving) * passage.total : t < reachAt + dwell ? reach : ((t - dwell) / moving) * passage.total;
+    const dwell = passage.bay === null ? 0 : PARK_DWELL, moving = 1 - dwell, total = passage.total;
+    let q: number;
+    if (passage.ends) q = t < moving ? (t / moving) * total : total;
+    else if (passage.starts) q = t < dwell ? 0 : ((t - dwell) / moving) * total;
+    else {
+      const reach = passage.bay ?? 0, reachAt = (reach / total) * moving;
+      q = t < reachAt ? (t / moving) * total : t < reachAt + dwell ? reach : ((t - dwell) / moving) * total;
+    }
     let k = 1;
     while (k < passage.along.length - 1 && passage.along[k]! < q) k += 1;
     const a = passage.points[k - 1]!, b = passage.points[k]!;
@@ -3241,7 +3330,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const at = t.industry ? siteAt.get(t.id) : undefined;
       if (at) {
         // As far as its yard reaches (the airport's is a field, 236 m long).
-        const yard = SITE_YARD[t.industry ?? ""], reach = Math.max(4.5, yard ? Math.hypot(yard.w, yard.d) / 2 / M + 1 : 0);
+        const yard = SITE_YARD[t.industry ?? ""], reach = Math.max(4.5, yard ? (Math.hypot(yard.w, yard.d) * siteScale(t.industry ?? "")) / 2 / M + 1 : 0);
         for (let y = Math.max(0, Math.floor(at.y - reach)); y <= Math.min(H - 1, Math.ceil(at.y + reach)); y += 1)
           for (let x = Math.max(0, Math.floor(at.x - reach)); x <= Math.min(W - 1, Math.ceil(at.x + reach)); x += 1)
             if ((occupied[y * W + x] === FREE || occupied[y * W + x] === TOWN) && yardHas(t, x, y, 4)) occupied[y * W + x] = QUAY;
@@ -4408,6 +4497,18 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   scene.add(arcGroup);
   let arcsFor: readonly OverlayMark[] | null = null;
   const cssColour = document.createElement("canvas").getContext("2d")!;
+  /**
+   * The arcs read from afar; close in they fade away (2026-11-04: zoomed to a town, its arcs to
+   * every neighbour, high above it, crossed the view as broad dark bands over everything).
+   */
+  let arcFade = 1;
+  function fadeArcs(away: number): void {
+    const fade = Math.max(0, Math.min(1, (away - 600) / 900));
+    if (Math.abs(fade - arcFade) < 0.01) return;
+    arcFade = fade;
+    arcGroup.visible = fade > 0.01;
+    for (const child of arcGroup.children as THREE.Mesh[]) (child.material as THREE.MeshBasicMaterial).opacity = (child.userData.opacity as number) * fade;
+  }
   function arcs(next: readonly OverlayMark[]): void {
     if (next === arcsFor) return;
     arcsFor = next;
@@ -4425,6 +4526,8 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       cssColour.fillStyle = m.color;
       const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(cssColour.fillStyle as string), transparent: true, opacity: Math.max(0.4, m.alpha), depthWrite: false, fog: false });
       const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(12, Math.round(span / 25)), 1.5 + m.width * 1.4, 8, false), material);
+      tube.userData.opacity = material.opacity;
+      material.opacity *= arcFade;
       tube.renderOrder = 3;
       arcGroup.add(tube);
     }
@@ -4436,6 +4539,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
     pickAt,
     rain(seconds, away) {
       animateSiteLife(seconds);
+      fadeArcs(away);
       rainMaterial.uniforms.uTime!.value = seconds;
       // Close in, under the cloud, it thins away -- else it veils the view -- and the rain shows.
       stormMaterial.opacity = Math.max(0.08, Math.min(0.72, (away - 250) / 600));
@@ -4514,9 +4618,10 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
         if (!geometry.boundingSphere) geometry.computeBoundingSphere();
         const sphere = geometry.boundingSphere!;
         // The town's built-up heart, not its whole spread of fields and houses.
-        const radius = Math.max(20, Math.min(160, sphere.radius * 0.55));
-        const x = entry.mesh.position.x + sphere.center.x;
-        const z = entry.mesh.position.z + sphere.center.z;
+        const scaled = entry.mesh.scale.x;
+        const radius = Math.max(20, Math.min(160, sphere.radius * scaled * 0.55));
+        const x = entry.mesh.position.x + sphere.center.x * scaled;
+        const z = entry.mesh.position.z + sphere.center.z * scaled;
         ring.position.set(x, elevationAt(x / M, z / M) * HEIGHT + 1.5, z);
         ring.scale.setScalar(radius);
       }

@@ -28,8 +28,10 @@ export const BUS_PARK = { drive: 8, island: 4.2, pave: 13, bay: 22, lane: 8, kee
 const BAYS = 4;
 
 export interface BusPark {
-  /** The town. */
+  /** The town (or the site: a lorry park before its gate, the airport's bus park before its terminal). */
   id: string;
+  /** A bus park (a town's, the airport's) or a lorry park (a site's): what it's drawn as. */
+  kind: "bus" | "lorry";
   /** What it was laid from: a change lays it again (and the town round it builds anew). */
   key: string;
   node: Point;
@@ -43,6 +45,8 @@ export interface BusPark {
   centre: Point;
   /** Each route ending here, its bay: where along the island (s), which side (o: + far, - near), metres. */
   bays: Map<string, { s: number; o: number }>;
+  /** Every bay it has, in that frame: a haulier's lorry takes one by its number. */
+  spots: Array<{ s: number; o: number }>;
 }
 
 /** A park's own frame (metres) to the map (cells). */
@@ -77,19 +81,33 @@ export function layBusParks(
   blocked: (x: number, y: number) => boolean,
   ringed: (id: string) => boolean,
   ringOuter: number,
-  /** Parks whose way out is set already (the airport's, by its yard): laid that way, and only once it is. */
+  /**
+   * The sites' parks, whose way out their yard has set (view3d.ts siteKit: the gate toward the
+   * point, the park between): each laid that way, once it is, whether or not a route of yours ends
+   * there -- the hauliers come anyway. The airport's is a bus park; the rest, lorry parks.
+   */
   fixed: Map<string, number> = new Map(),
 ): Map<string, BusPark> {
   const out = new Map<string, BusPark>();
   const laid: BusPark[] = [];
   const { positions } = world.simulation.routing;
   const ends = parkEnds(world);
-  for (const [id, routes] of [...ends].sort(([a], [b]) => (a < b ? -1 : 1))) {
+  // Your road freight's lorries end at sites too: their bays as a bus route's.
+  for (const route of world.lorryRoutes) {
+    const v = route.vehicleIds[0];
+    if (!v || world.railVehicles.has(v)) continue;
+    for (const id of [route.a, route.b]) if (fixed.has(id)) (ends.get(id) ?? ends.set(id, []).get(id)!).push(route.id);
+  }
+  for (const id of fixed.keys()) if (!ends.has(id)) ends.set(id, []);
+  // The sites' first (their ground is set), then the towns'.
+  const order = [...ends].sort(([a], [b]) => (fixed.has(a) !== fixed.has(b) ? (fixed.has(a) ? -1 : 1) : a < b ? -1 : 1));
+  for (const [id, routes] of order) {
     const town = world.towns.get(id)!;
     if (town.industry && !fixed.has(id)) continue;
+    const kind: BusPark["kind"] = town.industry && town.industry !== "airport" ? "lorry" : "bus";
     const node = positions.get(id) ?? { x: town.x, y: town.y };
     routes.sort();
-    const straight = routes.length > 1 ? BUS_PARK.bay * 2 : BUS_PARK.bay;
+    const straight = routes.length > 1 || town.industry ? BUS_PARK.bay * 2 : BUS_PARK.bay;
     const gap = ringed(id) ? ringOuter + 10 : 12;
     // The roads into the town, each by the way it leaves the point: the park's lane between them.
     const arms: number[] = [];
@@ -105,7 +123,7 @@ export function layBusParks(
     let best: { axis: number; score: number } | null = fixed.has(id) ? { axis: fixed.get(id)!, score: 0 } : null;
     for (let k = 0; k < (fixed.has(id) ? 0 : 24); k += 1) {
       const axis = (k / 24) * Math.PI * 2;
-      const trial: BusPark = { id, key: "", node, axis, gap, straight, centre: { x: 0, y: 0 }, bays: new Map() };
+      const trial: BusPark = { id, kind, key: "", node, axis, gap, straight, centre: { x: 0, y: 0 }, bays: new Map(), spots: [] };
       trial.centre = { x: node.x + (Math.cos(axis) * (gap + BUS_PARK.pave)) / M, y: node.y + (Math.sin(axis) * (gap + BUS_PARK.pave)) / M };
       let score = 0;
       // Its paving, sampled every 4 m.
@@ -129,21 +147,31 @@ export function layBusParks(
       if (!best || score < best.score - 1e-9) best = { axis, score };
     }
     if (!best) continue;
-    const park: BusPark = { id, key: "", node, axis: best.axis, gap, straight, centre: { x: 0, y: 0 }, bays: new Map() };
+    const park: BusPark = { id, kind, key: "", node, axis: best.axis, gap, straight, centre: { x: 0, y: 0 }, bays: new Map(), spots: [] };
     park.centre = { x: node.x + (Math.cos(best.axis) * (gap + BUS_PARK.pave)) / M, y: node.y + (Math.sin(best.axis) * (gap + BUS_PARK.pave)) / M };
     // Bays: the far side first, then the near (either side of the lane's mouth).
     const spots = straight > BUS_PARK.bay
       ? [{ s: -BUS_PARK.bay / 2, o: 1 }, { s: BUS_PARK.bay / 2, o: 1 }, { s: -BUS_PARK.bay / 2 - 2, o: -1 }, { s: BUS_PARK.bay / 2 + 2, o: -1 }]
       : [{ s: 0, o: 1 }];
-    routes.forEach((r, i) => {
-      const spot = spots[i % Math.min(BAYS, spots.length)]!;
-      park.bays.set(r, { s: spot.s, o: spot.o * BUS_PARK.drive });
-    });
-    park.key = `${best.axis.toFixed(3)}|${gap}|${routes.join(",")}`;
+    park.spots = spots.map((spot) => ({ s: spot.s, o: spot.o * BUS_PARK.drive }));
+    routes.forEach((r, i) => park.bays.set(r, park.spots[i % Math.min(BAYS, park.spots.length)]!));
+    park.key = `${kind}|${best.axis.toFixed(3)}|${gap}|${routes.join(",")}`;
     out.set(id, park);
     laid.push(park);
   }
   return out;
+}
+
+/**
+ * The ground a site's park will stand on, its yard set (view3d.ts siteKit): out from its point the
+ * way its yard lies, a park of four bays -- what the next site placed keeps off.
+ */
+export function siteParkGround(id: string, node: Point, axis: number): BusPark {
+  const gap = 12, straight = BUS_PARK.bay * 2;
+  return {
+    id, kind: "lorry", key: "", node, axis, gap, straight, bays: new Map(), spots: [],
+    centre: { x: node.x + (Math.cos(axis) * (gap + BUS_PARK.pave)) / M, y: node.y + (Math.sin(axis) * (gap + BUS_PARK.pave)) / M },
+  };
 }
 
 /** Whether a point (cells) is on a park's ground or its lane, `pad` metres round. */

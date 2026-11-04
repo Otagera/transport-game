@@ -310,13 +310,44 @@ export function airliner(kit: Kit, x: number, z: number, ry: number): void {
   for (const [wx, wz] of [[0, 13], [-2.6, 0], [2.6, 0]] as const) k.box(0.7, 1.6, 1, paint("--paint-dark-2"), wx, wz);
   kit.place(k.merged(), x, 0, z, ry);
 }
+/**
+ * Each kind's plant drawn this much larger than its tables' metres (SITE_YARD, SITE_BAY,
+ * SITE_LIFE, SITE_STOCK, all scaled with it), to stand with the lorries that serve it (your look,
+ * 2026-11-04: a refinery's tank was narrower than the tanker it filled, its yard a quarter of the
+ * airport's) -- the plant only: its fence, the lorries at its bay, its digger and its finished goods
+ * stay their size (view3d.ts siteKit, addSiteLife). Kinds without one stay as drawn: the airport is
+ * to scale already, a border post and a station are made for people.
+ */
+export const SITE_SCALE: Record<string, number> = {
+  refinery: 2, newrefinery: 2, powerstation: 2, steelworks: 2,
+  works: 1.8, terminal: 1.8, depot: 1.8, quarry: 1.8, ironmine: 1.8, coalmine: 1.8,
+  oilfield: 1.6, assembly: 1.6, steelport: 1.6,
+  mill: 1.5, flourmill: 1.5, silo: 1.5, textile: 1.5,
+};
+export const siteScale = (kind: string): number => SITE_SCALE[kind] ?? 1;
+/** Whether a kind has a lorry park before its gate (busparks3d.ts): every site hauliers load or unload at. */
+export const hasLorryPark = (kind: string): boolean => kind in SITE_SCALE;
+/** A yard's fence at its own size, round a yard of any size (view3d.ts draws it apart from a scaled plant). */
+export function yardFence(kit: Kit, w: number, d: number, gate: number): void {
+  yard(kit, w, d, gate);
+}
+let fenced = true;
 const yardOf = (kind: string, kit: Kit) => {
+  if (!fenced) return;
   const y = SITE_YARD[kind]!;
   yard(kit, y.w, y.d, y.gate);
 };
 
-/** An industrial site, drawn as the thing it is. */
-export function site(kit: Kit, rand: Rand, kind: string): void {
+/** An industrial site, drawn as the thing it is; `fence` false, without its fence (drawn apart: yardFence). */
+export function site(kit: Kit, rand: Rand, kind: string, fence = true): void {
+  fenced = fence;
+  try {
+    siteParts(kit, rand, kind);
+  } finally {
+    fenced = true;
+  }
+}
+function siteParts(kit: Kit, rand: Rand, kind: string): void {
   if (kind === "refinery" || kind === "newrefinery") {
     yardOf(kind, kit);
     // The tank farm in its bund.
@@ -1172,6 +1203,42 @@ export function busPark(kit: Kit, rand: Rand, at: { straight: number; gap: numbe
   kit.box(5.6, 0.3, 4.2, paint("--paint-red-6"), -10, pave - 3.5, top + 3);
   for (const x of [-5, 5]) kit.box(0.35, 6, 0.35, paint("--paint-grey-20"), x, pave + 0.6, top);
   kit.box(10.6, 1.5, 0.3, at.you, 0, pave + 0.6, top + 5.2);
+  void rand;
+}
+/**
+ * A site's lorry park before its gate (busparks3d.ts, as a bus park in its frame: x along its
+ * island, +z toward the site's point): laterite paving worn by the wheels, its lane, the island with
+ * the weighbridge office and its plate, four bays marked at the kerb, the barrier at its mouth.
+ */
+export function lorryPark(kit: Kit, rand: Rand, at: { straight: number; gap: number; ringed: boolean; depth: number; bays: Array<{ s: number; o: number }> }): void {
+  const { straight, gap } = at;
+  const pave = 13, island = 4.2, top = 0.45, dirt = paint("--paint-earth-17"), line = paint("--paint-light-4");
+  kit.box(straight, top + at.depth, pave * 2, dirt, 0, 0, -at.depth);
+  for (const end of [-1, 1]) kit.cylinder(pave, top + at.depth, dirt, end * straight / 2, 0, -at.depth, 28);
+  // Ruts where the wheels go round.
+  for (const side of [-1, 1]) kit.box(straight, 0.04, 3.2, paint("--paint-earth-24"), 0, side * 8, top);
+  const laneEnd = pave + gap - (at.ringed ? 13 : 3);
+  kit.box(8, top + at.depth, laneEnd - pave + 1, paint("--paint-grey-21"), 0, (pave - 1 + laneEnd) / 2, -at.depth);
+  // The island: kerbed, the weighbridge office on it, its lamp; the weighbridge's plate on the near side.
+  kit.box(straight, 0.4, island * 2, paint("--paint-grey-18"), 0, 0, top);
+  for (const end of [-1, 1]) kit.cylinder(island, 0.4, paint("--paint-grey-18"), end * straight / 2, 0, top, 20);
+  kit.box(7, 3.2, 4.6, paint("--paint-earth-47"), -straight / 2 + 6, 0, top + 0.4);
+  kit.box(7.6, 0.3, 5.2, paint("--paint-red-6"), -straight / 2 + 6, 0, top + 3.6);
+  kit.box(0.2, 6, 0.2, paint("--paint-grey-20"), straight / 2 - 2, 0, top + 0.4);
+  kit.box(1.2, 0.3, 0.5, paint("--paint-light-2"), straight / 2 - 2, 0.3, top + 6.2);
+  kit.box(18, 0.12, 3.4, paint("--paint-grey-13"), -straight / 4, 8, top);
+  for (const x of [-straight / 4 - 9, -straight / 4 + 9]) kit.box(0.3, 0.13, 3.4, paint("--paint-dark-2"), x, 8, top);
+  // Each bay: its outline at the kerb.
+  for (const bay of at.bays) {
+    const z = -bay.o, side = Math.sign(z) || 1;
+    const edge = side * (island + 0.3), out = side * (island + 6.2);
+    for (const x of [bay.s - 10, bay.s + 10]) kit.box(0.25, 0.04, 5.9, line, x, (edge + out) / 2, top);
+  }
+  // The barrier at its mouth, its pole up; a sign.
+  kit.box(1, 1.2, 1, paint("--paint-grey-14"), -5, pave + 0.4, top);
+  kit.add(new THREE.BoxGeometry(7, 0.25, 0.25).rotateZ(1.2), paint("--paint-red-3"), { x: -3.6, y: top + 4, z: pave + 0.4 });
+  for (const x of [5.5, 9.5]) kit.box(0.25, 4.4, 0.25, paint("--paint-grey-20"), x, pave + 0.6, top);
+  kit.box(5, 1.6, 0.2, paint("--paint-blue-9"), 7.5, pave + 0.6, top + 3.2);
   void rand;
 }
 /** A bus stop: a shelter (a roof on two posts, a back, a bench) and its sign in `sign`; its front toward +z. */
