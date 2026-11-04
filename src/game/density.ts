@@ -51,12 +51,20 @@ export interface Box { x0: number; y0: number; x1: number; y1: number }
 
 /** Priority, highest first (1): an action in progress, then what's happening, then what you asked for, then standing state. */
 export const PRIORITY = { ghost: 1, event: 2, lit: 3, taken: 4, townName: 5, siteName: 6, roadName: 7, ruin: 8, siteIcon: 9 } as const;
+/** What labels keep off and never give way: a town's mark, a site's icon (placed first, never painted). */
+export const OBSTACLE = 0;
 
 export interface Claim {
   id: string;
   kind: string;
   priority: number;
   box: Box;
+  /**
+   * Where else it could go, in the order it would rather (a town's name below its mark, then above,
+   * right, left; a tag along its road either side): the first that's clear and least over the
+   * lines wins (`resolve`'s cost). Absent, `box` alone.
+   */
+  boxes?: Box[];
   /** Where it's about, for collapsing a crowd of its kind (a screen point). */
   at: { x: number; y: number };
 }
@@ -88,7 +96,12 @@ export class Placer {
     this.claims.push(c);
   }
 
-  resolve(rules: CollapseRule[] = []): { placed: Set<string>; chips: Chip[] } {
+  /**
+   * `cost`: how much of the map's lines a box would cover (render.ts: its lines on a grid); of a
+   * claim's places that are clear, the one that costs least, a place further down its list costing
+   * a little more. Returns which place each claim got (`slot`, its index in its boxes).
+   */
+  resolve(rules: CollapseRule[] = [], cost?: (box: Box) => number): { placed: Set<string>; slot: Map<string, number>; chips: Chip[] } {
     let claims = this.claims;
     const chips: Chip[] = [];
     for (const rule of rules) {
@@ -113,13 +126,28 @@ export class Placer {
     }
     const placed: Box[] = [];
     const won = new Set<string>();
+    const slot = new Map<string, number>();
     // Highest priority first; ties in the order claimed (largest town first, as the callers claim them).
     const order = claims.map((c, i) => ({ c, i })).sort((p, q) => p.c.priority - q.c.priority || p.i - q.i);
     for (const { c } of order) {
-      if (placed.some((b) => overlap(b, c.box))) continue;
-      placed.push(c.box);
+      // What labels keep off stands whatever else is there.
+      if (c.priority === OBSTACLE) {
+        placed.push(c.box);
+        won.add(c.id);
+        continue;
+      }
+      const options = c.boxes ?? [c.box];
+      let best = -1, least = Infinity;
+      options.forEach((b, k) => {
+        if (placed.some((p) => overlap(p, b))) return;
+        const price = (cost ? cost(b) : 0) + k * 4;
+        if (price < least) { least = price; best = k; }
+      });
+      if (best < 0) continue;
+      placed.push(options[best]!);
       won.add(c.id);
+      slot.set(c.id, best);
     }
-    return { placed: won, chips: chips.filter((chip) => won.has(`chip:${chip.kind}:${chip.ids[0]}`)) };
+    return { placed: won, slot, chips: chips.filter((chip) => won.has(`chip:${chip.kind}:${chip.ids[0]}`)) };
   }
 }

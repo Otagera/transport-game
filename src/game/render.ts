@@ -21,7 +21,8 @@ import { GLYPHS, drawBadge, drawSite as drawSiteIcon, drawTown as drawTownIcon, 
 import { steadySite } from "./steady";
 import { congestionColor, junctionPlates, offsetPolyline, overloaded } from "./corridor";
 import { segmentRung } from "@engine/game/roads";
-import { PRIORITY, Placer, drawsAt, tierOf as zoomTierOf, type Box, type Chip, type Tier as ZoomTier } from "./density";
+import { OBSTACLE, PRIORITY, Placer, drawsAt, tierOf as zoomTierOf, type Box, type Chip, type Tier as ZoomTier } from "./density";
+import { bundleLines, type BundleItem } from "./bundle";
 
 // The game's map, ported from the information lab (since discarded; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -196,6 +197,8 @@ let focus: Focus | null = null;
 let zoomTier: ZoomTier = "far";
 /** This frame's placed labels (density.ts Placer), by id: `town:`, `site:`, `icon:`, `ruin:`, and the passes' own. */
 let placed = new Set<string>();
+/** Which of its places each label got (claimLabels: a town's name below its mark, or above, right, left; a tag along its road). */
+let slots = new Map<string, number>();
 /** This frame's chips ("3 taken"), for a click on one (main.ts chipAt). */
 let chips: Chip[] = [];
 /** The chip under a screen point, if any. */
@@ -299,6 +302,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   const overlay = state.overlay ?? "none";
   const network = state.network ?? "both";
 
+  bundleNetwork(world, view, network);
   drawGround(ctx, world, view);
   if (drawsAt(zoomTier, "hamlet")) drawHamlets(ctx, world, view);
   drawRoads(ctx, world, view, overlay !== "none", network);
@@ -320,7 +324,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   for (const ruin of world.ruins.values()) if (placed.has(`ruin:${ruin.id}`)) drawRuin(ctx, view, ruin);
   if (drawsAt(zoomTier, "wardens") && network !== "rail") drawWardens(ctx, world, view);
   // The rest, the least important first, so the most important paints on top.
-  for (const p of paints.filter((x) => placed.has(x.id)).sort((a, b) => b.priority - a.priority)) p.paint();
+  for (const p of paints.filter((x) => placed.has(x.id)).sort((a, b) => b.priority - a.priority)) p.paint(slots.get(p.id) ?? 0);
   for (const chip of chips) drawChip(ctx, chip);
   // Last, so nothing on the map draws through the price.
   if (state.ghost) drawLabel(ctx, state.ghost.to, state.ghost.label, state.ghost.ok, state.ghost.forecast);
@@ -330,6 +334,32 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
 
 // --- Geometry --------------------------------------------------------------------------
 
+// Shared corridors side by side (bundle.ts): each road's, track's and pipe's line as it's drawn --
+// moved aside where it runs alongside another -- built once a zoom (and again when the network
+// changes), and asked for by everything drawn on a road: its body, its vehicles, its tags.
+let bundled = new Map<string, Point[]>();
+let bundledFor = "";
+function bundleNetwork(world: GameWorld, view: View, network: Network): void {
+  const segments = world.simulation.map.segments;
+  const shows = (s: Segment) => s.retiredAt === undefined && (network === "both" || (s.type === "rail") === (network === "rail"));
+  const pipes = (world.pipelines ?? []).map((p) => `${p.id}:${p.line.length}`).join(",");
+  // Worked out again only as the zoom passes a step of 15% (a wheel's zoom would ask every frame).
+  const scale = Math.pow(1.15, Math.round(Math.log(view.scale) / Math.log(1.15)));
+  const key = `${scale.toFixed(3)}|${network}|${segments.length}|${segments[segments.length - 1]?.id ?? ""}|${segments.filter((s) => s.retiredAt !== undefined).length}|${pipes}`;
+  if (key === bundledFor) return;
+  bundledFor = key;
+  const items: BundleItem[] = segments.filter(shows).map((s) => {
+    const rung = segmentRung(s);
+    return { id: s.id, line: segmentPolyline(world.simulation.map, s), width: (RUNG_WIDTH[rung] + CASING) * markScale, rank: s.type === "rail" ? 1 : 0 };
+  });
+  for (const p of world.pipelines ?? []) items.push({ id: `pipe:${p.id}`, line: pipeLine(p.line), width: 3 * markScale, rank: 2 });
+  bundled = bundleLines(items, scale, 12 * markScale);
+}
+/** A segment's line as it's drawn: alongside others, moved aside (bundleNetwork). */
+function drawnLine(world: GameWorld, segment: Segment): Point[] {
+  return bundled.get(segment.id) ?? segmentPolyline(world.simulation.map, segment);
+}
+
 /** The road (or, on `routing` = the rail network, the track) between two adjacent nodes, oriented from `from` to `to`. */
 function edgeLine(world: GameWorld, from: string, to: string, routing: RoutingContext = world.simulation.routing): Point[] {
   const edge = routing.graph.get(from)?.find((candidate) => candidate.to === to);
@@ -338,7 +368,7 @@ function edgeLine(world: GameWorld, from: string, to: string, routing: RoutingCo
     const { positions } = world.simulation.routing;
     return [positions.get(from)!, positions.get(to)!];
   }
-  const line = segmentPolyline(world.simulation.map, segment);
+  const line = drawnLine(world, segment);
   return segment.fromNodeId === from ? line : [...line].reverse();
 }
 
@@ -651,7 +681,7 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
     const load = rail ? 0 : ((world.roadFlowEMA.get(s.id) ?? 0) + privateLoad(world, s.id)) / Math.max(1e-6, roadCapacity(world, s.id));
     const speed = world.segmentSpeed.get(s.id) ?? 1;
     const alpha = alphaFor(s.id) * (rail && world.railOutOfService.has(s.id) ? 0.45 : 1);
-    return { s, rung, rail, load, speed, alpha, line: segmentPolyline(map, s), width: RUNG_WIDTH[rung] * markScale, color: rail ? COLORS.rail : congestionColor(load, speed, colors), retired: s.retiredAt !== undefined };
+    return { s, rung, rail, load, speed, alpha, line: s.retiredAt === undefined ? drawnLine(world, s) : segmentPolyline(map, s), width: RUNG_WIDTH[rung] * markScale, color: rail ? COLORS.rail : congestionColor(load, speed, colors), retired: s.retiredAt !== undefined };
   }).sort((p, q) => RUNG_ORDER[p.rung] - RUNG_ORDER[q.rung]);
   const live = items.filter((x) => !x.retired);
 
@@ -748,7 +778,7 @@ function drawPipes(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   for (const p of world.pipelines) {
-    const pts = pipeLine(p.line).map((q) => toScreen(view, q.x, q.y));
+    const pts = (bundled.get(`pipe:${p.id}`) ?? pipeLine(p.line)).map((q) => toScreen(view, q.x, q.y));
     const stroke = () => {
       ctx.beginPath();
       pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
@@ -1006,23 +1036,26 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   if (state.problems?.has(town.id)) drawWaitingMark(ctx, p.x + r * 0.8, p.y - r * 0.8);
   if (state.pointed?.has(town.id)) drawPointedRing(ctx, p.x, p.y, r);
   // Name and size, where the placer gave it room (claimLabels).
-  if (placed.has(`town:${town.id}`)) {
-    ctx.textAlign = "center";
+  const slot = slots.get(`town:${town.id}`);
+  if (placed.has(`town:${town.id}`) && slot !== undefined) {
+    // Below its mark, or where the placer found room: above, right, left (claimLabels).
+    const at = nameAt(p, r, slot, 29, 5);
+    ctx.textAlign = at.align;
     ctx.textBaseline = "top";
     // A white halo under each label, so a road under it doesn't make it hard to read.
     ctx.lineJoin = "round";
     ctx.strokeStyle = COLORS.surface;
     ctx.lineWidth = 3.5;
     ctx.font = tier === "city" || tier === "regional" ? `700 ${FS.body} system-ui, sans-serif` : `600 ${FS.dense} system-ui, sans-serif`;
-    ctx.strokeText(town.name, p.x, p.y + r + 7);
+    ctx.strokeText(town.name, at.x, at.y + 2);
     ctx.fillStyle = COLORS.ink;
-    ctx.fillText(town.name, p.x, p.y + r + 7);
+    ctx.fillText(town.name, at.x, at.y + 2);
     const trend = growthTrend(world, town.id);
     const arrow = trend === "growing" ? "▲" : trend === "shrinking" ? "▼" : "";
     ctx.font = `${FS.caption} system-ui, sans-serif`;
-    ctx.strokeText(`${Math.round(town.population)}k ${arrow}`, p.x, p.y + r + 21);
+    ctx.strokeText(`${Math.round(town.population)}k ${arrow}`, at.x, at.y + 16);
     ctx.fillStyle = trend === "growing" ? COLORS.grow : trend === "shrinking" ? COLORS.jammed : COLORS.muted;
-    ctx.fillText(`${Math.round(town.population)}k ${arrow}`, p.x, p.y + r + 21);
+    ctx.fillText(`${Math.round(town.population)}k ${arrow}`, at.x, at.y + 16);
   }
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
@@ -1084,16 +1117,18 @@ function drawSite(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, s
   if (state.problems?.has(site.id)) drawWaitingMark(ctx, p.x + r, p.y - r);
   if (state.pointed?.has(site.id)) drawPointedRing(ctx, p.x, p.y, r);
   // Its name, where the placer gave it room (claimLabels).
-  if (placed.has(`site:${site.id}`)) {
+  const slot = slots.get(`site:${site.id}`);
+  if (placed.has(`site:${site.id}`) && slot !== undefined) {
+    const at = nameAt(p, r, slot, 14, 4);
     ctx.font = `600 ${FS.caption} system-ui, sans-serif`;
-    ctx.textAlign = "center";
+    ctx.textAlign = at.align;
     ctx.textBaseline = "top";
     ctx.lineJoin = "round";
     ctx.strokeStyle = COLORS.surface;
     ctx.lineWidth = 3.5;
-    ctx.strokeText(site.name, p.x, p.y + r + 5);
+    ctx.strokeText(site.name, at.x, at.y + 1);
     ctx.fillStyle = COLORS.ink;
-    ctx.fillText(site.name, p.x, p.y + r + 5);
+    ctx.fillText(site.name, at.x, at.y + 1);
     ctx.textBaseline = "alphabetic";
     ctx.textAlign = "left";
   }
@@ -1107,7 +1142,7 @@ const STRIKE_MARK_DAYS = 5;
 function drawWardens(ctx: CanvasRenderingContext2D, world: GameWorld, view: View): void {
   for (const lane of world.lanes) {
     if (lane.enforcement !== "strict" || lane.strikeUntil > world.economy.elapsedSeconds) continue;
-    const line = (roadChain(world, lane.a, lane.b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+    const line = (roadChain(world, lane.a, lane.b) ?? []).flatMap((piece) => drawnLine(world, piece));
     if (line.length === 0) continue;
     const [, rest] = splitPolyline(line, polylineLength(line) / 2);
     const mid = toScreen(view, rest[0]!.x, rest[0]!.y);
@@ -1158,7 +1193,7 @@ function tagPill(ctx: CanvasRenderingContext2D, x: number, y: number, text: stri
 
 /** Where a road between two towns runs, its middle (or a third along) on screen. */
 function alongRoad(world: GameWorld, view: View, a: string, b: string, share: number): { at: Point; line: Point[] } | null {
-  const line = (roadChain(world, a, b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+  const line = (roadChain(world, a, b) ?? []).flatMap((piece) => drawnLine(world, piece));
   if (line.length < 2) return null;
   const [, rest] = splitPolyline(line, polylineLength(line) * share);
   return { at: toScreen(view, rest[0]!.x, rest[0]!.y), line };
@@ -1171,13 +1206,36 @@ function alongRoad(world: GameWorld, view: View, a: string, b: string, share: nu
  * out -- site icons. Resolved together, so a road name gives way to a strike whatever order they come
  * in. Sets `placed` and `chips`; returns the painters for the passes' own labels.
  */
-function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, state: DrawState): Array<{ id: string; priority: number; paint: () => void }> {
+function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, state: DrawState): Array<{ id: string; priority: number; paint: (slot: number) => void }> {
   const placer = new Placer();
-  const paints: Array<{ id: string; priority: number; paint: () => void }> = [];
-  const add = (id: string, kind: string, priority: number, box: Box, at: { x: number; y: number }, paint?: () => void) => {
-    placer.claim({ id, kind, priority, box, at });
+  const paints: Array<{ id: string; priority: number; paint: (slot: number) => void }> = [];
+  const add = (id: string, kind: string, priority: number, box: Box | Box[], at: { x: number; y: number }, paint?: (slot: number) => void) => {
+    const boxes = Array.isArray(box) ? box : [box];
+    placer.claim({ id, kind, priority, box: boxes[0]!, boxes, at });
     if (paint) paints.push({ id, priority, paint });
   };
+  /** A tag along a road between two towns: tried at these shares of the way, right of the point then left. */
+  const tagsAlong = (a: string, b: string, shares: number[], text: string, fill: string, ink: string, loud: boolean) => {
+    const tags: Array<{ box: Box; paint: () => void }> = [];
+    let anchor: { x: number; y: number } | null = null;
+    ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
+    const width = ctx.measureText(text).width + 10;
+    for (const share of shares) {
+      const where = alongRoad(world, view, a, b, share);
+      if (!where) continue;
+      anchor ??= where.at;
+      tags.push(tagPill(ctx, where.at.x + 14, where.at.y, text, fill, ink, loud), tagPill(ctx, where.at.x - 14 - width, where.at.y, text, fill, ink, loud));
+    }
+    return anchor ? { anchor, boxes: tags.map((t) => t.box), paint: (slot: number) => tags[slot]?.paint() } : null;
+  };
+  // What labels keep off: every town's mark; a site's icon wherever it's drawn whole (not far out,
+  // where the icons are claims themselves).
+  for (const town of world.towns.values()) {
+    if (town.industry && zoomTier === "far") continue;
+    const p = toScreen(view, town.x, town.y);
+    const r = townRadius(town, view) + 2;
+    add(`mark:${town.id}`, "obstacle", OBSTACLE, { x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r }, p);
+  }
   const now = world.economy.elapsedSeconds;
   // 1. The price label: an action in progress.
   if (state.ghost) add("ghost", "ghost", PRIORITY.ghost, { x0: state.ghost.to.x - 12, y0: state.ghost.to.y - 90, x1: state.ghost.to.x + 280, y1: state.ghost.to.y + 12 }, state.ghost.to);
@@ -1188,11 +1246,12 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     const past = !event && last && now - last.endedAt < STRIKE_MARK_DAYS * SECONDS_PER_GAME_DAY
       ? `struck day ${gameDay(world, last.startedAt)}${last.cost === null ? "" : last.cost < 1 ? " · no loss" : ` · ₦${Math.round(last.cost).toLocaleString()}`}` : null;
     if (!event && !past) continue;
-    const where = alongRoad(world, view, lane.a, lane.b, 0.5);
-    if (!where) continue;
-    const tag = event ? tagPill(ctx, where.at.x + 14, where.at.y, event.text, event.fill, COLORS.onFill, true) : tagPill(ctx, where.at.x + 14, where.at.y, past!, withAlpha(COLORS.jammed, 0.14), COLORS.strike, false);
+    const tag = event
+      ? tagsAlong(lane.a, lane.b, [0.5, 0.4, 0.6, 0.3, 0.7], event.text, event.fill, COLORS.onFill, true)
+      : tagsAlong(lane.a, lane.b, [0.5, 0.4, 0.6, 0.3, 0.7], past!, withAlpha(COLORS.jammed, 0.14), COLORS.strike, false);
+    if (!tag) continue;
     // A strike past is a note, not an event: it ranks with a change of hands.
-    add(`strike:${lane.a}|${lane.b}`, event ? "event" : "taken-note", event ? PRIORITY.event : PRIORITY.taken, tag.box, where.at, tag.paint);
+    add(`strike:${lane.a}|${lane.b}`, event ? "event" : "taken-note", event ? PRIORITY.event : PRIORITY.taken, tag.boxes, tag.anchor, tag.paint);
   }
   const floods = world.floods;
   for (const ford of floods?.fords ?? []) {
@@ -1204,15 +1263,15 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
       const fill = under ? COLORS.flood : COLORS.slow;
       ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
       const width = ctx.measureText(text).width + 10;
-      const tag = tagPill(ctx, p.x - width / 2, p.y + 10 * markScale + 9, text, fill, COLORS.onFill, true);
-      add(`ford:${ford.id}`, "event", PRIORITY.event, tag.box, p, () => {
+      const tags = [tagPill(ctx, p.x - width / 2, p.y + 10 * markScale + 9, text, fill, COLORS.onFill, true), tagPill(ctx, p.x - width / 2, p.y - 10 * markScale - 9, text, fill, COLORS.onFill, true)];
+      add(`ford:${ford.id}`, "event", PRIORITY.event, tags.map((t) => t.box), p, (slot) => {
         // The crossing itself, ringed.
         ctx.strokeStyle = fill;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(p.x, p.y, 7 * markScale, 0, Math.PI * 2);
         ctx.stroke();
-        tag.paint();
+        tags[slot]!.paint();
       });
       continue;
     }
@@ -1262,14 +1321,10 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   // 4. A change of hands: TAKEN or LOST, a few days, and a crowd of them a chip.
   if (drawsAt(zoomTier, "taken")) {
     for (const corridor of corridorChanges(world)) {
-      const where = alongRoad(world, view, corridor.a, corridor.b, 1 / 3);
-      if (!where) continue;
       const taken = corridor.change === "taken";
-      const text = taken ? "TAKEN" : "LOST";
-      ctx.font = `700 ${FS.caption} ui-monospace, monospace`;
-      const width = ctx.measureText(text).width + 10;
-      const tag = tagPill(ctx, where.at.x - 14 - width, where.at.y, text, taken ? COLORS.player : COLORS.home, COLORS.onFill, false);
-      add(`taken:${corridor.a}|${corridor.b}`, "taken", PRIORITY.taken, tag.box, where.at, tag.paint);
+      const tag = tagsAlong(corridor.a, corridor.b, [1 / 3, 0.25, 0.42, 0.18, 0.5], taken ? "TAKEN" : "LOST", taken ? COLORS.player : COLORS.home, COLORS.onFill, false);
+      if (!tag) continue;
+      add(`taken:${corridor.a}|${corridor.b}`, "taken", PRIORITY.taken, tag.boxes, tag.anchor, tag.paint);
     }
   }
   // 3 and 5. Town names: what you asked for first, then the largest first.
@@ -1280,8 +1335,7 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     if (!drawsAt(zoomTier, isVillage ? "villageName" : "townName", lit(town.id))) continue;
     const p = toScreen(view, town.x, town.y);
     const r = townRadius(town, view);
-    const half = Math.max(24, town.name.length * 3.6);
-    add(`town:${town.id}`, "townName", lit(town.id) ? PRIORITY.lit : PRIORITY.townName, { x0: p.x - half, y0: p.y - r - 2, x1: p.x + half, y1: p.y + r + 34 }, p);
+    add(`town:${town.id}`, "townName", lit(town.id) ? PRIORITY.lit : PRIORITY.townName, nameBoxes(p, r, Math.max(24, town.name.length * 3.6), 29, 5), p);
   }
   // 6. Site names zoomed in; and zoomed out, the site icons themselves only where they fit.
   for (const site of [...world.towns.values()].filter((t) => t.industry)) {
@@ -1290,7 +1344,7 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     if (drawsAt(zoomTier, "siteName", lit(site.id))) {
       ctx.font = `600 ${FS.caption} system-ui, sans-serif`;
       const half = ctx.measureText(site.name).width / 2 + 2;
-      add(`site:${site.id}`, "siteName", lit(site.id) ? PRIORITY.lit : PRIORITY.siteName, { x0: p.x - half, y0: p.y + r + 4, x1: p.x + half, y1: p.y + r + 18 }, p);
+      add(`site:${site.id}`, "siteName", lit(site.id) ? PRIORITY.lit : PRIORITY.siteName, nameBoxes(p, r, half, 14, 4), p);
     }
     if (zoomTier === "far") add(`icon:${site.id}`, "siteIcon", PRIORITY.siteIcon, { x0: p.x - r - 2, y0: p.y - r - 2, x1: p.x + r + 2, y1: p.y + r + 2 }, p);
   }
@@ -1299,7 +1353,7 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     for (const [key, label] of Object.entries(world.labels)) {
       if (!key.startsWith("road:") || !label.name) continue;
       const [a, b] = key.slice(5).split("|") as [string, string];
-      const line = (roadChain(world, a, b) ?? []).flatMap((piece) => segmentPolyline(world.simulation.map, piece));
+      const line = (roadChain(world, a, b) ?? []).flatMap((piece) => drawnLine(world, piece));
       if (line.length < 2) continue;
       const [before, rest] = splitPolyline(line, polylineLength(line) / 2);
       const p = rest[0]!, q = rest.find((r) => Math.hypot(r.x - p.x, r.y - p.y) > 1e-6) ?? before[before.length - 2] ?? line[0]!;
@@ -1336,6 +1390,7 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
       add(`ruin:${ruin.id}`, "ruin", PRIORITY.ruin, { x0: p.x - half, y0: p.y + 6, x1: p.x + half, y1: p.y + 20 }, p);
     }
   }
+  const lines = lineGrid(world, view);
   const resolved = placer.resolve([{
     kind: "taken",
     radius: 40 * markScale,
@@ -1345,12 +1400,52 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
       const width = ctx.measureText(`${count} taken`).width + 10;
       return { x0: at.x - width / 2, y0: at.y - 9, x1: at.x + width / 2, y1: at.y + 9 };
     },
-  }]);
+  }], lines);
   placed = resolved.placed;
+  slots = resolved.slot;
   chips = resolved.chips;
   return paints;
 }
 
+/**
+ * A name's places round a mark at `p` of radius `r`, in the order it would rather: below, above,
+ * right, left; `half` its width's half, `tall` its height, `gap` from the mark.
+ */
+function nameBoxes(p: { x: number; y: number }, r: number, half: number, tall: number, gap: number): Box[] {
+  return [
+    { x0: p.x - half, y0: p.y + r + gap, x1: p.x + half, y1: p.y + r + gap + tall },
+    { x0: p.x - half, y0: p.y - r - gap - tall, x1: p.x + half, y1: p.y - r - gap },
+    { x0: p.x + r + gap, y0: p.y - tall / 2, x1: p.x + r + gap + half * 2, y1: p.y + tall / 2 },
+    { x0: p.x - r - gap - half * 2, y0: p.y - tall / 2, x1: p.x - r - gap, y1: p.y + tall / 2 },
+  ];
+}
+/** Where a name in place `slot` (nameBoxes) starts and how it's aligned: below and above centred, right and left from the mark. */
+function nameAt(p: { x: number; y: number }, r: number, slot: number, tall: number, gap: number): { x: number; y: number; align: CanvasTextAlign } {
+  if (slot === 1) return { x: p.x, y: p.y - r - gap - tall, align: "center" };
+  if (slot === 2) return { x: p.x + r + gap, y: p.y - tall / 2, align: "left" };
+  if (slot === 3) return { x: p.x - r - gap, y: p.y - tall / 2, align: "right" };
+  return { x: p.x, y: p.y + r + gap, align: "center" };
+}
+/** The map's lines on a grid of 8 px cells, as drawn: what a label's box costs is how many it covers. */
+function lineGrid(world: GameWorld, view: View): (box: Box) => number {
+  const CELL = 8;
+  const hit = new Set<number>();
+  const mark = (x: number, y: number) => hit.add(Math.floor(x / CELL) * 100000 + Math.floor(y / CELL));
+  for (const s of world.simulation.map.segments) {
+    if (s.retiredAt !== undefined) continue;
+    const line = drawnLine(world, s);
+    for (let k = 1; k < line.length; k += 1) {
+      const a = toScreen(view, line[k - 1]!.x, line[k - 1]!.y), b = toScreen(view, line[k]!.x, line[k]!.y);
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (CELL / 2)));
+      for (let i = 0; i <= n; i += 1) mark(a.x + ((b.x - a.x) * i) / n, a.y + ((b.y - a.y) * i) / n);
+    }
+  }
+  return (box) => {
+    let n = 0;
+    for (let x = Math.floor(box.x0 / CELL); x <= Math.floor(box.x1 / CELL); x += 1) for (let y = Math.floor(box.y0 / CELL); y <= Math.floor(box.y1 / CELL); y += 1) if (hit.has(x * 100000 + y)) n += 1;
+    return n;
+  };
+}
 /** A crowd of TAKEN tags as one chip: "3 taken" (click: the log's Corridors). */
 function drawChip(ctx: CanvasRenderingContext2D, chip: Chip): void {
   const tag = tagPill(ctx, chip.box.x0, (chip.box.y0 + chip.box.y1) / 2, `${chip.count} taken`, COLORS.player, COLORS.onFill, false);
@@ -1364,7 +1459,7 @@ function drawRoadHighlight(ctx: CanvasRenderingContext2D, world: GameWorld, view
   ctx.globalAlpha = 0.5;
   ctx.lineWidth = 14;
   ctx.lineCap = "round";
-  strokeLine(ctx, view, segmentPolyline(world.simulation.map, segment));
+  strokeLine(ctx, view, drawnLine(world, segment));
   ctx.globalAlpha = 1;
 }
 function drawGhostLine(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, ghost: Ghost): void {
