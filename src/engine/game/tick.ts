@@ -33,6 +33,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { chargeRoutineUpkeep } from "./upkeep";
 import { tripPlans } from "./transfers";
 import { changePatience } from "./busstations";
+import { trunkSet } from "./trunks";
 import { isDirt, updateRoadSpeeds, yourSpeeds } from "./congestion";
 import { creditLanes, laneEncroachment, lanesBySegment, struckSegments, updateLanes } from "./pushback";
 import { updateProject } from "./project";
@@ -92,6 +93,33 @@ const arrivalKeys = new WeakMap<object, string>();
 /** Motor-park pool key: `at>origin>destination` -- where they are, and the trip they're on. */
 function poolKey(at: string, origin: string, destination: string): string {
   return `${at}>${origin}>${destination}`;
+}
+
+/**
+ * Riders an okada or a keke carried to a trunk's head (trunks.ts), waiting there for a danfo on:
+ * `at>origin>destination>r` -- the trip already counted the informal sector's, when they set off.
+ */
+const relayKey = (at: string, origin: string, destination: string) => `${at}>${origin}>${destination}>r`;
+const isRelayed = (key: string) => key.endsWith(">r") || key.endsWith(">rt");
+/**
+ * Riders whose road out is a trunk, who'd have taken an okada or a keke: back to wait for a danfo,
+ * which may run it (`>t`, or `>rt` relayed too) -- once: out-waiting that, they go home.
+ */
+const onTrunkKey = (key: string) => (key.endsWith(">r") ? `${key}t` : `${key}>t`);
+const refusedOnTrunk = (key: string) => key.endsWith(">t") || key.endsWith(">rt");
+
+/**
+ * Passengers an informal vehicle set down short of their destination, at a trunk's end: on along
+ * the trunk by danfo, or off it -- the last mile, on a feeder -- by keke or okada.
+ */
+function relayRiders(world: GameWorld, deliveries: DeliveryEvent[]): void {
+  const trunks = trunkSet(world);
+  for (const { entry, amount } of deliveries) {
+    if (!entry || entry.kind !== "passengers" || !entry.trip || entry.trip.destination === entry.to) continue;
+    const key = relayKey(entry.to, entry.trip.origin, entry.trip.destination);
+    const next = roadPathByKey(world, pairKey(entry.to, entry.trip.destination), entry.to, entry.trip.destination)?.segmentIds[0];
+    bump(next && !trunks.has(next) ? world.informal.smallPool : world.informal.pool, key, amount);
+  }
 }
 
 const parsedPoolKeys = new Map<string, { at: string; origin: string; destination: string; trip: string; path: string }>();
@@ -287,7 +315,10 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
         informal.earnings += goodsFares(world, deliveries) * tuning.truckerFareShare;
         recordGoodsDelivered(deliveries, goodsTrucked);
         relayArrivals(world, deliveries);
-      } else informal.earnings += passengerFares(world, deliveries);
+      } else {
+        informal.earnings += passengerFares(world, deliveries);
+        relayRiders(world, deliveries);
+      }
       continue;
     }
     // Each leg pays a fare, on getting off (revenue on unload) -- per
@@ -486,6 +517,7 @@ function groupPool(
   drift: number,
   lost: Map<string, number>,
   onDrift: (key: string, trip: string, amount: number) => void,
+  gaveUp?: Map<string, number>,
 ): Group[] {
   const groups = new Map<string, Group>();
   for (const [key, pooled] of pool) {
@@ -496,6 +528,7 @@ function groupPool(
     // No road: nobody can take them. They stay home.
     if (!path || path.nodeIds.length < 2) {
       bump(lost, trip, pooled);
+      if (gaveUp && isRelayed(key)) bump(gaveUp, trip, -pooled);
       pool.set(key, 0);
       continue;
     }
@@ -583,9 +616,16 @@ function sendInformal(
   yours: ReadonlyMap<string, number>,
   lost: Map<string, number>,
   takings: Takings,
+  // Where the run meets a trunk (trunks.ts), an okada's or a keke's: the index of its first trunk
+  // road on the run. It goes as far as the trunk's head, and those bound beyond wait there for a danfo.
+  cut = -1,
 ): boolean {
   const { simulation, tuning, informal } = world;
   const spec = informalSpec(tuning, mode);
+  if (cut === 0) return false; // its first road a trunk: no okada or keke on it
+  const segmentIds = cut > 0 ? run.path.segmentIds.slice(0, cut) : run.path.segmentIds;
+  const endNode = cut > 0 ? run.path.nodeIds[cut]! : run.destination;
+  const before = cut > 0 ? new Set(run.path.nodeIds.slice(1, cut + 1)) : null;
   // One road, one budget: your vehicles' road space counts against it too
   // (brief, step 5b). Released per segment, danfos otherwise filled the
   // trunk around your buses -- 8 trunk buses carried 180 riders a day
@@ -594,17 +634,17 @@ function sendInformal(
   // On strike (pushback.ts): no danfo sets off along a struck corridor. Kekes and okadas aren't the union's.
   if (mode === "danfo" && world.lanes.length > 0) {
     const struck = struckSegments(world);
-    if (run.path.segmentIds.some((id) => struck.has(id))) return false;
+    if (segmentIds.some((id) => struck.has(id))) return false;
   }
-  const space = run.path.segmentIds.map((id) => (informal.segmentSpace.get(id) ?? 0) + (yours.get(id) ?? 0));
-  if (space.some((used, i) => used + spec.weight > informalBudget(world, run.path.segmentIds[i]!))) return false;
+  const space = segmentIds.map((id) => (informal.segmentSpace.get(id) ?? 0) + (yours.get(id) ?? 0));
+  if (space.some((used, i) => used + spec.weight > informalBudget(world, segmentIds[i]!))) return false;
   // A real operator does not join a jam that pays nothing (principles §3).
-  if (run.path.segmentIds.some((id) => (world.segmentSpeed.get(id) ?? 1) < tuning.informalMinSpeed)) return false;
+  if (segmentIds.some((id) => (world.segmentSpeed.get(id) ?? 1) < tuning.informalMinSpeed)) return false;
 
   const id = `${mode}-${world.nextId++}`;
   // An empty queue map: it leaves with the people who gave up on you, it
   // doesn't also sweep the queue that's still waiting for you.
-  const vehicle = createOneShotVehicle(id, group.at, run.destination, simulation.routing, spec.speed, spec.capacity, spec.weight, new Map());
+  const vehicle = createOneShotVehicle(id, group.at, endNode, simulation.routing, spec.speed, spec.capacity, spec.weight, new Map());
   if (!vehicle) return false;
 
   const share = Math.min(1, spec.capacity / load);
@@ -612,7 +652,8 @@ function sendInformal(
   // (brief, Money: riders must respond to price, or tolls are free money):
   // a share of those who'd board stay home instead, growing with the toll's
   // share of their fare. You're paid the toll as it sets off.
-  const toll = tollFor(world, run.path.segmentIds, spec.weight);
+  // On a trunk of yours a danfo pays its toll as on any road of yours (trunks.ts); okadas and kekes never run one.
+  const toll = tollFor(world, segmentIds, spec.weight);
   const riders = aboard.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0) * share, 0);
   const meanFare = riders > 0 ? aboard.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0) * share * legFare(world, group.at, rider.destination), 0) / riders : 1;
   // Where fuel is short, the danfo charges more too (fuel.ts), and that prices riders out the same way.
@@ -622,27 +663,33 @@ function sendInformal(
     const pooled = pool.get(rider.key) ?? 0;
     pool.set(rider.key, pooled * (1 - share));
     const leaving = pooled * share;
-    bump(gaveUp, pairKey(rider.origin, rider.destination), leaving * (1 - stayHome));
-    bump(lost, pairKey(rider.origin, rider.destination), leaving * stayHome);
-    return { from: group.at, to: rider.destination, kind: "passengers" as const, amount: leaving * (1 - stayHome), trip: { origin: rider.origin, destination: rider.destination } };
+    const trip = pairKey(rider.origin, rider.destination);
+    // A rider relayed at a trunk's head was counted the informal sector's when they set off; priced
+    // out now, they go home -- moved from its count to the lost.
+    if (isRelayed(rider.key)) bump(gaveUp, trip, -leaving * stayHome);
+    else bump(gaveUp, trip, leaving * (1 - stayHome));
+    bump(lost, trip, leaving * stayHome);
+    // Bound past a trunk's head: carried to it, to wait for a danfo there (relayRiders).
+    const to = before && !before.has(rider.destination) ? endNode : rider.destination;
+    return { from: group.at, to, kind: "passengers" as const, amount: leaving * (1 - stayHome), trip: { origin: rider.origin, destination: rider.destination } };
   });
   takings.tolls += toll;
   // The park levy, on every informal departure: the agberos keep their cut -- less at a motor park (parks.ts).
   const levy = tuning.levyPerSeat * spec.capacity;
-  const cut = agberoCutAt(world, group.at);
-  takings.levies += levy * (1 - cut);
-  takings.agberos += levy * cut;
-  for (const key of corridorsAlong(world, run.path.segmentIds)) bump(takings.leviesByCorridor, key, levy * (1 - cut));
+  const agberos = agberoCutAt(world, group.at);
+  takings.levies += levy * (1 - agberos);
+  takings.agberos += levy * agberos;
+  for (const key of corridorsAlong(world, segmentIds)) bump(takings.leviesByCorridor, key, levy * (1 - agberos));
   if (world.parks.size > 0) {
     const atTown = takings.leviesByTown.get(group.at) ?? { yours: 0, agberos: 0 };
-    atTown.yours += levy * (1 - cut);
-    atTown.agberos += levy * cut;
+    atTown.yours += levy * (1 - agberos);
+    atTown.agberos += levy * agberos;
     takings.leviesByTown.set(group.at, atTown);
   }
-  if (world.lanes.length > 0) creditLanes(lanesBySegment(world), run.path.segmentIds, toll + levy * (1 - cut));
+  if (world.lanes.length > 0) creditLanes(lanesBySegment(world), segmentIds, toll + levy * (1 - agberos));
   simulation.vehicles.push(vehicle);
-  informal.active.set(id, { segmentIds: run.path.segmentIds, weight: spec.weight, mode, released: 0 });
-  for (const segmentId of run.path.segmentIds) bump(informal.segmentSpace, segmentId, spec.weight);
+  informal.active.set(id, { segmentIds, weight: spec.weight, mode, released: 0 });
+  for (const segmentId of segmentIds) bump(informal.segmentSpace, segmentId, spec.weight);
   return true;
 }
 
@@ -715,14 +762,22 @@ function dispatchInformal(world: GameWorld, dt: number, lost: Map<string, number
   // skipped (exactly: a sum of some of them, in order, is never more than all of them, in order).
   // Most groups are waiting to fill, most ticks -- profiled, the search was a quarter of a tick.
   const waitingIn = (group: Group, pool: Map<string, number>) => group.riders.reduce((sum, rider) => sum + (pool.get(rider.key) ?? 0), 0);
-  const danfoGroups = groupPool(world, informal.pool, drift, lost, (key, _trip, amount) => bump(informal.smallPool, key, amount));
+  // Those who'd give up on a danfo take a keke or an okada -- unless they're back from one for a trunk: then home.
+  const danfoGroups = groupPool(world, informal.pool, drift, lost, (key, trip, amount) => {
+    if (!refusedOnTrunk(key)) return bump(informal.smallPool, key, amount);
+    bump(lost, trip, amount);
+    if (isRelayed(key)) bump(gaveUp, trip, -amount);
+  }, gaveUp);
   // Every run from a group starts on the same road (a group is riders at one park whose roads
   // share a first leg): if sendInformal would turn that leg down, it turns down every run, so
   // the search is skipped -- exactly, as its checks change nothing before they pass. Most ticks
   // the roads out are full: 0.4 vehicles leave a tick, the search ran for every group.
   const struck = world.lanes.length > 0 ? struckSegments(world) : null;
+  // Trunks (trunks.ts): no okada or keke sets off along one.
+  const trunks = trunkSet(world);
   const refuses = (id: string, mode: InformalMode) =>
     (mode === "danfo" && struck?.has(id)) ||
+    (mode !== "danfo" && trunks.has(id)) ||
     (informal.segmentSpace.get(id) ?? 0) + (yours.get(id) ?? 0) + informalSpec(tuning, mode).weight > informalBudget(world, id) ||
     (world.segmentSpeed.get(id) ?? 1) < tuning.informalMinSpeed;
   // (Every rider's first leg, not just the first rider's: two roads could join the same towns.)
@@ -738,14 +793,33 @@ function dispatchInformal(world: GameWorld, dt: number, lost: Map<string, number
   for (const group of danfoGroups) {
     if (waitingIn(group, informal.pool) < tuning.danfoCapacity || firstLegRefuses(group, "danfo")) continue;
     const best = bestRun(group, informal.pool);
-    if (best && best.load >= tuning.danfoCapacity) sendInformal(world, "danfo", group, best.run, best.aboard, best.load, informal.pool, gaveUp, yours, lost, takings);
+    // Along a trunk, a danfo runs it end to end: those bound off it change there to a keke or an
+    // okada for the last mile, on the feeder (relayRiders) -- the feeders are the informal sector's.
+    const leaves = best && trunks.has(best.run.path.segmentIds[0]!) ? best.run.path.segmentIds.findIndex((id) => !trunks.has(id)) : -1;
+    if (best && best.load >= tuning.danfoCapacity) sendInformal(world, "danfo", group, best.run, best.aboard, best.load, informal.pool, gaveUp, yours, lost, takings, leaves);
   }
 
-  const smallGroups = groupPool(world, informal.smallPool, drift, lost, (_key, trip, amount) => bump(lost, trip, amount));
+  // Out-waited even the okadas, they go home -- a relayed rider's trip moved from the informal count to the lost.
+  const smallGroups = groupPool(world, informal.smallPool, drift, lost, (key, trip, amount) => {
+    bump(lost, trip, amount);
+    if (isRelayed(key)) bump(gaveUp, trip, -amount);
+  }, gaveUp);
+  // Where a run meets a trunk, the okada or keke goes as far as its head (sendInformal's cut).
+  const cutAt = (segmentIds: readonly string[]) => (trunks.size > 0 ? segmentIds.findIndex((id) => trunks.has(id)) : -1);
   for (const group of smallGroups) {
+    // Their road out a trunk: no keke or okada -- back to wait for a danfo, which may (once).
+    if (trunks.size > 0 && group.riders.every((rider) => trunks.has(rider.path.segmentIds[0]!))) {
+      for (const rider of group.riders) {
+        const waiting = informal.smallPool.get(rider.key) ?? 0;
+        if (waiting <= 0) continue;
+        informal.smallPool.set(rider.key, 0);
+        bump(informal.pool, onTrunkKey(rider.key), waiting);
+      }
+      continue;
+    }
     const best = waitingIn(group, informal.smallPool) < tuning.kekeCapacity || firstLegRefuses(group, "keke") ? null : bestRun(group, informal.smallPool);
     if (best && best.load >= tuning.kekeCapacity) {
-      if (sendInformal(world, "keke", group, best.run, best.aboard, best.load, informal.smallPool, gaveUp, yours, lost, takings)) continue;
+      if (sendInformal(world, "keke", group, best.run, best.aboard, best.load, informal.smallPool, gaveUp, yours, lost, takings, cutAt(best.run.path.segmentIds))) continue;
     }
     // An okada takes one rider, from whoever has waited in the biggest crowd.
     const single = group.riders.reduce<PooledRider | null>(
@@ -753,7 +827,7 @@ function dispatchInformal(world: GameWorld, dt: number, lost: Map<string, number
       null,
     );
     const waiting = single ? informal.smallPool.get(single.key) ?? 0 : 0;
-    if (single && waiting >= tuning.okadaCapacity) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp, yours, lost, takings);
+    if (single && waiting >= tuning.okadaCapacity && !refuses(single.path.segmentIds[0]!, "okada")) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp, yours, lost, takings, cutAt(single.path.segmentIds));
   }
 
   // Truckers, on the same road budget (truckers.ts).

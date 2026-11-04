@@ -23,6 +23,7 @@ import { congestionColor, junctionPlates, offsetPolyline, overloaded } from "./c
 import { segmentRung } from "@engine/game/roads";
 import { OBSTACLE, PRIORITY, Placer, drawsAt, tierOf as zoomTierOf, type Box, type Chip, type Tier as ZoomTier } from "./density";
 import { bundleLines, type BundleItem } from "./bundle";
+import { trunkSet } from "@engine/game/trunks";
 
 // The game's map, ported from the information lab (since discarded; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -734,7 +735,16 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
     ctx.arc(p.x, p.y, plate.radius, 0, Math.PI * 2);
     ctx.fill();
   }
-  // Pass D: on the centreline -- a lane's stripe, track's ties, your riders' core.
+  // Pass D: on the centreline -- a lane's stripe, track's ties, your riders' core; and a trunk's
+  // edge lines, an expressway's (trunks.ts): no okadas or kekes on it.
+  const trunks = trunkSet(world);
+  for (const x of live) {
+    if (x.rail || !trunks.has(x.s.id)) continue;
+    ctx.globalAlpha = x.alpha;
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = Math.max(0.8, 0.7 * markScale);
+    for (const side of [-1, 1]) strokeOffset(ctx, view, x.line, side * (x.width / 2 + 0.4 * markScale));
+  }
   for (const x of live) {
     ctx.globalAlpha = x.alpha;
     if (x.rung === "lane") {

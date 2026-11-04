@@ -7,6 +7,8 @@ import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus 
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
 import { addCar, addTrain, buildHalt, buildTrack } from "./rail";
 import { fixRoadNow, setRoadMaintained } from "./wear";
+import { setTrunk, trunksOn } from "./trunks";
+import { SWITCHED_OFF } from "./tuning";
 import type { Alignment } from "./roads";
 import { setEnforcement, settleStrike, type Enforcement } from "./pushback";
 import { dropProject, nameProject, type ProjectRung } from "./project";
@@ -36,7 +38,7 @@ export { remitRefusal } from "./remit";
 
 export type ActionSpec =
   | { kind: "bus" | "minibus" | "brt" | "lorry" | "train" | "freight"; a: string; b: string }
-  | { kind: "road"; a: string; b: string; alignment: Alignment; high?: boolean }
+  | { kind: "road"; a: string; b: string; alignment: Alignment; high?: boolean; trunk?: boolean }
   | { kind: "pave"; a: string; b: string }
   | { kind: "lane"; a: string; b: string }
   | { kind: "enforce"; a: string; b: string; enforcement: Enforcement }
@@ -45,6 +47,8 @@ export type ActionSpec =
   | { kind: "track"; a: string; b: string; alignment: Alignment }
   | { kind: "halt"; town: string }
   | { kind: "fix"; segmentId: string; on: boolean }
+  // A road declared a trunk (on), or made a feeder again (trunks.ts).
+  | { kind: "trunk"; segmentId: string; on: boolean }
   | { kind: "retire" | "restore" | "repair"; segmentId: string }
   | { kind: "dropProject" }
   | { kind: "restoreRefinery" }
@@ -120,8 +124,20 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       return addTrain(world, spec.a, spec.b);
     case "freight":
       return addFreightTrain(world, spec.a, spec.b);
-    case "road":
-      return buildRoad(world, spec.a, spec.b, spec.alignment, spec.high ?? false);
+    case "road": {
+      // Declared a trunk as it's built (trunks.ts): one more choice on the verb; refused whole if it can't be.
+      if (spec.trunk && !trunksOn(world)) return { ok: false, reason: SWITCHED_OFF };
+      const built = buildRoad(world, spec.a, spec.b, spec.alignment, spec.high ?? false);
+      if (!built.ok || !spec.trunk) return built;
+      const roads = world.simulation.map.segments.filter((s) => s.type === "road" && ((s.fromNodeId === spec.a && s.toNodeId === spec.b) || (s.fromNodeId === spec.b && s.toNodeId === spec.a)));
+      const piece = roads[roads.length - 1];
+      if (piece) setTrunk(world, piece.id, true);
+      return built;
+    }
+    case "trunk": {
+      const result = setTrunk(world, spec.segmentId, spec.on);
+      return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };
+    }
     case "pave":
       return paveRoad(world, spec.a, spec.b);
     case "lane":

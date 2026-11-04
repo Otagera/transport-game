@@ -223,6 +223,28 @@ The arc of a session. One game day is 30 seconds at 1×, so at 2× an hour is ab
 
 A verb that stops creating a decision in play (always done, or never done) is a candidate to cut, whatever it cost to build.
 
+## Scales
+
+(Proposed 2026-11-03, [SCALES-AND-MODES.md](SCALES-AND-MODES.md); scopes 1 and 2 built 2026-11-04.) The
+game had two scales -- a town's interior as an invisible number, and the map between towns -- and
+every mode still on the list fell in the gap. Three close it:
+
+| Scale | What it is | Where you meet it | Built |
+| --- | --- | --- | --- |
+| **Trunk** | long hops, regional town to regional town; a road's class | the map: declared when you build a road (E), or on its card | yes |
+| **Feeder** | villages, sites, the approaches into a town; no verbs, only rules | the map, the informal sector's ground | yes |
+| **Inside** | a town's own journeys, in four slices: walk, keke and okada, your city line, car | the town card | not yet |
+
+**A trunk** is a property, not a rung: the old highways joining the clusters, and roads between two
+towns of 45k+ on day 1, are trunks from the start; a road you build is a feeder until you declare it
+(₦50 a cell, the signs and wardens), and any trunk can be made a feeder again for nothing. **On a
+trunk** no okada or keke runs; a danfo may, pays its toll where the trunk is yours (built or paved),
+and runs it end to end -- riders bound off
+it change there to a keke or an okada for the last mile, and an okada bound along it sets its riders
+down at its head, for a danfo on. The informal sector reorganises round your trunk instead of
+fighting it head on. **The union** answers a trunk with a demand afterwards, not consent first: pay
+his members, make it a feeder again, or refuse him.
+
 ## Fares
 
 **Fares rise with distance, on one schedule set by policy, the same for you and the danfos.** Today every leg pays ₦4 whatever its length. That left long routes unable to pay and made changing buses double the fare (see Evidence).
@@ -1677,6 +1699,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 | Date | Decision | Status |
 | --- | --- | --- |
 | 2026-11-03 | Five modes scoped (proposed; [five-modes.md](five-modes.md)). Pipeline (a capped link with a truck/pipe dial whose political price follows the dial, not the build) and the airport (a third gateway: demand at a point with no people) are ready and delegable. Intercity coach waits on the trunk class and answers C31 -- it is not a long bus, it is the only mode permitted on trips a bus cannot make pay. Okada permission waits on the feeder scope and moves the informal onto the feeders rather than removing it. Water is last and not delegated: it inverts the terrain rule, uses the rains already built, and needs pathing plus generator work. The urban ladder's prompt needs its rationale rewritten on top of the inside scope. **The pipeline built** (2026-11-03): refined fuel only, from the tank farm or a refinery to a town (your call); the inherited line broken up the old railway from the tank farm (your call); new and restored pipes start at nothing on the dial, so building costs money and only using it costs the chairman. **The airport built** (2026-11-03): travellers each way and air freight; its freight by hauliers and your freight train, since there are no player lorries (your call) | Proposed; pipeline and airport built |
+| 2026-11-04 | Three scales (proposed 2026-11-03, [SCALES-AND-MODES.md](SCALES-AND-MODES.md)): trunk, feeder and inside, of which only the inside's car slice loads your approach roads -- so a city line exists to unjam your own trunk, not to earn a fare. Your calls today: **a road's class changes both ways** (declared at ₦50 a cell on a road you build or have; a feeder again for nothing, which is also the union's concession); **the union answers with a demand afterwards**, not consent first; **trunk and feeder land together**, so a trunk does something the day it lands, then inside and the urban ladder, then the coach. Built (2026-11-04, §Scales): classes, declaring, the okada and keke ban, danfos' tolls and end-to-end runs on a trunk, the relay at its ends, the union's trunk demand. | Agreed; trunk and feeder built |
 | 2026-10-30 | Convergent chains: a second input rather than a third tier -- the value is one factory fed by several routes, so a single failure idles a place, not a product. First the assembly plant (steel plus fuel into buses and minibuses you buy, cheaper as its line matures; the port's imported steel a substitute for the works'); then a recipe card naming the short input and where it's stuck, and a chain strip that forks; then room, by spreading within the frame before enlarging it, measured | Agreed 2026-10-30 |
 | 2026-10-30 | Shallot (assessed, not adopted): a WebGPU engine in TypeScript and Bun, written for agents. Not adopted: its UI story is a DOM overlay, so it doesn't touch the chrome; it documents no 2D pipeline, and the 2D map is the primary view; and none of the week's measured defects -- the mitre offset, junction plates, casing order, the corridor's over-subscribed channels, the 3D's unapplied findings -- is an engine problem. Taken from it: `.lab.ts` against `.test.ts`, the single pointer-events overlay container over the plate, derive-from-elapsed as a determinism guard (a test across frame budgets), and a `gym/` giving the brief's checks machine-readable verdicts (C14 first). A declared tick order is parked behind a trigger: the next ordering bug that costs more than a day, or a new system nobody can place. Watched as a possible host for the engine extraction (principles §2), not as a rewrite | Agreed 2026-10-30 |
 | 2026-10-30 | The look: `architecture/look.md` is the visual contract, settled by rendering three palettes and three layouts on the real game at seed 0 day 41. Ink-and-cream chrome with no hue of its own, yellow reserved for the informal sector, water as the dark value anchor; the Board layout, where the map's controls live in the left column and nothing overlaps the plate; three stats, the key as a chip, pledges moved into the panel. Enforced by four checks in `verify`. The 3D view adopts the same tokens and then applies principles §Visual direction, which it was built without. Corrected on adoption: the one token source is `tokens.css` (no `style/tokens.ts`); `verify` and `scripts/shots.ts` are to add | Agreed 2026-10-30 |

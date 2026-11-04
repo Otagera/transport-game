@@ -1,4 +1,5 @@
 import { projectName } from "@engine/game/project";
+import { isTrunk, trunkPrice } from "@engine/game/trunks";
 import { airportStranded, airportSummary } from "@engine/game/airport";
 import { pipeSummaries } from "@engine/game/pipelines";
 import { routeAlong, stanceWord, unionOf } from "@engine/game/union";
@@ -451,7 +452,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         `<button data-union="${union.id}|pay">Pay his members · ${nairaK(d.price)}</button>`,
         d.kind === "lane" && world.lanes.some((l) => (l.a === d.a && l.b === d.b) || (l.a === d.b && l.b === d.a)) ? `<button data-union="${union.id}|concede">Ease the lane</button>` : "",
         d.kind === "pipeline" && world.pipelines?.some((p) => p.a === d.a && p.b === d.b && p.dial > 0) ? `<button data-union="${union.id}|concede">Turn the pipe down to ${pct(Math.floor((world.pipelines.find((p) => p.a === d.a && p.b === d.b)?.dial ?? 0) * 5) / 10)}</button>` : "",
-        routeAlong(world, d.a, d.b) ? `<button data-union="${union.id}|coop">Hand him the route</button>` : "",
+        d.kind === "trunk" ? `<button data-union="${union.id}|concede">Make it a feeder again</button>` : "",
+        d.kind !== "trunk" && d.kind !== "pipeline" && routeAlong(world, d.a, d.b) ? `<button data-union="${union.id}|coop">Hand him the route</button>` : "",
         `<button data-union="${union.id}|refuse">Refuse</button>`,
       ].join("");
       items.push({ id: `union:${union.id}`, text: `${union.chairman}, ${where} union (${stanceWord(union.stance)}): "${d.text}" By day ${gameDay(world, d.deadlineAt) - 1}, or he strikes.`, button: buttons, at: [d.a], weight: 9e7 });
@@ -1261,6 +1263,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       : first.retiredAt !== undefined ? `<div class="problem"><span>Retired day ${gameDay(world, first.retiredAt)}: gone on day ${gameDay(world, goneAt(world, first))}</span><button data-restore="${first.id}" title="Repair it to new and keep it">Restore · ${nairaK(restoreRoadCost(world, first.id))}</button></div>`
       : wear.kept ? `<div class="problem none"><span>Kept up: ${naira(wear.upkeepPerDay)} a day</span><span class="actions"><button data-keep="${first.id}|0" title="Stop paying to keep it up: it starts wearing again">Stop</button>${retire}</span></div>`
       : `<div class="problem${wear.condition >= 0.97 ? " none" : ""}"><span>${wear.condition >= 0.97 ? "Sound" : `Worn: ${pct(wear.speed)} speed${wear.roughPerDay >= 1 ? `, costs your vehicles ${naira(wear.roughPerDay)} a day` : ""}`}</span><span class="actions"><button data-keep="${first.id}|1" title="Repair it as it wears, billed as it goes${wear.repair >= 1 ? `; the catch-up repair (${naira(wear.repair)}) is charged now` : ""}">Keep it up · ${nairaK(wear.upkeepPerDay)}/day</button>${wear.repair >= 1 ? `<button data-fixnow="${first.id}" title="Repair all of it to new, once">Fix now · ${nairaK(wear.repair)}</button>` : ""}${retire}</span></div>`;
+    // Its class (trunks.ts): a trunk keeps the okadas and kekes off it; a feeder is theirs.
+    const trunk = w.mode === "road" && world.tuning.trunksEnabled && first.retiredAt === undefined ? isTrunk(world, first.id) : null;
+    const classHtml = trunk === null ? ""
+      : trunk ? `<div class="problem none"><span>A trunk: no okadas or kekes on it, danfos pay its toll</span><span class="actions"><button data-trunk="${first.id}|0" title="The informal sector's ground again: okadas and kekes back on it">Make it a feeder</button></span></div>`
+      : `<div class="problem none"><span>A feeder: the informal sector's ground</span><span class="actions"><button data-trunk="${first.id}|1" title="No okadas or kekes on it; danfos pay its toll, and run it end to end -- the last mile off it by okada. The union will want it back.">Make it a trunk · ${nairaK(trunkPrice(world, first.id))}</button></span></div>`;
     const costs = c ? [c.leviesLostPerDay >= 1 ? `park levies ${naira(-c.leviesLostPerDay)} a day since you came` : "", c.lastStrikeCost !== null ? (c.lastStrikeCost < 1 ? "the last strike cost nothing" : `the last strike cost ${naira(c.lastStrikeCost)}`) : c.takenSince !== null && !c.hasLane ? "no pushback without a lane" : ""].filter(Boolean) : [];
     return `<div class="kicker">${w.mode === "rail" ? "Track" : "Road"} · ${wayKind(w).replace(/^Track( · )?/, "") || "in service"}${w.pieces.length > 1 ? ` · ${w.pieces.length} stretches` : ""}</div>
       <div class="head"><div class="title">${esc(named || `${nameOf(w.a)} – ${nameOf(w.b)}`)}</div></div>
@@ -1268,6 +1275,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${roadKey ? nameRow(roadKey, false) : ""}
       ${problemHtml(problem)}
       ${wearHtml}
+      ${classHtml}
       <div class="tiles">
         ${w.mode === "road" ? tile("Traffic", pct(w.load), "of what it carries before it jams") : ""}
         ${cars > 0 && flow > 0 ? tile("Private cars", pct(cars / flow), "of its traffic") : ""}

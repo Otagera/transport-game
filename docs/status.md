@@ -151,7 +151,12 @@ day 1, so reaching it costs a repair (₦349-595) as well as a bus; the strategi
 next trip by trips a naira, now passes it over for other trips on 4 of 5 maps, but still serves it
 in the first week; then (your choice) **grown into**: its travellers a few dozen a day at the start,
 rising with the region's growth cubed -- first served on days 7, 17, 32, 6 and 44 of the five maps,
-mid-term on three (engine.md, The airport).
+mid-term on three (engine.md, The airport). **Trunks and feeders** (branch `scales`; brief, Scales): the
+three scales' first two, with your calls -- a road's class both ways, the union's demand afterwards,
+both scopes together. The old highways are trunks; you declare more (E on the road tool, or the
+road's card). No okada or keke on a trunk; danfos pay its toll and run it end to end, the last mile
+off it by okada. On your 5059 network: okadas off the declared trunks (79 -> 3 trips a day), trips
+made up 1%, the union's demand at once (engine.md, Trunks and feeders).
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

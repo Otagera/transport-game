@@ -168,7 +168,11 @@ export function remittanceExpected(world: GameWorld, netPerDay: number): number 
   return Math.max(0, tuning.remittanceShare * Math.min(funds - tuning.remittanceReserve - held, world.remittance.net + gain));
 }
 
-/** The toll an informal vehicle of road space `weight` pays for a path: each road of yours on it. */
+/**
+ * The toll an informal vehicle of road space `weight` pays for a path: each road of yours on it --
+ * a trunk of yours too (trunks.ts: "danfos may, and pay its toll"); an old road you haven't paved,
+ * trunk or not, charges none.
+ */
 export function tollFor(world: GameWorld, segmentIds: readonly string[], weight: number): number {
   let roads = 0;
   for (const id of segmentIds) {

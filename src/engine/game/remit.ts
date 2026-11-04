@@ -202,7 +202,7 @@ export function remitRefusal(world: GameWorld, spec: ActionSpec): string | null 
       return world.power ? placesOutsideRemit(world, world.power.stationId) : null;
     case "restoreTextile":
       return world.textile ? placesOutsideRemit(world, world.textile.millId) : null;
-    case "fix": case "retire": case "restore": case "repair": {
+    case "fix": case "retire": case "restore": case "repair": case "trunk": {
       const chain = chainOf(world, spec.segmentId);
       return chain ? linkOutsideRemit(world, chain.a, chain.b) : null;
     }

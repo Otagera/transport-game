@@ -1320,6 +1320,43 @@ flowchart LR
   not held on two: the check's "rather than always or never" is met on the strategist's play. The
   scope's "a few hundred a day at the start" is now a few dozen, grown to a few hundred.
 
+### Trunks and feeders (2026-11-04; brief, Scales; SCALES-AND-MODES.md, scopes 1 and 2)
+
+`trunks.ts`, behind `trunksEnabled` (absent in older runs: no classes, every road as it was).
+
+- **A road's class** (`Segment.roadClass`, `roadClass`, `trunkSet`): declared, else derived for the
+  inherited network -- an old highway joining two clusters, or a road between two towns of
+  `trunkTownPopulation` (45k) on day 1 (`basePopulation`, so a road doesn't change class as towns
+  grow) -- else a feeder. A road you build is a feeder until you declare it. The field is
+  `roadClass`, not the scope's `class`; copied to both halves when a town splits a road.
+- **Declaring** (`trunk` action, or `trunk: true` on `road`): `trunkCostPerCell` (₦50) over the whole
+  road through its roadside towns; made a feeder again for nothing. The union (union.ts, demand kind
+  `trunk`): -0.15 and a demand with a deadline; conceding makes it a feeder again (+0.25); it isn't
+  his to run (no co-op); refused or ignored, a strike only where the trunk has a bus lane.
+- **The informal sector on a trunk** (tick.ts `dispatchInformal`, `sendInformal`'s `cut`):
+  - no okada or keke sets off along one (`refuses`); one whose run meets a trunk further on goes as
+    far as its head and sets those bound beyond down there (`relayRiders`), into the danfo pool at
+    `at>origin>destination>r` -- the trip counted the informal sector's when they first set off, so
+    a relayed rider who later goes home is moved from that count to the lost;
+  - riders whose road out is a trunk, who'd have taken an okada, go back once to wait for a danfo
+    (`>t`); out-waiting that, home;
+  - a danfo pays a trunk's toll where the trunk is yours, built or paved, as on any road of yours
+    (budget.ts `tollFor`); an old road you haven't paved charges none, trunk or not -- a toll on a
+    road you put nothing into would be free money (the suite's "inherited roads you haven't paved
+    charge no toll"). And it runs a trunk end to end: riders bound off it change there to a keke or
+    an okada for the last mile on the feeder.
+- **Measured.** Map 5059 from day 1 (no network of yours; 2 trunk roads by the derived rule), 6
+  days, trunks off -> on: trips made 746 -> 762 a day, lost unchanged (2,402 -> 2,400); okada and
+  keke road-time on the trunks 10.1 -> 0.5, on the feeders at their ends 22.8 -> 41.1. Your 5059
+  network (your run's 444 actions at once), five of its busiest okada roads declared, 6 days: okada
+  and keke trips on them 79 -> 3 a day; trips made 3,328 -> 3,372 (you +30, informal +14); lost
+  2,062 -> 2,092; okada and keke trips on the feeders at their ends 94 -> 93 -- level, not thicker:
+  the riders the trunk loses its okadas for go by danfo along it, or on your buses, and only those
+  bound off it take an okada at its end. The informal sector here spawns for riders, never for
+  road, so the feeders thicken where journeys run on past a trunk's end (the day-1 map), not
+  otherwise. The union named its trunk demand at once. (A first pass without the end-to-end danfo
+  and the second wait cost 2% of trips made.)
+
 ### Your bus station (2026-11-04; brief, Your bus station)
 
 - **`busstations.ts`** -- behind `busStationsEnabled` (absent in older runs, and `busStations`

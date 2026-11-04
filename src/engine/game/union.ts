@@ -6,7 +6,8 @@ import { laneOn, setEnforcement } from "./pushback";
 import { SECONDS_PER_GAME_DAY as D } from "../economy/state";
 import { inHome } from "./fuel";
 import { clusterOf } from "./clusters";
-import { removeBus, roadChain } from "./world";
+import { chainOf, removeBus, roadChain } from "./world";
+import { setTrunk } from "./trunks";
 import { strikePipe, type Pipeline } from "./pipelines";
 
 // The union as a party (docs/brief.md, Revision 5, step 5; agreed 2026-10-25: "proceed").
@@ -29,7 +30,7 @@ import { strikePipe, type Pipeline } from "./pipelines";
 // Plain data on the world, changed here and by the `union` action, so a run file replays it.
 // Off, and absent, in runs played before it (no unionEnabled).
 
-export type DemandKind = "lane" | "corridor" | "welfare" | "pipeline";
+export type DemandKind = "lane" | "corridor" | "welfare" | "pipeline" | "trunk";
 export type Answer = "pay" | "concede" | "coop" | "refuse";
 
 export interface Demand {
@@ -121,6 +122,7 @@ function demand(world: GameWorld, union: UnionState, kind: DemandKind, a: string
   const text = kind === "lane" ? `Our drivers lost their road on ${ab} to your lane. Ease it, or see to our members.`
     : kind === "corridor" ? `You've taken ${ab} from our members. Leave us the run, or see to them.`
     : kind === "pipeline" ? `Your pipe from ${ab} is taking our tanker drivers' loads. Turn it down, or see to our members.`
+    : kind === "trunk" ? `Our okadas and kekes lost ${ab} to your trunk. Make it a feeder again, or see to our members.`
     : `Our members are suffering. See to their welfare.`;
   const days = world.tuning.unionDemandDays ?? 7;
   union.demand = { kind, a, b, text, price: priceFor(world, union, kind), deadlineAt: world.economy.elapsedSeconds + days * D };
@@ -137,6 +139,18 @@ export function unionAfterAction(world: GameWorld, spec: ActionSpec): void {
       move(world, union, spec.kind === "lane" ? -0.25 : -0.1, spec.kind === "lane" ? `a bus lane on ${nameOf(world, spec.a)}–${nameOf(world, spec.b)}` : `BRT on ${nameOf(world, spec.a)}–${nameOf(world, spec.b)}`, events);
       if (spec.kind === "lane") demand(world, union, "lane", spec.a, spec.b, events);
     }
+  } else if ((spec.kind === "trunk" && spec.on) || (spec.kind === "road" && spec.trunk)) {
+    // A trunk declared (trunks.ts): the road taken off his okadas and kekes -- a demand, with a deadline.
+    const chain = spec.kind === "trunk" ? chainOf(world, spec.segmentId) : { a: spec.a, b: spec.b };
+    const union = chain ? unionOf(world, chain.a) ?? unionOf(world, chain.b) : undefined;
+    if (chain && union) {
+      move(world, union, -0.15, `you made ${nameOf(world, chain.a)}–${nameOf(world, chain.b)} a trunk: no okadas on it`, events);
+      demand(world, union, "trunk", chain.a, chain.b, events);
+    }
+  } else if (spec.kind === "trunk") {
+    const chain = chainOf(world, spec.segmentId);
+    const union = chain ? unionOf(world, chain.a) ?? unionOf(world, chain.b) : undefined;
+    if (chain && union) move(world, union, 0.1, `you made ${nameOf(world, chain.a)}–${nameOf(world, chain.b)} a feeder again`, events);
   } else if (spec.kind === "enforce" && spec.enforcement === "strict") {
     const union = unionOf(world, spec.a);
     if (union) move(world, union, -0.15, `wardens on ${nameOf(world, spec.a)}–${nameOf(world, spec.b)}`, events);
@@ -169,6 +183,11 @@ export function answerDemand(world: GameWorld, unionId: string, answer: Answer):
     if (!pipe || !pipe.working || pipe.dial <= 0) return { ok: false, reason: "nothing to concede there" };
     pipe.dial = Math.floor(pipe.dial * 5) / 10;
     move(world, union, 0.25, `you turned the pipe from ${ab} down to ${Math.round(pipe.dial * 100)}%`, events);
+  } else if (answer === "concede" && d.kind === "trunk") {
+    // A feeder again (trunks.ts): his okadas and kekes back on it.
+    const piece = roadChain(world, d.a, d.b)?.[0];
+    if (!piece || !setTrunk(world, piece.id, false).ok) return { ok: false, reason: "nothing to concede there" };
+    move(world, union, 0.25, `you made ${ab} a feeder again`, events);
   } else if (answer === "concede") {
     const lane = d.kind === "lane" ? laneOn(world, d.a, d.b) : undefined;
     if (!lane) return { ok: false, reason: "nothing to concede there" };
@@ -177,6 +196,8 @@ export function answerDemand(world: GameWorld, unionId: string, answer: Answer):
     move(world, union, 0.25, `you eased the lane on ${ab}`, events);
   } else if (answer === "coop" && d.kind === "pipeline") {
     return { ok: false, reason: "a pipeline isn't his to run" };
+  } else if (answer === "coop" && d.kind === "trunk") {
+    return { ok: false, reason: "a trunk isn't his to run" };
   } else if (answer === "coop") {
     const route = routeAlong(world, d.a, d.b);
     if (!route) return { ok: false, reason: "you run no route there" };

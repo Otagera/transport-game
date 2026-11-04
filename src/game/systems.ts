@@ -71,7 +71,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   },
   {
     id: "informal", label: "Danfos and kekes", col: 2, row: 1, feeds: ["noSeat", "money"], unit: "/day",
-    keys: [/^danfo/, /^keke/, /^okada/, /^informal/, /^agbero/, /^levy/, /^park/, /^settlement/, /^strike/, /^union/, /^enforcement/, /^corridor/],
+    keys: [/^danfo/, /^keke/, /^okada/, /^informal/, /^trunk/, /^agbero/, /^levy/, /^park/, /^settlement/, /^strike/, /^union/, /^enforcement/, /^corridor/],
     measure: safe((w) => [...w.pairOutcomes.values()].reduce((t, r) => t + r.poached * D, 0)),
   },
   {

@@ -657,6 +657,14 @@ export interface GameTuning {
    */
   airportRoadCondition?: number;
   pipelinesEnabled?: boolean;
+  /**
+   * Trunks and feeders (trunks.ts; docs/SCALES-AND-MODES.md, scopes 1 and 2): on; a town this big
+   * (thousands, on day 1) at both ends makes an inherited road a trunk; what declaring one costs a
+   * cell. Absent in older runs: no classes, every road as it was.
+   */
+  trunksEnabled?: boolean;
+  trunkTownPopulation?: number;
+  trunkCostPerCell?: number;
   pipeCostPerCell?: number;
   pipeRestorePerCell?: number;
   pipeCapPerDay?: number;

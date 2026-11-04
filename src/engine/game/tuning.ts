@@ -587,6 +587,12 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // 250 t a day; ₦400 a day; 2% lost kept up, 10% neglected; hauliers follow the work over 20 days
   // (15% always stay); a strike 7 days, a tap 5, about one a hundred days on a 100-cell pipe; at
   // 250 t a day the union settles near -0.5 (stance fades over unionMemoryDays, 120: 250 x 120 x k).
+  // Trunks and feeders (trunks.ts; docs/SCALES-AND-MODES.md, scopes 1 and 2): an inherited road is
+  // a trunk joining two clusters or two towns of 45k+ (the map's "regional town"); declaring one
+  // costs the signs and wardens, a little a cell -- what it really costs is the union.
+  trunksEnabled: true,
+  trunkTownPopulation: 45,
+  trunkCostPerCell: 50,
   pipelinesEnabled: true,
   // The airport (airport.ts; five-modes.md, 2. Airport): first guesses from the scope, to measure with
   // the strategist. A few hundred travellers a day each way at the start (0.35 a thousand of ~750k);

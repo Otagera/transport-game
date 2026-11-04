@@ -370,6 +370,8 @@ let tool: Tool = "bus";
 let alignment: Alignment = "cheapest";
 // A new road over water: a causeway (floods with the rains) or a high bridge (C; floods.ts).
 let highBridge = false;
+/** A new road declared a trunk as it's built (E; trunks.ts): no okadas or kekes on it, danfos pay its toll. */
+let trunkRoad = false;
 let selectedTown: string | null = null;
 let hoverTown: string | null = null;
 let mouse: { x: number; y: number } | null = null;
@@ -651,7 +653,7 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
       if (!chain) {
         const way = wayBetween("road", a, b).way;
         const plan = planRoad(world, a, b, way);
-        return { kind: "road", a, b, alignment: way, high: highBridge && !!plan && highBridgeCost(world, plan.polyline) > 0 };
+        return { kind: "road", a, b, alignment: way, high: highBridge && !!plan && highBridgeCost(world, plan.polyline) > 0, ...(trunkRoad && world.tuning.trunksEnabled ? { trunk: true } : {}) };
       }
       if (chain.some(isDirt)) return { kind: "pave", a, b };
       // A lane already: the Road tool switches its enforcement, strict <-> lax.
@@ -1177,7 +1179,7 @@ canvas.addEventListener("click", (event) => {
     const high = highBridge && !!plan && highBridgeCost(world, plan.polyline) > 0;
     const wet = !!plan && highBridgeCost(world, plan.polyline) > 0;
     const cost = roadCost(world, from, town, way, high);
-    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment: way, high });
+    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment: way, high, ...(trunkRoad && world.tuning.trunksEnabled ? { trunk: true } : {}) });
     if (result.ok) say(`Built road ${townName(from)} – ${townName(town)}${way === "direct" ? ", the straight way" : ""}${!wet ? "" : high ? ", on a high bridge" : ", over a causeway that floods in the rains (C for a high bridge)"}, for ${naira(cost)}.${later}`);
     else say(`Can't build: ${result.reason}`, true);
   } else if (tool === "track") {
@@ -1309,6 +1311,10 @@ window.addEventListener("keydown", (event) => {
   else if ((event.key === "i" || event.key === "I") && toolOn("pipe")) setTool("pipe");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
+  else if ((event.key === "e" || event.key === "E") && world.tuning.trunksEnabled && tool === "road") {
+    trunkRoad = !trunkRoad;
+    say(trunkRoad ? "New roads: a trunk -- no okadas or kekes on it, danfos pay its toll; the union will want it back." : "New roads: a feeder, the informal sector's ground.", false, 4);
+  }
   else if ((event.key === "c" || event.key === "C") && world.tuning.causewaysEnabled && world.floods) {
     highBridge = !highBridge;
     say(highBridge ? "Roads over water: a high bridge, open in the rains." : "Roads over water: a causeway, cheap -- it floods in the rains.", false, 4);
@@ -1548,9 +1554,13 @@ function ghost(): Ghost | null {
     const keep = naira(upkeepFor(world.tuning, plan.length, plan.bridgeCells, false));
     // Over water: which kind of crossing, and the other's price (C).
     const crossing = raise <= 0 ? "" : high ? ` · a high bridge, open in the rains (a causeway ${naira(raise)} less, C)` : ` · a causeway: floods in the rains (a high bridge +${naira(raise)}, C)`;
-    const label = `${way === "direct" ? `Road straight ${straightWord(plan)}` : "Road"} ${naira(plan.cost + (high ? raise : 0))} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${crossing}${otherWay(plan, other, way)} · ${riders} · earns no fares itself: run a bus on it`;
+    // A trunk (E): its signs and wardens on top, and what it means.
+    const trunk = trunkRoad && world.tuning.trunksEnabled;
+    const trunkCost = trunk ? Math.round(plan.length * (world.tuning.trunkCostPerCell ?? 50)) : 0;
+    const asTrunk = !world.tuning.trunksEnabled ? "" : trunk ? ` · a trunk (+${naira(trunkCost)}): no okadas or kekes, danfos pay its toll, the union will want it back (E: a feeder)` : " · a feeder (E: a trunk)";
+    const label = `${way === "direct" ? `Road straight ${straightWord(plan)}` : "Road"} ${naira(plan.cost + (high ? raise : 0) + trunkCost)} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${crossing}${asTrunk}${otherWay(plan, other, way)} · ${riders} · earns no fares itself: run a bus on it`;
     const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost + (high ? raise : 0))} · ${check.reason}` };
-    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment: way, high }, { label: "the road", towns: [selectedTown, to] });
+    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment: way, high, ...(trunk ? { trunk: true } : {}) }, { label: "the road", towns: [selectedTown, to] });
   }
   if (tool === "track") {
     const check = checkTrack(world, selectedTown, to, "cheapest");
@@ -3542,6 +3552,14 @@ function onPanelClick(event: MouseEvent): void {
     act({ label: "dropping the named project", towns: [] }, { kind: "dropProject" });
     say("Project dropped: the treasury takes its usual share again.");
     renderPanel();
+    return;
+  }
+  // A road's class (trunks.ts), from its card.
+  if (target.dataset.trunk) {
+    const [id, on] = target.dataset.trunk.split("|") as [string, string];
+    const name = roadName(id);
+    const result = act({ label: on === "1" ? `${name} a trunk` : `${name} a feeder`, towns: roadTowns(id) }, { kind: "trunk", segmentId: id, on: on === "1" });
+    say(result.ok ? (on === "1" ? `${capitalise(name)} is a trunk: no okadas or kekes on it${(result.amount ?? 0) > 0 ? ` (${naira(result.amount ?? 0)})` : ""}.` : `${capitalise(name)} is a feeder again.`) : `Can't: ${result.reason}`, !result.ok);
     return;
   }
   // A corridor's wear, from its row in the Corridors section.
