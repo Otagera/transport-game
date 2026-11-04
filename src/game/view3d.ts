@@ -44,6 +44,7 @@ import { Kit, block, bungalow, church, hut, market, mosque, seeded, shophouse, s
 import { RING_DRIVE, RING_OUTER, RING_ZONE, busPark, hasLorryPark, lorryPark, roundabout, siteScale, yardFence } from "./shapes3d";
 import { AIRPORT, airAt, airliner, airportArrival, airportDeparture } from "./shapes3d";
 import { airportTravellersPerDay } from "@engine/game/airport";
+import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { BUS_PARK, inPark, layBusParks, parkDrive, parkEnds, parkPoint, siteParkGround, type BusPark } from "./busparks3d";
 
 const M = 8; // metres a map cell
@@ -2879,10 +2880,19 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   let parks = new Map<string, BusPark>();
   let parksInput = "";
   const parkMeshes = new Map<string, { key: string; mesh: THREE.Mesh; top: number }>();
+  /**
+   * The towns with your bus station (the other session's busstations.ts, world.busStations, behind
+   * busStationsEnabled): read as it's saved until its types are merged here.
+   */
+  function builtStations(w: GameWorld): Set<string> {
+    const built = (w as unknown as { busStations?: Set<string> }).busStations;
+    return (w.tuning as unknown as { busStationsEnabled?: boolean }).busStationsEnabled && built ? built : new Set();
+  }
   function syncParks(w: GameWorld): void {
     const ends = parkEnds(w);
+    const stationsBuilt = builtStations(w);
     const freight = w.lorryRoutes.filter((r) => r.vehicleIds[0] && !w.railVehicles.has(r.vehicleIds[0])).map((r) => r.id).sort().join(",");
-    const input = `${network}|${[...ends].map(([id, r]) => `${id}:${[...r].sort().join(",")}`).sort().join("|")}|${freight}|${stationsInput.length}|${siteAt.size}`;
+    const input = `${network}|${[...ends].map(([id, r]) => `${id}:${[...r].sort().join(",")}`).sort().join("|")}|${freight}|${[...stationsBuilt].sort().join(",")}|${stationsInput.length}|${siteAt.size}`;
     if (input === parksInput) return;
     parksInput = input;
     passages.clear();
@@ -2895,7 +2905,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const kind = w.towns.get(id)?.industry ?? "";
       if (kind === "airport" || hasLorryPark(kind)) fixed.set(id, Math.atan2(-Math.cos(at.ry), -Math.sin(at.ry)));
     }
-    parks = layBusParks(w, roadsOnly, blocked, (id) => (degree.get(id) ?? 0) >= 3, RING_OUTER, fixed);
+    parks = layBusParks(w, roadsOnly, blocked, (id) => (degree.get(id) ?? 0) >= 3, RING_OUTER, fixed, stationsBuilt);
     for (const [id, built] of parkMeshes) {
       if (parks.get(id)?.key === built.key) continue;
       scene.remove(built.mesh);
@@ -2918,7 +2928,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       });
       const ringed = rings.has(park.id) || (degree.get(park.id) ?? 0) >= 3;
       if (park.kind === "lorry") lorryPark(kit, seeded(`lorrypark-${park.id}`), { straight: park.straight, gap: park.gap, ringed, depth: high - low + 0.3, bays: park.spots });
-      else busPark(kit, seeded(`buspark-${park.id}`), { straight: park.straight, gap: park.gap, ringed, depth: high - low + 0.3, bays: colours, you: tokenPaint("--you") });
+      else busPark(kit, seeded(`buspark-${park.id}`), { straight: park.straight, gap: park.gap, ringed, depth: high - low + 0.3, bays: colours, you: tokenPaint("--you"), station: park.station });
       const mesh = new THREE.Mesh(kit.merged(), material);
       mesh.position.set(park.centre.x * M, high, park.centre.y * M);
       mesh.rotation.y = Math.atan2(-Math.cos(park.axis), -Math.sin(park.axis));
@@ -4257,6 +4267,12 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       const ry = Math.atan2(-Math.cos(park.axis), -Math.sin(park.axis));
       const centre = parkPoint(park, 0, 0);
       const lift = built.top - elevationAt(centre.x, centre.y) * HEIGHT + 0.95;
+      if (park.station) {
+        // Your station's concourse: the riders changing lines here (transfers.ts), waiting under cover.
+        const changing = Math.max(2, Math.min(30, Math.round(((w.transferRateEMA.get(park.id) ?? 0) * SECONDS_PER_GAME_DAY) / 10)));
+        const end = park.straight / 2 + BUS_PARK.pave;
+        crowds.push({ key: `concourse:${park.id}`, n: changing, at: { x: centre.x * M, z: centre.y * M, ry }, lift, place: (r) => [-(end + 2 + r() * 6), (r() - 0.5) * 4, 0.6] });
+      }
       [...park.bays].forEach(([routeId, bay]) => crowds.push({
         key: `buspark:${park.id}:${routeId}`, n, at: { x: centre.x * M, z: centre.y * M, ry }, lift,
         // In the kit's frame (busPark): x along the island, z toward the town (-o).

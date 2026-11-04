@@ -720,6 +720,15 @@ whatever else was there bunched on that one point. Now:
   (`passageThrough`, cached) is bent from up to `PARK_ZONE` (120 m) either side along the roads, so
   they go round it a little faster than on the road to make up the time the engine never gave them.
   The airport has its own, before its terminal, turned with its field.
+- **Your bus station** (2026-11-04; the other session's busstations.ts, `world.busStations`, read
+  defensively until its types are merged here): where you've built one, that town's park is drawn as
+  the station (busparks3d.ts `station`, `STATION`; shapes3d `busStation`) whether or not a line ends
+  there -- the terminal beyond the island's end, two floors glazed, your colour on its fascia and its
+  name board; a covered way from it to the island, the riders changing lines there waiting under it
+  (`transferRateEMA`); the ticket office and the name board over the mouth; behind the park its
+  depot, where the lines ending there are serviced: the workshop with a bus in each bay, the fuel
+  island. A route's end with no station is its loop and its shelter, no office or name board: what
+  you built stands out.
 - **A roundabout where three roads or more meet in a town** (`syncRings`), and at a route's end where
   no park could be laid: a kerbed island (black and white) with its obelisk or clock tower, a ring of
   road round it. Whatever drives through goes round it keeping right (`onRing`, the last and first 44

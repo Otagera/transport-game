@@ -138,7 +138,9 @@ airport's airliners land, taxi, stand and take off, the busier it is the more of
 (branch `map2d`): roads, track and pipes that share a corridor drawn side by side, not braided;
 labels that find room round their mark or along their road instead of vanishing, keeping off the
 towns and the lines; vehicles smaller from the region zoom, the other side's dots (render-and-ui.md,
-The 2D map's core, its labels, its zooms).
+The 2D map's core, its labels, its zooms). And (branch `busstation3d`) your bus station in 3D: its
+terminal and concourse, its depot behind, where the other session's station is built; a route's
+end without one plainer.
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

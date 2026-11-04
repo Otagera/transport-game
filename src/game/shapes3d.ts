@@ -1222,7 +1222,7 @@ export function roundabout(kit: Kit, rand: Rand, depth = 0.3): void {
  * canopy -- benches, its fascia in your colour -- each bay marked at the kerb with its route's
  * colour on a sign, a ticket office by the mouth and the park's name board over it.
  */
-export function busPark(kit: Kit, rand: Rand, at: { straight: number; gap: number; ringed: boolean; depth: number; bays: Array<{ s: number; o: number; colour: string | number }>; you: string | number }): void {
+export function busPark(kit: Kit, rand: Rand, at: { straight: number; gap: number; ringed: boolean; depth: number; bays: Array<{ s: number; o: number; colour: string | number }>; you: string | number; station?: boolean }): void {
   const { straight, gap } = at;
   const pave = 13, island = 4.2, top = 0.5, ground = paint("--paint-grey-18"), line = paint("--paint-light-1");
   // The paving, rounded at its ends, and the lane out to the junction (to the roundabout's edge).
@@ -1250,12 +1250,56 @@ export function busPark(kit: Kit, rand: Rand, at: { straight: number; gap: numbe
     kit.box(0.15, 3.2, 0.15, paint("--paint-grey-20"), bay.s - 8, side * (island - 0.5), top + 0.45);
     kit.box(1.4, 1, 0.12, bay.colour, bay.s - 8, side * (island - 0.5), top + 0.45 + 2.6);
   }
+  // Only what you built has a name and an office: a route's end alone is its loop and its shelter.
+  if (at.station) busStation(kit, { straight, depth: at.depth, you: at.you });
+  void rand;
+}
+/**
+ * Your bus station (the other session's busstations.ts; brief, Your bus station) on a bus park, in
+ * its frame: the terminal beyond the island's end -- two floors, glazed, your colour on its fascia,
+ * its name board -- a covered way from it to the island; the ticket office and the name board over
+ * the mouth; behind the park its depot, where the lines ending here are serviced: its yard, the
+ * workshop with a bus in each bay, the fuel island. busparks3d.ts STATION gives it its ground.
+ */
+function busStation(kit: Kit, at: { straight: number; depth: number; you: string | number }): void {
+  const { straight, depth, you } = at;
+  const pave = 13, top = 0.5, end = straight / 2 + pave, concrete = paint("--paint-grey-18");
+  // The terminal's forecourt and the depot's yard: paving out to the station's ground.
+  kit.box(24, top + depth, 26, concrete, -(end + 11), 0, -depth);
+  kit.box(straight + pave * 2, top + depth, 28, concrete, 0, -(pave + 14), -depth);
+  // The terminal: two floors, glazed toward the park, its roof's parapet, your colour along it.
+  const tx = -(end + 11);
+  kit.box(20, 8, 18, paint("--paint-light-4"), tx, 0, top);
+  for (const floor of [0, 1]) kit.box(20.1, 2.2, 14, paint("--paint-blue-17"), tx, 0, top + 1.2 + floor * 4);
+  kit.box(20.6, 0.8, 18.6, paint("--paint-grey-14"), tx, 0, top + 8);
+  kit.box(20.8, 1.2, 0.3, you, tx, 9.4, top + 6.6);
+  for (const x of [tx - 5, tx + 5]) kit.box(0.35, 4, 0.35, paint("--paint-grey-20"), x, 0, top + 8.8);
+  kit.box(14, 2.2, 0.3, you, tx, 0, top + 12.4);
+  // The covered way from its doors to the island's end.
+  kit.box(end - straight / 2 + 2, 0.3, 5, paint("--paint-light-2"), -(straight / 2 + (end - straight / 2) / 2 - 1), 0, top + 4.6);
+  for (const x of [-(straight / 2 + 2), -(end - 1)]) for (const z of [-2.2, 2.2]) kit.box(0.25, 4.6, 0.25, paint("--paint-grey-20"), x, z, top);
   // The ticket office by the mouth, and the name board over it.
   kit.box(5, 3, 3.6, paint("--paint-earth-47"), -10, pave - 3.5, top);
   kit.box(5.6, 0.3, 4.2, paint("--paint-red-6"), -10, pave - 3.5, top + 3);
   for (const x of [-5, 5]) kit.box(0.35, 6, 0.35, paint("--paint-grey-20"), x, pave + 0.6, top);
-  kit.box(10.6, 1.5, 0.3, at.you, 0, pave + 0.6, top + 5.2);
-  void rand;
+  kit.box(10.6, 1.5, 0.3, you, 0, pave + 0.6, top + 5.2);
+  // The depot behind: the workshop, open to its yard, a bus in each of its bays.
+  // Deep enough for a bus as the roads draw it (19 m), nose in from the yard.
+  const wz = -(pave + 15), wx = straight / 4;
+  kit.box(34, 7.5, 22, paint("--paint-grey-11"), wx, wz, top);
+  kit.gable(34.6, 22.6, 3, paint("--paint-grey-14"), wx, wz, top + 7.5);
+  kit.box(31, 6.5, 0.2, paint("--paint-dark-2"), wx, wz + 11.05, top + 0.2);
+  for (const k of [-1, 1]) {
+    const bus = vehicleGeometry("bus");
+    bus.scale(1.6, 1.6, 1.6);
+    kit.place(bus, wx + k * 8, top + 0.35, wz + 0.5, Math.PI / 2);
+  }
+  // The fuel island: its canopy on four posts, two pumps under it.
+  const fx = -straight / 4, fz = -(pave + 16);
+  kit.box(1.4, 0.3, 10, concrete, fx, fz, top);
+  for (const dz of [-3, 3]) kit.box(0.8, 1.6, 0.6, you, fx, fz + dz, top + 0.3);
+  for (const [dx, dz] of [[-3, -5], [3, -5], [-3, 5], [3, 5]] as const) kit.box(0.3, 5, 0.3, paint("--paint-grey-20"), fx + dx, fz + dz, top);
+  kit.box(8, 0.5, 12, paint("--paint-light-4"), fx, fz, top + 5);
 }
 /**
  * A site's lorry park before its gate (busparks3d.ts, as a bus park in its frame: x along its

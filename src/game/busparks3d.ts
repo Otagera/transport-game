@@ -32,6 +32,11 @@ export interface BusPark {
   id: string;
   /** A bus park (a town's, the airport's) or a lorry park (a site's): what it's drawn as. */
   kind: "bus" | "lorry";
+  /**
+   * Your bus station built here (the other session's busstations.ts; brief, Your bus station): the
+   * park drawn as the station -- its terminal and concourse, its depot behind -- on more ground.
+   */
+  station: boolean;
   /** What it was laid from: a change lays it again (and the town round it builds anew). */
   key: string;
   node: Point;
@@ -87,6 +92,8 @@ export function layBusParks(
    * there -- the hauliers come anyway. The airport's is a bus park; the rest, lorry parks.
    */
   fixed: Map<string, number> = new Map(),
+  /** The towns with your bus station: each has its park, a route of yours ending there or not. */
+  stations: ReadonlySet<string> = new Set(),
 ): Map<string, BusPark> {
   const out = new Map<string, BusPark>();
   const laid: BusPark[] = [];
@@ -99,15 +106,17 @@ export function layBusParks(
     for (const id of [route.a, route.b]) if (fixed.has(id)) (ends.get(id) ?? ends.set(id, []).get(id)!).push(route.id);
   }
   for (const id of fixed.keys()) if (!ends.has(id)) ends.set(id, []);
+  for (const id of stations) if (!ends.has(id) && world.towns.get(id) && !world.towns.get(id)!.industry) ends.set(id, []);
   // The sites' first (their ground is set), then the towns'.
   const order = [...ends].sort(([a], [b]) => (fixed.has(a) !== fixed.has(b) ? (fixed.has(a) ? -1 : 1) : a < b ? -1 : 1));
   for (const [id, routes] of order) {
     const town = world.towns.get(id)!;
     if (town.industry && !fixed.has(id)) continue;
     const kind: BusPark["kind"] = town.industry && town.industry !== "airport" ? "lorry" : "bus";
+    const station = kind === "bus" && !town.industry && stations.has(id);
     const node = positions.get(id) ?? { x: town.x, y: town.y };
     routes.sort();
-    const straight = routes.length > 1 || town.industry ? BUS_PARK.bay * 2 : BUS_PARK.bay;
+    const straight = routes.length > 1 || town.industry || station ? BUS_PARK.bay * 2 : BUS_PARK.bay;
     const gap = ringed(id) ? ringOuter + 10 : 12;
     // The roads into the town, each by the way it leaves the point: the park's lane between them.
     const arms: number[] = [];
@@ -123,12 +132,12 @@ export function layBusParks(
     let best: { axis: number; score: number } | null = fixed.has(id) ? { axis: fixed.get(id)!, score: 0 } : null;
     for (let k = 0; k < (fixed.has(id) ? 0 : 24); k += 1) {
       const axis = (k / 24) * Math.PI * 2;
-      const trial: BusPark = { id, kind, key: "", node, axis, gap, straight, centre: { x: 0, y: 0 }, bays: new Map(), spots: [] };
+      const trial: BusPark = { id, kind, station, key: "", node, axis, gap, straight, centre: { x: 0, y: 0 }, bays: new Map(), spots: [] };
       trial.centre = { x: node.x + (Math.cos(axis) * (gap + BUS_PARK.pave)) / M, y: node.y + (Math.sin(axis) * (gap + BUS_PARK.pave)) / M };
       let score = 0;
-      // Its paving, sampled every 4 m.
-      const half = straight / 2 + BUS_PARK.pave;
-      for (let s = -half; s <= half; s += 4) for (let o = -BUS_PARK.pave; o <= BUS_PARK.pave; o += 4) {
+      // Its ground, sampled every 4 m (a station's, its terminal and depot too).
+      const ground = groundOf(trial);
+      for (let s = -ground.half; s <= ground.half; s += 4) for (let o = -BUS_PARK.pave; o <= ground.back; o += 4) {
         const p = parkPoint(trial, s, o);
         if (blocked(p.x, p.y)) score += 10;
         else if (roadNear(p.x, p.y, 5 / M)) score += 8;
@@ -147,7 +156,7 @@ export function layBusParks(
       if (!best || score < best.score - 1e-9) best = { axis, score };
     }
     if (!best) continue;
-    const park: BusPark = { id, kind, key: "", node, axis: best.axis, gap, straight, centre: { x: 0, y: 0 }, bays: new Map(), spots: [] };
+    const park: BusPark = { id, kind, station, key: "", node, axis: best.axis, gap, straight, centre: { x: 0, y: 0 }, bays: new Map(), spots: [] };
     park.centre = { x: node.x + (Math.cos(best.axis) * (gap + BUS_PARK.pave)) / M, y: node.y + (Math.sin(best.axis) * (gap + BUS_PARK.pave)) / M };
     // Bays: the far side first, then the near (either side of the lane's mouth).
     const spots = straight > BUS_PARK.bay
@@ -155,7 +164,7 @@ export function layBusParks(
       : [{ s: 0, o: 1 }];
     park.spots = spots.map((spot) => ({ s: spot.s, o: spot.o * BUS_PARK.drive }));
     routes.forEach((r, i) => park.bays.set(r, park.spots[i % Math.min(BAYS, park.spots.length)]!));
-    park.key = `${kind}|${best.axis.toFixed(3)}|${gap}|${routes.join(",")}`;
+    park.key = `${kind}${station ? "+station" : ""}|${best.axis.toFixed(3)}|${gap}|${routes.join(",")}`;
     out.set(id, park);
     laid.push(park);
   }
@@ -169,17 +178,29 @@ export function layBusParks(
 export function siteParkGround(id: string, node: Point, axis: number): BusPark {
   const gap = 12, straight = BUS_PARK.bay * 2;
   return {
-    id, kind: "lorry", key: "", node, axis, gap, straight, bays: new Map(), spots: [],
+    id, kind: "lorry", station: false, key: "", node, axis, gap, straight, bays: new Map(), spots: [],
     centre: { x: node.x + (Math.cos(axis) * (gap + BUS_PARK.pave)) / M, y: node.y + (Math.sin(axis) * (gap + BUS_PARK.pave)) / M },
   };
 }
+
+/**
+ * A park's ground in its frame (metres): `half` along its island either way, `back` out beyond it
+ * -- a station's further, its terminal at one end and its depot behind (STATION).
+ */
+export function groundOf(park: BusPark): { half: number; back: number } {
+  const half = park.straight / 2 + BUS_PARK.pave;
+  return park.station ? { half: half + STATION.terminal, back: BUS_PARK.pave + STATION.depot } : { half, back: BUS_PARK.pave };
+}
+/** A station's more ground (metres): its terminal beyond the island's end, its depot yard behind the park. */
+export const STATION = { terminal: 22, depot: 28 };
 
 /** Whether a point (cells) is on a park's ground or its lane, `pad` metres round. */
 export function inPark(park: BusPark, p: Point, pad: number): boolean {
   const dx = (p.x - park.centre.x) * M, dy = (p.y - park.centre.y) * M;
   const ca = Math.cos(park.axis), sa = Math.sin(park.axis);
   const o = dx * ca + dy * sa, s = -dx * sa + dy * ca;
-  if (Math.abs(s) < park.straight / 2 + BUS_PARK.pave + pad && Math.abs(o) < BUS_PARK.pave + pad) return true;
+  const ground = groundOf(park);
+  if (Math.abs(s) < ground.half + pad && o > -BUS_PARK.pave - pad && o < ground.back + pad) return true;
   return Math.abs(s) < BUS_PARK.lane / 2 + pad && o < 0 && o > -BUS_PARK.pave - park.gap - pad;
 }
 
