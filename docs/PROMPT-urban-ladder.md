@@ -1,6 +1,6 @@
 > Saved as given (2026-11-04). Not to be run as it stands: per [five-modes.md](five-modes.md),
 > "Already scoped, needing one correction", its rungs and numbers hold but its *reason* is to be
-> rewritten on top of the inside scope (`SCALES-AND-MODES.md`, not yet in the repo) -- a city line
+> rewritten on top of the inside scope ([SCALES-AND-MODES.md](SCALES-AND-MODES.md)) -- a city line
 > exists mainly to take cars off your own approach roads, the three rungs differing in how much of
 > the car slice each takes. Its line references are to `main` at `624fcb2`.
 
