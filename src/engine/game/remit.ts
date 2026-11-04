@@ -182,7 +182,7 @@ export function remitRefusal(world: GameWorld, spec: ActionSpec): string | null 
       return linkOutsideRemit(world, spec.a, spec.b);
     case "halt":
       return placesOutsideRemit(world, spec.town);
-    case "yard": case "park": case "metro":
+    case "yard": case "park": case "metro": case "busStation":
       return placesOutsideRemit(world, spec.townId);
     case "expand":
       return placesOutsideRemit(world, spec.siteId);

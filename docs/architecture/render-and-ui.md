@@ -696,6 +696,19 @@ whatever else was there bunched on that one point. Now:
 
 Drawn only, as the stations are: the engine's vehicles still pass through the town's point.
 
+**Your bus station on the screen** (2026-11-04; engine.md, Your bus station). The Station tool
+(<kbd>S</kbd>, Build, beside Park) is one click on a town; its quote names your lines there, riders
+changing a day and those giving up changing. On the map, an S in your colour at the town's
+bottom-right (render.ts `drawStationMark`). On the town's card: with a station, its tiles (change
+lines here, give up changing, its depot's lines) and the routes table becomes **the board** --
+each line's problem (VERDICT_WORDS) and, where it loses, a Sell one button (`data-remove`, let past
+screen.ts's row pick); without one, an offer where 80+ a day give up changing
+(`STATION_OFFER_PER_DAY`). Waiting on you names the two worst such towns with the station's button,
+weighted with the airport's (2e6 + the number): ranked once a game day like the rest, so it
+appears from the next day (`changeGiveUpEMA`, rolling a game day). Headless on your 5059 replay:
+Odun offered at ~205 a day giving up, bought from the card; the board listed 25 lines, losing
+first. Not yet in 3D (the bus parks, branch `terminus`, are drawn from your routes alone).
+
 **Stations and trains in their parts** (2026-11-03, `stations3d.ts`; your playtest, map 8703 day
 482: Otido's six lines and its freight in one heap in the town's middle). The game's trains have no
 platforms -- every line's track runs to its town's node, and a train loads the moment it's there

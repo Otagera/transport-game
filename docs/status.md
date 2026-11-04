@@ -95,7 +95,7 @@ it -- now it says why they're not carried and names the move that pays (problems
 engine.md, The airport). Replaced on day 361 and nothing changed: parked as story or sandbox at the
 start (brief, Ideas parked). **Your bus station** agreed (brief, same name): people change there,
 the depot, the board of its lines; measured on your replay, 9% of those who give up do so at a
-change, 40% of changers at Odun; on three more saved games 4-19%, about half of changers lost at two to four hub towns. Next: building it.
+change, 40% of changers at Odun; on three more saved games 4-19%, about half of changers lost at two to four hub towns. **Built** (busstations.ts; engine.md and render-and-ui.md, Your bus station): the Station tool (S), changing riders 3x as patient, the depot half the rough roads' cost, the board on the town's card with Sell, Waiting on you naming the worst hubs. On your replay a station at Odun paid back in 27 days, at Ofabo (nobody changing) never. Next: the strategist's stations (C44, C45), then your playtest (C46).
 
 **The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
 you aim and The network): from your "to click on some things are difficult ... between tick the
