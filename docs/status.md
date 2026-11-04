@@ -134,7 +134,11 @@ scale**: each plant 1.5-2x, with the lorries and the airport, its fence and vehi
 placed as the airport is, a **lorry park** before each gate that hauliers and your freight lorries
 go through to a bay; the 3D overlay arcs fade out close in -- they were the dark bands across every
 close view (render-and-ui.md, Sites to scale, and their lorry parks). And (branch `airport-life`) the
-airport's airliners land, taxi, stand and take off, the busier it is the more often.
+airport's airliners land, taxi, stand and take off, the busier it is the more often. And the **2D map**
+(branch `map2d`): roads, track and pipes that share a corridor drawn side by side, not braided;
+labels that find room round their mark or along their road instead of vanishing, keeping off the
+towns and the lines; vehicles smaller from the region zoom, the other side's dots (render-and-ui.md,
+The 2D map's core, its labels, its zooms).
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

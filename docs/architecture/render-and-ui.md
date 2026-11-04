@@ -632,6 +632,31 @@ under the buttons shows in 3D too. They're for the overview: closer than 600 m t
 by 600 and whole from 1500 (`fadeArcs`) -- zoomed in on a town, its arcs to every neighbour, high
 above it, had crossed the view as broad dark bands over everything (2026-11-04).
 
+**The 2D map's core, its labels, its zooms** (2026-11-04; your map 5059 at day 654: the core between
+Igbo-Onani, Iwashin, Ikon, Etofo and Ojamu a tangle, its labels piled on each other).
+
+- **Shared corridors side by side** (`bundle.ts`, render.ts `bundleNetwork`, `drawnLine`): roads,
+  track and pipes built along nearly the same ground -- each routed on its own a cell or two apart --
+  had braided over and under each other. Where two run alongside (within 28 degrees of parallel,
+  closer than their widths), each is moved sideways until they lie side by side 1.5 px apart, the
+  way round settled by rank (roads, track, pipes) where they lie exactly on one another, eased
+  along the line and back to its own toward either end, so they still meet at the town; lines that
+  only cross are left alone. In screen pixels, so the lanes hold at any zoom; worked out again as
+  the zoom passes a 15% step (15-21 ms for the 83 lines of the dense test world). Everything drawn
+  on a road uses the drawn line: its body, plates, vehicles, strike and TAKEN tags, highlight.
+- **Labels with places to choose from** (density.ts `Placer`: `boxes`, `OBSTACLE`, `resolve`'s
+  cost): a town's or site's name tries below its mark, then above, right, left (`nameBoxes`,
+  `nameAt`); a strike's or a corridor's tag slides along its road at a few shares of the way, either
+  side; every town's mark (and, closer than the region, every site's icon) is kept off by every
+  label; of a label's clear places the one least over the lines wins (`lineGrid`: the drawn lines
+  on an 8 px grid). Before, a label had one place, and gave way by vanishing: on the dense test
+  world four of the core's town names were gone.
+- **What each zoom shows** (`drawVehicles`): from the region (the map's opening zoom, "mid") the
+  roads say what runs on them -- the colour the traffic, the core your riders -- so the vehicles are
+  smaller (72%; 60% further out), the other side's a dot, and of several of one kind on one spot
+  (7 px) one is drawn; in close ("near"), every one at its size. A bus at its route's end turns
+  under its town's mark, drawn over it, so the 2D needs no park.
+
 **Click anything in 3D** (2026-11-03; `Built.pickAt`, `Pick3D`). The 3D view was watch-only but
 for towns and sites; a click now picks, smallest first: a vehicle drawn within 12 px (its line's
 card; a danfo's or hauliers' truck, the road it's on), a town's or site's buildings (or its

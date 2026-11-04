@@ -944,7 +944,7 @@ function drawOverlay(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
 
 // --- Vehicles (the lab's pills, at the sim's own positions) -----------------------------------
 
-function pill(ctx: CanvasRenderingContext2D, pose: { x: number; y: number; angle: number }, len: number, wid: number, fill: string, edge: string, full: number | null): void {
+function drawPill(ctx: CanvasRenderingContext2D, pose: { x: number; y: number; angle: number }, len: number, wid: number, fill: string, edge: string, full: number | null): void {
   ctx.save();
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.angle);
@@ -974,16 +974,42 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
   for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) routeOf.set(id, route.id);
   // A train as long as its cars (rail.ts addCar): one car, the pill it always was; four, nearly twice.
   const trainLength = (route: string | undefined) => 12 + 8 * Math.min(4, route ? carsOn(world, route) : 1) ** 0.75;
+  // By the zoom (your word, 2026-11-04: what each zoom shows): from the region, the roads say what
+  // runs on them -- their colour the traffic, their core your riders -- so the vehicles are smaller
+  // there (the other side's a dot), and where several of a kind stand on one spot, one of them; in
+  // close, every one at its size.
+  const near = zoomTier === "near";
+  const size = near ? 1 : zoomTier === "mid" ? 0.72 : 0.6;
+  const seen = new Set<string>();
+  const crowded = (pose: { x: number; y: number }, kind: string) => {
+    if (near) return false;
+    const key = `${kind}:${Math.floor(pose.x / 7)}:${Math.floor(pose.y / 7)}`;
+    if (seen.has(key)) return true;
+    seen.add(key);
+    return false;
+  };
+  const pill = (ctx2: CanvasRenderingContext2D, pose: { x: number; y: number; angle: number }, len: number, wid: number, fill: string, edge: string, full: number | null) => drawPill(ctx2, pose, len * size, wid * size, fill, edge, full);
   for (const vehicle of world.simulation.vehicles) {
     const informal = vehicle.lifecycle === "one-shot";
     if (informal && !oneByOne) continue;
     if (network !== "both" && world.railVehicles.has(vehicle.id) !== (network === "rail")) continue;
     const pose = vehiclePose(world, view, vehicle);
     if (!pose) continue;
+    if (crowded(pose, informal ? "informal" : vehicle.carries === "goods" ? "goods" : world.railVehicles.has(vehicle.id) ? "train" : "bus")) continue;
     const route = routeOf.get(vehicle.id);
     ctx.globalAlpha = (!focus ? 1 : route ? (focus.routes.has(route) ? 1 : FADED) : focus.segments.has(segmentOfVehicle(world, vehicle) ?? "") ? 1 : FADED) * (dim ? OVERLAY_BACKDROP : 1);
     const full = vehicle.cargo.reduce((sum, entry) => sum + entry.amount, 0) / Math.max(1, vehicle.capacity);
-    if (informal) {
+    if (informal && !near) {
+      // The other side, from afar: a dot in its colour on the road.
+      const mode = world.informal.active.get(vehicle.id)?.mode ?? (vehicle.id.startsWith("truck-") ? "truck" : "danfo");
+      ctx.fillStyle = mode === "truck" ? COLORS.goods : COLORS.danfo;
+      ctx.strokeStyle = COLORS.ink;
+      ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      ctx.arc(pose.x, pose.y, (mode === "truck" ? 2.2 : 1.8) * markScale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (informal) {
       const mode = world.informal.active.get(vehicle.id)?.mode ?? (vehicle.id.startsWith("truck-") ? "truck" : "danfo");
       if (mode === "truck") pill(ctx, pose, 9, 4, COLORS.goods, COLORS.ink, null);
       else if (mode === "keke") pill(ctx, pose, 4, 3, COLORS.danfo, COLORS.ink, null);
@@ -1539,8 +1565,8 @@ function vehiclePose(world: GameWorld, view: View, vehicle: Vehicle): { x: numbe
   const prev = line[0]!;
   const angle = next === here ? Math.atan2(here.y - prev.y, here.x - prev.x) : Math.atan2(next.y - here.y, next.x - here.x);
   const p = toScreen(view, here.x, here.y);
-  // Keep right: opposite directions on one road don't overlap.
-  const side = 5 * markScale;
+  // Keep right: opposite directions on one road don't overlap (nearer the line from afar, the vehicles smaller there).
+  const side = 5 * markScale * (zoomTier === "near" ? 1 : 0.75);
   return { x: p.x - Math.sin(angle) * side, y: p.y + Math.cos(angle) * side, angle };
 }
 function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: GameTown): void {
