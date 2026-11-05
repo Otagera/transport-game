@@ -1449,14 +1449,30 @@ lines, 8% of inside trips a line, ₦120 a line a day), **the monorail** (150k+,
   Five maps to day 250 against `main`: with only the metro (`urbanRungs` null) all five are
   `main`'s to the naira -- the metro's numbers didn't move. With the ladder, light rail on 4 maps
   (7 towns; Otido, Ojada, Ibakpo, Oren, Osashon, Ikino, Elosa), the monorail on none (no town in
-  reach of 150k with ₦110k to spare), the metro once (Bewa, one line, not main's two). And light rail
-  cost it: trips at day 250 1,403 -> 1,261, 2,668 -> 2,525, 1,762 -> 1,670, 1,457 -> 1,403
-  (4-10% fewer), net a day lower on three, people -12k and -43k on the two that bought it by day
-  150, most money held ₦242k -> ₦92k on 949 (three light rails, its goods line never bought). One
-  line at Otido after day 200 cost 10% of trips by day 250: its approach roads were your buses'.
-  Bought where it can, as the strategist does, light rail is a trap at these numbers -- ₦288 a day
-  on ₦80k, and the road it takes is the road your buses run on. C14 is unmoved (62, 20, 61, 62,
-  62 days): the ladder doesn't fill the middle of the game.
+  reach of 150k with ₦110k to spare), the metro once (Bewa, one line, not main's two). C14 is
+  unmoved (62, 20, 61, 62, 62 days): the ladder doesn't fill the middle of the game.
+- **What light rail costs** (measured 2026-11-05, four maps to day 250; map 3218 never bought it).
+  Trips a day are the mean of days 201-250: a single day's count misleads. (The first report took
+  day 250 alone and had light rail costing 4-10% everywhere, "10% at Otido" -- a one-day dip;
+  over 50 days Otido's line changed nothing.)
+
+  | map | metro only | light rail wherever it can | the same, trams taking no road | only where its roads have room |
+  |---|---|---|---|---|
+  | 8703 | 1,401 | 1,404 | 1,409 | 1,401 (none bought) |
+  | 2418 | 2,534 | 2,471 (-2.5%) | 2,562 (+1.1%) | 2,478 (-2.2%; Ibakpo, one line) |
+  | 949 | 1,896 | 1,645 (-13%) | 1,866 (-1.6%) | 1,896 (none bought) |
+  | 7585 | 1,233 | 1,232 | 1,234 | 1,233 (none bought) |
+
+  - The loss is the street: with `roadCapacityPerLine` 0 the same purchases land within 2% either
+    way. The money (₦288 a day on ₦80k) is about even -- and so is everything else: free of the
+    street, it's no gain by day 250 either.
+  - Room is rare. `LIGHTRAIL_ROOM=0.95` (the strategist buys light rail only where every road
+    into the town would still run at 95% speed or better with one more line, its traffic as it
+    is) let one line through in four maps, and Ibakpo's slowest road was at 78% by day 250: the
+    town grew into its roads. A town reaches 80k because it's busy; the slowest road into each
+    light-rail town ended at 15-56% speed with or without the trams.
+  So looking before buying doesn't rescue it: at 12% a line light rail is a trap where it hurts
+  and nothing where it doesn't. Open (brief, Scales): its street cost and its upside.
 
 ### Your bus station (2026-11-04; brief, Your bus station)
 

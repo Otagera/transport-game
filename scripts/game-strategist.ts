@@ -58,6 +58,8 @@ import { pipeId, pipePlan, pipeServes, pipeWouldCarry, restorePipeCost } from ".
 import { unionOf } from "../src/engine/game/union";
 import { haulDistance } from "../src/engine/game/haulage";
 import { airportSummary } from "../src/engine/game/airport";
+import { roadCapacity, speedFactor } from "../src/engine/game/congestion";
+import { privateLoad } from "../src/engine/game/private";
 
 const SEEDS = (process.env.SEEDS ?? "0,543,2411").split(",").map(Number);
 const DAYS = Number(process.env.DAYS ?? 250);
@@ -67,8 +69,33 @@ const LOG = !!process.env.LOG;
 const NO_PLEDGES = !!process.env.NO_PLEDGES;
 /** Pledges made but not chased: the strategist before 2026-11-01. */
 const CHASE_OFF = !!process.env.CHASE_OFF;
+/**
+ * LIGHTRAIL_ROOM=<speed>: light rail bought only where its roads have room -- every road into the
+ * town still at that speed or better with one more line's trams in the street, the traffic on it
+ * as it is now (its cars as they are: the few the line would take off are not counted). Unset:
+ * bought wherever the town is big enough, as a player who doesn't look might.
+ */
+const LIGHTRAIL_ROOM = process.env.LIGHTRAIL_ROOM ? Number(process.env.LIGHTRAIL_ROOM) : null;
+/** City lines bought this map, and light rail passed over for want of room (by town). */
+const urbanBuys: string[] = [];
+const noRoom = new Map<string, number>();
 /** The far clusters opened, and the day, this map (remit.ts). */
 const openings: string[] = [];
+/** The slowest road into a town, its traffic as now, with `more` more light-rail lines in its streets. */
+function slowestWithTrams(world: GameWorld, townId: string, more: number): number {
+  const rung = urbanRung(world, "lightrail");
+  const lines = metroLines(world, townId);
+  const now = Math.max(0, 1 - (rung?.roadCapacityPerLine ?? 0) * lines);
+  const next = Math.max(0, 1 - (rung?.roadCapacityPerLine ?? 0) * (lines + more));
+  if (next <= 0 || now <= 0) return 0;
+  let slowest = 1;
+  for (const s of world.simulation.map.segments) {
+    if (s.type !== "road" || (s.fromNodeId !== townId && s.toNodeId !== townId)) continue;
+    const flow = (world.roadFlowEMA.get(s.id) ?? 0) + privateLoad(world, s.id);
+    slowest = Math.min(slowest, speedFactor(flow, (roadCapacity(world, s.id) * next) / now, world.tuning.minSpeedFactor));
+  }
+  return slowest;
+}
 /** Kept back for running costs and a bad week: no move spends below it. */
 const RESERVE = 2500;
 /** A lorry is bought where the hint says one more earns this much over its cost. */
@@ -444,10 +471,20 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
   // allows (as a player might: it can't change kind later). With only the metro in the game, as before.
   if (world.tuning.metroEnabled && day % 5 === 0) {
     const kindFor = (t: GameTown) => urbanKind(world, t.id) ?? [...URBAN_KINDS].reverse().find((k) => { const r = urbanRung(world, k); return !!r && t.population >= r.minPopulation; });
-    const pick = [...world.towns.values()].filter((t) => !t.industry && inRemit(world, t.id)).map((t) => ({ t, kind: kindFor(t) })).filter((x) => !!x.kind && checkUrban(world, x.t.id, x.kind).ok).sort((p, q) => q.t.population - p.t.population)[0];
+    // LIGHTRAIL_ROOM: light rail (a first line or another) only where its roads have room.
+    const room = (t: GameTown, kind: string | undefined) => {
+      if (kind !== "lightrail" || LIGHTRAIL_ROOM === null) return true;
+      if (slowestWithTrams(world, t.id, 1) >= LIGHTRAIL_ROOM) return true;
+      noRoom.set(t.name, (noRoom.get(t.name) ?? 0) + 1);
+      return false;
+    };
+    const pick = [...world.towns.values()].filter((t) => !t.industry && inRemit(world, t.id)).map((t) => ({ t, kind: kindFor(t) })).filter((x) => !!x.kind && checkUrban(world, x.t.id, x.kind).ok && room(x.t, x.kind)).sort((p, q) => q.t.population - p.t.population)[0];
     if (pick && pick.kind && spend(world, urbanPrice(world, pick.t.id, pick.kind))) {
       const name = pick.kind === "lightrail" ? "light rail" : pick.kind;
-      did(act(world, day, { kind: "metro", townId: pick.t.id, ...(pick.kind === "metro" ? {} : { mode: pick.kind }) }, `${pick.t.name} (${Math.round(pick.t.population)}k): ${metroLines(world, pick.t.id) === 0 ? urbanName(pick.kind) : `another ${name} line`}`));
+      const speeds = pick.kind === "lightrail" ? `, roads ${Math.round(slowestWithTrams(world, pick.t.id, 0) * 100)}% -> ${Math.round(slowestWithTrams(world, pick.t.id, 1) * 100)}%` : "";
+      if (did(act(world, day, { kind: "metro", townId: pick.t.id, ...(pick.kind === "metro" ? {} : { mode: pick.kind }) }, `${pick.t.name} (${Math.round(pick.t.population)}k): ${metroLines(world, pick.t.id) === 0 ? urbanName(pick.kind) : `another ${name} line`}`))) {
+        urbanBuys.push(`day ${day} ${pick.t.name} ${pick.kind} ${metroLines(world, pick.t.id)}${speeds}`);
+      }
     }
   }
   // The works: restored once cement holds 10k people back.
@@ -614,6 +651,8 @@ function chainsGrowthShare(world: GameWorld): { share: number; unlocked: number;
 /** The day the private refinery was first seen open, this map (reset per map). */
 let secondOpened: number | undefined;
 for (const seed of SEEDS) {
+  urbanBuys.length = 0;
+  noRoom.clear();
   const started = performance.now();
   const { days, world } = play(seed);
   const at = (day: number) => days[Math.min(day, days.length) - 1]!;
@@ -705,6 +744,9 @@ for (const seed of SEEDS) {
   const rungCount = (k: string) => [...world.metros.keys()].filter((id) => urbanKind(world, id) === k).length;
   console.log(`  metros (Revision 4, 6): ${[...world.metros].map(([id, lines]) => `${world.towns.get(id)?.name} ${lines} line(s), ${Math.round(metroRiders(world, id).riders)} riders/day`).join("; ") || "none"}; metro fares ₦${Math.round(world.budget.metro / 1000)}k all game`);
   console.log(`  urban ladder: light rail ${rungCount("lightrail")} town(s), monorail ${rungCount("monorail")}, metro ${rungCount("metro")}${[...world.metros.keys()].length ? `: ${[...world.metros].map(([id, lines]) => `${world.towns.get(id)?.name} ${urbanKind(world, id)} ${lines}`).join(", ")}` : ""}`);
+  console.log(`  city lines bought: ${urbanBuys.join("; ") || "none"}${LIGHTRAIL_ROOM !== null ? ` | light rail passed over for want of room (speed under ${Math.round(LIGHTRAIL_ROOM * 100)}%): ${[...noRoom].map(([n, c]) => `${n} ${c}x`).join(", ") || "never"}` : ""}`);
+  console.log(`  slowest road into each light-rail town at the end: ${[...world.metros.keys()].filter((id) => urbanKind(world, id) === "lightrail").map((id) => `${world.towns.get(id)?.name} ${Math.round(slowestWithTrams(world, id, 0) * 100)}%`).join(", ") || "none"}`);
+  console.log(`  trips a day, mean of days ${DAYS - 49}-${DAYS}: ${Math.round(window(DAYS - 50, DAYS).reduce((s, d) => s + d.trips, 0) / 50)}; of days ${DAYS - 99}-${DAYS - 50}: ${Math.round(window(DAYS - 100, DAYS - 50).reduce((s, d) => s + d.trips, 0) / 50)}`);
   console.log(`  motor parks (Revision 4, 5): ${world.parks.size} (${[...world.parks].map((id) => world.towns.get(id)?.name).join(", ")}); levies last 20 days ₦${Math.round(window(DAYS - 20, DAYS).reduce((s, d) => s + d.levies, 0) / 20)}/day`);
   console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);
   // The five modes' checks (five-modes.md): the fuel chain still decides over the game; the airport connected over something else.
