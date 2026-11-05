@@ -164,8 +164,8 @@ half from the okadas (the scope's open ratio, measured: engine.md, The inside sc
 ladder** (branch `urban`; brief, Scales): light rail, the monorail and the metro on the town card,
 out of the More fold, one kind a town -- each taking more of a town's cars off its roads than the
 last; light rail's trams share the street and stop in a strike (engine.md, The urban ladder).
-Light rail is open: at its street cost it never paid in the strategist's games, and its fix is
-being measured.
+Light rail's trams take no road: measured, the prompt's 12% street share was its whole cost
+(engine.md, The urban ladder); whether it wants an upside is open.
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

@@ -1429,17 +1429,17 @@ lines, 8% of inside trips a line, ₦120 a line a day), **the monorail** (150k+,
   kekes and okadas): light rail 0.2, the monorail 0.35, the metro 0.5 (`cityLineCarDraw`, measured
   for the inside scale). Measured (`scripts/_tmp/ladderdraw.ts`), each rung at its maximum lines in
   a town grown into its size (x1.3-1.6 of day 1), its approach roads' cars over capacity:
-  - light rail, 2 lines at 110k: the roads 10-25% *fuller* at 0.2 (18 -> 21%, 73 -> 87%,
-    45 -> 52%...): its trams take more road than the cars it takes off. It breaks even near 0.5. It
-    is the rung for the fares (₦288 a day on ₦80k) and the growth (+12% of its start), and you pay
-    for it in road;
+  - light rail, 2 lines at 110k, its trams taking the prompt's 12% of the road a line: the roads
+    10-25% *fuller* at 0.2 (18 -> 21%, 73 -> 87%, 45 -> 52%...): its trams take more road than the
+    cars it takes off. It breaks even near 0.5. (Its street share is 0 now: below.) It is the rung
+    for the fares (₦288 a day on ₦80k) and the growth (+12% of its start);
   - the monorail, 2 lines at 170k: about a quarter of the town's cars off at 0.35 (car share
     30 -> 22%, roads 24 -> 18% full); ₦784 a day on ₦190k, +22%;
   - the metro, 3 lines at 200k: two-thirds of its cars off at 0.5 (The inside scale).
   Each rung up takes more cars off your roads; the kekes and okadas keep 20-45% of its trips.
 - **On the town card** (screen.ts `ladderHtml`, out of the More fold, where the metro was): the
   rung it has -- riders, net a day, the share of its car trips taken off its roads, light rail's
-  street and strike -- and another line; or each rung it could have, with its price, its riders a
+  strike (and its street share, in a game that carries one) -- and another line; or each rung it could have, with its price, its riders a
   line and how many out of cars, a rung it's too small for shown with the size it needs. One
   primary button per rung it can buy; quiet when it's only the money. Nothing on a town under 60%
   of the smallest rung's size. The 2D mark lettered T, E or M; in 3D only a metro has entrances
@@ -1472,7 +1472,25 @@ lines, 8% of inside trips a line, ₦120 a line a day), **the monorail** (150k+,
     town grew into its roads. A town reaches 80k because it's busy; the slowest road into each
     light-rail town ended at 15-56% speed with or without the trams.
   So looking before buying doesn't rescue it: at 12% a line light rail is a trap where it hurts
-  and nothing where it doesn't. Open (brief, Scales): its street cost and its upside.
+  and nothing where it doesn't.
+- **Its street share is 0** (decided 2026-11-05, from a second batch: the same four maps, light
+  rail bought wherever it can, the street share halved, and halved with more of its riders out of
+  the cars):
+
+  | map | metro only | 12% | 6% | 6%, 0.3 of its riders from cars | 0% |
+  |---|---|---|---|---|---|
+  | 2418 | 2,534 | 2,471 (-2.5%) | 2,550 (+0.6%) | 2,559 (+1.0%) | 2,562 (+1.1%) |
+  | 949 | 1,896 | 1,645 (-13%) | 1,760 (-7%) | 1,710 (-10%) | 1,866 (-1.6%) |
+
+  (8703 and 7585 bought their line on day 245: no difference in any.) On 949 the loss follows the
+  share, and halving it isn't enough: its three light-rail towns' roads were at 15-40% speed when
+  each line was bought, and on a road at capacity the speed falls with the fourth power of what's
+  left of it (BPR), so a little road costs a lot. More riders from the cars (0.3) moved too few
+  cars to show; 1-3% between runs is noise, 949's 7% is not. So light rail's trams take no road
+  (`roadCapacityPerLine` 0); its drawbacks are the strike and the few cars it takes off -- a cheap
+  first city line for a town of 80-150k that does no harm and, by day 250, little good. Run files
+  and saves carry their tuning, so the 12% games replay as they were, and the card names the
+  street share wherever a game has one. Open (brief, Scales): whether light rail wants an upside.
 
 ### A road bent through points (2026-11-05; brief, Tools for building, 3)
 

@@ -11,8 +11,8 @@ import type { GameTuning, GameWorld, UrbanKind } from "@engine/game/types";
 import type { ActionResult } from "@engine/game/world";
 
 // The urban ladder (metro.ts; docs/PROMPT-urban-ladder.md, its reason rewritten on the inside scale):
-// light rail, the monorail and the metro on the town card, one kind a town; light rail sharing the
-// street and stopped by a strike; each rung drawing its own share of its riders out of the cars.
+// light rail, the monorail and the metro on the town card, one kind a town; light rail in the street,
+// stopped by a strike; each rung drawing its own share of its riders out of the cars.
 
 const start = (overrides: Partial<GameTuning> = {}) => startRun(GAME_MAP, 2418, { all: false, goodsOff: false, wearOff: false }, null, { maxEmergentTowns: 0, startingFunds: 5e6, ...overrides });
 const why = (r: ActionResult) => (r.ok ? "" : r.reason);
@@ -101,27 +101,29 @@ describe("the urban ladder (metro.ts; PROMPT-urban-ladder.md)", () => {
     }
   }, 120_000);
 
-  test("light rail takes 12% a line of the roads into its town, at each end; the monorail none", () => {
-    const w = start();
-    const isTown = (id: string) => !!w.towns.get(id) && !w.towns.get(id)!.industry;
-    const road = w.simulation.map.segments.find((s) => s.type === "road" && isTown(s.fromNodeId) && isTown(s.toNodeId))!;
-    const base = roadCapacity(w, road.id);
-    const [a, b] = [w.towns.get(road.fromNodeId)!, w.towns.get(road.toNodeId)!];
-    a.population = 260;
-    b.population = 260;
-    build(w, a.id, "lightrail");
-    build(w, a.id, "lightrail");
-    expect(roadCapacity(w, road.id) / base).toBeCloseTo(0.76, 9);
-    build(w, b.id, "lightrail");
-    build(w, b.id, "lightrail");
-    expect(roadCapacity(w, road.id) / base).toBeCloseTo(0.76 * 0.76, 9);
-    const m = start();
-    const ma = m.towns.get(road.fromNodeId)!;
-    ma.population = 260;
-    build(m, ma.id, "monorail");
-    build(m, ma.id, "monorail");
-    expect(roadCapacity(m, road.id)).toBe(base);
-  }, 60_000);
+  test("light rail's trams take none of the roads into its town (measured 2026-11-05); a game that carries the prompt's 12% takes it a line, at each end; the monorail none", () => {
+    // A road between two towns, both at both lines of a kind; its capacity against the road's own.
+    const capacity = (kind: UrbanKind, overrides: Partial<GameTuning> = {}) => {
+      const w = start(overrides);
+      const isTown = (id: string) => !!w.towns.get(id) && !w.towns.get(id)!.industry;
+      const road = w.simulation.map.segments.find((s) => s.type === "road" && isTown(s.fromNodeId) && isTown(s.toNodeId))!;
+      const base = roadCapacity(w, road.id);
+      const [a, b] = [w.towns.get(road.fromNodeId)!, w.towns.get(road.toNodeId)!];
+      a.population = 260;
+      b.population = 260;
+      for (let n = 0; n < 2; n += 1) build(w, a.id, kind);
+      const one = roadCapacity(w, road.id) / base;
+      for (let n = 0; n < 2; n += 1) build(w, b.id, kind);
+      return { one, both: roadCapacity(w, road.id) / base };
+    };
+    expect(start().tuning.urbanRungs!.lightrail!.roadCapacityPerLine).toBe(0);
+    expect(capacity("lightrail")).toEqual({ one: 1, both: 1 });
+    const rungs = start().tuning.urbanRungs!;
+    const old = capacity("lightrail", { urbanRungs: { ...rungs, lightrail: { ...rungs.lightrail!, roadCapacityPerLine: 0.12 } } });
+    expect(old.one).toBeCloseTo(0.76, 9);
+    expect(old.both).toBeCloseTo(0.76 * 0.76, 9);
+    expect(capacity("monorail")).toEqual({ one: 1, both: 1 });
+  }, 120_000);
 
   test("old runs: a metro action with no mode builds a metro, written down nowhere new; a world saved before the ladder is all metros", () => {
     const { w, town } = sized(260);

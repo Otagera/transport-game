@@ -10,7 +10,10 @@
 > `world.metros` with a `world.urbanKinds` beside it, not one `world.urban` map (saves are the
 > world as it stands); and the metro's eight numbers stay its `metro*` tuning, the other two rungs
 > an `urbanRungs` record absent in older run files (which carry their whole tuning), with
-> `metroEnabled` kept as the ladder's switch, not renamed.
+> `metroEnabled` kept as the ladder's switch, not renamed. And, measured after: Step 4's street
+> share is 0, not 0.12 (2026-11-05) -- bought where a town's roads are already full, as they are
+> at 80k, it cost the strategist up to 13% of a map's trips, and 7-10% at half; the mechanism
+> stays for the run files that carry it.
 
 # The urban ladder: three city modes on the town card
 

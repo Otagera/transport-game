@@ -285,9 +285,13 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // the monorail beside the metro, one kind a town. The metro's column is the eight above, unchanged.
   // Each rung's draw on the cars is ours (the prompt's reason rewritten on the inside scale): the
   // rungs differ most in how many cars each takes off a town's approach roads -- light rail least,
-  // its trams taking the okadas' riders and, in the street, the cars' road.
+  // its trams taking the okadas' riders, and stopped by a strike on its roads.
+  // Light rail's street share (`roadCapacityPerLine`) is 0, not the prompt's 0.12 (2026-11-05,
+  // engine.md, The urban ladder): a town reaches 80k because it's busy, so its roads are full when
+  // it's bought, and there a little road costs a lot of speed -- 13% of a map's trips at 0.12, 7-10%
+  // at 0.06, even at 0. Run files and saves that carry 0.12 keep it.
   urbanRungs: {
-    lightrail: { minPopulation: 80, firstCost: 45000, lineCost: 35000, maxLines: 2, lineShare: 0.08, fare: 3, runningPerLine: 120, capShare: 0.12, roadCapacityPerLine: 0.12, stoppedByStrikes: true, carDraw: 0.2 },
+    lightrail: { minPopulation: 80, firstCost: 45000, lineCost: 35000, maxLines: 2, lineShare: 0.08, fare: 3, runningPerLine: 120, capShare: 0.12, roadCapacityPerLine: 0, stoppedByStrikes: true, carDraw: 0.2 },
     monorail: { minPopulation: 150, firstCost: 110000, lineCost: 80000, maxLines: 2, lineShare: 0.12, fare: 3, runningPerLine: 220, capShare: 0.22, roadCapacityPerLine: 0, stoppedByStrikes: false, carDraw: 0.35 },
   },
   parksEnabled: true,

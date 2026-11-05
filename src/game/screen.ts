@@ -718,7 +718,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       if (!check.ok && check.reason !== "can't afford it") return "";
       return `<button class="${check.ok ? "primary" : "quiet"}" data-metro="${townId}|${kind}"${check.ok ? "" : ` title="${esc(check.reason ?? "")}"`}>${label} · ${nairaK(urbanPrice(world, townId, kind))}</button>`;
     };
-    const street = (rung: UrbanRung) => `its trams share the street: each line takes ${pct(rung.roadCapacityPerLine)} of the roads into ${esc(town.name)}, and a strike on them stops it`;
+    // Light rail's trams in the street, in words: a strike stops them; and in a game that still
+    // charges them road (a run file or save from before 2026-11-05), the share each line takes.
+    const street = (rung: UrbanRung) => !rung.stoppedByStrikes && rung.roadCapacityPerLine <= 0 ? ""
+      : `Its trams run in the street: ${rung.roadCapacityPerLine > 0 ? `each line takes ${pct(rung.roadCapacityPerLine)} of the roads into ${esc(town.name)}${rung.stoppedByStrikes ? ", and a strike on them stops it" : ""}` : `a strike on the roads into ${esc(town.name)} stops it`}`;
     if (at) {
       const { riders, share } = urbanRiders(world, townId);
       const net = riders * at.rung.fare - at.lines * at.rung.runningPerLine;
@@ -726,13 +729,13 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const stopped = at.rung.stoppedByStrikes && townStruck(world, townId);
       return `<h2>Your ${URBAN_TITLE[at.kind].toLowerCase()} · ${plural(at.lines, "line")}</h2>
         <div class="tiles">${tile("Riders", `${int(riders)}/day`, stopped ? "stopped: a strike on its roads" : `${pct(share)} of its inside trips`)}${tile("Net", `${nairaK(net)}/day`, "fares less running")}${tile("Cars off its roads", pct(took), "of its car trips")}</div>
-        ${at.rung.roadCapacityPerLine > 0 ? `<p class="muted">${street(at.rung)[0]!.toUpperCase()}${street(at.rung).slice(1)}: they carry ${pct(1 - urbanRoadFactor(world, townId))} less.</p>` : ""}
+        ${street(at.rung) ? `<p class="muted">${street(at.rung)}.${at.rung.roadCapacityPerLine > 0 ? ` Those roads carry ${pct(1 - urbanRoadFactor(world, townId))} less.` : ""}</p>` : ""}
         ${at.lines < at.rung.maxLines ? `<p class="muted">Another line: ~${int(at.rung.lineShare * s.trips)} riders a day more. ${button(at.kind, "Another line")}</p>` : ""}`;
     }
     const rows = rungs.map(({ kind, rung }) => {
       if (town.population < rung.minPopulation) return `<tr><td>${URBAN_TITLE[kind]} <span class="muted">· needs a town of ${rung.minPopulation}k</span></td><td></td></tr>`;
       const cars = Math.min(s.carBase, rung.carDraw * rung.lineShare) * s.trips;
-      return `<tr><td><b>${URBAN_TITLE[kind]}</b><br><span class="muted">~${int(rung.lineShare * s.trips)} riders a day a line, ~${int(cars)} of them out of cars${rung.roadCapacityPerLine > 0 ? `. ${street(rung)[0]!.toUpperCase()}${street(rung).slice(1)}` : ""}.</span></td><td>${button(kind, "Build")}</td></tr>`;
+      return `<tr><td><b>${URBAN_TITLE[kind]}</b><br><span class="muted">~${int(rung.lineShare * s.trips)} riders a day a line, ~${int(cars)} of them out of cars${street(rung) ? `. ${street(rung)}` : ""}.</span></td><td>${button(kind, "Build")}</td></tr>`;
     });
     return `<h2>City lines</h2><p class="muted">One kind a town. A line carries its own short trips; the riders it takes out of cars come off the roads into it.</p>
       <table><tbody>${rows.join("")}</tbody></table>`;

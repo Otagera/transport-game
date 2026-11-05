@@ -11,10 +11,11 @@ import { struckSegments } from "./pushback";
 //
 // Three rungs, one kind a town, a line at a time:
 //
-//   - **Light rail** (80k+): trams on the street. Cheap, and the rung most towns can take, but it
-//     shares the street: each line takes `roadCapacityPerLine` of its town's approach roads
-//     (congestion.ts roadCapacity), a strike on those roads stops it with everything else, and its
-//     riders come mostly out of the kekes and okadas, not the cars.
+//   - **Light rail** (80k+): trams on the street. Cheap, and the rung most towns can take, but a
+//     strike on its town's roads stops it with everything else, and its riders come mostly out of
+//     the kekes and okadas, not the cars. Its trams could take `roadCapacityPerLine` of the town's
+//     approach roads (congestion.ts roadCapacity); measured, that was its whole cost and it's 0
+//     now -- kept for the run files and saves that carry the prompt's 12%.
 //   - **Monorail** (150k+): elevated, on piers. No street cost, no strike, a real price; more of its
 //     riders out of the cars.
 //   - **Metro** (200k+): underground, the dearest; the most out of the cars. Its numbers are the
@@ -22,8 +23,7 @@ import { struckSegments } from "./pushback";
 //
 // What a line is for (the inside scale): only a town's cars load its approach roads, and a city
 // line takes its riders out of the cars and the okadas in its rung's ratio (`carDraw`). So the
-// rungs differ, above all, in how many cars each takes off your roads -- and light rail can leave
-// them worse, its trams in the lanes the cars it took left.
+// rungs differ, above all, in how many cars each takes off your roads -- light rail few.
 //
 //   - Riders a day: each line carries `lineShare` of the town's inside trips -- people still walk,
 //     and the keke still takes them to the station. Each line is its own decision (at first the
