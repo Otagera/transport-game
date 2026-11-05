@@ -587,6 +587,15 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   // 250 t a day; ₦400 a day; 2% lost kept up, 10% neglected; hauliers follow the work over 20 days
   // (15% always stay); a strike 7 days, a tap 5, about one a hundred days on a 100-cell pipe; at
   // 250 t a day the union settles near -0.5 (stance fades over unionMemoryDays, 120: 250 x 120 x k).
+  // The inside scale (inside.ts; docs/SCALES-AND-MODES.md, scope 3): a car trip's road load set so a
+  // town's cars are 4% of its inside trips on day 1 (0.005 of a thousand people in cars, over 10
+  // trips a thousand), rising with its growth as its cars always did. A city line draws half its
+  // riders from the cars (the scope's open question, measured: three lines take two-thirds of a 200k
+  // town's cars off its approach roads and leave the okadas a fifth of its trips; engine.md, The
+  // inside scale).
+  insideEnabled: true,
+  privateLoadPerCarTrip: 0.0125,
+  cityLineCarDraw: 0.5,
   // Trunks and feeders (trunks.ts; docs/SCALES-AND-MODES.md, scopes 1 and 2): an inherited road is
   // a trunk joining two clusters or two towns of 45k+ (the map's "regional town"); declaring one
   // costs the signs and wardens, a little a cell -- what it really costs is the union.

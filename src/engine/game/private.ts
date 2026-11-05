@@ -1,5 +1,6 @@
 import type { GameWorld } from "./types";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
+import { carLoad } from "./inside";
 
 // Private traffic (docs/brief.md, Revision 5, Ideas parked: "we did not account for other
 // humans driving on our roads"). The original game's Module 12 (git 661492b), carried over:
@@ -26,13 +27,12 @@ export function privateLoad(world: GameWorld, segmentId: string): number {
   return world.privateFlow?.get(segmentId) ?? 0;
 }
 
-/** A town's cars, as road load: a share of its size and all of its growth since day 1, thousands, times the load a thousand make. */
+/**
+ * A town's cars, as road load: its inside trips' car slice (inside.ts) -- a share of its size and
+ * all of its growth since day 1 as before, less what your city line takes off the roads.
+ */
 export function townCars(world: GameWorld, townId: string): number {
-  const town = world.towns.get(townId);
-  if (!town || town.industry) return 0;
-  const t = world.tuning;
-  const base = world.basePopulation.get(townId) ?? town.population;
-  return (t.privatePerThousand ?? 0) * ((t.privateBaseShare ?? 0) * town.population + Math.max(0, town.population - base));
+  return carLoad(world, townId);
 }
 
 /** Once a game day (tick.ts): every road's private load from the towns near it. */

@@ -1357,6 +1357,52 @@ flowchart LR
   otherwise. The union named its trunk demand at once. (A first pass without the end-to-end danfo
   and the second wait cost 2% of trips made.)
 
+### The inside scale (2026-11-05; brief, Scales; SCALES-AND-MODES.md, scope 3)
+
+`inside.ts`, behind `insideEnabled` (absent in older runs: a town's cars as they were, and a metro
+takes none off the roads).
+
+- **Four slices** (`insideSplit`), shares of a town's inside trips (`insideTrips`: its people times
+  `localTripsPerThousandPerDay`; none at a site) that sum to one, worked out when asked:
+  - **car** first: its cars as they always were (`carsByProsperity`, private.ts's old `townCars`:
+    `privatePerThousand` times `privateBaseShare` of its size plus all its growth since day 1) over
+    its trips at `privateLoadPerCarTrip` (0.0125) of road load each. 4% on day 1 on every map
+    (0.005 x 1000 / 10 trips / 0.0125), about 22% grown a third, 44% doubled;
+  - **walk**: `walkableTownPopulation` over its people plus that (a 10k village 80%, a 100k town
+    29%), and no more than the cars leave -- the prosperous drive rather than walk, so the cars
+    never give way to the walk and stay what they were;
+  - **your city line**: what your lines in it carry (metro.ts, `metroLineShare` a line), taken
+    out of the cars and the informal in one ratio, `cityLineCarDraw` from the cars and the rest
+    from the informal, each no more than it has (the overflow goes to the other) -- one partition,
+    one subtraction, so nobody stops walking and the shares still add up;
+  - **keke and okada**: the rest. Display only, as inside-town informal trips always were (brief,
+    The informal sector): its okadas and kekes on the map carry trips between towns.
+- **Only the cars leave the town** (`carLoad`, which private.ts `townCars` now returns): the car
+  slice as road load, on the approach roads by the old spreading. Worked out as its cars less what
+  a line took, never share times trips: (cars / x) x x isn't cars to the last bit, and that float's
+  difference tipped a strategist decision by day 60 on map 8703 (net ₦961 a day against ₦270 at day
+  60) in games with no city line at all. With no line, `carLoad` is `carsByProsperity` exactly
+  (test/inside.test.ts), so every check measured before still compares.
+- **On the town card** (screen.ts `insideHtml`; the legacy panel's inside line): "Inside the town",
+  a four-colour bar and what it means -- only the cars load its approach roads, and how many fewer
+  your line has put there.
+- **The ratio** (the scope's open question: "Measure, do not guess"). The biggest town on each of
+  five maps grown to a metro's 200k (x1.6 of day 1), three lines (45% of its inside trips), its
+  approach roads' cars alone: with no line its cars are 34-40% of its trips and the roads 29-58%
+  full; at a draw of 0.25 the cars fall to 23-29%, the roads about a third lighter, and the okadas
+  and kekes are squeezed to 9-17%; at 0.5 the cars 12-18%, the roads about two-thirds lighter
+  (speed from cars 97-100%), the informal 20-28%; at 0.75 the cars 0-7%, the roads nearly empty.
+  `scripts/_tmp/linedraw.ts`.
+  In a game the strategist builds few city lines: one in fifteen runs (five maps, three settings),
+  Bewa's on map 2418 near day 221. There, scale off against draws of 0.25, 0.5 and 0.75, the four
+  games are the same to the last day before the line, and at day 250 people 1,009k against 1,006k
+  (it built one line, not two), 1,012k and 1,018k; trips and money within a game's chance -- the
+  line is 30 days old. So the strategist doesn't decide the ratio; the direct measure does. **0.5**:
+  three lines take two-thirds of a big town's cars off its approach roads -- worth building for --
+  and leave the okadas a fifth to a quarter of its trips, a sector still there; 0.75 would empty
+  its roads of cars, which a metro doesn't do, and 0.25 would make the line mainly the okadas'
+  rival. The urban ladder sets each rung's own draw round it (PROMPT-urban-ladder.md, the note).
+
 ### Your bus station (2026-11-04; brief, Your bus station)
 
 - **`busstations.ts`** -- behind `busStationsEnabled` (absent in older runs, and `busStations`

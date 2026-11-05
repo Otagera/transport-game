@@ -66,7 +66,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   // Who carries
   {
     id: "service", label: "Your vehicles", col: 2, row: 0, feeds: ["noSeat", "growth", "money"], unit: "/day",
-    keys: [/^bus/, /^minibus/, /^brt/, /^train/, /^metro/, /^fare/, /^halt/, /^station/, /^lane/, /^oldLine/, /^track/, /^rail/, /^carriage/, /^growthCapLaneShare$/],
+    keys: [/^bus/, /^minibus/, /^brt/, /^train/, /^metro/, /^cityLine/, /^inside/, /^fare/, /^halt/, /^station/, /^lane/, /^oldLine/, /^track/, /^rail/, /^carriage/, /^growthCapLaneShare$/],
     measure: safe((w) => headline(w).yourRidersPerDay),
   },
   {

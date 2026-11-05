@@ -2,6 +2,7 @@ import type { GameWorld } from "./types";
 import type { ActionResult } from "./world";
 import { canAfford, SECONDS_PER_GAME_DAY } from "../economy/state";
 import { SWITCHED_OFF } from "./tuning";
+import { insideTrips } from "./inside";
 
 // A metro (docs/brief.md, Revision 4, 6: "a new mode for the biggest
 // towns"). Every other mode you run carries trips between towns; inside a
@@ -30,11 +31,7 @@ export function metroLines(world: GameWorld, townId: string): number {
   return world.tuning.metroEnabled ? (world.metros.get(townId) ?? 0) : 0;
 }
 
-/** A town's inside trips a day (world.ts localTravel's figure). */
-function insideTrips(world: GameWorld, townId: string): number {
-  const town = world.towns.get(townId);
-  return town ? town.population * world.tuning.localTripsPerThousandPerDay : 0;
-}
+// A town's inside trips a day: inside.ts, where they're split in four.
 
 /** Riders a day the metro at a town carries now, and the share of the town's inside trips. */
 export function metroRiders(world: GameWorld, townId: string): { riders: number; share: number } {

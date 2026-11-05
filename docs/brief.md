@@ -225,7 +225,7 @@ A verb that stops creating a decision in play (always done, or never done) is a 
 
 ## Scales
 
-(Proposed 2026-11-03, [SCALES-AND-MODES.md](SCALES-AND-MODES.md); scopes 1 and 2 built 2026-11-04.) The
+(Proposed 2026-11-03, [SCALES-AND-MODES.md](SCALES-AND-MODES.md); scopes 1 and 2 built 2026-11-04, scope 3 2026-11-05.) The
 game had two scales -- a town's interior as an invisible number, and the map between towns -- and
 every mode still on the list fell in the gap. Three close it:
 
@@ -233,7 +233,7 @@ every mode still on the list fell in the gap. Three close it:
 | --- | --- | --- | --- |
 | **Trunk** | long hops, regional town to regional town; a road's class | the map: declared when you build a road (E), or on its card | yes |
 | **Feeder** | villages, sites, the approaches into a town; no verbs, only rules | the map, the informal sector's ground | yes |
-| **Inside** | a town's own journeys, in four slices: walk, keke and okada, your city line, car | the town card | not yet |
+| **Inside** | a town's own journeys, in four slices: walk, keke and okada, your city line, car | the town card | yes |
 
 **A trunk** is a property, not a rung: the old highways joining the clusters, and roads between two
 towns of 45k+ on day 1, are trunks from the start; a road you build is a feeder until you declare it
@@ -244,6 +244,14 @@ it change there to a keke or an okada for the last mile, and an okada bound alon
 down at its head, for a danfo on. The informal sector reorganises round your trunk instead of
 fighting it head on. **The union** answers a trunk with a demand afterwards, not consent first: pay
 his members, make it a feeder again, or refuse him.
+
+**Inside a town** its own journeys, the short ones, are one number in four slices: walk, keke and
+okada, your city line, car. **Only the cars leave the town:** they're what load its approach roads,
+and they grow with its prosperity as its cars always did -- 4% of its trips on day 1, about a fifth
+grown a third, nearly half doubled -- while the walk falls as it grows. A city line takes its riders
+out of the cars and the okadas in one ratio, half from each (measured: engine.md, The inside
+scale), so **a city line exists to take cars off your own approach roads**, more than for its fare:
+three lines in a 200k town take about two-thirds of its cars off them. On the town card, a bar.
 
 ## Fares
 
@@ -1699,6 +1707,7 @@ One more, kept as it is: by day 30 of a two-bus game the strip showed the inform
 | Date | Decision | Status |
 | --- | --- | --- |
 | 2026-11-03 | Five modes scoped (proposed; [five-modes.md](five-modes.md)). Pipeline (a capped link with a truck/pipe dial whose political price follows the dial, not the build) and the airport (a third gateway: demand at a point with no people) are ready and delegable. Intercity coach waits on the trunk class and answers C31 -- it is not a long bus, it is the only mode permitted on trips a bus cannot make pay. Okada permission waits on the feeder scope and moves the informal onto the feeders rather than removing it. Water is last and not delegated: it inverts the terrain rule, uses the rains already built, and needs pathing plus generator work. The urban ladder's prompt needs its rationale rewritten on top of the inside scope. **The pipeline built** (2026-11-03): refined fuel only, from the tank farm or a refinery to a town (your call); the inherited line broken up the old railway from the tank farm (your call); new and restored pipes start at nothing on the dial, so building costs money and only using it costs the chairman. **The airport built** (2026-11-03): travellers each way and air freight; its freight by hauliers and your freight train, since there are no player lorries (your call) | Proposed; pipeline and airport built |
+| 2026-11-05 | The inside scale built (§Scales; scope 3): a town's own journeys in four slices -- walk, keke and okada, your city line, car -- on its card; only the cars load its approach roads, and with no city line they are its cars as they always were, to the last bit. **A city line draws half its riders from the cars, half from the okadas** (the scope's open ratio, measured, engine.md The inside scale): three lines take two-thirds of a 200k town's cars off its approach roads and leave the okadas a fifth to a quarter of its trips. The strategist builds too few lines to decide it. The urban ladder next, its rungs differing in the draw | Built; ratio measured, yours to change |
 | 2026-11-04 | Three scales (proposed 2026-11-03, [SCALES-AND-MODES.md](SCALES-AND-MODES.md)): trunk, feeder and inside, of which only the inside's car slice loads your approach roads -- so a city line exists to unjam your own trunk, not to earn a fare. Your calls today: **a road's class changes both ways** (declared at ₦50 a cell on a road you build or have; a feeder again for nothing, which is also the union's concession); **the union answers with a demand afterwards**, not consent first; **trunk and feeder land together**, so a trunk does something the day it lands, then inside and the urban ladder, then the coach. Built (2026-11-04, §Scales): classes, declaring, the okada and keke ban, danfos' tolls and end-to-end runs on a trunk, the relay at its ends, the union's trunk demand. | Agreed; trunk and feeder built |
 | 2026-10-30 | Convergent chains: a second input rather than a third tier -- the value is one factory fed by several routes, so a single failure idles a place, not a product. First the assembly plant (steel plus fuel into buses and minibuses you buy, cheaper as its line matures; the port's imported steel a substitute for the works'); then a recipe card naming the short input and where it's stuck, and a chain strip that forks; then room, by spreading within the frame before enlarging it, measured | Agreed 2026-10-30 |
 | 2026-10-30 | Shallot (assessed, not adopted): a WebGPU engine in TypeScript and Bun, written for agents. Not adopted: its UI story is a DOM overlay, so it doesn't touch the chrome; it documents no 2D pipeline, and the 2D map is the primary view; and none of the week's measured defects -- the mitre offset, junction plates, casing order, the corridor's over-subscribed channels, the 3D's unapplied findings -- is an engine problem. Taken from it: `.lab.ts` against `.test.ts`, the single pointer-events overlay container over the plate, derive-from-elapsed as a determinism guard (a test across frame budgets), and a `gym/` giving the brief's checks machine-readable verdicts (C14 first). A declared tick order is parked behind a trigger: the next ordering bug that costs more than a day, or a new system nobody can place. Watched as a possible host for the engine extraction (principles §2), not as a rewrite | Agreed 2026-10-30 |

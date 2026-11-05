@@ -663,6 +663,15 @@ export interface GameTuning {
    * cell. Absent in older runs: no classes, every road as it was.
    */
   trunksEnabled?: boolean;
+  /**
+   * The inside scale (inside.ts; docs/SCALES-AND-MODES.md, scope 3): on; the road load of one car
+   * trip a day inside a town (its cars are its car trips times this); the share of a city line's
+   * riders taken from the cars, the rest from the kekes and okadas. Absent in older runs: a town's
+   * cars as they were, a metro taking none of them.
+   */
+  insideEnabled?: boolean;
+  privateLoadPerCarTrip?: number;
+  cityLineCarDraw?: number;
   trunkTownPopulation?: number;
   trunkCostPerCell?: number;
   pipeCostPerCell?: number;

@@ -1,4 +1,5 @@
 import { projectName } from "@engine/game/project";
+import { insideSplit } from "@engine/game/inside";
 import { isTrunk, trunkPrice } from "@engine/game/trunks";
 import { airportStranded, airportSummary } from "@engine/game/airport";
 import { pipeSummaries } from "@engine/game/pipelines";
@@ -90,6 +91,22 @@ const css = (name: string) => getComputedStyle(document.documentElement).getProp
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 const KIND_COLOR: Record<string, string> = { bus: "--you", minibus: "--s3", brt: "--s4", train: "--rail" };
+
+
+/**
+ * A town's inside trips in their four slices (inside.ts; the three scales, scope 3): walk, keke
+ * and okada, your city line, car -- the bar, and what the cars do. The whole of this scope's screen.
+ */
+function insideHtml(world: GameWorld, id: string): string {
+  if (!world.tuning.insideEnabled) return "";
+  const s = insideSplit(world, id);
+  if (s.trips <= 0) return "";
+  const took = s.carBase - s.car;
+  const pct1 = (x: number) => `${Math.round(x * 100)}%`;
+  return `<h2>Inside the town · ${Math.round(s.trips).toLocaleString()} trips a day</h2>
+    <div class="bar3" title="Walk, keke and okada, your city line, car"><i style="width:${pct1(s.walk)};background:var(--line)"></i><i style="width:${pct1(s.informal)};background:var(--informal)"></i><i style="width:${pct1(s.line)};background:var(--you)"></i><i style="width:${pct1(s.car)};background:var(--muted)"></i></div>
+    <p class="muted">Walk ${pct1(s.walk)} · keke and okada ${pct1(s.informal)} · your city line ${pct1(s.line)} · car ${pct1(s.car)}. Only the cars leave the town: they load its approach roads${took > 0.0005 ? `, ${pct1(took)} fewer for your line` : s.carBase > 0.0005 ? `; a city line would take some off them` : ""}.</p>`;
+}
 
 export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: ScreenHooks) {
   const stripEl = document.querySelector<HTMLElement>("#strip")!;
@@ -1084,6 +1101,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         </div>
         <div class="bar3"><i style="width:${pct(t.share.you)};background:var(--you)"></i><i style="width:${pct(t.share.informal)};background:var(--informal)"></i><i style="width:${pct(t.share.lost)};background:var(--home)"></i></div>
         <div class="chart"><div class="t"><span>People, thousands</span><span>${t.target ? `heading for ${int(t.target)}k` : ""}</span></div>${chartSvg([{ name: "People (k)", color: css("--ink-2"), values: pop }], { height: 90 })}</div>
+        ${insideHtml(world, t.id)}
         ${t.fuel !== null || t.cement !== null ? `<div class="tiles">${t.fuel !== null ? tile("Fuel supplied", pct(t.fuel)) : ""}${t.cement !== null ? tile("Cement supplied", pct(t.cement), t.cementHeld > 1 ? `${int(t.cementHeld)}k fewer people for it` : "") : ""}${t.steel !== null ? tile("Steel supplied", pct(t.steel), t.steelHeld > 1 ? `${int(t.steelHeld)}k fewer people for it` : "past +80% of its start") : ""}</div>` : ""}
         ${onTheWayHtml(t.id)}
         ${stationHtml(t.id)}

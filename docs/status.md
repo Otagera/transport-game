@@ -156,7 +156,11 @@ three scales' first two, with your calls -- a road's class both ways, the union'
 both scopes together. The old highways are trunks; you declare more (E on the road tool, or the
 road's card). No okada or keke on a trunk; danfos pay its toll and run it end to end, the last mile
 off it by okada. On your 5059 network: okadas off the declared trunks (79 -> 3 trips a day), trips
-made up 1%, the union's demand at once (engine.md, Trunks and feeders).
+made up 1%, the union's demand at once (engine.md, Trunks and feeders). **The inside scale** (branch
+`inside`; brief, Scales): a town's own journeys in four slices on its card -- walk, keke and okada,
+your city line, car -- of which only the cars load its approach roads; with no city line they're
+its cars as they always were, to the last bit. A city line takes its riders half from the cars and
+half from the okadas (the scope's open ratio, measured: engine.md, The inside scale).
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

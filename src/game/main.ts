@@ -1,4 +1,5 @@
 import { coalArriving, coalOutput, inPowerReach, powerActive, powerLift, powerShare, poweredSites } from "@engine/game/power";
+import { insideSplit } from "@engine/game/inside";
 import { checkPipe, isPipeSource, pipePlan, pipeWouldCarry } from "@engine/game/pipelines";
 import { aWeekOnText, termVerdictText } from "@engine/game/term";
 import { SIM_DT } from "@engine/loop";
@@ -2671,7 +2672,7 @@ function renderTown(townId: string): void {
       <ul>
         ${biggestLine ? `<li>${biggestLine}</li>` : ""}
         <li>Of its trips: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</li>
-        <li>Inside: ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day by keke and okada, not counted against you.</li>
+        <li>${world.tuning.insideEnabled ? (() => { const s = insideSplit(world, townId); const p = (x: number) => `${Math.round(x * 100)}%`; return `Inside: ~${Math.round(s.trips).toLocaleString()} short trips a day: walk ${p(s.walk)}, keke and okada ${p(s.informal)}, your city line ${p(s.line)}, car ${p(s.car)}; only the cars load its roads.`; })() : `Inside: ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day by keke and okada, not counted against you.`}</li>
         ${metroItem(townId)}
         ${parkItem(townId)}
       </ul>
