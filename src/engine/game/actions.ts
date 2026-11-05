@@ -38,7 +38,7 @@ export { remitRefusal } from "./remit";
 
 export type ActionSpec =
   | { kind: "bus" | "minibus" | "brt" | "lorry" | "train" | "freight"; a: string; b: string }
-  | { kind: "road"; a: string; b: string; alignment: Alignment; high?: boolean; trunk?: boolean }
+  | { kind: "road"; a: string; b: string; alignment: Alignment; high?: boolean; trunk?: boolean; via?: Array<{ x: number; y: number }> }
   | { kind: "pave"; a: string; b: string }
   | { kind: "lane"; a: string; b: string }
   | { kind: "enforce"; a: string; b: string; enforcement: Enforcement }
@@ -128,7 +128,7 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
     case "road": {
       // Declared a trunk as it's built (trunks.ts): one more choice on the verb; refused whole if it can't be.
       if (spec.trunk && !trunksOn(world)) return { ok: false, reason: SWITCHED_OFF };
-      const built = buildRoad(world, spec.a, spec.b, spec.alignment, spec.high ?? false);
+      const built = buildRoad(world, spec.a, spec.b, spec.alignment, spec.high ?? false, spec.via);
       if (!built.ok || !spec.trunk) return built;
       const roads = world.simulation.map.segments.filter((s) => s.type === "road" && ((s.fromNodeId === spec.a && s.toNodeId === spec.b) || (s.fromNodeId === spec.b && s.toNodeId === spec.a)));
       const piece = roads[roads.length - 1];

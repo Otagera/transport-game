@@ -1474,6 +1474,15 @@ lines, 8% of inside trips a line, ₦120 a line a day), **the monorail** (150k+,
   So looking before buying doesn't rescue it: at 12% a line light rail is a trap where it hurts
   and nothing where it doesn't. Open (brief, Scales): its street cost and its upside.
 
+### A road bent through points (2026-11-05; brief, Tools for building, 3)
+
+- The road action's optional `via` (absent in older runs): points, map cells, the road must pass
+  through in order. `roads.ts planVia` plans it leg by leg through them with `planCorridor` (all of
+  them marked existing waypoints: they're not nodes, nothing joins there), cached on the world's
+  `roadPlans` under its points; `planRoad`, `roadCost`, `checkRoad` and `buildRoad` take it, and a
+  road with one is planned through them whatever its way (cheapest or straight). Priced as its
+  longer way costs (test/upgrades.test.ts).
+
 ### Your bus station (2026-11-04; brief, Your bus station)
 
 - **`busstations.ts`** -- behind `busStationsEnabled` (absent in older runs, and `busStations`

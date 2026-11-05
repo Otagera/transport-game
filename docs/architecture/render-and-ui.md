@@ -770,6 +770,22 @@ problem button and the station board's jammed, worn or full rows carry it too. H
 5059 replay: Igbo-Onani ↔ Ifena, "Pave its 2 dirt roads (Esewan–Odun, Iginin–Ifena) · ₦4,076";
 Esewan–Iginin's card, a ₦164k lane on a 63%-loaded road, said too few travel along it.
 
+**Draw a chain** (2026-11-05; brief, Tools for building, 1-2). With the Road or Track tool,
+Cmd- or Ctrl-click towns in turn (main.ts `chain`): a message lists each leg -- a road or track where
+none joins it, else the next rung (`chainLeg`, from `actionFor`: pave, lane, rail on the road,
+restore the old line; a lane's enforcement is skipped) -- with its price and the total, and the
+chain's towns are ringed. Enter builds the legs in order, one action each, stopping at the first
+refused; Esc or another tool drops it. Shift still keeps a hub selected. Told once a game when the
+Road or Track tool is picked. Headless on map 8703: Idawo, Omiga, Otido -- "pave Idawo – Omiga
+₦1,441; road Omiga – Otido ₦537. Total ₦1,978", built in two legs.
+
+**Bend a road** (2026-11-05; brief, Tools for building, 3). With the Road tool and a town picked,
+Alt- or Option-click the map: a point the road must pass through (main.ts `bends`, map cells). The
+preview and its quote follow it ("Road bent through 1 point ₦859 ... bends round: 49% longer trip",
+Idawo to Ijura on map 8703, headless); the town clicked next builds it, the points on the road
+action (`via`). Esc, another tool or a new first town drops them. Building only: a road that
+exists is paved or laned as it lies.
+
 **Your bus station on the screen** (2026-11-04; engine.md, Your bus station). The Station tool
 (<kbd>S</kbd>, Build, beside Park) is one click on a town; its quote names your lines there, riders
 changing a day and those giving up changing. On the map, an S in your colour at the town's

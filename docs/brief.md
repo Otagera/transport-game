@@ -1207,16 +1207,17 @@ two-click job between two towns one road joins; 148 buses and 42 minibuses bough
 You said "upgrading hurt more". So first, upgrading from the cards (built 2026-11-05,
 render-and-ui.md, Upgrading from the cards); then these four, in this order:
 
-1. **Draw a chain.** With the Road or Track tool, Shift-click towns A, B, C, D, then Enter (or a
-   double-click on the last): every leg in one go. Where no road joins a leg, it's built; where one
+1. **Draw a chain** (built 2026-11-05). With the Road or Track tool, Cmd- or Ctrl-click towns A, B, C, D, then Enter
+   (Shift already keeps a hub selected to fan out from): every leg in one go. Where no road joins a leg, it's built; where one
    does, it goes up one rung -- so the same gesture draws a new road and upgrades an old corridor.
    The quote, before you commit, lists each leg (build, pave, lane, or the rail it becomes) and its
    price, and the total. A plain click, A then B, stays as it is. Each leg is still one action in the
    run file.
-2. **A corridor at once.** The chain's upgrade, over existing roads only: Shift-click A then D where
-   roads already join them through B and C, and every road on the way goes up a rung. (Item 1's
-   gesture: one change, two uses.)
-3. **Bend a road.** While drawing a leg, Alt-click points on the map the road must pass through --
+2. **A corridor at once.** The chain's upgrade, over existing roads: Cmd-click A, B, C, D along roads
+   that already join them, and every road on the way goes up a rung. (Item 1's gesture: one change,
+   two uses. Built 2026-11-05 together with item 1; the towns are clicked, not found, so a chain
+   never builds a road you didn't point at.)
+3. **Bend a road** (built 2026-11-05). While drawing a leg, Alt-click points on the map the road must pass through --
    to cross a river where you choose, or skirt a hill. The road is planned through them, piece by
    piece, and priced as one road (`roads.ts`, a `via` on the road action; absent in older runs).
    Today's straight-or-round stays as the default.

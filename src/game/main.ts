@@ -653,8 +653,9 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
       const chain = roadChain(world, a, b);
       if (!chain) {
         const way = wayBetween("road", a, b).way;
-        const plan = planRoad(world, a, b, way);
-        return { kind: "road", a, b, alignment: way, high: highBridge && !!plan && highBridgeCost(world, plan.polyline) > 0, ...(trunkRoad && world.tuning.trunksEnabled ? { trunk: true } : {}) };
+        const via = a === selectedTown && bends.length > 0 ? bends : undefined;
+        const plan = planRoad(world, a, b, way, via);
+        return { kind: "road", a, b, alignment: way, high: highBridge && !!plan && highBridgeCost(world, plan.polyline) > 0, ...(trunkRoad && world.tuning.trunksEnabled ? { trunk: true } : {}), ...(via ? { via: [...via] } : {}) };
       }
       if (chain.some(isDirt)) return { kind: "pave", a, b };
       // A lane already: the Road tool switches its enforcement, strict <-> lax.
@@ -680,6 +681,60 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
     case "station":
       return null;
   }
+}
+
+/** The towns of a chain being drawn (brief, Tools for building, 1-2), in order; empty when none. */
+let chain: string[] = [];
+let chainTold = false;
+/** Points a road being drawn must pass through, map cells (brief, Tools for building, 3): Alt-click to add. */
+let bends: Array<{ x: number; y: number }> = [];
+
+/** One leg of a chain: what it does now (a road where none joins it, else its next rung), and its price. Null: nothing to do (a lane already, with the Road tool). */
+function chainLeg(a: string, b: string): { action: ActionSpec; label: string; price: number } | null {
+  const action = actionFor(tool, a, b);
+  if (!action) return null;
+  const name = `${townName(a)} – ${townName(b)}`;
+  switch (action.kind) {
+    case "road": return { action, label: `road ${name}`, price: roadCost(world, a, b, action.alignment, !!action.high) };
+    case "pave": return { action, label: `pave ${name}`, price: paveCost(world, a, b) };
+    case "lane": return { action, label: `bus lane on ${name}`, price: laneCost(world, a, b) };
+    case "track": {
+      const how = trackAction(world, a, b);
+      return { action, label: `${how === "restore" ? "restore the old line" : how === "onroad" ? "rail on the road" : "track"} ${name}`, price: trackCost(world, a, b, action.alignment) };
+    }
+    default: return null; // a lane's enforcement isn't a rung
+  }
+}
+
+function chainSummary(): string {
+  if (chain.length < 2) return `Chain from ${townName(chain[0] ?? "")}: Ctrl-click the next town.`;
+  const legs = chain.slice(1).map((b, i) => ({ a: chain[i]!, b, leg: chainLeg(chain[i]!, b) }));
+  const total = legs.reduce((sum, l) => sum + (l.leg?.price ?? 0), 0);
+  const words = legs.map((l) => (l.leg ? `${l.leg.label} ${naira(l.leg.price)}` : `${townName(l.a)} – ${townName(l.b)} at its top rung`)).join("; ");
+  return `Chain: ${words}. Total ${naira(total)}${total > world.economy.funds ? " -- more than you have" : ""}. Enter builds it, Esc drops it.`;
+}
+
+/** Builds a chain's legs in order, each as its own action; stops at the first refused. */
+function buildChain(): void {
+  const towns = chain;
+  chain = [];
+  selectedTown = null;
+  let done = 0, spent = 0, skipped = 0;
+  for (let i = 1; i < towns.length; i += 1) {
+    const a = towns[i - 1]!, b = towns[i]!;
+    const leg = chainLeg(a, b);
+    if (!leg) { skipped += 1; continue; }
+    const result = act({ label: leg.label, towns: [a, b] }, leg.action);
+    if (!result.ok) {
+      say(`${done > 0 ? `Built ${done} leg${done === 1 ? "" : "s"} (${naira(spent)}); then c` : "C"}an't ${leg.label}: ${result.reason}`, true, 8);
+      renderPanel();
+      return;
+    }
+    done += 1;
+    spent += result.amount ?? leg.price;
+  }
+  say(`Chain built: ${done} leg${done === 1 ? "" : "s"} for ${naira(spent)}${skipped ? `; ${skipped} already at the top rung` : ""}.${later}`, false, 8);
+  renderPanel();
 }
 
 /** The move waiting for a second click to confirm it despite its forecast. */
@@ -1029,6 +1084,13 @@ function setTool(next: Tool): void {
   if (!toolOn(next)) return;
   tool = next;
   selectedTown = null;
+  chain = [];
+  bends = [];
+  // Once a game: how to chain (brief, Tools for building).
+  if ((next === "road" || next === "track") && !chainTold) {
+    chainTold = true;
+    say(`${next === "road" ? "Road" : "Track"}: click two towns. To do several legs at once, Cmd- or Ctrl-click towns in turn (a new ${next === "road" ? "road" : "line"} where none joins them, else the next rung), then Enter.`, false, 8);
+  }
   renderToolbar();
 }
 
@@ -1079,6 +1141,12 @@ canvas.addEventListener("click", (event) => {
       say(`Maintaining ${name}: repaired for ${naira(result.amount ?? 0)}, about ${naira(upkeep)}/day to keep at this traffic.${later}`);
     } else say(`Stopped maintaining ${name}: it will wear again`);
     renderPanel();
+    return;
+  }
+  // Bend a road (brief, Tools for building, 3): with a town picked, Alt- or Option-click the map adds a point it passes through.
+  if (tool === "road" && selectedTown && event.altKey) {
+    bends.push({ x: (event.clientX - view.offsetX) / view.scale, y: (event.clientY - view.offsetY) / view.scale });
+    say(`Bent through ${bends.length} point${bends.length === 1 ? "" : "s"}: click the town it goes to (Esc drops them).`, false, 6);
     return;
   }
   const town = townAt(event.clientX, event.clientY);
@@ -1133,8 +1201,18 @@ canvas.addEventListener("click", (event) => {
     renderPanel();
     return;
   }
+  // Draw a chain (brief, Tools for building, 1-2): Ctrl- or Cmd-click towns in turn with the Road
+  // or Track tool; Enter builds every leg -- a road where none joins it, else its next rung.
+  if ((tool === "road" || tool === "track") && (event.ctrlKey || event.metaKey)) {
+    if (chain.length === 0) chain = selectedTown && selectedTown !== town ? [selectedTown, town] : [town];
+    else if (chain[chain.length - 1] !== town) chain.push(town);
+    selectedTown = town;
+    say(chainSummary(), false, 30);
+    return;
+  }
   if (!selectedTown || selectedTown === town) {
     selectedTown = selectedTown === town ? null : town;
+    bends = [];
     return;
   }
   const from = selectedTown;
@@ -1176,12 +1254,14 @@ canvas.addEventListener("click", (event) => {
     else say(`Can't pave: ${result.reason}`, true);
   } else if (tool === "road") {
     const { way } = wayBetween("road", from, town);
-    const plan = planRoad(world, from, town, way);
+    const via = bends.length > 0 ? [...bends] : undefined;
+    bends = [];
+    const plan = planRoad(world, from, town, way, via);
     const high = highBridge && !!plan && highBridgeCost(world, plan.polyline) > 0;
     const wet = !!plan && highBridgeCost(world, plan.polyline) > 0;
-    const cost = roadCost(world, from, town, way, high);
-    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment: way, high, ...(trunkRoad && world.tuning.trunksEnabled ? { trunk: true } : {}) });
-    if (result.ok) say(`Built road ${townName(from)} – ${townName(town)}${way === "direct" ? ", the straight way" : ""}${!wet ? "" : high ? ", on a high bridge" : ", over a causeway that floods in the rains (C for a high bridge)"}, for ${naira(cost)}.${later}`);
+    const cost = roadCost(world, from, town, way, high, via);
+    const result = act({ label: `the ${townName(from)} – ${townName(town)} road`, towns }, { kind: "road", a: from, b: town, alignment: way, high, ...(trunkRoad && world.tuning.trunksEnabled ? { trunk: true } : {}), ...(via ? { via } : {}) });
+    if (result.ok) say(`Built road ${townName(from)} – ${townName(town)}${via ? `, bent through ${via.length} point${via.length === 1 ? "" : "s"}` : way === "direct" ? ", the straight way" : ""}${!wet ? "" : high ? ", on a high bridge" : ", over a causeway that floods in the rains (C for a high bridge)"}, for ${naira(cost)}.${later}`);
     else say(`Can't build: ${result.reason}`, true);
   } else if (tool === "track") {
     const action = trackAction(world, from, town);
@@ -1295,7 +1375,8 @@ window.addEventListener("keydown", (event) => {
     } else if (key && event.key === "Escape") screen.stopRenaming();
     return;
   }
-  if (event.key === "r" || event.key === "R") setTool("road");
+  if (event.key === "Enter" && chain.length >= 2) buildChain();
+  else if (event.key === "r" || event.key === "R") setTool("road");
   else if (event.key === "b" || event.key === "B") setTool("bus");
   else if (event.key === "m" || event.key === "M") setTool("minibus");
   else if (event.key === "x" || event.key === "X") setTool("brt");
@@ -1349,6 +1430,8 @@ window.addEventListener("keydown", (event) => {
     // Esc: the revenue screen shut, else a half-made build dropped, else back to the lists.
     if (screen.verdictOpen()) screen.openVerdict(null);
     else if (screen.revenueOpen()) screen.openRevenue(false);
+    else if (bends.length > 0) { bends = []; say("Bends dropped.", false, 3); }
+    else if (chain.length > 0) { chain = []; selectedTown = null; say("Chain dropped.", false, 3); }
     else if (selectedTown) selectedTown = null;
     else {
       panelTown = null;
@@ -1540,10 +1623,11 @@ function ghost(): Ghost | null {
   }
   if (tool === "road") {
     const { way, other: otherWayKind } = wayBetween("road", selectedTown, to);
-    const plan = planRoad(world, selectedTown, to, way);
+    const via = bends.length > 0 ? bends : undefined;
+    const plan = planRoad(world, selectedTown, to, way, via);
     const raise = plan ? highBridgeCost(world, plan.polyline) : 0;
     const high = highBridge && raise > 0;
-    const check = checkRoad(world, selectedTown, to, way, high);
+    const check = checkRoad(world, selectedTown, to, way, high, via);
     if (!plan) return { from: selectedTown, to: end, ok: false, label: check.ok ? "" : check.reason };
     const otherPlan = otherWayKind ? planRoad(world, selectedTown, to, otherWayKind) : null;
     // The other way priced as this one's built: high, its crossings high too.
@@ -1559,9 +1643,9 @@ function ghost(): Ghost | null {
     const trunk = trunkRoad && world.tuning.trunksEnabled;
     const trunkCost = trunk ? Math.round(plan.length * (world.tuning.trunkCostPerCell ?? 50)) : 0;
     const asTrunk = !world.tuning.trunksEnabled ? "" : trunk ? ` · a trunk (+${naira(trunkCost)}): no okadas or kekes, danfos pay its toll, the union will want it back (E: a feeder)` : " · a feeder (E: a trunk)";
-    const label = `${way === "direct" ? `Road straight ${straightWord(plan)}` : "Road"} ${naira(plan.cost + (high ? raise : 0) + trunkCost)} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${crossing}${asTrunk}${otherWay(plan, other, way)} · ${riders} · earns no fares itself: run a bus on it`;
+    const label = `${via ? `Road bent through ${via.length} point${via.length === 1 ? "" : "s"}` : way === "direct" ? `Road straight ${straightWord(plan)}` : "Road"} ${naira(plan.cost + (high ? raise : 0) + trunkCost)} + ${keep}/day to keep${roadWhy(plan, selectedTown, to)}${crossing}${asTrunk}${otherWay(plan, other, way)} · ${riders} · earns no fares itself: run a bus on it`;
     const ghost = { from: selectedTown, to: end, ok: check.ok, line: plan.polyline, label: check.ok ? label : `${naira(plan.cost + (high ? raise : 0))} · ${check.reason}` };
-    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment: way, high, ...(trunk ? { trunk: true } : {}) }, { label: "the road", towns: [selectedTown, to] });
+    return withForecast(ghost, { kind: "road", a: selectedTown, b: to, alignment: way, high, ...(trunk ? { trunk: true } : {}), ...(via ? { via: [...via] } : {}) }, { label: "the road", towns: [selectedTown, to] });
   }
   if (tool === "track") {
     const check = checkTrack(world, selectedTown, to, "cheapest");
@@ -3861,7 +3945,8 @@ function frame(now: number): void {
     view3d.frame(world, focusFor(world, focusOn.town, focusOn.route), focusOn.route ? null : focusOn.town);
   } else draw(ctx, world, view, {
     selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay, network,
-    pointed: pointed && performance.now() < pointed.until ? pointed.ids : undefined,
+    // A chain being drawn rings its towns (brief, Tools for building).
+    pointed: chain.length > 0 ? new Set(chain) : pointed && performance.now() < pointed.until ? pointed.ids : undefined,
     focusTown: focusOn.town,
     focusRoute: focusOn.route,
     focusPipe: picked?.kind === "pipe" ? picked.id : null,

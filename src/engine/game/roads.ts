@@ -109,8 +109,35 @@ export function segmentLength(world: GameWorld, segment: Segment): number {
  */
 export type Alignment = "cheapest" | "direct";
 
-export function planRoad(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest"): RoadPlan | null {
+export function planRoad(world: GameWorld, a: string, b: string, alignment: Alignment = "cheapest", via?: Point[]): RoadPlan | null {
+  if (via && via.length > 0) return planVia(world, a, b, via);
   return planAlignment(world, a, b, world.simulation.map.terrain, exchangeRate(world), world.roadPlans, alignment);
+}
+
+/**
+ * A road bent through points you chose (brief, Tools for building, 3): planned leg by leg through
+ * them, in order, as one road -- to cross a river where you choose, or skirt a hill. The points
+ * aren't nodes: nothing joins there, and the road is priced as the cheapest way through them.
+ */
+export function planVia(world: GameWorld, a: string, b: string, via: Point[]): RoadPlan | null {
+  const townA = world.towns.get(a);
+  const townB = world.towns.get(b);
+  if (!townA || !townB) return null;
+  const { terrain } = world.simulation.map;
+  const points = via.map((p) => ({ x: Math.max(0, Math.min(terrain.width - 1, Math.round(p.x))), y: Math.max(0, Math.min(terrain.height - 1, Math.round(p.y))) }));
+  const key = `${a}:${b}:via:${points.map((p) => `${p.x},${p.y}`).join(";")}`;
+  if (world.roadPlans.has(key)) return world.roadPlans.get(key)!;
+  const waypoints = [{ x: Math.round(townA.x), y: Math.round(townA.y) }, ...points, { x: Math.round(townB.x), y: Math.round(townB.y) }];
+  const corridor = planCorridor(terrain, waypoints, "auto", new Set(waypoints.map((_, i) => i)), 1, 1, !!world.tuning.tautRoads);
+  let plan: RoadPlan | null = null;
+  if (corridor) {
+    const polyline = corridor.polyline.map((p) => ({ x: p.x, y: p.y }));
+    polyline[0] = { x: townA.x, y: townA.y };
+    polyline[polyline.length - 1] = { x: townB.x, y: townB.y };
+    plan = toPlan(polyline, corridor.breakdown, exchangeRate(world));
+  }
+  world.roadPlans.set(key, plan);
+  return plan;
 }
 
 // Sample spacing along a direct line, cells.

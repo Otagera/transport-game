@@ -5,7 +5,8 @@ import { applyAction } from "@engine/game/actions";
 import { gameTick } from "@engine/game/tick";
 import { SIM_DT } from "@engine/loop";
 import { lineUpgrade, roadUpgrade } from "@engine/game/problems";
-import { paveCost, roadChain } from "@engine/game/world";
+import { paveCost, roadChain, roadCost } from "@engine/game/world";
+import { planRoad } from "@engine/game/roads";
 import type { GameWorld } from "@engine/game/types";
 
 // Upgrading where you're looking (problems.ts roadUpgrade, lineUpgrade; your map 5059 playtest:
@@ -53,5 +54,29 @@ describe("upgrading from the cards", () => {
     expect(roadChain(w, a, b)!.every((s) => s.surface === "paved")).toBe(true);
     // Paved all the way and not jammed: a lane would buy nothing, so none is offered.
     expect(lineUpgrade(w, routeId)).toBeNull();
+  }, 120_000);
+
+  test("a road bent through a point you chose passes it, costs what its longer way costs, and replays", () => {
+    const w = start();
+    // Two towns no road joins directly.
+    const towns = [...w.towns.values()].filter((t) => !t.industry);
+    let pair: [string, string] | null = null;
+    for (const p of towns) for (const q of towns) if (!pair && p.id < q.id && !roadChain(w, p.id, q.id) && Math.hypot(p.x - q.x, p.y - q.y) > 12 && Math.hypot(p.x - q.x, p.y - q.y) < 30 && planRoad(w, p.id, q.id)) pair = [p.id, q.id];
+    const [a, b] = pair!;
+    const A = w.towns.get(a)!, B = w.towns.get(b)!;
+    // A point off to one side of the straight line, a third of its length away.
+    const mid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+    const len = Math.hypot(B.x - A.x, B.y - A.y);
+    const side = { x: mid.x - ((B.y - A.y) / len) * len / 3, y: mid.y + ((B.x - A.x) / len) * len / 3 };
+    const plain = planRoad(w, a, b)!;
+    const bent = planRoad(w, a, b, "cheapest", [side]);
+    if (!bent) return; // over water or off the map: nothing to bend through here
+    expect(bent.length).toBeGreaterThan(plain.length);
+    expect(Math.min(...bent.polyline.map((p) => Math.hypot(p.x - side.x, p.y - side.y)))).toBeLessThan(2);
+    expect(roadCost(w, a, b, "cheapest", false, [side])).toBe(bent.cost);
+    const funds = w.economy.funds;
+    expect(applyAction(w, { kind: "road", a, b, alignment: "cheapest", via: [side] }).ok).toBe(true);
+    expect(funds - w.economy.funds).toBe(bent.cost);
+    expect(roadChain(w, a, b)).not.toBeNull();
   }, 120_000);
 });
