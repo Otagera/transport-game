@@ -47,13 +47,13 @@ import type { BondPurpose } from "../src/engine/game/bonds";
 import { seaportLink } from "../src/engine/game/gateways";
 import { parkLevyGain } from "../src/engine/game/parks";
 import { freightLineSplit } from "../src/engine/game/freightrates";
-import { checkMetro, metroLines, metroPrice, metroRiders } from "../src/engine/game/metro";
+import { URBAN_KINDS, checkUrban, metroLines, metroRiders, urbanKind, urbanName, urbanPrice, urbanRung } from "../src/engine/game/metro";
 import { crudeArriving, fuelSupply, newRefinery, newRefineryCapacity, newRefineryCrude, newRefineryOutput } from "../src/engine/game/fuel";
 import { townGrowth } from "../src/engine/game/growth";
 import { marketFed, marketTowns } from "../src/engine/game/food";
 import { clothExported, clothServed, clothWant, cottonArriving, cottonTowns, textileOutput } from "../src/engine/game/textile";
 import { workforceShares } from "../src/engine/game/workers";
-import type { GameWorld } from "../src/engine/game/types";
+import type { GameTown, GameWorld } from "../src/engine/game/types";
 import { pipeId, pipePlan, pipeServes, pipeWouldCarry, restorePipeCost } from "../src/engine/game/pipelines";
 import { unionOf } from "../src/engine/game/union";
 import { haulDistance } from "../src/engine/game/haulage";
@@ -439,11 +439,16 @@ function decide(world: GameWorld, day: number, losing: Map<string, number>): { m
     const best = [...world.basePopulation.keys()].filter((id) => !world.parks.has(id) && inRemit(world, id) && world.towns.get(id)!.population >= 50 && slowest(id) < 0.8).sort((p, q) => world.towns.get(q)!.population - world.towns.get(p)!.population)[0];
     if (best && spend(world, world.tuning.parkCost)) did(act(world, day, { kind: "park", townId: best }, `a motor park: the roads into ${world.towns.get(best)!.name} jam (${Math.round(slowest(best) * 100)}% speed), ~₦${Math.round(parkLevyGain(world, best))}/day more levy`));
   }
-  // A metro (Revision 4, 6): the biggest town that can take one, a line at a time, every five
-  // days at most.
+  // A city line (the urban ladder, metro.ts): the biggest town that can take one, a line at a time,
+  // every five days at most -- the kind it has, or for its first line the highest rung its size
+  // allows (as a player might: it can't change kind later). With only the metro in the game, as before.
   if (world.tuning.metroEnabled && day % 5 === 0) {
-    const town = [...world.towns.values()].filter((t) => !t.industry && inRemit(world, t.id) && checkMetro(world, t.id).ok).sort((p, q) => q.population - p.population)[0];
-    if (town && spend(world, metroPrice(world, town.id))) did(act(world, day, { kind: "metro", townId: town.id }, `${town.name} (${Math.round(town.population)}k): ${metroLines(world, town.id) === 0 ? "a metro" : "another metro line"}`));
+    const kindFor = (t: GameTown) => urbanKind(world, t.id) ?? [...URBAN_KINDS].reverse().find((k) => { const r = urbanRung(world, k); return !!r && t.population >= r.minPopulation; });
+    const pick = [...world.towns.values()].filter((t) => !t.industry && inRemit(world, t.id)).map((t) => ({ t, kind: kindFor(t) })).filter((x) => !!x.kind && checkUrban(world, x.t.id, x.kind).ok).sort((p, q) => q.t.population - p.t.population)[0];
+    if (pick && pick.kind && spend(world, urbanPrice(world, pick.t.id, pick.kind))) {
+      const name = pick.kind === "lightrail" ? "light rail" : pick.kind;
+      did(act(world, day, { kind: "metro", townId: pick.t.id, ...(pick.kind === "metro" ? {} : { mode: pick.kind }) }, `${pick.t.name} (${Math.round(pick.t.population)}k): ${metroLines(world, pick.t.id) === 0 ? urbanName(pick.kind) : `another ${name} line`}`));
+    }
   }
   // The works: restored once cement holds 10k people back.
   const cement = world.cement;
@@ -697,7 +702,9 @@ for (const seed of SEEDS) {
     console.log(`  C42 textile (${tx.source}): ${tx.working ? `restored day ${restored ?? "?"}` : "idle"}; cotton ${Math.round(cottonArriving(world) * D)} of ${Math.round((p?.inputs[0]?.needed ?? 0) * D)} t/day, cloth ${Math.round(textileOutput(world) * D)} t/day, markets served ${Math.round(served * 100)}%, exported ${Math.round(clothExported(world) * D)} t/day; its commuters ${Math.round((commutes / Math.max(1e-9, inReach)) * 100)}% of trips in reach${cottonOpen !== null ? `; C43 cotton clusters open ${cottonOpen}` : ""}`);
   }
   console.log(`  freight (rate ${world.tuning.freightRateDefault ?? "standard"}): ${lines.length} line(s); along them your trains ${Math.round(split.yours)} t/day, hauliers ${Math.round(split.hauliers)}, spoiling ${Math.round(split.spoiled)}; trucks on the road now ${trucks}; goods income ₦${Math.round(world.budget.goods / 1000)}k all game`);
+  const rungCount = (k: string) => [...world.metros.keys()].filter((id) => urbanKind(world, id) === k).length;
   console.log(`  metros (Revision 4, 6): ${[...world.metros].map(([id, lines]) => `${world.towns.get(id)?.name} ${lines} line(s), ${Math.round(metroRiders(world, id).riders)} riders/day`).join("; ") || "none"}; metro fares ₦${Math.round(world.budget.metro / 1000)}k all game`);
+  console.log(`  urban ladder: light rail ${rungCount("lightrail")} town(s), monorail ${rungCount("monorail")}, metro ${rungCount("metro")}${[...world.metros.keys()].length ? `: ${[...world.metros].map(([id, lines]) => `${world.towns.get(id)?.name} ${urbanKind(world, id)} ${lines}`).join(", ")}` : ""}`);
   console.log(`  motor parks (Revision 4, 5): ${world.parks.size} (${[...world.parks].map((id) => world.towns.get(id)?.name).join(", ")}); levies last 20 days ₦${Math.round(window(DAYS - 20, DAYS).reduce((s, d) => s + d.levies, 0) / 20)}/day`);
   console.log(`  lorries: ${lorries.length} routes, net ₦${Math.round(lorries.reduce((s, l) => s + l.netPerDay, 0))}/day, ${lorries.filter((l) => l.netPerDay < 0).length} losing`);
   // The five modes' checks (five-modes.md): the fuel chain still decides over the game; the airport connected over something else.

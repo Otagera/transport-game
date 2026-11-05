@@ -156,6 +156,7 @@ export function createGameWorld(def: GameMapDef, tuning: GameTuning = DEFAULT_GA
     busStations: new Set(),
     parkTakings: new Map(),
     metros: new Map(),
+    urbanKinds: new Map(),
     freightRates: new Map(),
     sweep: createSweepState(0, tuning.sweepPeriodDays ?? 60),
     food: null,

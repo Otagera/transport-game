@@ -199,6 +199,32 @@ export interface InformalState {
   earnings: number;
 }
 
+/** The urban ladder's rungs (metro.ts): trams in the street, elevated, underground. */
+export type UrbanKind = "lightrail" | "monorail" | "metro";
+
+/** A city line's numbers (metro.ts), one rung of the urban ladder. */
+export interface UrbanRung {
+  /** The smallest town it's built in, thousands. */
+  minPopulation: number;
+  /** The first line's price, and each further line's. */
+  firstCost: number;
+  lineCost: number;
+  maxLines: number;
+  /** The share of a town's inside trips a line carries. */
+  lineShare: number;
+  /** A rider's fare, and a line's running a day. */
+  fare: number;
+  runningPerLine: number;
+  /** How far all its lines lift a town's growth limit, as a share of its start. */
+  capShare: number;
+  /** The share of its town's approach road capacity a line takes (trams in the street); 0 for none. */
+  roadCapacityPerLine: number;
+  /** Whether a strike on its town's roads stops it. */
+  stoppedByStrikes: boolean;
+  /** The share of its riders drawn out of the cars (inside.ts); the rest out of the kekes and okadas. */
+  carDraw: number;
+}
+
 export interface GameTuning {
   /** Tolls (budget.ts): per road of yours on a path, per danfo-equivalent of road space. */
   tollPerRoad: number;
@@ -433,6 +459,12 @@ export interface GameTuning {
   metroFare: number;
   metroRunningPerLine: number;
   metroCapShare: number;
+  /**
+   * The urban ladder's other two rungs (metro.ts; docs/PROMPT-urban-ladder.md): light rail and
+   * the monorail, each with its numbers. The metro's are the eight above. Absent in run files
+   * before the ladder: only the metro.
+   */
+  urbanRungs?: Partial<Record<Exclude<UrbanKind, "metro">, UrbanRung>>;
   parksEnabled: boolean;
   parkCost: number;
   parkCapacityBoost: number;
@@ -1012,8 +1044,10 @@ export interface GameWorld {
   busStations?: Set<string>;
   /** At each parked town, the park levy a second, rolling: yours, and the agberos' (parks.ts, the town card). */
   parkTakings: Map<string, { yours: number; agberos: number }>;
-  /** Metro lines built, by town (metro.ts). */
+  /** City lines built, by town (metro.ts), whatever their kind. */
   metros: Map<string, number>;
+  /** A town's city line's kind where it isn't a metro (metro.ts); absent in worlds saved before the ladder. */
+  urbanKinds?: Map<string, UrbanKind>;
   /** Freight lines charging other than the standard rate (freightrates.ts), by route id. */
   freightRates: Map<string, "cheap" | "dear">;
   /** Times each site has been expanded (expand.ts), by its id. */

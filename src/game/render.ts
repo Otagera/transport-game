@@ -1,7 +1,7 @@
 import { isClosed, landOf, remitOn } from "@engine/game/remit";
 import { privateLoad } from "@engine/game/private";
 import { labelOf, routeLabelKey } from "@engine/game/labels";
-import type { GameTown, GameWorld } from "@engine/game/types";
+import type { GameTown, GameWorld, UrbanKind } from "@engine/game/types";
 import type { Segment } from "@engine/map/types";
 import type { RoutingContext, Vehicle } from "@engine/simulation/types";
 import { carsOn, routingFor } from "@engine/game/rail";
@@ -1068,7 +1068,7 @@ function drawTown(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, t
   if (world.yards.has(town.id)) drawYardMark(ctx, p.x - r - 6, p.y - r - 6);
   if (world.parks.has(town.id)) drawParkMark(ctx, p.x + r - 1, p.y - r - 6);
   if (world.busStations?.has(town.id)) drawStationMark(ctx, p.x + r - 1, p.y + r - 3);
-  if ((world.metros.get(town.id) ?? 0) > 0) drawMetroMark(ctx, p.x - r - 7, p.y + r - 3, world.metros.get(town.id)!);
+  if ((world.metros.get(town.id) ?? 0) > 0) drawMetroMark(ctx, p.x - r - 7, p.y + r - 3, world.metros.get(town.id)!, world.urbanKinds?.get(town.id) ?? "metro");
   // Waiting on you here: an amber mark on its top-right.
   if (state.problems?.has(town.id)) drawWaitingMark(ctx, p.x + r * 0.8, p.y - r * 0.8);
   if (state.pointed?.has(town.id)) drawPointedRing(ctx, p.x, p.y, r);
@@ -1595,7 +1595,10 @@ function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: GameTown): vo
   ctx.fillText(text, p.x, p.y + 16);
   ctx.textAlign = "left";
 }
-function drawMetroMark(ctx: CanvasRenderingContext2D, x: number, y: number, lines: number): void {
+// A town's city lines (metro.ts): its rung's letter -- T the trams (light rail), E elevated (the
+// monorail), M the metro -- and a dot a line.
+const URBAN_LETTER: Record<UrbanKind, string> = { lightrail: "T", monorail: "E", metro: "M" };
+function drawMetroMark(ctx: CanvasRenderingContext2D, x: number, y: number, lines: number, kind: UrbanKind): void {
   ctx.fillStyle = COLORS.player;
   ctx.beginPath();
   ctx.arc(x + 5, y + 5, 5.5, 0, Math.PI * 2);
@@ -1604,7 +1607,7 @@ function drawMetroMark(ctx: CanvasRenderingContext2D, x: number, y: number, line
   ctx.font = `700 ${FS.tiny} ui-monospace, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("M", x + 5, y + 5.5);
+  ctx.fillText(URBAN_LETTER[kind], x + 5, y + 5.5);
   ctx.fillStyle = COLORS.player;
   for (let i = 0; i < lines; i += 1) ctx.fillRect(x + 12 + i * 4, y + 4, 2.5, 2.5);
   ctx.textAlign = "left";

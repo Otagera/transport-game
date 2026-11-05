@@ -7,6 +7,7 @@ import type { GameWorld } from "./types";
 import { lineSpeed } from "./wear";
 import { laneEncroachment, struckSegments } from "./pushback";
 import { parkCapacityFactor } from "./parks";
+import { urbanRoadFactor } from "./metro";
 
 // Shared road (docs/principles.md §6, step 2). Your buses and the informal
 // sector slow each other down -- which closes the loop the hook depends on
@@ -60,7 +61,10 @@ export function roadCapacity(world: GameWorld, segmentId: string, encroachment?:
   const taken = segment.busLane ? (encroachment ?? laneEncroachment(world).get(segmentId) ?? 0) : 0;
   const lane = segment.busLane ? world.tuning.laneGeneralCapacity + (1 - world.tuning.laneGeneralCapacity) * taken : 1;
   // Danfos loading in a motor park, not at the roadside, leave the roads into it clearer (parks.ts).
-  return world.tuning.roadFlowCapacity * (isDirt(segment) ? world.tuning.dirtRoadCapacity : 1) * lane * parkCapacityFactor(world, segment.fromNodeId, segment.toNodeId);
+  // A town's light rail runs in its streets: each line takes a share of the roads into it, at each
+  // end that has one (metro.ts urbanRoadFactor) -- a road between two such towns, twice.
+  const trams = segment.type === "road" ? urbanRoadFactor(world, segment.fromNodeId) * urbanRoadFactor(world, segment.toNodeId) : 1;
+  return world.tuning.roadFlowCapacity * (isDirt(segment) ? world.tuning.dirtRoadCapacity : 1) * lane * parkCapacityFactor(world, segment.fromNodeId, segment.toNodeId) * trams;
 }
 
 /**

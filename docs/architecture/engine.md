@@ -1403,6 +1403,61 @@ takes none off the roads).
   its roads of cars, which a metro doesn't do, and 0.25 would make the line mainly the okadas'
   rival. The urban ladder sets each rung's own draw round it (PROMPT-urban-ladder.md, the note).
 
+### The urban ladder (2026-11-05; brief, Scales; PROMPT-urban-ladder.md, its reason rewritten)
+
+`metro.ts`, the metro's module grown three rungs: **light rail** (80k+, ₦45k then ₦35k a line, 2
+lines, 8% of inside trips a line, ₦120 a line a day), **the monorail** (150k+, ₦110k/₦80k, 2, 12%,
+₦220) and **the metro** (200k+, ₦150k/₦100k, 3, 15%, ₦300), ₦3 a rider each; growth lifted
+`capShare` (0.12, 0.22, 0.30) times lines over the most. The prompt's numbers as given.
+
+- **One kind a town** (`checkUrban`: "Bewa already has light rail"); no changing kind (deferred).
+- **The state is the metro's, kept**: `world.metros` the lines (any kind), `world.urbanKinds` a
+  town's kind where it isn't a metro, absent in worlds saved before (all metros). The prompt
+  moved it to one `world.urban` map; saves are the world as it stands (snapshot.ts), so a new
+  map would have broken every save before it. The metro's eight numbers stay its `metro*` tuning,
+  read as the metro's rung (`urbanRung`); the other two are `urbanRungs`, absent in run files
+  before the ladder (which carry their whole tuning): only the metro, as they played. The action
+  is `metro` with `mode` (absent, a metro), so every run file replays unchanged.
+- **Light rail shares the street** (congestion.ts `roadCapacity`, `urbanRoadFactor`): each line
+  takes `roadCapacityPerLine` (12%) of every road into its town, at each end -- a road between two
+  light-rail towns of 2 lines carries 0.76 x 0.76. And a strike on a road into its town (the
+  lanes' strikes, pushback.ts `struckSegments`; `townStruck`) stops it: no riders, no fares, its
+  running still paid, its riders back in the cars and on the okadas (inside.ts) while it lasts.
+- **The reason, rewritten on the inside scale.** The prompt sold the rungs on price, reach and
+  the street; the inside scale says a city line is for taking cars off your own approach roads.
+  So each rung draws its own share of its riders out of the cars (`carDraw`; the rest out of the
+  kekes and okadas): light rail 0.2, the monorail 0.35, the metro 0.5 (`cityLineCarDraw`, measured
+  for the inside scale). Measured (`scripts/_tmp/ladderdraw.ts`), each rung at its maximum lines in
+  a town grown into its size (x1.3-1.6 of day 1), its approach roads' cars over capacity:
+  - light rail, 2 lines at 110k: the roads 10-25% *fuller* at 0.2 (18 -> 21%, 73 -> 87%,
+    45 -> 52%...): its trams take more road than the cars it takes off. It breaks even near 0.5. It
+    is the rung for the fares (₦288 a day on ₦80k) and the growth (+12% of its start), and you pay
+    for it in road;
+  - the monorail, 2 lines at 170k: about a quarter of the town's cars off at 0.35 (car share
+    30 -> 22%, roads 24 -> 18% full); ₦784 a day on ₦190k, +22%;
+  - the metro, 3 lines at 200k: two-thirds of its cars off at 0.5 (The inside scale).
+  Each rung up takes more cars off your roads; the kekes and okadas keep 20-45% of its trips.
+- **On the town card** (screen.ts `ladderHtml`, out of the More fold, where the metro was): the
+  rung it has -- riders, net a day, the share of its car trips taken off its roads, light rail's
+  street and strike -- and another line; or each rung it could have, with its price, its riders a
+  line and how many out of cars, a rung it's too small for shown with the size it needs. One
+  primary button per rung it can buy; quiet when it's only the money. Nothing on a town under 60%
+  of the smallest rung's size. The 2D mark lettered T, E or M; in 3D only a metro has entrances
+  (light rail's tracks and the monorail's piers are a piece of their own).
+- **The strategist** buys at the biggest town that can take one, every five days: the kind it
+  has, else the highest rung its size allows.
+  Five maps to day 250 against `main`: with only the metro (`urbanRungs` null) all five are
+  `main`'s to the naira -- the metro's numbers didn't move. With the ladder, light rail on 4 maps
+  (7 towns; Otido, Ojada, Ibakpo, Oren, Osashon, Ikino, Elosa), the monorail on none (no town in
+  reach of 150k with ₦110k to spare), the metro once (Bewa, one line, not main's two). And light rail
+  cost it: trips at day 250 1,403 -> 1,261, 2,668 -> 2,525, 1,762 -> 1,670, 1,457 -> 1,403
+  (4-10% fewer), net a day lower on three, people -12k and -43k on the two that bought it by day
+  150, most money held ₦242k -> ₦92k on 949 (three light rails, its goods line never bought). One
+  line at Otido after day 200 cost 10% of trips by day 250: its approach roads were your buses'.
+  Bought where it can, as the strategist does, light rail is a trap at these numbers -- ₦288 a day
+  on ₦80k, and the road it takes is the road your buses run on. C14 is unmoved (62, 20, 61, 62,
+  62 days): the ladder doesn't fill the middle of the game.
+
 ### Your bus station (2026-11-04; brief, Your bus station)
 
 - **`busstations.ts`** -- behind `busStationsEnabled` (absent in older runs, and `busStations`

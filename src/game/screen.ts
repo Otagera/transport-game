@@ -1,5 +1,7 @@
 import { projectName } from "@engine/game/project";
 import { insideSplit } from "@engine/game/inside";
+import { URBAN_KINDS, checkUrban, townStruck, urbanAt, urbanPrice, urbanRiders, urbanRoadFactor, urbanRung } from "@engine/game/metro";
+import type { UrbanKind, UrbanRung } from "@engine/game/types";
 import { isTrunk, trunkPrice } from "@engine/game/trunks";
 import { airportStranded, airportSummary } from "@engine/game/airport";
 import { pipeSummaries } from "@engine/game/pipelines";
@@ -680,6 +682,43 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     ? `<div class="problem"><span>⚠ ${esc(problem.text)}</span>${problem.button}</div>`
     : `<div class="problem none"><span>Nothing wrong here</span></div>`;
   const tile = (k: string, v: string, note = "") => `<div class="tile"><div class="k">${k}</div><div class="v num">${v}</div>${note ? `<div class="k">${note}</div>` : ""}</div>`;
+  // The urban ladder on the town card proper (metro.ts; PROMPT-urban-ladder.md, step 6; it was under
+  // More, the cement works' restore button's mistake): the rung the town has, what its lines carry
+  // and the cars they take off its roads; or the rungs it could have, each with its price -- one it's
+  // too small for shown with the size it needs, not hidden. Nothing on a town far below them all.
+  const URBAN_TITLE: Record<UrbanKind, string> = { lightrail: "Light rail", monorail: "Monorail", metro: "Metro" };
+  function ladderHtml(townId: string): string {
+    const town = world.towns.get(townId);
+    if (!town || town.industry || !world.tuning.metroEnabled) return "";
+    const rungs = URBAN_KINDS.flatMap((kind) => { const rung = urbanRung(world, kind); return rung ? [{ kind, rung }] : []; }) as { kind: UrbanKind; rung: UrbanRung }[];
+    const at = urbanAt(world, townId);
+    if (rungs.length === 0 || (!at && town.population < 0.6 * Math.min(...rungs.map((r) => r.rung.minPopulation)))) return "";
+    const s = insideSplit(world, townId);
+    // One primary button per rung it can buy now; quiet when it's only the money (look.md §5).
+    const button = (kind: UrbanKind, label: string) => {
+      const check = checkUrban(world, townId, kind);
+      if (!check.ok && check.reason !== "can't afford it") return "";
+      return `<button class="${check.ok ? "primary" : "quiet"}" data-metro="${townId}|${kind}"${check.ok ? "" : ` title="${esc(check.reason ?? "")}"`}>${label} · ${nairaK(urbanPrice(world, townId, kind))}</button>`;
+    };
+    const street = (rung: UrbanRung) => `its trams share the street: each line takes ${pct(rung.roadCapacityPerLine)} of the roads into ${esc(town.name)}, and a strike on them stops it`;
+    if (at) {
+      const { riders, share } = urbanRiders(world, townId);
+      const net = riders * at.rung.fare - at.lines * at.rung.runningPerLine;
+      const took = s.carBase > 0 ? (s.carBase - s.car) / s.carBase : 0;
+      const stopped = at.rung.stoppedByStrikes && townStruck(world, townId);
+      return `<h2>Your ${URBAN_TITLE[at.kind].toLowerCase()} · ${plural(at.lines, "line")}</h2>
+        <div class="tiles">${tile("Riders", `${int(riders)}/day`, stopped ? "stopped: a strike on its roads" : `${pct(share)} of its inside trips`)}${tile("Net", `${nairaK(net)}/day`, "fares less running")}${tile("Cars off its roads", pct(took), "of its car trips")}</div>
+        ${at.rung.roadCapacityPerLine > 0 ? `<p class="muted">${street(at.rung)[0]!.toUpperCase()}${street(at.rung).slice(1)}: they carry ${pct(1 - urbanRoadFactor(world, townId))} less.</p>` : ""}
+        ${at.lines < at.rung.maxLines ? `<p class="muted">Another line: ~${int(at.rung.lineShare * s.trips)} riders a day more. ${button(at.kind, "Another line")}</p>` : ""}`;
+    }
+    const rows = rungs.map(({ kind, rung }) => {
+      if (town.population < rung.minPopulation) return `<tr><td>${URBAN_TITLE[kind]} <span class="muted">· needs a town of ${rung.minPopulation}k</span></td><td></td></tr>`;
+      const cars = Math.min(s.carBase, rung.carDraw * rung.lineShare) * s.trips;
+      return `<tr><td><b>${URBAN_TITLE[kind]}</b><br><span class="muted">~${int(rung.lineShare * s.trips)} riders a day a line, ~${int(cars)} of them out of cars${rung.roadCapacityPerLine > 0 ? `. ${street(rung)[0]!.toUpperCase()}${street(rung).slice(1)}` : ""}.</span></td><td>${button(kind, "Build")}</td></tr>`;
+    });
+    return `<h2>City lines</h2><p class="muted">One kind a town. A line carries its own short trips; the riders it takes out of cars come off the roads into it.</p>
+      <table><tbody>${rows.join("")}</tbody></table>`;
+  }
   const fold = (key: string, label: string, body: string) => body.trim()
     ? `<details class="more" data-fold="${key}"${openFolds.has(key) ? " open" : ""}><summary>${esc(label)}</summary><div class="panel-body">${body}</div></details>`
     : "";
@@ -1102,12 +1141,13 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         <div class="bar3"><i style="width:${pct(t.share.you)};background:var(--you)"></i><i style="width:${pct(t.share.informal)};background:var(--informal)"></i><i style="width:${pct(t.share.lost)};background:var(--home)"></i></div>
         <div class="chart"><div class="t"><span>People, thousands</span><span>${t.target ? `heading for ${int(t.target)}k` : ""}</span></div>${chartSvg([{ name: "People (k)", color: css("--ink-2"), values: pop }], { height: 90 })}</div>
         ${insideHtml(world, t.id)}
+        ${ladderHtml(t.id)}
         ${t.fuel !== null || t.cement !== null ? `<div class="tiles">${t.fuel !== null ? tile("Fuel supplied", pct(t.fuel)) : ""}${t.cement !== null ? tile("Cement supplied", pct(t.cement), t.cementHeld > 1 ? `${int(t.cementHeld)}k fewer people for it` : "") : ""}${t.steel !== null ? tile("Steel supplied", pct(t.steel), t.steelHeld > 1 ? `${int(t.steelHeld)}k fewer people for it` : "past +80% of its start") : ""}</div>` : ""}
         ${onTheWayHtml(t.id)}
         ${stationHtml(t.id)}
         <h2>${hasBusStation(world, t.id) ? "The board: your lines here" : "Your routes here"} · ${here.length}</h2>
         <table><tbody>${here.map((r) => boardRow(t.id, r)).join("") || `<tr><td class="muted">None</td></tr>`}</tbody></table>
-        ${fold("town", "More: its trips, parks, metro, strikes", hooks.townMore(t.id))}`;
+        ${fold("town", "More: its trips, parks, strikes", hooks.townMore(t.id))}`;
     }
     if (sel.kind === "route" && world.lorryRoutes.some((x) => x.id === sel.id)) {
       // A goods line: the same card as a passenger line's, its figures in tonnes.
@@ -1527,7 +1567,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const row = (name: string, keys: string | string[], sign: 1 | -1, note?: string): MoneyRow => ({ name, value: sign * last(keys), history: dailyBudget(keys).map((v) => sign * v), note });
     const keep = (rows: MoneyRow[]) => rows.filter((r) => Math.abs(r.value) >= 1 || r.history.some((v) => Math.abs(v) >= 1));
     const sections: MoneySection[] = [
-      { name: "Your lines", rows: [...families, ...keep([row("Metro fares", "metro", 1)])], note: fuel >= 1 ? `their running includes ${nairaK(fuel)} of fuel above the pump` : undefined },
+      { name: "Your lines", rows: [...families, ...keep([row("City lines", "metro", 1)])], note: fuel >= 1 ? `their running includes ${nairaK(fuel)} of fuel above the pump` : undefined },
       { name: "Roads", rows: keep([row("Tolls", "tolls", 1), row("Upkeep", ["upkeep", "enforcement"], -1)]) },
       { name: "The state", rows: keep([row("Allocation", "allocation", 1)]) },
       { name: "The rest", rows: keep([row("Park levies", "levies", 1, `the agberos kept ${nairaK(last("agberos"))}`), row("Loading levies", "loading", 1), row("Export payments", "exports", 1)]) },

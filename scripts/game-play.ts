@@ -39,7 +39,7 @@ import { freightLineSplit, freightRate } from "../src/engine/game/freightrates";
 import { isFreightRoute } from "../src/engine/game/goods";
 import { cementBreak } from "../src/engine/game/cement";
 import { parkLevyGain, parkReport } from "../src/engine/game/parks";
-import { checkMetro, metroLines, metroPrice, metroRiders } from "../src/engine/game/metro";
+import { URBAN_KINDS, checkUrban, metroLines, metroRiders, urbanKind, urbanPrice, urbanRung } from "../src/engine/game/metro";
 
 interface Saved {
   world: GameWorld;
@@ -103,9 +103,15 @@ function state(w: GameWorld): string {
     const park = parkReport(w, id);
     if (park) bits.push(`motor park: roads into it at ${pc(park.roadSpeed)} speed, levy ${k(park.yours)}/day to you (agberos ${k(park.agberos)}, would keep ${k(park.agberosWithout)} without it)`);
     else if (w.tuning.parksEnabled) bits.push(`a park here: ~+${k(parkLevyGain(w, id))}/day levy, roads into it +${pc(w.tuning.parkCapacityBoost)} capacity -- ${j({ kind: "park", townId: id })}`);
+    // City lines (the urban ladder, metro.ts): what it has, and each rung it could build now or once it has the money.
     const lines = metroLines(w, id);
-    if (lines > 0) bits.push(`metro ${lines} line(s), ${Math.round(metroRiders(w, id).riders)} riders/day`);
-    if (checkMetro(w, id).ok || (lines < w.tuning.metroMaxLines && t.population >= w.tuning.metroMinPopulation && w.tuning.metroEnabled)) bits.push(`${lines === 0 ? "a metro" : "another metro line"} ${k(metroPrice(w, id))}: ~${Math.round(w.tuning.metroLineShare * t.population * w.tuning.localTripsPerThousandPerDay)} riders/day -- ${j({ kind: "metro", townId: id })}`);
+    if (lines > 0) bits.push(`${urbanKind(w, id)} ${lines} line(s), ${Math.round(metroRiders(w, id).riders)} riders/day`);
+    for (const kind of URBAN_KINDS) {
+      const rung = urbanRung(w, kind);
+      const check = checkUrban(w, id, kind);
+      if (!rung || !(check.ok || check.reason === "can't afford it")) continue;
+      bits.push(`${lines === 0 ? kind : `another ${kind} line`} ${k(urbanPrice(w, id, kind))}: ~${Math.round(rung.lineShare * t.population * w.tuning.localTripsPerThousandPerDay)} riders/day -- ${j({ kind: "metro", townId: id, ...(kind === "metro" ? {} : { mode: kind }) })}`);
+    }
     out.push(`  ${id}: ${bits.join(" · ")}`);
   }
   const roadside = [...w.towns.values()].filter((t) => !t.industry && !w.basePopulation.has(t.id));

@@ -456,7 +456,7 @@ function buildOf(world: GameWorld, spec: ActionSpec): { label: string; towns: st
       return { label: `the ${spec.kind === "brt" ? "BRT" : spec.kind} ${ab(spec.a, spec.b)}`, towns: [spec.a, spec.b] };
     case "yard": return { label: `the yard at ${nameOf(world, spec.townId)}`, towns: [spec.townId] };
     case "park": return { label: `the motor park at ${nameOf(world, spec.townId)}`, towns: [spec.townId] };
-    case "metro": return { label: `the metro in ${nameOf(world, spec.townId)}`, towns: [spec.townId] };
+    case "metro": return { label: `${spec.mode === "lightrail" ? "the light rail" : spec.mode === "monorail" ? "the monorail" : "the metro"} in ${nameOf(world, spec.townId)}`, towns: [spec.townId] };
     default: return null;
   }
 }

@@ -3,6 +3,14 @@
 > rewritten on top of the inside scope ([SCALES-AND-MODES.md](SCALES-AND-MODES.md)) -- a city line
 > exists mainly to take cars off your own approach roads, the three rungs differing in how much of
 > the car slice each takes. Its line references are to `main` at `624fcb2`.
+>
+> **Built 2026-11-05** (architecture/engine.md, The urban ladder), its numbers as given, with its
+> reason rewritten: each rung draws its own share of its riders out of the cars (light rail 0.2,
+> the monorail 0.35, the metro 0.5, measured). Two departures, both for old games: the state stays
+> `world.metros` with a `world.urbanKinds` beside it, not one `world.urban` map (saves are the
+> world as it stands); and the metro's eight numbers stay its `metro*` tuning, the other two rungs
+> an `urbanRungs` record absent in older run files (which carry their whole tuning), with
+> `metroEnabled` kept as the ladder's switch, not renamed.
 
 # The urban ladder: three city modes on the town card
 

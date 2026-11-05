@@ -54,7 +54,7 @@ import type { ForecastLine } from "./render";
 import { applyAction, remitRefusal, type ActionOutcome, type ActionSpec } from "@engine/game/actions";
 import { createRunRecorder, forkRun, recordAction, recordTick, replayRunSteps, runFile, startRunSteps, type RunRecorder, type RunSwitches } from "@engine/game/runlog";
 import { restoreSnapshot, snapshotOf } from "@engine/game/snapshot";
-import type { GameTown, GameWorld } from "@engine/game/types";
+import type { GameTown, GameWorld, UrbanKind } from "@engine/game/types";
 import { ago, listSaves, loadSave, saveKey, writeSave, type SaveKey, type SavedGame } from "./saves";
 import { vehicleMoves } from "@engine/game/moves";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/game/upkeep";
@@ -69,7 +69,7 @@ import { siteProduction } from "@engine/game/production";
 import { stationOf, stationOpen } from "@engine/game/stations";
 import { checkPark, parkLevyGain, parkReport } from "@engine/game/parks";
 import { checkBusStation, stationBoard } from "@engine/game/busstations";
-import { checkMetro, metroLines, metroPrice, metroRiders } from "@engine/game/metro";
+import { metroLines, urbanName, urbanRiders, urbanRung } from "@engine/game/metro";
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
 import { corridorSummaries } from "@engine/game/corridors";
 import { industryFlows, stoneServed } from "@engine/game/industries";
@@ -2244,22 +2244,6 @@ function parkItem(townId: string): string {
   return `<li>Motor park: its danfos load there, not on the road, so the roads into it carry ${pct(t.parkCapacityBoost)} more before they jam (the slowest runs at ${pct(report.roadSpeed)} of free speed). Levy here ${naira(report.yours)}/day to you, ${naira(report.agberos)} to the agberos; without the park they'd keep ${naira(report.agberosWithout)}.</li>`;
 }
 
-// A town's metro on its card (metro.ts, brief Revision 4, 6): what it carries and earns, and
-// the button for the first line or the next. Nothing on a town too small for one.
-function metroItem(townId: string): string {
-  const t = world.tuning;
-  const town = world.towns.get(townId);
-  if (!t.metroEnabled || !town || town.population < t.metroMinPopulation) return "";
-  const lines = metroLines(world, townId);
-  const check = checkMetro(world, townId);
-  const price = metroPrice(world, townId);
-  const button = lines < t.metroMaxLines ? ` <button data-metro="${townId}" ${check.ok ? "" : `disabled title="${check.reason}"`}>${lines === 0 ? "Build a metro" : "Add a line"}: ${naira(price)}</button>` : "";
-  const perLine = Math.round(t.metroLineShare * town.population * t.localTripsPerThousandPerDay);
-  if (lines === 0) return `<li>Big enough for a metro: a line would carry ~${perLine.toLocaleString()} of its inside trips a day at ${naira(t.metroFare)} each, and let it grow further.${button}</li>`;
-  const { riders, share } = metroRiders(world, townId);
-  return `<li>Metro: ${lines} line${lines > 1 ? "s" : ""}, ${Math.round(riders).toLocaleString()} riders a day (${pct(share)} of its inside trips), ${naira(riders * t.metroFare - lines * t.metroRunningPerLine)}/day after running costs.${lines < t.metroMaxLines ? ` Another line: ~${perLine.toLocaleString()} more.` : ""}${button}</li>`;
-}
-
 // A fuel site's card (brief, Revision 3, the fuel chain): what it does, what
 // it needs, and the one thing holding it back -- idle, no crude, no road out.
 function renderFuelSite(townId: string): void {
@@ -2673,7 +2657,6 @@ function renderTown(townId: string): void {
         ${biggestLine ? `<li>${biggestLine}</li>` : ""}
         <li>Of its trips: you ${pct(share.player)}, informal ${pct(share.informal)}, stayed home ${pct(share.lost)}.${changingText(townId)}</li>
         <li>${world.tuning.insideEnabled ? (() => { const s = insideSplit(world, townId); const p = (x: number) => `${Math.round(x * 100)}%`; return `Inside: ~${Math.round(s.trips).toLocaleString()} short trips a day: walk ${p(s.walk)}, keke and okada ${p(s.informal)}, your city line ${p(s.line)}, car ${p(s.car)}; only the cars load its roads.`; })() : `Inside: ~${Math.round(local.tripsPerDay).toLocaleString()} short trips a day by keke and okada, not counted against you.`}</li>
-        ${metroItem(townId)}
         ${parkItem(townId)}
       </ul>
       ${strikeBadge(laneAtTown(townId))}
@@ -2938,7 +2921,7 @@ function budgetParts() {
     ...(world.tuning.truckersEnabled && world.tuning.goodsEnabled ? [[`Loading levies <span class="muted">(touts kept ${naira(b.touts)})</span>`, b.loading] as [string, number]] : []),
     ["State allocation", b.allocation],
     ...(world.food && world.tuning.foodEnabled ? [["Export payments", b.exports] as [string, number]] : []),
-    ...(world.metros.size > 0 ? [["Metro fares", b.metro] as [string, number]] : []),
+    ...(world.metros.size > 0 ? [["City lines", b.metro] as [string, number]] : []),
     ["Running costs", -b.running],
     ...(world.fuel && world.tuning.fuelEnabled ? [["Fuel above the pump price", -b.fuel] as [string, number]] : []),
     ["Road upkeep", -b.upkeep],
@@ -3457,12 +3440,15 @@ function onPanelClick(event: MouseEvent): void {
     renderPanel();
     return;
   }
+  // A city line on the urban ladder (metro.ts), from the town card: "town|kind".
   if (target.dataset.metro) {
-    const town = target.dataset.metro;
+    const [town, mode = "metro"] = target.dataset.metro.split("|") as [string, UrbanKind?];
     const first = metroLines(world, town) === 0;
-    const result = act({ label: first ? "a metro" : "another metro line", towns: [town] }, { kind: "metro", townId: town });
+    const name = mode === "lightrail" ? "light rail" : mode;
+    const result = act({ label: first ? urbanName(mode) : `another ${name} line`, towns: [town] }, { kind: "metro", townId: town, ...(mode === "metro" ? {} : { mode }) });
+    const rung = urbanRung(world, mode);
     say(result.ok
-      ? `${first ? "Metro opened" : "Another metro line"} in ${townName(town)} for ${naira(result.amount ?? 0)}: it carries ${Math.round(metroRiders(world, town).riders).toLocaleString()} of the town's inside trips a day, at ${naira(world.tuning.metroFare)} each.`
+      ? `${first ? `${name[0]!.toUpperCase()}${name.slice(1)} opened` : `Another ${name} line`} in ${townName(town)} for ${naira(result.amount ?? 0)}: it carries ${Math.round(urbanRiders(world, town).riders).toLocaleString()} of the town's inside trips a day, at ${naira(rung?.fare ?? 0)} each.`
       : `Can't build it: ${result.reason}`, !result.ok, 8);
     renderPanel();
     return;

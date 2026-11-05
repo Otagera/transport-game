@@ -160,7 +160,10 @@ made up 1%, the union's demand at once (engine.md, Trunks and feeders). **The in
 `inside`; brief, Scales): a town's own journeys in four slices on its card -- walk, keke and okada,
 your city line, car -- of which only the cars load its approach roads; with no city line they're
 its cars as they always were, to the last bit. A city line takes its riders half from the cars and
-half from the okadas (the scope's open ratio, measured: engine.md, The inside scale).
+half from the okadas (the scope's open ratio, measured: engine.md, The inside scale). **The urban
+ladder** (branch `urban`; brief, Scales): light rail, the monorail and the metro on the town card,
+out of the More fold, one kind a town -- each taking more of a town's cars off its roads than the
+last; light rail's trams share the street and stop in a strike (engine.md, The urban ladder).
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

@@ -1049,7 +1049,9 @@ panel right (`--right`), the map fitted between them (`fitView`'s left and right
   (`data-tool`). A row hovered, or a thing picked from the panel, focuses the map; a town
   shown because you pointed at it doesn't fade the map.
 - **"More"**: the old cards, whole, under a fold that stays open across redraws -- the town or
-  site card (trips, parks, metro, strikes, production, expand, restore), the route card, and the
+  site card (trips, parks, strikes, production, expand, restore; the metro left it for the card
+  proper with the urban ladder, 2026-11-05: `ladderHtml`, under "Inside the town" -- the rung a
+  town has, or the rungs it could have with their prices, one primary button each), the route card, and the
   Treasury drawer as a card on the revenue screen (bonds, the named project, chains). The routes
   wing's rest (lorries, corridors, your share) went into the network and the road card
   (2026-11-02): its corridors were another style under a fold; only the developer's forecasts

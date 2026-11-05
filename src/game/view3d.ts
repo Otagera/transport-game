@@ -3721,7 +3721,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   let builds: THREE.Mesh | null = null;
   let buildsKey = "";
   function syncBuilds(w: GameWorld): void {
-    const key = `${[...w.parks].sort()}|${[...w.yards].sort()}|${[...w.metros].map(([t, n]) => `${t}:${n}`).sort()}`;
+    const key = `${[...w.parks].sort()}|${[...w.yards].sort()}|${[...w.metros].map(([t, n]) => `${t}:${n}:${w.urbanKinds?.get(t) ?? ""}`).sort()}`;
     if (key === buildsKey) return;
     buildsKey = key;
     if (builds) { scene.remove(builds); builds.geometry.dispose(); builds = null; }
@@ -3753,8 +3753,11 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
       if (at) parkAt.set(id, at);
     }
     for (const id of w.yards) { const t = w.towns.get(id); if (t) standAt(t, 2.4, (k, ry) => haulageYard(k, seeded(`yard-${id}`), ry)); }
+    // A metro's entrances, one a line. Light rail and the monorail are on the card and the 2D map's
+    // mark for now: their tracks and piers are a 3D piece of their own.
     for (const [id, lines] of w.metros) {
       const t = w.towns.get(id);
+      if ((w.urbanKinds?.get(id) ?? "metro") !== "metro") continue;
       for (let n = 0; t && n < lines; n += 1) standAt(t, 4.2 + n * 1.3, (k, ry) => metroEntrance(k, ry), 4);
     }
     if (kit.empty) return;

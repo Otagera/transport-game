@@ -281,6 +281,15 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   metroFare: 3,
   metroRunningPerLine: 300,
   metroCapShare: 0.3,
+  // The urban ladder (metro.ts; docs/PROMPT-urban-ladder.md, its numbers as given): light rail and
+  // the monorail beside the metro, one kind a town. The metro's column is the eight above, unchanged.
+  // Each rung's draw on the cars is ours (the prompt's reason rewritten on the inside scale): the
+  // rungs differ most in how many cars each takes off a town's approach roads -- light rail least,
+  // its trams taking the okadas' riders and, in the street, the cars' road.
+  urbanRungs: {
+    lightrail: { minPopulation: 80, firstCost: 45000, lineCost: 35000, maxLines: 2, lineShare: 0.08, fare: 3, runningPerLine: 120, capShare: 0.12, roadCapacityPerLine: 0.12, stoppedByStrikes: true, carDraw: 0.2 },
+    monorail: { minPopulation: 150, firstCost: 110000, lineCost: 80000, maxLines: 2, lineShare: 0.12, fare: 3, runningPerLine: 220, capShare: 0.22, roadCapacityPerLine: 0, stoppedByStrikes: false, carDraw: 0.35 },
+  },
   parksEnabled: true,
   parkCost: 20000,
   parkCapacityBoost: 0.25,

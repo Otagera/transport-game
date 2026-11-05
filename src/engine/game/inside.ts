@@ -1,4 +1,5 @@
 import type { GameWorld } from "./types";
+import { urbanAt, urbanRiders } from "./metro";
 
 // The inside scale (docs/SCALES-AND-MODES.md, scope 3; brief, Scales). A town's own journeys --
 // the short trips inside it, `localTripsPerThousandPerDay` of its people a day -- were one number
@@ -13,8 +14,10 @@ import type { GameWorld } from "./types";
 //     that (a 10k village walks 80% of them, a 100k town 29%) -- and as it prospers: the cars come
 //     first, so its cars are exactly what they always were;
 //   - your city line: what your lines in it carry (metro.ts), taken out of the cars and the
-//     informal in one stated ratio (`cityLineCarDraw` from the cars, the rest from the informal,
-//     each no more than it has) -- one partition, one subtraction, so the shares add up;
+//     informal in one stated ratio, its rung's (`carDraw` from the cars -- the metro's
+//     `cityLineCarDraw` -- the rest from the informal, each no more than it has) -- one partition,
+//     one subtraction, so the shares add up. A light rail stopped by a strike carries none, and its
+//     riders are back in the cars and on the okadas;
 //   - keke and okada: the rest, the informal's own ground.
 //
 // Only the car slice leaves the town: it's what loads the approach roads (private.ts townCars is
@@ -49,11 +52,14 @@ export interface InsideSplit {
   carBase: number;
 }
 
-/** The share of a town's inside trips your city lines carry (metro.ts), before it's taken from anyone. */
-function cityLineShare(world: GameWorld, townId: string): number {
-  const t = world.tuning;
-  if (!t.metroEnabled) return 0;
-  return (world.metros.get(townId) ?? 0) * t.metroLineShare;
+/**
+ * The share of a town's inside trips your city lines carry (metro.ts), before it's taken from
+ * anyone, and the share of that its rung draws out of the cars: the metro `cityLineCarDraw`, the
+ * urban ladder's other rungs their own (light rail least: its trams take the okadas' riders).
+ */
+function cityLine(world: GameWorld, townId: string): { share: number; carDraw: number } {
+  const at = urbanAt(world, townId);
+  return at ? { share: urbanRiders(world, townId).share, carDraw: at.rung.carDraw } : { share: 0, carDraw: 0 };
 }
 
 /** A town's inside trips in their four slices. */
@@ -69,8 +75,9 @@ export function insideSplit(world: GameWorld, townId: string): InsideSplit {
   const walk = Math.min(t.walkableTownPopulation / (town.population + t.walkableTownPopulation), 1 - carBase);
   const informalBase = 1 - walk - carBase;
   // Your city line, out of the cars and the informal in the stated ratio, each no more than it has.
-  const line = Math.min(cityLineShare(world, townId), informalBase + carBase);
-  let fromCar = Math.min(carBase, (t.cityLineCarDraw ?? 0.5) * line);
+  const city = cityLine(world, townId);
+  const line = Math.min(city.share, informalBase + carBase);
+  let fromCar = Math.min(carBase, city.carDraw * line);
   let fromInformal = line - fromCar;
   if (fromInformal > informalBase) {
     fromCar = Math.min(carBase, fromCar + fromInformal - informalBase);

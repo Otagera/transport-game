@@ -2,7 +2,7 @@ import { answerDemand, unionAfterAction } from "./union";
 import { nextEpoch } from "./epoch";
 import { upgradePort } from "./gateways";
 import { commitPledge, consoleMove, noteAction, type ConsoleOp } from "./term";
-import type { GameWorld } from "./types";
+import type { GameWorld, UrbanKind } from "./types";
 import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
 import { addCar, addTrain, buildHalt, buildTrack } from "./rail";
@@ -23,7 +23,7 @@ import { expandSite } from "./expand";
 import { buildYard } from "./yards";
 import { buildBusStation } from "./busstations";
 import { buildPark } from "./parks";
-import { buildMetro } from "./metro";
+import { buildUrban } from "./metro";
 import { setFreightRate } from "./freightrates";
 import { issueBond, type BondPurpose } from "./bonds";
 import { bridgeFord } from "./floods";
@@ -65,7 +65,8 @@ export type ActionSpec =
   | { kind: "yard"; townId: string }
   | { kind: "park"; townId: string }
   | { kind: "busStation"; townId: string }
-  | { kind: "metro"; townId: string }
+  /** A city line; `mode` its rung on the urban ladder (metro.ts), absent a metro, so run files before it replay unchanged. */
+  | { kind: "metro"; townId: string; mode?: UrbanKind }
   | { kind: "freightRate"; routeId: string; rate: "cheap" | "standard" | "dear" }
   | { kind: "bond"; purpose: BondPurpose }
   | { kind: "sell"; routeId: string }
@@ -192,7 +193,7 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
     case "freightRate":
       return setFreightRate(world, spec.routeId, spec.rate);
     case "metro": {
-      const result = buildMetro(world, spec.townId);
+      const result = buildUrban(world, spec.townId, spec.mode ?? "metro");
       return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
     }
     case "expand": {
