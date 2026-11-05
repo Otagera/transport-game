@@ -31,7 +31,7 @@ export function vehicleMoves(world: GameWorld): VehicleMove[] {
   for (const route of world.routes) {
     if (isRailRoute(route.id)) continue;
     const kind = isMinibusRoute(route.id) ? "minibus" : isBrtRoute(route.id) ? "brt" : "bus";
-    list.push({ action: { kind, a: route.a, b: route.b }, routeId: route.id, count: route.vehicleIds.length + 1, price: price(kind) });
+    list.push({ action: { kind, a: route.a, b: route.b, ...(route.via?.length ? { via: route.via } : {}) }, routeId: route.id, count: route.vehicleIds.length + 1, price: price(kind) });
   }
   const towns = [...world.towns.keys()];
   const pairs: Array<{ a: string; b: string; along: number }> = [];

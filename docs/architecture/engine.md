@@ -1483,6 +1483,17 @@ lines, 8% of inside trips a line, ₦120 a line a day), **the monorail** (150k+,
   road with one is planned through them whatever its way (cheapest or straight). Priced as its
   longer way costs (test/upgrades.test.ts).
 
+### Lines through towns you choose (2026-11-05; brief, Tools for building, 4)
+
+- A road line's optional `via` (`GameRoute.via`, the bus, minibus and BRT actions' `via`; absent in
+  older runs): towns between its ends, in order. `world.ts lineWaypoints` -- `[a, ...via, b,
+  ...via reversed]`, or `[a, b]` -- is what `createVehicle` goes round and what `takeShortestRoad`
+  replans leg by leg (a new road, a flooded ford); `roadRouteId` appends `@` and its towns, so it's
+  its own line beside the plain one. `checkBus` wants a road on every leg (a lane on every leg for a
+  BRT) and no town twice. Adding a vehicle to it -- the card's +, `seatMove`, `vehicleMoves` --
+  carries its `via`. It stops at every town on its way, like any line. Measured (brief, same item):
+  through Omiga, Idawo ↔ Otido earned less than the plain line on map 8703.
+
 ### Your bus station (2026-11-04; brief, Your bus station)
 
 - **`busstations.ts`** -- behind `busStationsEnabled` (absent in older runs, and `busStations`

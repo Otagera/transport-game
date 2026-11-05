@@ -98,9 +98,9 @@ export function seatMove(world: GameWorld, a: string, b: string): NamedMove {
     const net = routeSummaries(world).find((r) => r.id === route.id)?.netPerDay ?? 0;
     const judged = world.economy.elapsedSeconds - route.openedAtSeconds >= 3 * SECONDS_PER_GAME_DAY;
     if (d && judged && (net < 0 || d.incomePerVehicle < d.costPerVehicle)) {
-      return { action: { kind, a: route.a, b: route.b }, price: Infinity, label: `${pair}: another ${noun} wouldn't pay (each earns ₦${Math.round(d.incomePerVehicle)} a day against ₦${Math.round(d.costPerVehicle)} to run)` };
+      return { action: { kind, a: route.a, b: route.b, ...(route.via?.length ? { via: route.via } : {}) }, price: Infinity, label: `${pair}: another ${noun} wouldn't pay (each earns ₦${Math.round(d.incomePerVehicle)} a day against ₦${Math.round(d.costPerVehicle)} to run)` };
     }
-    return { action: { kind, a: route.a, b: route.b }, price, label: `Add a ${noun} to ${pair} (+)` };
+    return { action: { kind, a: route.a, b: route.b, ...(route.via?.length ? { via: route.via } : {}) }, price, label: `Add a ${noun} to ${pair} (+)` };
   }
   if (!path && railPath(world, a, b)) return { action: { kind: "train", a, b }, price: t.trainPurchaseCost, label: `Run a train ${pair} (T)` };
   const thin = pairDemand(world, a, b) * SECONDS_PER_GAME_DAY < MINIBUS_BELOW_PER_DAY;

@@ -144,7 +144,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   const days = (): RunDay[] => recorder.file.days;
   const nameOf = (id: string) => world.towns.get(id)?.name ?? world.ruins.get(id)?.name ?? id;
   // Yours to name and colour (labels.ts): the name you gave it, else its towns.
-  const routeName = (r: { id?: string; a: string; b: string }) => (r.id && labelOf(world, routeLabelKey(r.id))?.name) || `${nameOf(r.a)} ↔ ${nameOf(r.b)}`;
+  // A line through towns you chose (brief, Tools for building, 4) names them: "Idawo ↔ Otido via Omiga".
+  const viaOf = (id?: string) => (id ? world.routes.find((x) => x.id === id)?.via : undefined);
+  const routeName = (r: { id?: string; a: string; b: string }) => (r.id && labelOf(world, routeLabelKey(r.id))?.name) || `${nameOf(r.a)} ↔ ${nameOf(r.b)}${viaOf(r.id)?.length ? ` via ${viaOf(r.id)!.map(nameOf).join(", ")}` : ""}`;
   const swatchOf = (r: { id: string; kind: string }) => labelOf(world, routeLabelKey(r.id))?.colour ?? `var(${KIND_COLOR[r.kind] ?? "--you"})`;
   /** The route or road being named, its field open in the panel. */
   let renaming: string | null = null;

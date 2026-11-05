@@ -6,6 +6,7 @@ import { SIM_DT } from "@engine/loop";
 import { gameTick } from "@engine/game/tick";
 import {
   checkBus,
+  roadRouteId,
   checkPave,
   checkRoad,
   gameDay,
@@ -686,6 +687,7 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
 /** The towns of a chain being drawn (brief, Tools for building, 1-2), in order; empty when none. */
 let chain: string[] = [];
 let chainTold = false;
+let lineTold = false;
 /** Points a road being drawn must pass through, map cells (brief, Tools for building, 3): Alt-click to add. */
 let bends: Array<{ x: number; y: number }> = [];
 
@@ -706,19 +708,39 @@ function chainLeg(a: string, b: string): { action: ActionSpec; label: string; pr
   }
 }
 
+/** With a vehicle tool, a chain is one line through its towns (brief, Tools for building, 4). */
+const lineTool = () => tool === "bus" || tool === "minibus" || tool === "brt";
+
 function chainSummary(): string {
-  if (chain.length < 2) return `Chain from ${townName(chain[0] ?? "")}: Ctrl-click the next town.`;
+  if (chain.length < 2) return `${lineTool() ? "Line" : "Chain"} from ${townName(chain[0] ?? "")}: Ctrl-click the next town.`;
+  if (lineTool()) {
+    const kind = tool as "bus" | "minibus" | "brt";
+    const via = chain.slice(1, -1);
+    const check = checkBus(world, chain[0]!, chain[chain.length - 1]!, kind, via);
+    const noun = kind === "brt" ? "BRT bus" : kind;
+    return `Line ${chain.map(townName).join(" → ")} and back: a ${noun} ${naira(vehiclePrice(world, kind))}; it stops at every town on its way.${check.ok ? " Enter buys it, Esc drops it." : ` Can't: ${check.reason}.`}`;
+  }
   const legs = chain.slice(1).map((b, i) => ({ a: chain[i]!, b, leg: chainLeg(chain[i]!, b) }));
   const total = legs.reduce((sum, l) => sum + (l.leg?.price ?? 0), 0);
   const words = legs.map((l) => (l.leg ? `${l.leg.label} ${naira(l.leg.price)}` : `${townName(l.a)} – ${townName(l.b)} at its top rung`)).join("; ");
   return `Chain: ${words}. Total ${naira(total)}${total > world.economy.funds ? " -- more than you have" : ""}. Enter builds it, Esc drops it.`;
 }
 
-/** Builds a chain's legs in order, each as its own action; stops at the first refused. */
+/** Builds a chain's legs in order, each as its own action; stops at the first refused. With a vehicle tool, buys one vehicle on a line through its towns. */
 function buildChain(): void {
   const towns = chain;
   chain = [];
   selectedTown = null;
+  if (lineTool()) {
+    const kind = tool as "bus" | "minibus" | "brt";
+    const a = towns[0]!, b = towns[towns.length - 1]!, via = towns.slice(1, -1);
+    const noun = kind === "brt" ? "BRT bus" : kind;
+    const result = act({ label: `a ${noun} on ${towns.map(townName).join(" → ")}`, towns, routeId: roadRouteId(kind, a, b, via) }, { kind, a, b, ...(via.length > 0 ? { via } : {}) });
+    if (result.ok) say(`Line ${towns.map(townName).join(" → ")} and back: a ${noun} on it. Ctrl-click the same towns again for another, or + on its card.${later}`, false, 8);
+    else say(`Can't run that line: ${result.reason}`, true);
+    renderPanel();
+    return;
+  }
   let done = 0, spent = 0, skipped = 0;
   for (let i = 1; i < towns.length; i += 1) {
     const a = towns[i - 1]!, b = towns[i]!;
@@ -1090,6 +1112,9 @@ function setTool(next: Tool): void {
   if ((next === "road" || next === "track") && !chainTold) {
     chainTold = true;
     say(`${next === "road" ? "Road" : "Track"}: click two towns. To do several legs at once, Cmd- or Ctrl-click towns in turn (a new ${next === "road" ? "road" : "line"} where none joins them, else the next rung), then Enter.`, false, 8);
+  } else if ((next === "bus" || next === "minibus" || next === "brt") && !lineTold && world.routes.length > 0) {
+    lineTold = true;
+    say(`A line between two towns runs the shortest way. To run it through towns you choose, Cmd- or Ctrl-click them in turn, then Enter.`, false, 8);
   }
   renderToolbar();
 }
@@ -1203,7 +1228,7 @@ canvas.addEventListener("click", (event) => {
   }
   // Draw a chain (brief, Tools for building, 1-2): Ctrl- or Cmd-click towns in turn with the Road
   // or Track tool; Enter builds every leg -- a road where none joins it, else its next rung.
-  if ((tool === "road" || tool === "track") && (event.ctrlKey || event.metaKey)) {
+  if ((tool === "road" || tool === "track" || tool === "bus" || tool === "minibus" || tool === "brt") && (event.ctrlKey || event.metaKey)) {
     if (chain.length === 0) chain = selectedTown && selectedTown !== town ? [selectedTown, town] : [town];
     else if (chain[chain.length - 1] !== town) chain.push(town);
     selectedTown = town;
@@ -3741,7 +3766,7 @@ function onPanelClick(event: MouseEvent): void {
     const brt = isBrtRoute(addId);
     const vehicle = train ? "train" : mini ? "minibus" : brt ? "BRT bus" : "bus";
     const spec = { label: addLabel(vehicle, route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
-    const result = act(spec, { kind: train ? "train" : mini ? "minibus" : brt ? "brt" : "bus", a: route.a, b: route.b });
+    const result = act(spec, { kind: train ? "train" : mini ? "minibus" : brt ? "brt" : "bus", a: route.a, b: route.b, ...(route.via?.length ? { via: route.via } : {}) });
     const price = vehiclePrice(world, train ? "train" : mini ? "minibus" : brt ? "brt" : "bus");
     if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {

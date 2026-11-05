@@ -5,7 +5,7 @@ import { applyAction } from "@engine/game/actions";
 import { gameTick } from "@engine/game/tick";
 import { SIM_DT } from "@engine/loop";
 import { lineUpgrade, roadUpgrade } from "@engine/game/problems";
-import { paveCost, roadChain, roadCost } from "@engine/game/world";
+import { paveCost, roadChain, roadCost, roadPath } from "@engine/game/world";
 import { planRoad } from "@engine/game/roads";
 import type { GameWorld } from "@engine/game/types";
 
@@ -78,5 +78,33 @@ describe("upgrading from the cards", () => {
     expect(applyAction(w, { kind: "road", a, b, alignment: "cheapest", via: [side] }).ok).toBe(true);
     expect(funds - w.economy.funds).toBe(bent.cost);
     expect(roadChain(w, a, b)).not.toBeNull();
+  }, 120_000);
+
+  test("a line through towns you chose goes through them, out and back, beside the plain line between its ends", () => {
+    const w = start();
+    // Three towns: a and c joined by roads, b off their shortest way but joined to both.
+    let pick: [string, string, string] | null = null;
+    const towns = [...w.towns.values()].filter((t) => !t.industry).map((t) => t.id);
+    for (const a of towns) for (const c of towns) for (const b of towns) {
+      if (pick || a === c || b === a || b === c) continue;
+      const direct = roadPath(w, a, c);
+      if (!direct || direct.nodeIds.includes(b) || !roadPath(w, a, b) || !roadPath(w, b, c)) continue;
+      pick = [a, b, c];
+    }
+    const [a, b, c] = pick!;
+    expect(applyAction(w, { kind: "bus", a, b: c }).ok).toBe(true);
+    expect(applyAction(w, { kind: "bus", a, b: c, via: [b] }).ok).toBe(true);
+    const plain = w.routes.find((r) => !r.via && ((r.a === a && r.b === c) || (r.a === c && r.b === a)))!;
+    const through = w.routes.find((r) => r.via?.[0] === b)!;
+    expect(through.id).not.toBe(plain.id);
+    const bus = w.simulation.vehicles.find((v) => v.id === through.vehicleIds[0])!;
+    // Out through b to c, and back through b.
+    expect(bus.path[0]).toBe(a);
+    expect(bus.path.filter((n) => n === b).length).toBe(2);
+    expect(bus.path).toContain(c);
+    // A town twice is refused.
+    expect(applyAction(w, { kind: "bus", a, b: c, via: [a] }).ok).toBe(false);
+    for (let i = 0; i < 200; i += 1) gameTick(w, SIM_DT);
+    expect(w.simulation.vehicles.find((v) => v.id === through.vehicleIds[0])!.path.filter((n) => n === b).length).toBe(2);
   }, 120_000);
 });

@@ -1221,15 +1221,18 @@ render-and-ui.md, Upgrading from the cards); then these four, in this order:
    to cross a river where you choose, or skirt a hill. The road is planned through them, piece by
    piece, and priced as one road (`roads.ts`, a `via` on the road action; absent in older runs).
    Today's straight-or-round stays as the default.
-4. **Lines with stops you choose.** With a vehicle tool, Shift-click A, B, C, D, then Enter: one
-   line that stops there, in that order, and back. A line is a pair of towns today (its buses stop
-   where its road happens to pass); with stops chosen, a feeder can run into your station and a
-   trunk can skip the towns a faster line serves. The engine's line gets an optional `via` (its
-   stops between its ends); its path is the shortest way through them in order, and back
-   (principles §3: cyclic routes, a new vehicle at the largest gap, "ahead" before it comes back
-   through a stop -- all hold for a path through chosen stops). Its id carries its stops, so two
-   lines between the same ends can differ. To be measured before it's agreed as built: a chosen-
-   stops line against the pair line on the same towns (riders, fares, the transfers it changes).
+4. **Lines through towns you choose** (built 2026-11-05). With a vehicle tool, Cmd- or Ctrl-click
+   A, B, C, D, then Enter: one line through them, in that order, and back. A line was a pair of towns
+   (its buses take the shortest way); now it can be sent through the towns you choose -- a feeder
+   into your station, a line that serves a town the shortest way misses. It still stops at every
+   town on its way (a vehicle loads wherever it passes: skipping towns would be a change to how
+   vehicles load, not taken). The engine's line has an optional `via`; its path is the shortest way
+   through them in order, and back (principles §3: cyclic routes, a new vehicle at the largest gap,
+   "ahead" before it comes back through a stop -- all hold); its id carries its towns, so two lines
+   between the same ends can differ. Measured on map 8703, 10 days from day 1: Idawo ↔ Otido the
+   plain way, 1 bus 29 riders and +₦139 a day, 2 buses 50 and +₦138; through Omiga, 1 bus 27 and
+   -₦22, 2 buses 49 and +₦57 -- the detour costs more running than Omiga's riders bring there. A
+   choice with a price, as it should be: not a better line by default.
 
 ### Checks for the remit
 

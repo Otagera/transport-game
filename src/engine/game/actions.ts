@@ -3,7 +3,7 @@ import { nextEpoch } from "./epoch";
 import { upgradePort } from "./gateways";
 import { commitPledge, consoleMove, noteAction, type ConsoleOp } from "./term";
 import type { GameWorld, UrbanKind } from "./types";
-import { addBrt, addBus, addBusLane, addMinibus, buildRoad, paveRoad, removeBus } from "./world";
+import { addBus, addBusLane, buildRoad, paveRoad, removeBus } from "./world";
 import { addLorry, addFreightTrain, isLorryRoute, removeLorry } from "./goods";
 import { addCar, addTrain, buildHalt, buildTrack } from "./rail";
 import { fixRoadNow, setRoadMaintained } from "./wear";
@@ -37,7 +37,7 @@ export { remitRefusal } from "./remit";
 // run file (runlog.ts) records them so a whole game can be replayed.
 
 export type ActionSpec =
-  | { kind: "bus" | "minibus" | "brt" | "lorry" | "train" | "freight"; a: string; b: string }
+  | { kind: "bus" | "minibus" | "brt" | "lorry" | "train" | "freight"; a: string; b: string; via?: string[] }
   | { kind: "road"; a: string; b: string; alignment: Alignment; high?: boolean; trunk?: boolean; via?: Array<{ x: number; y: number }> }
   | { kind: "pave"; a: string; b: string }
   | { kind: "lane"; a: string; b: string }
@@ -114,11 +114,11 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };
     }
     case "bus":
-      return addBus(world, spec.a, spec.b);
+      return addBus(world, spec.a, spec.b, "bus", spec.via);
     case "minibus":
-      return addMinibus(world, spec.a, spec.b);
+      return addBus(world, spec.a, spec.b, "minibus", spec.via);
     case "brt":
-      return addBrt(world, spec.a, spec.b);
+      return addBus(world, spec.a, spec.b, "brt", spec.via);
     case "lorry":
       return addLorry(world, spec.a, spec.b);
     case "train":

@@ -456,8 +456,16 @@ export function isBrtRoute(routeId: string): boolean {
 }
 
 /** The route id a road vehicle of this kind runs between a and b. */
-export function roadRouteId(kind: RoadVehicleKind, a: string, b: string): string {
-  return kind === "minibus" ? minibusRouteId(a, b) : kind === "brt" ? brtRouteId(a, b) : routeKey(a, b);
+export function roadRouteId(kind: RoadVehicleKind, a: string, b: string, via?: string[]): string {
+  const base = kind === "minibus" ? minibusRouteId(a, b) : kind === "brt" ? brtRouteId(a, b) : routeKey(a, b);
+  // Through towns you chose (brief, Tools for building, 4): its stops in its id, so two lines between the same ends can differ.
+  return via && via.length > 0 ? `${base}@${(a < b ? via : [...via].reverse()).join(",")}` : base;
+}
+
+/** The towns a line's vehicles go round, in order: out through its chosen towns and back (a plain line, its two ends). */
+export function lineWaypoints(route: { a: string; b: string; via?: string[] }): string[] {
+  const via = route.via ?? [];
+  return via.length === 0 ? [route.a, route.b] : [route.a, ...via, route.b, ...[...via].reverse()];
 }
 
 export function minibusRouteId(a: string, b: string): string {
@@ -476,12 +484,16 @@ function roadVehicleSpec(world: GameWorld, kind: RoadVehicleKind) {
     : { capacity: t.busCapacity, speed: t.busSpeed, price: vehiclePrice(world, "bus"), perSecond: t.busOperatingCostPerSecond, roadSpace: t.busRoadSpace, defId: BUS_DEF_ID };
 }
 
-export function checkBus(world: GameWorld, a: string, b: string, kind: RoadVehicleKind = "bus"): ActionResult {
+export function checkBus(world: GameWorld, a: string, b: string, kind: RoadVehicleKind = "bus", via?: string[]): ActionResult {
   if (a === b) return { ok: false, reason: "pick two different towns" };
-  const path = roadPath(world, a, b);
-  if (!path) return { ok: false, reason: "no road between them" };
-  if (kind === "brt" && !path.segmentIds.every((id) => world.simulation.map.segments.find((s) => s.id === id)?.busLane)) {
-    return { ok: false, reason: "a BRT runs only on bus lanes: give the whole way a lane" };
+  const stops = [a, ...(via ?? []), b];
+  if (new Set(stops).size !== stops.length) return { ok: false, reason: "a town twice on one line" };
+  for (let i = 1; i < stops.length; i += 1) {
+    const path = roadPath(world, stops[i - 1]!, stops[i]!);
+    if (!path) return { ok: false, reason: stops.length > 2 ? `no road between ${world.towns.get(stops[i - 1]!)?.name ?? stops[i - 1]} and ${world.towns.get(stops[i]!)?.name ?? stops[i]}` : "no road between them" };
+    if (kind === "brt" && !path.segmentIds.every((id) => world.simulation.map.segments.find((s) => s.id === id)?.busLane)) {
+      return { ok: false, reason: "a BRT runs only on bus lanes: give the whole way a lane" };
+    }
   }
   if (!canAfford(world.economy, roadVehicleSpec(world, kind).price)) return { ok: false, reason: `can't afford a ${kind === "brt" ? "BRT bus" : kind}` };
   return { ok: true };
@@ -503,14 +515,14 @@ export function addBrt(world: GameWorld, a: string, b: string): ActionResult {
   return addBus(world, a, b, "brt");
 }
 
-export function addBus(world: GameWorld, a: string, b: string, kind: RoadVehicleKind = "bus"): ActionResult {
-  const check = checkBus(world, a, b, kind);
+export function addBus(world: GameWorld, a: string, b: string, kind: RoadVehicleKind = "bus", via?: string[]): ActionResult {
+  const check = checkBus(world, a, b, kind, via);
   if (!check.ok) return check;
 
-  const routeId = roadRouteId(kind, a, b);
+  const routeId = roadRouteId(kind, a, b, via);
   let route = world.routes.find((candidate) => candidate.id === routeId);
   if (!route) {
-    route = { id: routeId, a, b, vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
+    route = { id: routeId, a, b, ...(via && via.length > 0 ? { via: [...via] } : {}), vehicleIds: [], openedAtSeconds: world.economy.elapsedSeconds, boardingRateEMA: 0, loadFactorEMA: 0, speedEMA: 1 };
     world.routes.push(route);
     forgetRoute(world.ledger, route.id);
     world.plans = null; // a new route changes how riders cross the network
@@ -518,7 +530,7 @@ export function addBus(world: GameWorld, a: string, b: string, kind: RoadVehicle
   const spec = roadVehicleSpec(world, kind);
   const id = `${kind}-${world.nextId++}`;
   // No queues: a bus placed mid-route must not teleport-load at route.a.
-  const vehicle = createVehicle(id, [route.a, route.b], world.simulation.routing, spec.speed, spec.capacity, undefined, "passengers", spec.roadSpace);
+  const vehicle = createVehicle(id, lineWaypoints(route), world.simulation.routing, spec.speed, spec.capacity, undefined, "passengers", spec.roadSpace);
   // Headway, not bunching, is what another bus on a route is supposed to
   // buy. Starting every new bus at a terminus sends them out as a convoy
   // that serves the route exactly as often as one bus would -- measured:
@@ -588,17 +600,24 @@ export function takeShortestRoad(world: GameWorld, vehicle: Vehicle, route: Game
   const slowdown = detour && world.tuning.floodsEnabled && flooded && flooded.size > 0
     ? (id: string) => (flooded.has(id) ? 1 / Math.max(0.01, world.tuning.floodSpeed ?? 0.08) : 1)
     : undefined;
-  const there = findPath(world.simulation.routing, route.a, route.b, slowdown);
-  const back = findPath(world.simulation.routing, route.b, route.a, slowdown);
-  if (!there || !back) return;
-  const path = [...there.nodeIds, ...back.nodeIds.slice(1, -1)];
+  // Round its waypoints (its ends, and the towns you chose between them), leg by leg.
+  const points = lineWaypoints(route);
+  const path: string[] = [points[0]!];
+  let outEnd = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    const leg = findPath(world.simulation.routing, points[i]!, points[(i + 1) % points.length]!, slowdown);
+    if (!leg) return;
+    path.push(...leg.nodeIds.slice(1));
+    if (outEnd === 0 && points[(i + 1) % points.length] === route.b) outEnd = path.length - 1;
+  }
+  path.pop(); // the loop closes on its first town
   if (path.length === vehicle.path.length && path.every((id, i) => id === vehicle.path[i])) return;
   if (detour) {
     const stops = new Set(path);
     if (vehicle.cargo.some((entry) => !stops.has(entry.to))) return;
   }
   vehicle.path = path;
-  vehicle.pathIndex = detour && at === route.b ? there.nodeIds.length - 1 : 0;
+  vehicle.pathIndex = detour && at === route.b ? outEnd : 0;
   world.plans = null; // the stops it makes have changed, and riders' plans with them
 }
 

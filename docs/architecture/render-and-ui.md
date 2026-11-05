@@ -786,6 +786,12 @@ Idawo to Ijura on map 8703, headless); the town clicked next builds it, the poin
 action (`via`). Esc, another tool or a new first town drops them. Building only: a road that
 exists is paved or laned as it lies.
 
+**A line through towns you choose** (2026-11-05; brief, Tools for building, 4). With the Bus,
+Minibus or BRT tool, Cmd- or Ctrl-click towns in turn (the chain, main.ts `lineTool`): "Line Idawo →
+Omiga → Otido and back: a bus ₦500; it stops at every town on its way", or why it can't; Enter buys
+one vehicle on it. Named "Idawo ↔ Otido via Omiga" wherever a line is (screen.ts `routeName`). Told
+once a game, when you have a line and pick a vehicle tool.
+
 **Your bus station on the screen** (2026-11-04; engine.md, Your bus station). The Station tool
 (<kbd>S</kbd>, Build, beside Park) is one click on a town; its quote names your lines there, riders
 changing a day and those giving up changing. On the map, an S in your colour at the town's

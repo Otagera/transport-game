@@ -148,6 +148,8 @@ export interface GameRoute {
   id: string;
   a: string;
   b: string;
+  /** Towns it goes through between its ends, in order (brief, Tools for building, 4): absent, the shortest way. */
+  via?: string[];
   vehicleIds: string[];
   /** A rail line's cars a train (rail.ts addCar): absent, one. */
   cars?: number;
