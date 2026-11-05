@@ -1200,6 +1200,36 @@ below).
 | C45 | Not always, not never | The strategist, choosing by what each would save, builds 1-4 stations by day 300 on at least 3 of 5 maps (not one at every town, not none) |
 | C46 | The board is read | On your next playtest, you sell or move at least one losing line from a station's board (your verdict) |
 
+### Tools for building (agreed 2026-11-05: "start with those ... then the 4 items")
+
+**What the playtest showed.** Your map 5059 game: 36 roads, 51 pavings, 25 tracks and 5 lanes, each a
+two-click job between two towns one road joins; 148 buses and 42 minibuses bought one at a time.
+You said "upgrading hurt more". So first, upgrading from the cards (built 2026-11-05,
+render-and-ui.md, Upgrading from the cards); then these four, in this order:
+
+1. **Draw a chain.** With the Road or Track tool, Shift-click towns A, B, C, D, then Enter (or a
+   double-click on the last): every leg in one go. Where no road joins a leg, it's built; where one
+   does, it goes up one rung -- so the same gesture draws a new road and upgrades an old corridor.
+   The quote, before you commit, lists each leg (build, pave, lane, or the rail it becomes) and its
+   price, and the total. A plain click, A then B, stays as it is. Each leg is still one action in the
+   run file.
+2. **A corridor at once.** The chain's upgrade, over existing roads only: Shift-click A then D where
+   roads already join them through B and C, and every road on the way goes up a rung. (Item 1's
+   gesture: one change, two uses.)
+3. **Bend a road.** While drawing a leg, Alt-click points on the map the road must pass through --
+   to cross a river where you choose, or skirt a hill. The road is planned through them, piece by
+   piece, and priced as one road (`roads.ts`, a `via` on the road action; absent in older runs).
+   Today's straight-or-round stays as the default.
+4. **Lines with stops you choose.** With a vehicle tool, Shift-click A, B, C, D, then Enter: one
+   line that stops there, in that order, and back. A line is a pair of towns today (its buses stop
+   where its road happens to pass); with stops chosen, a feeder can run into your station and a
+   trunk can skip the towns a faster line serves. The engine's line gets an optional `via` (its
+   stops between its ends); its path is the shortest way through them in order, and back
+   (principles §3: cyclic routes, a new vehicle at the largest gap, "ahead" before it comes back
+   through a stop -- all hold for a path through chosen stops). Its id carries its stops, so two
+   lines between the same ends can differ. To be measured before it's agreed as built: a chosen-
+   stops line against the pair line on the same towns (riders, fares, the transfers it changes).
+
 ### Checks for the remit
 
 | # | Check | Passes when |

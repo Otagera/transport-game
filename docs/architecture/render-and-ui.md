@@ -758,6 +758,18 @@ trip that ends there stands at its bay till it's gone, one that starts there pul
 round trip turns there as a bus does. The airport's park is its bus park, and its air freight's
 lorries use it too.
 
+**Upgrading from the cards** (2026-11-05; your map 5059 playtest, "upgrading hurt more"). A rung
+was bought only with the Road tool, town to town, a road and a rung at a time, and a jammed line's
+card said "Pave or a lane" and left you to find its roads. Now (problems.ts): a **road's card**
+names its next rung (`roadUpgrade`) -- paved, a lane, rail ("the road becomes the railway") --
+priced, with what it gains, and says when a lane would buy little (the road under 70% loaded); a
+**line's card** names the rung its own roads want, all at once (`lineUpgrade`): its dirt roads
+paved, or, paved all the way and jammed, lanes on its roads -- one button (`data-upgrade-line`),
+one pave or lane action a road in the run file, stopping at the first refused. The jammed line's
+problem button and the station board's jammed, worn or full rows carry it too. Headless on your
+5059 replay: Igbo-Onani ↔ Ifena, "Pave its 2 dirt roads (Esewan–Odun, Iginin–Ifena) · ₦4,076";
+Esewan–Iginin's card, a ₦164k lane on a 63%-loaded road, said too few travel along it.
+
 **Your bus station on the screen** (2026-11-04; engine.md, Your bus station). The Station tool
 (<kbd>S</kbd>, Build, beside Park) is one click on a town; its quote names your lines there, riders
 changing a day and those giving up changing. On the map, an S in your colour at the town's

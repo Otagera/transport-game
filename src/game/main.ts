@@ -86,7 +86,7 @@ import { cementActive, cementImports, cementServed, isCementSite, limestoneArriv
 import { isSteelSite, mineOutput, oreArriving, steelBreak, steelCapacity, steelImports, steelOutput, steelServed } from "@engine/game/steel";
 import { isYourRoad } from "@engine/game/upkeep";
 import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
-import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
+import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, lineUpgrade, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
 import { averageBudget, averageNet } from "@engine/game/history";
 import { chipAt, draw, fitView, focusFor, overlayCaption, overlayMarks, pipeLine, routeColor, toScreen, townRadius, type Ghost, type Network, type Overlay, type OverlayMark, type View } from "./render";
@@ -3613,6 +3613,22 @@ function onPanelClick(event: MouseEvent): void {
     const result = act(move.spec, move.action);
     if (result.ok) say(`${move.title}: bought for ${naira(move.price)}.${later}`);
     else say(`Can't: ${result.reason}`, true);
+    renderPanel();
+    return;
+  }
+  // A line's roads to their next rung, all at once (problems.ts lineUpgrade): one action a road, in order; stops at the first refused.
+  const upgradeId = target.closest<HTMLElement>("[data-upgrade-line]")?.dataset.upgradeLine;
+  if (upgradeId) {
+    const up = lineUpgrade(world, upgradeId);
+    if (!up) return;
+    let done = 0, spent = 0;
+    for (const road of up.roads) {
+      const result = act({ label: `${up.rung === "paved" ? "paving" : "a bus lane on"} ${townName(road.a)} – ${townName(road.b)}`, towns: [road.a, road.b] }, road.action);
+      if (!result.ok) { say(`${done > 0 ? `Done ${done} of ${up.roads.length} (${naira(spent)}); then c` : "C"}an't ${up.rung === "paved" ? "pave" : "add a lane to"} ${townName(road.a)} – ${townName(road.b)}: ${result.reason}`, true); break; }
+      done += 1;
+      spent += result.amount ?? road.price;
+    }
+    if (done === up.roads.length) say(`${up.rung === "paved" ? "Paved" : "Bus lanes on"} ${done} road${done === 1 ? "" : "s"} under the line for ${naira(spent)}.${later}`);
     renderPanel();
     return;
   }

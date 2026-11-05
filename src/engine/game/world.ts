@@ -898,7 +898,7 @@ function roundTrips(world: GameWorld, routeId: string): { perDay: number; shorte
 
 /** Of the road space in use on a route's roads right now, the share that's informal. */
 /** The road segments a route's buses run over. */
-function routeSegments(world: GameWorld, routeId: string): Set<string> {
+export function routeSegments(world: GameWorld, routeId: string): Set<string> {
   // Passenger and goods routes alike: a lorry's dirt roads are what paving it means too.
   const route = [...world.routes, ...world.lorryRoutes].find((candidate) => candidate.id === routeId);
   const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);

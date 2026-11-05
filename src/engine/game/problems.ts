@@ -1,6 +1,6 @@
 import type { GameWorld } from "./types";
 import type { ActionSpec } from "./actions";
-import { canTravel, diagnoseRoute, findRoute, isBrtRoute, isMinibusRoute, laneCost, pairDemand, paveCost, roadPath, routeSummaries } from "./world";
+import { canTravel, demandAlong, diagnoseRoute, findRoute, roadChain, routeSegments, isBrtRoute, isMinibusRoute, laneCost, pairDemand, paveCost, roadPath, routeSummaries } from "./world";
 import { growthTrend, nextRungRoom, roadFull, townGrowth } from "./growth";
 import { corridorsAlong } from "./corridors";
 import { laneEncroachment, lanesBySegment } from "./pushback";
@@ -524,4 +524,67 @@ export function airportAdvice(world: GameWorld): AirportAdvice | null {
     return { ...base, why: `${why}; another wouldn't pay`, move: { action: { kind: "track", a: id, b: byRoad, alignment: "cheapest" }, price: rungPrice(world, id, byRoad, "rail"), label: `Track ${nameAt}–${nameOf(world, byRoad)}, then a train on it (K)` } };
   }
   return { ...base, why, move: seat };
+}
+
+// Upgrading where you're looking (your map 5059 playtest: "upgrading hurt more"). A rung was
+// bought only with the Road tool, town to town, one road and one rung at a time: a jammed line's
+// card said "Pave or a lane" and left you to find which of its roads, and click each. Now a road's
+// card names its next rung, priced, and a line's card the rung its own roads need, all of them at
+// once -- the same pave and lane actions, one per road, so a run file replays as before.
+
+/** A road's next rung, priced, and what it gains -- or why there's none. */
+export interface RoadUpgrade {
+  move: NamedMove;
+  gain: string;
+}
+
+/** The next rung on the whole road joining a and b (through roadside towns): paved, then a lane, then rail (the road becomes the railway). */
+export function roadUpgrade(world: GameWorld, a: string, b: string): RoadUpgrade | null {
+  const chain = roadChain(world, a, b);
+  if (!chain) return null;
+  const road = `${nameOf(world, a)}–${nameOf(world, b)}`;
+  if (chain.some((s) => s.surface !== "paved")) {
+    return { move: rungMove(world, "paved", { a, b }), gain: `carries ${(1 / world.tuning.dirtRoadCapacity).toFixed(1)}x the traffic, renewed, wearing slower` };
+  }
+  if (!chain.every((s) => s.busLane)) {
+    const wanted = Math.round(demandAlong(world, a, b) * SECONDS_PER_GAME_DAY);
+    const thin = wanted < world.tuning.laneMinTripsPerDay;
+    return { move: rungMove(world, "lane", { a, b }), gain: `your vehicles skip the traffic on it${thin ? `; only ${wanted} a day travel along it, too few to fill BRT buses` : `; ${wanted} a day travel along it, enough for BRT`}` };
+  }
+  if (!world.tuning.railEnabled) return null;
+  return { move: { ...rungMove(world, "rail", { a, b }), label: `Rail on ${road}: the road becomes the railway (K)` }, gain: "trains carry the most; the road and its lane are gone" };
+}
+
+/** A line's roads that want the same rung: paving its dirt ones, else a lane on its jammed line's roads. */
+export interface LineUpgrade {
+  rung: "paved" | "lane";
+  roads: Array<{ a: string; b: string; price: number; action: ActionSpec }>;
+  price: number;
+  label: string;
+}
+
+export function lineUpgrade(world: GameWorld, routeId: string): LineUpgrade | null {
+  if (isRailRoute(routeId)) return null;
+  const chains = new Map<string, { a: string; b: string; dirt: boolean; laned: boolean }>();
+  for (const id of routeSegments(world, routeId)) {
+    const chain = chainOf(world, id);
+    if (!chain) continue;
+    const key = chain.a < chain.b ? `${chain.a}~${chain.b}` : `${chain.b}~${chain.a}`;
+    if (chains.has(key)) continue;
+    chains.set(key, { a: chain.a, b: chain.b, dirt: chain.pieces.some((s) => s.surface !== "paved"), laned: chain.pieces.every((s) => s.busLane) });
+  }
+  const dirt = [...chains.values()].filter((c) => c.dirt);
+  const named = (list: Array<{ a: string; b: string }>) => list.slice(0, 3).map((c) => `${nameOf(world, c.a)}–${nameOf(world, c.b)}`).join(", ") + (list.length > 3 ? ` and ${list.length - 3} more` : "");
+  if (dirt.length > 0) {
+    const roads = dirt.map((c) => ({ a: c.a, b: c.b, price: paveCost(world, c.a, c.b), action: { kind: "pave", a: c.a, b: c.b } as ActionSpec }));
+    const price = roads.reduce((s, r) => s + r.price, 0);
+    return { rung: "paved", roads, price, label: dirt.length === 1 ? `Pave its dirt road ${named(dirt)}` : `Pave its ${dirt.length} dirt roads (${named(dirt)})` };
+  }
+  // Paved all the way: a lane, only where traffic is what slows it (a lane on a free road buys nothing).
+  if (diagnoseRoute(world, routeId)?.verdict !== "jammed") return null;
+  const open = [...chains.values()].filter((c) => !c.laned);
+  if (open.length === 0) return null;
+  const roads = open.map((c) => ({ a: c.a, b: c.b, price: laneCost(world, c.a, c.b), action: { kind: "lane", a: c.a, b: c.b } as ActionSpec }));
+  const price = roads.reduce((s, r) => s + r.price, 0);
+  return { rung: "lane", roads, price, label: open.length === 1 ? `A bus lane on ${named(open)}` : `Bus lanes on its ${open.length} roads (${named(open)})` };
 }

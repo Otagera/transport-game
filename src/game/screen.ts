@@ -38,7 +38,7 @@ import { handoverNote, termLetter, type Letter } from "./correspondent";
 import { thenAndNowSvg } from "./thenandnow";
 import { railPath } from "@engine/game/rail";
 import { STATION_OFFER_PER_DAY, hasBusStation, stationBoard } from "@engine/game/busstations";
-import { NO_SEAT_MIN_PER_DAY, airportAdvice, corridorNoSeat, townNoSeat, shrinkCause, whereNext, wornRoadAt, type NamedMove, type Opening } from "@engine/game/problems";
+import { NO_SEAT_MIN_PER_DAY, airportAdvice, lineUpgrade, roadUpgrade, corridorNoSeat, townNoSeat, shrinkCause, whereNext, wornRoadAt, type NamedMove, type Opening } from "@engine/game/problems";
 import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
 import { assemblyGeneration } from "@engine/game/assembly";
@@ -571,6 +571,21 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `<div class="pane waiting where-next"><h2>Where next · people to gain</h2>${rows.join("")}</div>`;
   }
 
+  // Upgrading where you're looking (problems.ts roadUpgrade; your map 5059 playtest): the road's next rung, priced, with what it gains.
+  // A lane on a road that isn't jammed buys little (principles §3, Congestion: capacity relief is
+  // worth what the jam was costing): the card says so before the price.
+  function roadUpgradeHtml(a: string, b: string, load: number): string {
+    const up = roadUpgrade(world, a, b);
+    if (!up) return `<div class="problem none"><span>At its top rung</span></div>`;
+    const free = up.move.action.kind === "lane" && load < 0.7 ? `Not jammed (${pct(load)} of what it carries), so a lane buys little. ` : "";
+    return `<div class="problem none"><span>${free}Next: ${esc(up.gain)}</span>${moveButton(up.move, "")}</div>`;
+  }
+  // A line's roads that want the same rung, all at once (problems.ts lineUpgrade): one button, one action a road.
+  function lineUpgradeButton(routeId: string): string {
+    const up = lineUpgrade(world, routeId);
+    if (!up) return "";
+    return `<button data-upgrade-line="${esc(routeId)}" title="${esc(up.roads.map((r) => `${nameOf(r.a)}–${nameOf(r.b)} ${nairaK(r.price)}`).join(", "))}">${esc(up.label)} · ${nairaK(up.price)}</button>`;
+  }
   // Your bus station (busstations.ts; brief, Your bus station): riders changing lines there, and
   // those giving up changing; without one, the offer where enough change to matter.
   function stationHtml(townId: string): string {
@@ -597,7 +612,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const verdict = station ? diagnoseRoute(world, r.id)?.verdict : undefined;
     const word = verdict && verdict !== "healthy" ? ` <span class="warnword">${esc(VERDICT_WORDS[verdict] ?? verdict)}</span>` : "";
     const sell = station && r.netPerDay < 0 ? `<button data-remove="${esc(r.id)}" title="Sell one of its vehicles">Sell one</button>` : "";
-    return `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}${word}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td>${station ? `<td>${sell}</td>` : ""}</tr>`;
+    const upgrade = station && (verdict === "jammed" || verdict === "worn" || verdict === "full") ? lineUpgradeButton(r.id) : "";
+    return `<tr class="row" data-pick="route|${r.id}"><td><span class="swatch" style="background:${swatchOf(r)}"></span>${esc(routeName(r))}${word}</td><td>${int(r.ridersPerDay)}/day</td><td class="${r.netPerDay < 0 ? "down" : ""}">${naira(r.netPerDay)}</td>${station ? `<td>${upgrade}${sell}</td>` : ""}</tr>`;
   }
   function townProblem(t: Town): Problem {
     // Outside your remit (remit.ts): running without you until a verdict opens its cluster.
@@ -649,7 +665,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "full": return { text: "Full: riders are left waiting", button: add };
       case "overcapacity": return { text: "More vehicles than riders", button: sell };
       case "thin": return { text: "Too few riders to pay its way", button: sell };
-      case "jammed": return { text: "Stuck in traffic", button: toolButton("road", "Pave or a lane <kbd>R</kbd>") };
+      case "jammed": return { text: "Stuck in traffic", button: lineUpgradeButton(r.id) || toolButton("road", "Pave or a lane <kbd>R</kbd>") };
       case "worn": return { text: "Its road is worn: it costs more to run", button: toolButton("fix", "Keep the road up <kbd>F</kbd>") };
       case "waiting": return r.netPerDay < 0 ? { text: "Riders give up waiting, and it loses money", button: sell } : { text: "Riders give up waiting", button: add };
       default: return r.netPerDay < 0 ? { text: "Loses money", button: sell } : null;
@@ -1181,6 +1197,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         ${labelOf(world, routeLabelKey(r.id))?.name ? `<div class="muted">${esc(nameOf(r.a))} ↔ ${esc(nameOf(r.b))}</div>` : ""}
         ${nameRow(routeLabelKey(r.id), true)}
         ${problemHtml(routeProblem(r))}
+        ${lineUpgradeButton(r.id) ? `<div class="problem none"><span>Its roads</span>${lineUpgradeButton(r.id)}</div>` : ""}
         <div class="tiles">
           ${tile("Riders a day", int(r.ridersPerDay))}
           ${tile("How full", pct(r.loadFactor))}
@@ -1333,6 +1350,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${roadKey ? nameRow(roadKey, false) : ""}
       ${problemHtml(problem)}
       ${wearHtml}
+      ${w.mode === "road" && !w.outOfService ? roadUpgradeHtml(w.a, w.b, w.load) : ""}
       ${classHtml}
       <div class="tiles">
         ${w.mode === "road" ? tile("Traffic", pct(w.load), "of what it carries before it jams") : ""}
@@ -1723,7 +1741,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   /** A click the screen handles itself: true when it did. Moves and old-card buttons are the page's. */
   function onClick(target: HTMLElement): boolean {
     // A button inside a pickable row (the board's Sell) is its own: main.ts takes it.
-    if (target.closest("[data-remove]")) return false;
+    if (target.closest("[data-remove],[data-upgrade-line]")) return false;
     const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename],[data-chip]");
     if (!el || el.closest("details.more .panel-body")) return false;
     if (el.dataset.rename) {
