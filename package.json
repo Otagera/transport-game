@@ -16,10 +16,11 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "test:parallel": "bun scripts/test-parallel.ts",
     "preview": "vite preview",
     "verify:bundle": "node scripts/verify-prod-bundle.mjs",
     "verify:look": "bun scripts/verify-look.ts",
-    "verify": "bun run typecheck && bun test && bun run build && bun run verify:bundle && bun run verify:look",
+    "verify": "bun run typecheck && bun run test:parallel && bun run build && bun run verify:bundle && bun run verify:look",
     "shots": "bun scripts/shots.ts",
     "gym": "bun gym/run.ts"
   },

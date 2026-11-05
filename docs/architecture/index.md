@@ -95,6 +95,7 @@ scripts/game-play.ts        Play from a terminal (an OpenCode player)
 scripts/game-run.ts         Read or replay a saved run
 scripts/shots.ts            The five screens at 1600x1000 @2x into shots/ (look.md §9)
 scripts/verify-look.ts      The look's checks (look.md §9): no literals, four roles, tokens agree, signal untouched
+scripts/test-parallel.ts    The tests across the machine's cores (verify runs it)
 scripts/game-probe.ts, corridor-probe.ts, game-lever-audit.ts   Calibration probes
 docs/
   brief.md        The design contract
@@ -147,7 +148,18 @@ flowchart LR
 - `bun run typecheck` — `tsc --noEmit`, pinned to TypeScript `^5.7` (the `latest` tag is
   an unstable 7.x rewrite with a different, non-classic compiler API that
   `architecture-boundaries.test.ts` depends on — don't upgrade without checking).
-- `bun test` — the game's tests and the engine foundation's.
+- `bun test` — the game's tests and the engine foundation's, one file after another on one
+  core. `bun run test:parallel` (`scripts/test-parallel.ts`, what `verify` runs) runs them across
+  the cores free: each file its own `bun test`, a long file (`game.test.ts`) split by its
+  top-level describe blocks with `-t`, and one chunk more for every test no named block takes, so
+  each test runs once. Longest first, by the timings the last run kept in `.cache/` (ignored);
+  `TEST_WORKERS` sets the workers, else the cores less half the load (2-6); CI's 30 s default
+  timeout, as several tests near bun's 5 s cross it side by side. A failing job prints its output.
+- Worlds in tests come from `test/support/worlds.ts`: `startGame` and `startRun` with the
+  engine's signatures, built once a process for the same arguments and copied after (the save's
+  structured clone, snapshot.ts). A region world's warm-up week is ~10 s; the light-rail tests
+  went from 250 s to 39 s. `snapshot.test.ts` and the same-seed checks build theirs fresh;
+  `TEST_WORLDS=fresh` builds every world fresh.
 - `bun run build` — `vite build`.
 - `bun run verify:bundle` (`scripts/verify-prod-bundle.mjs`) — asserts strings belonging
   to dev-only surfaces are absent from the production bundle (the labs are never build

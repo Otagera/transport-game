@@ -34,7 +34,7 @@ import { goodsFares, legFare, stageFare } from "@engine/game/fares";
 import { routineUpkeepPerDay, totalRoutineUpkeepPerDay } from "@engine/game/upkeep";
 import { paveStepCost } from "@engine/pathing/cost";
 import { paveMoves } from "@engine/game/moves";
-import { startGame } from "@engine/game/start";
+import { startGame, startRun } from "./support/worlds"; // built once, copied after
 import { industryFlows, openQuarry, stoneServed, updateIndustries } from "@engine/game/industries";
 import { bondAmount, repayBonds } from "@engine/game/bonds";
 import { expandCost } from "@engine/game/expand";
@@ -84,7 +84,7 @@ import { GAME_MAP } from "../src/game/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
 import { applyAction } from "@engine/game/actions";
 import { whatIf } from "@engine/game/whatif";
-import { createRunRecorder, forkRun, recordAction, recordTick, replayRun, runFile, startRun, startRunSteps, type RunFile } from "@engine/game/runlog";
+import { createRunRecorder, forkRun, recordAction, recordTick, replayRun, runFile, startRunSteps, type RunFile } from "@engine/game/runlog";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/game/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/game/settlement";

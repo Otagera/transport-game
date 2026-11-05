@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { GAME_MAP } from "../src/game/map";
-import { startRun } from "@engine/game/runlog";
+import { startRun } from "./support/worlds"; // built once, copied after
 import { applyAction } from "@engine/game/actions";
 import { insideSplit, insideTrips } from "@engine/game/inside";
 import { roadCapacity } from "@engine/game/congestion";

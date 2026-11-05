@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { GAME_MAP } from "../src/game/map";
-import { startRun } from "@engine/game/runlog";
+import { startRun } from "./support/worlds"; // built once, copied after
 import { carLoad, carsByProsperity, insideSplit } from "@engine/game/inside";
 import { privateLoad, updatePrivateTraffic } from "@engine/game/private";
 import type { GameTuning } from "@engine/game/types";

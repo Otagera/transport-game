@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { GAME_MAP } from "../src/game/map";
-import { startRun } from "@engine/game/runlog";
+import { startRun } from "./support/worlds"; // built once, copied after
 import { applyAction } from "@engine/game/actions";
 import { gameTick, queueKey } from "@engine/game/tick";
 import { SIM_DT } from "@engine/loop";
