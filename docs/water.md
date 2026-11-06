@@ -183,6 +183,40 @@ the strategist on the five maps; and only then the default.
 | C49 | The home city is a water city | On at least 8 of 12 seeds the home city is on a river, lagoon, estuary, delta or lake; on the rest within 15 cells of it |
 | C50 | Rivers are rivers | No two rivers cross on any of 50 seeds; every river reaches the sea, a lake or another river |
 
+## Map version 16 built (opt-in, 2026-11-06; new games still on 13)
+
+`src/engine/game/waterfirst.ts`: the first stage of a region drawn water first (the characters
+above, turned and mirrored; rivers as a tree, a tributary ending on its host; the home city on the
+bank its character chose, else inland; the home box round it; the trunk built leg by leg to the
+hand-made map's lengths, then the rest of the home cluster by spacing, the dry rule 2 cells; the far
+clusters by version 7's reach, a spot on navigable water counting a third more, the first on the
+coast -- the sea, or a lagoon, delta arm or estuary that reaches it -- when the home city isn't;
+three to five river towns and two to four fishing villages on the banks, each with an old spur).
+Then `gameMap`'s passes that don't redraw the water: roads by the land, land forms, hamlets, laid
+over the land, names. Versions 1-15 take their old path. Draws: 120 seeds, none failed, the slowest
+0.8 s; regions 16-23 each; the home city inland on 13 of 120 (C49). Tests: `test/waterfirst.test.ts`
+(the same seed the same map; every region; no rivers crossing on 50 seeds, C50; C49 on the twelve;
+a game starts on a delta, a lake basin and a lagoon map).
+
+**The probe on the five test maps** (boats 2.5+ cells, jetties within 10 cells, only where the
+water is at most 1.5x the road):
+
+| map | v16 water | home city | people between waterside towns: v13 / v16 | goods by water: v13 / v16 |
+|---|---|---|---|---|
+| 8703 | a delta, the sea south | on a creek in the delta | 9% / 29% | 12% / 0% |
+| 2418 | a lake basin (north-east) | on the river | 1% / 9% | 2% / 0% |
+| 949 | a lake basin (north-east) | by the lake | 1% / 16% | 0% / 14% |
+| 3218 | a delta, the sea west | on a creek in the delta | 2% / 14% | 2% / 7% |
+| 7585 | a lagoon coast, the sea east | on the lagoon | 5% / 22% | 0% / 27% |
+
+**C48 half holds.** People: well above today's 0-5% on all five. Goods: 15%+ on one (7585), 14%
+on 949, 0-7% on the rest -- the heavy flows run between the sites placed at the start (the works
+and its quarries, the refinery, the mills; start.ts), which pay the water no mind: on 8703 the home
+city is on a delta creek while its limestone and fuel go inland. Next, before step 2: sites by the
+water where their kind would be (a cement works on a river, the refinery or tank farm at the
+harbour, the mill on a river among its farms), then the probe again. Not yet done: your verdict on
+the sheet (C47), and the strategist on the five maps.
+
 ## After the map
 
 - **Step 2, jetties and boats.** A jetty at a waterfront (your build); a waterway network built

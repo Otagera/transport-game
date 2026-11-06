@@ -4,6 +4,7 @@ import { createRng, type Rng } from "../map/random";
 import { UnionFind } from "../map/connectivity";
 import { planCorridor } from "../pathing/plan";
 import { buildGameTerrain } from "./terrain";
+import { waterFirstMap } from "./waterfirst";
 import { fictionalName, stream, withFictionalNames } from "./names";
 import {
   EDGE_MARGIN,
@@ -58,19 +59,19 @@ export const REGION_HEIGHT = 160;
 const HOME_WIDTH = 100;
 const HOME_HEIGHT = 64;
 /** Clusters beyond the home one. */
-const CLUSTERS = 3;
+export const CLUSTERS = 3;
 /** A cluster's towns sit within this of its regional town, cells. */
 const CLUSTER_RADIUS = 20;
 /** Towns in a cluster, its regional town included (fewer when the names run out, never under MIN_CLUSTER). */
-const CLUSTER_TOWNS = 6;
-const MIN_CLUSTER = 4;
+export const CLUSTER_TOWNS = 6;
+export const MIN_CLUSTER = 4;
 /** Cluster centres at least this far apart, and this far from the home box, cells. */
-const CLUSTER_GAP = 62;
-const HOME_GAP = 40;
+export const CLUSTER_GAP = 62;
+export const HOME_GAP = 40;
 /** The regional towns, thousands: all well under the home city (100k+), so it stays dominant. */
-const HUB_SIZES = [70, 55, 45];
+export const HUB_SIZES = [70, 55, 45];
 /** The rest of a cluster's towns, thousands (log-uniform between). */
-const SMALL_TOWN: [number, number] = [8, 26];
+export const SMALL_TOWN: [number, number] = [8, 26];
 /** How deep the sea comes in from the coast edge, cells. */
 const SEA_DEPTH: [number, number] = [4, 7];
 /**
@@ -79,11 +80,11 @@ const SEA_DEPTH: [number, number] = [4, 7];
  * far it is from the rest: that pushed clusters into the corners, half their reach off the frame);
  * and a cluster's towns a little wider round it. Map 3218's right third and south-east sat bare.
  */
-const SPREAD_FITS = 60;
-const SPREAD_RADIUS = 26;
+export const SPREAD_FITS = 60;
+export const SPREAD_RADIUS = 26;
 /** A place "reaches" land this near it, cells; the reach is sampled on a grid this fine. */
-const REACH = 28;
-const REACH_STEP = 6;
+export const REACH = 28;
+export const REACH_STEP = 6;
 /** Draws of the region round the home cluster before giving up on the region (never seen in tests). */
 const MAX_DRAWS = 300;
 
@@ -103,6 +104,19 @@ export interface RegionInfo {
 export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?: boolean; riverValleys?: boolean; mapVersion?: number }): GameMapDef {
   // Map version 2 (2026-10-28): rivers that wind, and an old railway that follows the land.
   const version = tuning.mapVersion ?? 1;
+  // Version 16 (opt-in until its sheet is approved: docs/water.md, Step 1, redrawn): the region drawn
+  // water first (waterfirst.ts), then the later passes that don't redraw the water.
+  if (version >= 16 && tuning.regionEnabled && seed !== 0) {
+    const first = waterFirstMap(seed);
+    if (first) {
+      let wf = roadsByTheLand(first.map, first.homeRoads);
+      wf = landForms(wf, seed);
+      wf = withHamlets(wf, seed);
+      wf = laidOverLand(wf);
+      wf = withFictionalNames(wf, seed);
+      return tuning.riverValleys ? { ...wf, terrain: { ...wf.terrain, valleys: true } } : wf;
+    }
+  }
   // Version 7: the clusters spread over the frame (drawRegion, `spread`).
   const spread = version >= 7;
   let map = tuning.regionEnabled ? regionInfo(base, seed, STANDARD, spread).map : generatedMapInfo(base, seed).map;
@@ -165,7 +179,7 @@ const STANDARD: Frame = { w: REGION_WIDTH, h: REGION_HEIGHT };
  * at that point (generate.ts's isDryAround takes a river's widest, which on a
  * coast that comes and goes would hold towns far off the shore).
  */
-function dryOf(water: GameRiverDef[], p: Point, clearance: number): boolean {
+export function dryOf(water: GameRiverDef[], p: Point, clearance: number): boolean {
   for (const river of water) {
     for (let k = 1; k < river.points.length; k += 1) {
       const [ax, ay] = river.points[k - 1]!;
@@ -287,7 +301,7 @@ function wetAlong(terrain: TerrainField, a: Point, b: Point): number {
  * road did -- it still crosses where it was planned to.
  */
 const ROAD_STRAIGHTEN = 2.5;
-function straightened(terrain: TerrainField, line: Point[]): Point[] {
+export function straightened(terrain: TerrainField, line: Point[]): Point[] {
   if (line.length <= 2) return line;
   const a = line[0]!;
   const b = line[line.length - 1]!;
@@ -304,7 +318,7 @@ function straightened(terrain: TerrainField, line: Point[]): Point[] {
 }
 
 /** Distance from a point to a box (0 inside it). */
-function toBox(p: Point, box: { x: number; y: number; width: number; height: number }): number {
+export function toBox(p: Point, box: { x: number; y: number; width: number; height: number }): number {
   const dx = Math.max(box.x - p.x, 0, p.x - (box.x + box.width));
   const dy = Math.max(box.y - p.y, 0, p.y - (box.y + box.height));
   return Math.hypot(dx, dy);
@@ -576,7 +590,7 @@ function drawRegion(rng: Rng, home: GeneratedMapInfo, frame: Frame = STANDARD, s
 // towns, roads and sites stay where they were; only the water's line and the railway's change.
 
 /** A deterministic number in 0..1 from a seed and a key (no stream drawn from). */
-function hashed(seed: number, key: number): number {
+export function hashed(seed: number, key: number): number {
   let h = (seed * 2654435761) ^ (key * 2246822519);
   h = Math.imul(h ^ (h >>> 15), 2246822507);
   h = Math.imul(h ^ (h >>> 13), 3266489909);
@@ -584,7 +598,7 @@ function hashed(seed: number, key: number): number {
 }
 
 /** Corner-cutting (Chaikin): each pass replaces a corner with two points a quarter in; the ends stay. */
-function chaikin(points: Array<[number, number]>, widths: number[], passes: number): { points: Array<[number, number]>; widths: number[] } {
+export function chaikin(points: Array<[number, number]>, widths: number[], passes: number): { points: Array<[number, number]>; widths: number[] } {
   let p = points, w = widths;
   for (let pass = 0; pass < passes; pass += 1) {
     const np: Array<[number, number]> = [p[0]!], nw = [w[0]!];
@@ -666,7 +680,7 @@ function naturalWater(map: GameMapDef, seed: number): GameMapDef {
 }
 
 /** The old railway planned over the land, round the hills and over the rivers at their narrows, as a road you build is. */
-function laidOverLand(map: GameMapDef): GameMapDef {
+export function laidOverLand(map: GameMapDef): GameMapDef {
   if (!map.rails?.length) return map;
   const terrain = buildGameTerrain(map);
   const at = (id: string) => map.towns.find((t) => t.id === id)!;
@@ -903,7 +917,7 @@ function landlocked(map: GameMapDef): GameMapDef {
 // from the map's stream (the relief from a seed of its own), so towns, roads and sites stay put;
 // a river's change kept only where it stays clear of every town.
 
-const RELIEF: Record<string, Omit<ReliefDef, "seed" | "plateaus">> = {
+export const RELIEF: Record<string, Omit<ReliefDef, "seed" | "plateaus">> = {
   southwest: { amplitude: 1.8, scale: 34 },
   southeast: { amplitude: 2.1, scale: 30, ridged: true },
   southSouth: { amplitude: 0.35, scale: 40 },
@@ -1060,7 +1074,7 @@ function landFirst(map: GameMapDef, seed: number, trunk: readonly string[] | nul
 const HOME_SHARES = [0.85, 0.65, 0.45, 0.3, 0.15];
 const HOME_GUARD = 0.08;
 
-function withHomeLand(map: GameMapDef, trunk: readonly string[]): GameMapDef {
+export function withHomeLand(map: GameMapDef, trunk: readonly string[]): GameMapDef {
   const relief = map.terrain?.relief;
   const at = (id: string) => map.towns.find((t) => t.id === id);
   const legs = trunk.slice(1).map((id, k) => [at(trunk[k]!), at(id)] as const).filter((l): l is readonly [GameTown, GameTown] => !!l[0] && !!l[1]);
@@ -1087,7 +1101,7 @@ function withHomeLand(map: GameMapDef, trunk: readonly string[]): GameMapDef {
 // crosses the water no more times than the old line; else the eased old line, else as it was. The
 // home cluster's roads are its own (their prices are the trunk's), and keep their lines.
 
-function roadsByTheLand(map: GameMapDef, homeRoads: number): GameMapDef {
+export function roadsByTheLand(map: GameMapDef, homeRoads: number): GameMapDef {
   const terrain = buildGameTerrain(map);
   const at = new Map(map.towns.map((t) => [t.id, t]));
   const lineOf = (r: GameRoadDef): Point[] => [at.get(r.a)!, ...(r.via ?? []).map(([x, y]) => ({ x, y })), at.get(r.b)!];
@@ -1150,7 +1164,7 @@ function roadsByTheLand(map: GameMapDef, homeRoads: number): GameMapDef {
 const HAMLET_SPACING = 7; // cells between candidate spots
 const HAMLET_CLEAR = 9; // cells from any town
 
-function withHamlets(map: GameMapDef, seed: number): GameMapDef {
+export function withHamlets(map: GameMapDef, seed: number): GameMapDef {
   const terrain = buildGameTerrain(map);
   const W = map.width, H = map.height;
   const top = terrain.elevation.reduce((m, e) => Math.max(m, e), 0) || 1;
@@ -1213,7 +1227,7 @@ const FORMS: Record<string, { lakes: number; lakeSize: [number, number]; wet: nu
   northeast: { lakes: 1, lakeSize: [5, 8], wet: 0.3, beds: 4, dunes: 1 },
 };
 
-function landForms(map: GameMapDef, seed: number): GameMapDef {
+export function landForms(map: GameMapDef, seed: number): GameMapDef {
   const forms = FORMS[map.region ?? "southwest"] ?? FORMS.southwest!;
   const rng = createRng(seed + 13_000_013);
   const box = map.home!;
