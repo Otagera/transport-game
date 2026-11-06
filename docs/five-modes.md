@@ -189,6 +189,12 @@ distance.
 
 # 4. Okada permission — after Scope 2 (feeder)
 
+> **Built 2026-11-04, with trunks and feeders** (architecture/engine.md, Trunks and feeders): no
+> okada or keke sets off along a trunk; a danfo runs it end to end and pays its toll where it's
+> yours; riders bound off it change at its end for the last mile; declaring one draws the union's
+> named demand. Measured, the feeders thicken only where journeys run on past a trunk's end (the
+> day-1 map) -- on a built network the riders it loses its okadas for go by danfo or on your buses.
+
 ## What it is
 
 Not a new button. A rule: **okadas and kekes may not run on a trunk.** Danfos may, and pay

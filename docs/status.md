@@ -122,8 +122,9 @@ the tank farm or a refinery to a town, its dial what share goes by pipe, the uni
 tonnes, the tankers drifting off its corridor and slow to return when a strike or a tap stops it;
 an inherited line broken up the old railway. **The airport built** (engine.md, The airport): there
 on day 1 on a long dirt road, a few hundred travellers a day each way stranded until you reach it,
-8-10 t of air freight a day by hauliers or your freight train. Next: the coach (shelved 2026-11-06), the
-okada rule and the urban ladder wait on `SCALES-AND-MODES.md`; water last. The strategist taught both (engine.md,
+8-10 t of air freight a day by hauliers or your freight train. Next: the coach, the okada rule and the
+urban ladder wait on `SCALES-AND-MODES.md`; water last. (Since: the okada rule built with trunks and
+feeders, the urban ladder built, the coach shelved -- water is what's left.) The strategist taught both (engine.md,
 the scope's checks measured): the fuel chain keeps deciding after a pipe on 4 of 5 maps, but the
 union's price is mild when you can pay; the airport is served on day 1-2 everywhere, so its check
 ("rather than always") is open -- a capital decision only if reaching it costs more than a bus.
