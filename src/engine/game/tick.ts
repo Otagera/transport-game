@@ -39,7 +39,7 @@ import { creditLanes, laneEncroachment, lanesBySegment, struckSegments, updateLa
 import { updateProject } from "./project";
 import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
-import { goodsLoader, produceAndSpoil, recordGoodsDelivered, relayArrivals, relayLoader, updateGoodsOutcomes } from "./goods";
+import { beginTickFlows, endTickFlows, goodsLoader, produceAndSpoil, recordGoodsDelivered, relayArrivals, relayLoader, updateGoodsOutcomes } from "./goods";
 import { updateAssembly } from "./assembly";
 
 // How much longer people wait at a motor park for a danfo to fill than
@@ -167,6 +167,15 @@ function poolKeyFor(at: string, queueKey: string, origin: string, destination: s
 // on your buses, taken by a danfo, or stayed home.
 export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   nextEpoch(world); // what the screen read between ticks is read again (epoch.ts)
+  beginTickFlows(world); // the goods flows read once this tick (goods.ts)
+  try {
+    return tickBody(world, dt);
+  } finally {
+    endTickFlows(world);
+  }
+}
+
+function tickBody(world: GameWorld, dt: number): GameEvent[] {
   const { simulation, tuning, informal, economy } = world;
   const fundsAtStart = economy.funds;
   const arrived = new Map<string, number>();

@@ -246,8 +246,10 @@ v13), so it should be profiled before v16 becomes the default.
 at the start (7585: 1294 town pairs against 868), and a tick is per pair: arrivals, giving up,
 and the informal sector's pools (twice the keys) and its minibus dispatch. The pooling's reading
 is now kept between ticks (engine.md, Speed), with the same figures to the bit and 13-18% off a
-tick on both versions. v16 stays about a third slower than v13 per tick on the same machine,
-because it is a bigger game.
+tick on both versions; then the goods flows built once a tick and the hauliers' change check
+made cheap, another 13%. v16 is still about half again v13's tick (17.8 s for 10 idle days on
+7585 against 11.4 s), because it is a bigger game, but it now runs at v13's speed from before these
+changes.
 
 ## After the map
 

@@ -30,7 +30,9 @@ import type { GoodsKind } from "./goods";
 export interface HaulPlans {
   /** What it was built for: the road graph (rebuilt, never edited, on every road change: rail.ts), the towns and the yards. */
   routing: unknown;
-  stamp: string;
+  /** The towns and the yards it was built for, in order (`sameAs`). */
+  towns: string[];
+  yards: string[];
   /** The places it measured distances between. */
   places: string;
   /** Places goods may wait between legs: the towns, and any site with a yard. */
@@ -44,7 +46,16 @@ export interface HaulPlans {
 }
 
 const placesOf = (world: GameWorld) => [...world.towns.keys()].join(",");
-const stampOf = (world: GameWorld) => `${placesOf(world)}|${[...world.yards].join(",")}`;
+/**
+ * Whether a set's or a map's keys are still `ids`, in order. Read a step at a time, not joined
+ * into one string a call: haulPlans is asked many times a tick, and the join was a twentieth of a
+ * tick (profiled on map version 16, 2026-11-06). The same answer as comparing the joined strings.
+ */
+function sameAs(keys: Iterable<string>, ids: readonly string[]): boolean {
+  let i = 0;
+  for (const id of keys) if (ids[i++] !== id) return false;
+  return i === ids.length;
+}
 
 /** Road distances from one place to every place, cells (Dijkstra over the built roads, as roadPath measures them). */
 function distancesFrom(world: GameWorld, from: string, places: Set<string>): Map<string, number> {
@@ -73,10 +84,9 @@ function distancesFrom(world: GameWorld, from: string, places: Set<string>): Map
 }
 
 export function haulPlans(world: GameWorld): HaulPlans {
-  const stamp = stampOf(world);
   const routing = world.simulation.routing;
   const old = world.haulPlans;
-  if (old && old.routing === routing && old.stamp === stamp) return old;
+  if (old && old.routing === routing && sameAs(world.towns.keys(), old.towns) && sameAs(world.yards, old.yards)) return old;
   const relays = [...world.towns.values()].filter((town) => !town.industry || hasYard(world, town.id)).map((town) => town.id);
   // The roads and places unchanged, only the yards: the distances stand (a yard's preview, yardWouldBring).
   const placesKey = placesOf(world);
@@ -86,7 +96,7 @@ export function haulPlans(world: GameWorld): HaulPlans {
     dist = new Map();
     for (const id of places) dist.set(id, distancesFrom(world, id, places));
   }
-  world.haulPlans = { routing, stamp, places: placesKey, relays, dist, toward: new Map(), next: new Map() };
+  world.haulPlans = { routing, towns: [...world.towns.keys()], yards: [...world.yards], places: placesKey, relays, dist, toward: new Map(), next: new Map() };
   return world.haulPlans;
 }
 
