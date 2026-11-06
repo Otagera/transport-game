@@ -217,8 +217,30 @@ creeks and the rest narrow (canoe water); the delta's city on an arm:
 
 **C48 holds**: goods 17-40% and people 13-28% on all five. Most of those water routes have a ford
 in the way (raising them the home cluster's ₦12-37k) -- step 3's decision, as planned. Sites by the
-water weren't needed for it. Your verdict on the sheet (C47, 2026-11-06): "it looks better". Not yet
-done: the strategist on the five maps, then the default.
+water weren't needed for it. Your verdict on the sheet (C47, 2026-11-06): "it looks better".
+
+**The strategist on the five maps** (250 days, `GAME_TUNING='{"mapVersion":16}'` against 13; no
+boats yet, so this is the land game played on the new maps). Trips a day are the mean of days
+201-250:
+
+| map | trips/day v13 → v16 | people, day 250 | funds, day 100 | longest idle stretch, days 60-150 | terms kept |
+|---|---|---|---|---|---|
+| 8703 | 1409 → 1780 | 861k → 1025k | ₦-71k → ₦9k | 62 → 2 days | 2/2 → 2/2 |
+| 2418 | 2562 → 2019 | 1013k → 1104k | ₦-4k → ₦4k | 20 → 5 | 2/2 → 2/2 |
+| 949 | 1866 → 1903 | 1012k → 1071k | ₦-26k → ₦21k | 61 → 4 | 2/2 → 1/2 |
+| 3218 | 2009 → 2788 | 1030k → 1231k | ₦-114k → ₦19k | 62 → 7 | 2/2 → 2/2 |
+| 7585 | 1234 → 1981 | 791k → 1051k | ₦-46k → ₦8k | 62 → 9 | 2/2 → 2/2 |
+
+On four of the five maps the bot carries more, and on all five the region is bigger. On none does
+it fall into debt early: on v13, three maps had a 62-day stall from day 60, sitting on a loss. C14
+(< 15 idle days) holds on all five on v16, and on none on v13. 2418 carries a fifth less: its lake
+basin spreads the towns, and the bot reaches 20% of the trips in 4 towns, not 8. 949 missed one
+term's pledge and opened only one far cluster. The airport is still never served (unchanged).
+
+**The cost: speed.** v16 maps have 48-50 towns, against 42-45. Timed serially on this machine, with
+no lines built, starting a game takes 13-14 s against 10-11 s, and 20 idle days take 41-53 s against
+30-35 s (8703 +17%, 2418 +42%, 7585 +75%). That slowdown ships to the phone (20 fps at day 481 on
+v13), so it should be profiled before v16 becomes the default.
 
 ## After the map
 
