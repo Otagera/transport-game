@@ -141,7 +141,7 @@ function southwest(rng: Rng, fw: number, fh: number): Drawn {
   const inletX = between(rng, 0.2, 0.8) * fw;
   const inletTop = along(lagoon, inletX / fw);
   rivers.push({ points: [inletTop, [inletTop[0] + between(rng, -2, 2), shoreAt(sea, inletTop[0]) + 2]], widths: [1.8, 2.2], width: 2.2 });
-  const big = meander(rng, [between(rng, 0.15, 0.85) * fw, -4], along(lagoon, between(rng, 0.25, 0.75)), 1.5, 3.2, 0.06);
+  const big = meander(rng, [between(rng, 0.15, 0.85) * fw, -4], along(lagoon, between(rng, 0.25, 0.75)), 2.6, 3.4, 0.06);
   if (!crossesAny(big, rivers, 3)) rivers.push(big);
   tributaries(rng, rivers, lagoon, 1 + Math.floor(rng() * 2), fw, fh, [1.1, 2.2], [0.1, 0.9]);
   const homes = [
@@ -162,7 +162,7 @@ function southSouth(rng: Rng, fw: number, fh: number): Drawn {
   const spread = between(rng, 0.65, 0.9) * fw;
   for (let k = 0; k < count; k += 1) {
     const x = Math.max(4, Math.min(fw - 5, apex[0] + (k / (count - 1) - 0.5) * spread));
-    const arm = meander(rng, apex, [x, shoreAt(sea, x) + 3], 3, 2, 0.03);
+    const arm = meander(rng, apex, [x, shoreAt(sea, x) + 3], 3.2, 2.7, 0.03);
     if (crossesAny(arm, [...arms], 2, 2)) continue;
     arms.push(arm);
   }
@@ -171,11 +171,11 @@ function southSouth(rng: Rng, fw: number, fh: number): Drawn {
   for (let k = 1; k < arms.length; k += 1) {
     if (rng() < 0.4) continue;
     const t = between(rng, 0.55, 0.85);
-    const creek = meander(rng, along(arms[k - 1]!, t), along(arms[k]!, t + between(rng, -0.05, 0.05)), 1.1, 1.1, 0.08);
+    const creek = meander(rng, along(arms[k - 1]!, t), along(arms[k]!, t + between(rng, -0.05, 0.05)), 1.3, 1.3, 0.08);
     if (!crossesAny(creek, rivers.filter((r) => r !== arms[k - 1] && r !== arms[k]), 0)) rivers.push(creek);
   }
   const mid = arms[Math.floor(arms.length / 2)] ?? trunk;
-  const homes = [{ at: along(mid, between(rng, 0.55, 0.75)), why: "in the delta, on a creek" }, { at: apex, why: "at the delta's head" }];
+  const homes = [{ at: along(mid, between(rng, 0.55, 0.75)), why: "in the delta, on one of its arms" }, { at: apex, why: "at the delta's head" }];
   return { rivers, sea, homes: rng() < 0.6 ? homes : [homes[1]!, homes[0]!] };
 }
 
@@ -186,7 +186,8 @@ function southeast(rng: Rng, fw: number, fh: number): Drawn {
   const mouthX = between(rng, 0.3, 0.7) * fw;
   const big = meander(rng, start, [mouthX, shoreAt(sea, mouthX) + 4], 3.2, 6.5, 0.05);
   const rivers: GameRiverDef[] = [sea, big];
-  tributaries(rng, rivers, big, 2 + Math.floor(rng() * 2), fw, fh, [1.2, 2.4]);
+  tributaries(rng, rivers, big, 1, fw, fh, [2.6, 3.2]); // one tributary a boat can take, as the Cross River's
+  tributaries(rng, rivers, big, 1 + Math.floor(rng() * 2), fw, fh, [1.2, 2.4]);
   const homes = [{ at: along(big, between(rng, 0.84, 0.9)), why: "on the estuary" }, { at: along(big, between(rng, 0.4, 0.6)), why: "a river port on the big river" }];
   return { rivers, sea, homes: rng() < 0.5 ? homes : [homes[1]!, homes[0]!] };
 }
@@ -199,13 +200,14 @@ function middleBelt(rng: Rng, fw: number, fh: number): Drawn {
   const on = meander(rng, meet, out, 5, 5.5, 0.05);
   const rivers: GameRiverDef[] = [a, b, on];
   if (crossesAny(b, [a], 2) || crossesAny(on, [a, b], 0, 2)) return { rivers: [], sea: null, homes: [] };
-  tributaries(rng, rivers, rng() < 0.5 ? on : b, 1 + Math.floor(rng() * 2), fw, fh, [1.1, 2.2]);
+  tributaries(rng, rivers, rng() < 0.5 ? on : b, 1, fw, fh, [2.6, 3]);
+  tributaries(rng, rivers, rng() < 0.5 ? on : b, Math.floor(rng() * 2), fw, fh, [1.1, 2.2]);
   const homes = [{ at: meet, why: "at the confluence" }, { at: along(b, between(rng, 0.4, 0.65)), why: "on one of the two rivers" }];
   return { rivers, sea: null, homes: rng() < 0.6 ? homes : [homes[1]!, homes[0]!] };
 }
 
 function north(rng: Rng, fw: number, fh: number): Drawn {
-  const main = meander(rng, [between(rng, 0.1, 0.9) * fw, -4], [between(rng, 0.1, 0.9) * fw, fh + 3], 1.6, 2.8, 0.07);
+  const main = meander(rng, [between(rng, 0.1, 0.9) * fw, -4], [between(rng, 0.1, 0.9) * fw, fh + 3], 2.6, 3.4, 0.07);
   const rivers: GameRiverDef[] = [main];
   tributaries(rng, rivers, main, 1 + Math.floor(rng() * 2), fw, fh, [1, 1.8]);
   const homes = [
@@ -225,7 +227,7 @@ function northeast(rng: Rng, fw: number, fh: number): Drawn {
   const lake: GameRiverDef = { points: lakePts, widths: lakeWs, width: 2 * ry, lake: true };
   const rivers: GameRiverDef[] = [lake];
   const shore: Pt = [cx + (cx < fw / 2 ? rx : -rx) * 0.9, cy + (cy < fh / 2 ? ry : -ry) * 0.6];
-  const feeder = meander(rng, [fw - cx + between(rng, -30, 30), cy < fh / 2 ? fh + 3 : -4], shore, 1.2, 2.6, 0.07);
+  const feeder = meander(rng, [fw - cx + between(rng, -30, 30), cy < fh / 2 ? fh + 3 : -4], shore, 2.6, 3.2, 0.07);
   rivers.push(feeder);
   if (rng() < 0.6) tributaries(rng, rivers, feeder, 1, fw, fh, [1, 1.8]);
   const homes = [

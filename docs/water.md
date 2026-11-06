@@ -199,23 +199,26 @@ over the land, names. Versions 1-15 take their old path. Draws: 120 seeds, none 
 a game starts on a delta, a lake basin and a lagoon map).
 
 **The probe on the five test maps** (boats 2.5+ cells, jetties within 10 cells, only where the
-water is at most 1.5x the road):
+water is at most 1.5x the road). First drawn, the main channels tapered under a boat's width (a
+delta's arms to 2 cells at the sea, the home city on a creek 2.3 wide, the far hubs only on narrow
+tributaries): people took to the water, goods didn't (0-14% on four maps). The probe at 1.5 cells
+said why -- 27% of 8703's goods could go by canoe, 0% by boat: the network was there, too narrow.
+Widened -- a delta's arms 3.2 to 2.7, the north's river and the north-east's feeder 2.6+, the
+south-west's big river 2.6+, one tributary a boat can take in the south-east and the Middle Belt,
+creeks and the rest narrow (canoe water); the delta's city on an arm:
 
 | map | v16 water | home city | people between waterside towns: v13 / v16 | goods by water: v13 / v16 |
 |---|---|---|---|---|
-| 8703 | a delta, the sea south | on a creek in the delta | 9% / 29% | 12% / 0% |
-| 2418 | a lake basin (north-east) | on the river | 1% / 9% | 2% / 0% |
-| 949 | a lake basin (north-east) | by the lake | 1% / 16% | 0% / 14% |
-| 3218 | a delta, the sea west | on a creek in the delta | 2% / 14% | 2% / 7% |
-| 7585 | a lagoon coast, the sea east | on the lagoon | 5% / 22% | 0% / 27% |
+| 8703 | a delta, the sea south | in the delta | 9% / 28% | 12% / 21% |
+| 2418 | a lake basin (north-east) | on the river | 1% / 13% | 2% / 36% |
+| 949 | a lake basin (north-east) | by the lake | 1% / 16% | 0% / 32% |
+| 3218 | a delta, the sea west | in the delta | 2% / 17% | 2% / 17% |
+| 7585 | a lagoon coast, the sea east | on the lagoon | 5% / 24% | 0% / 40% |
 
-**C48 half holds.** People: well above today's 0-5% on all five. Goods: 15%+ on one (7585), 14%
-on 949, 0-7% on the rest -- the heavy flows run between the sites placed at the start (the works
-and its quarries, the refinery, the mills; start.ts), which pay the water no mind: on 8703 the home
-city is on a delta creek while its limestone and fuel go inland. Next, before step 2: sites by the
-water where their kind would be (a cement works on a river, the refinery or tank farm at the
-harbour, the mill on a river among its farms), then the probe again. Not yet done: your verdict on
-the sheet (C47), and the strategist on the five maps.
+**C48 holds**: goods 17-40% and people 13-28% on all five. Most of those water routes have a ford
+in the way (raising them the home cluster's ₦12-37k) -- step 3's decision, as planned. Sites by the
+water weren't needed for it. Your verdict on the sheet (C47, 2026-11-06): "it looks better". Not yet
+done: the strategist on the five maps, then the default.
 
 ## After the map
 
