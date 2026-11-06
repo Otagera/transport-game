@@ -122,7 +122,66 @@ So geography decides, map by map: water is worth having where the home cluster's
 river that runs on to the clusters or the sea, and the generator draws that by accident. The next
 step is the generator itself -- maps drawn with water in them from the start (a river city, towns
 along a navigable river, a harbour where it meets the sea) -- which also answers your sense that
-the maps' water all looks alike (2026-11-06). Open.
+the maps' water all looks alike (2026-11-06). Agreed: see Step 1, redrawn, below.
+
+## Step 1, redrawn: water first (agreed 2026-11-06)
+
+**What you saw:** "the shape of the water was the same" on every seed. A sheet of twelve seeds of
+version 13 shows why: nearly every map has one frame -- the sea along one edge, a river down each
+side, one big river straight across the middle through or beside the home box, a small lake or two
+-- and ten of the twelve draw the south-west. Two reasons, both yours: the generator draws a fixed,
+Nigeria-shaped skeleton (`region.ts` `drawCoast`, `drawMainRiver`: the sea on one edge, the big river
+across to it above or below the home box, the home river joined to it, a tributary or two; version
+4's regions dress it, never redraw it); and every version since 2 adds to the last and moves
+nothing, so the skeleton was never redrawn -- which also kept the checks' old numbers comparable.
+
+**What changes** (a new map version, its own path in the generator; versions 1-15 kept as they are,
+so every run replays the map it was played on):
+
+1. **The water is drawn first, by region, varied by seed** -- each region a character of Nigeria's,
+   not one layout:
+   - **south-west:** a coast with a lagoon behind it and creeks, rivers running down to the lagoon;
+   - **south-south:** a delta fanning into the sea from a head inland, its arms joined by creeks;
+   - **south-east:** one big river the map's length to an estuary, tributaries joining it;
+   - **Middle Belt:** two big rivers meeting in a Y and running on as one (Lokoja); no sea;
+   - **north:** a dry plain, a lake basin (Lake Chad) fed by a river or two; no sea.
+   The whole turned and mirrored by the seed: the sea on any side or none (rarely the top -- or
+   only as a lagoon's edge), the rivers running any way. The seed's region as today, with the
+   skew to the south-west corrected (twelve seeds: ten south-west).
+2. **Rivers as a tree.** Every river drains into another, a lake or the sea; rivers join, they never
+   cross (the probe's sketch crossed them on two of twelve). A river widens downstream; its width
+   at each point is its boat class (no dredging: water.md above).
+3. **The home city by the water, mostly.** Placed on the water's character: at a confluence, on a
+   river through it (London, Lokoja), on a lagoon (Lagos), at a delta's head (Onitsha) or on a creek
+   in it (Port Harcourt), on an estuary (Calabar), by a lake (Maiduguri) -- and now and then inland,
+   near the water but not on it (Ibadan, Kano). The home cluster round it is drawn by the slice
+   generator's rules, but no longer pinned as the measured slice map: **C21 changes** -- it still
+   reads like a map you know at the start, and the ladder's prices on its trunk are measured again
+   on the new maps instead of guaranteed (your call, 2026-11-06).
+4. **Towns placed relative to the water.** River towns along the navigable reaches, a harbour where
+   the big river meets the sea (the seaport on its shore, not 7-9 cells inland), fishing villages on
+   the coast, lagoon, creeks and lakes; the far clusters' regional towns on water where their
+   region has it. The dry rule (3 cells from water) becomes a footprint rule: a town's land on land,
+   its waterfront on the water. Roads and the old railway as today, over the new land.
+5. **The checks start again.** C14, C16, C21, C31 and the strategist's baselines were measured on
+   version 13's maps; on the new version the five test maps (8703, 2418, 949, 3218, 7585) get new
+   geography, so every number is measured afresh and the old ones kept beside them for what they
+   were. The cost of a redraw, taken on purpose.
+
+**How it's judged, in order:** a water-only sheet (done: the probe's sketch, twelve seeds, five
+characters, no two framed alike -- `scripts/water-sketch.ts`, a probe, not the generator); then the real
+version opt-in, with a sheet of twelve maps with towns and roads for you to approve; then the map
+tests (deterministic, every town reachable, earlier versions unchanged); the water probe (C47-C48);
+the strategist on the five maps; and only then the default.
+
+**Checks** (in the brief, Water first):
+
+| # | Check | Passes when |
+| --- | --- | --- |
+| C47 | Maps don't look alike | Of twelve seeds, no two share a water layout by eye (your verdict on the sheet), and every region appears |
+| C48 | The water carries | The water probe on the five test maps: a real share of the goods could go by water (15% a first guess) and the people between waterside towns well above today's 0-5%, on at least 3 of 5 |
+| C49 | The home city is a water city | On at least 8 of 12 seeds the home city is on a river, lagoon, estuary, delta or lake; on the rest within 15 cells of it |
+| C50 | Rivers are rivers | No two rivers cross on any of 50 seeds; every river reaches the sea, a lake or another river |
 
 ## After the map
 
