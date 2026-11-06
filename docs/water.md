@@ -95,6 +95,35 @@ before anything is played.
 - version 13's towns, roads and sites unchanged (a test, as for every version); every town still
   reachable by road; the generator's time per map within its budget.
 
+## The first two tests (2026-11-06; map versions 14 and 15, opt-in, new games still on 13)
+
+The probe with a waterfront for any town within 10 cells of the water, a boat needing 2.5+ cells,
+counting only goods and people where the water is at most 1.5x the road:
+
+| map | goods by water: 13 / 14 / 15 | people between waterside towns: 13 / 14 / 15 | the seaport joined to home by water (15) |
+|---|---|---|---|
+| 8703 | 12% / 12% / 16% | 5% / 7% / 11% | yes, but 392 cells by water against 130 by road |
+| 2418 | 2% / 3% / 28% | 1% / 5% / 14% | landlocked; two far hubs joined (137, 253 cells) |
+| 949 | 0% / 4% / 5% | 1% / 3% / 4% | the home city is the seaport |
+| 3218 | 2% / 2% / 2% | 1% / 5% / 6% | yes, but 484 cells by water |
+| 7585 | 0% / 4% / 5% | 0% / 7% / 6% | no: the home city is 18 cells off the water |
+
+- **Version 14, places added** (river towns about 20 cells from the nearest town, fishing villages,
+  the big river widened beyond the home box; nothing moved -- tested on five maps): water goes
+  from almost nothing to a little. The new pairs are small (5-36 people a day); the heavy goods
+  never touch the water.
+- **Version 15, the home cluster's rivers widened too** (a break with C21: its fords widen --
+  spans 1-2.5 cells to 3-4.5 on four maps, one new ford on 2418, raising them all ₦1-16k to
+  ₦4-26k; paving unchanged): water matters on a map whose home towns share a river (2418: 28% of
+  the goods, Bewa-Ukpola 137 people a day, 32 cells by water against 25 by road) and stays thin
+  elsewhere (2-6%). Where the seaport is joined to home at all, the water runs 3x the road.
+
+So geography decides, map by map: water is worth having where the home cluster's towns sit on a
+river that runs on to the clusters or the sea, and the generator draws that by accident. The next
+step is the generator itself -- maps drawn with water in them from the start (a river city, towns
+along a navigable river, a harbour where it meets the sea) -- which also answers your sense that
+the maps' water all looks alike (2026-11-06). Open.
+
 ## After the map
 
 - **Step 2, jetties and boats.** A jetty at a waterfront (your build); a waterway network built

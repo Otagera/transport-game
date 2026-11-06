@@ -133,6 +133,8 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
     // Version 14 (a first test, not new games' default yet: docs/water.md): places on the water --
     // the big river widened, river towns and fishing villages on its banks and the coast's.
     if (version >= 14 && map.home) map = withWater(map, seed);
+    // Version 15 (a second test, opt-in): the rivers through the home cluster at a boat's width too.
+    if (version >= 15 && map.home) map = withHomeWater(map);
   }
   // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
   return tuning.riverValleys ? { ...map, terrain: { ...map.terrain, valleys: true } } : map;
@@ -1349,6 +1351,65 @@ const BIG_BOAT = 3.5; // cells of river a big boat needs (water.md: a reach's wi
 const SMALL_BOAT = 2.5;
 const FISHING_CLEAR = 9;
 
+/**
+ * A river widened to a boat's width (version 14): the half nearer its mouth (its wider end) to
+ * BIG_BOAT, the rest to SMALL_BOAT -- only where that stays clear of every town and of every road
+ * but one crossing it there, tapering into the narrows it keeps; beyond the home box unless `inBox`.
+ */
+function widenedRiver(map: GameMapDef, river: GameRiverDef, inBox: boolean): GameRiverDef {
+  const box = map.home!;
+  const at = new Map(map.towns.map((t) => [t.id, t]));
+  const lineOf = (r: GameRoadDef): Point[] => [at.get(r.a)!, ...(r.via ?? []).map(([x, y]) => ({ x, y })), at.get(r.b)!];
+  const roadLines = [...map.roads, ...(map.rails ?? [])].map(lineOf);
+  const toLine = (p: Point, line: Point[]) => Math.min(...line.slice(1).map((q, k) => toSegment(p, line[k]!, q)));
+  const pts = river.points;
+  const old = pts.map((_, k) => river.widths?.[k] ?? river.width);
+  const along = [0];
+  for (let k = 1; k < pts.length; k += 1) along.push(along[k - 1]! + Math.hypot(pts[k]![0] - pts[k - 1]![0], pts[k]![1] - pts[k - 1]![1]));
+  const total = along.at(-1)!;
+  const fifth = Math.max(1, Math.floor(pts.length / 5));
+  const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length;
+  const mouthAtEnd = mean(old.slice(-fifth)) >= mean(old.slice(0, fifth));
+  // Where each road crosses it: its line within the water there.
+  const crossAt = roadLines.map((line) => along.filter((_, k) => toLine({ x: pts[k]![0], y: pts[k]![1] }, line) <= old[k]! / 2 + 0.5));
+  const widths = old.map((w0, k) => {
+    const want = (mouthAtEnd ? total - along[k]! : along[k]!) <= total / 2 ? BIG_BOAT : SMALL_BOAT;
+    if (w0 >= want) return w0;
+    const p = { x: pts[k]![0], y: pts[k]![1] };
+    if (!inBox && toBox(p, box) < want / 2 + 2) return w0;
+    if (map.towns.some((t) => distance(t, p) < want / 2 + WATER_CLEARANCE)) return w0;
+    const blocked = roadLines.some((line, r) => toLine(p, line) < want / 2 + 0.7 && !crossAt[r]!.some((c) => Math.abs(c - along[k]!) <= want * 2));
+    return blocked ? w0 : want;
+  });
+  // No step: at most 0.3 cells of width a cell of river, either way, never narrower than drawn.
+  for (let k = 1; k < pts.length; k += 1) widths[k] = Math.max(old[k]!, Math.min(widths[k]!, widths[k - 1]! + 0.3 * (along[k]! - along[k - 1]!)));
+  for (let k = pts.length - 2; k >= 0; k -= 1) widths[k] = Math.max(old[k]!, Math.min(widths[k]!, widths[k + 1]! + 0.3 * (along[k + 1]! - along[k]!)));
+  return { ...river, widths: widths.map((w) => Math.round(w * 100) / 100) };
+}
+
+// --- Map version 15: water to the home cluster (docs/water.md; a second test, opt-in) ----------
+// Version 14 left the home box alone (C21: the home cluster is the slice map exactly), and water
+// stayed out of the traffic: the home city and the seaport weren't joined at a boat's width on any
+// map. This widens the home river -- the one with most of its course in the home box -- and the big
+// river through the box as version 14 widens the rest, the same clearances kept. It changes the
+// home trunk's crossings and so the ladder's prices on it: what it costs is measured, not assumed.
+function withHomeWater(map: GameMapDef): GameMapDef {
+  const box = map.home!;
+  const rivers = [...(map.terrain?.rivers ?? [])];
+  const isSea = (r: GameRiverDef) => Math.max(r.width, ...(r.widths ?? [])) >= 9;
+  const inside = (r: GameRiverDef) => r.points.filter(([x, y]) => toBox({ x, y }, box) === 0).length;
+  const flowing = rivers.map((r, i) => ({ r, i })).filter(({ r }) => !r.lake && !isSea(r) && inside(r) > 0);
+  if (!flowing.length) return map;
+  const widenIds = new Set(flowing.map(({ i }) => i));
+  const next: GameMapDef = { ...map, terrain: { ...map.terrain, rivers: rivers.map((r, i) => (widenIds.has(i) ? widenedRiver(map, r, true) : r)) } };
+  try {
+    buildGameTerrain(next);
+  } catch {
+    return map;
+  }
+  return next;
+}
+
 function withWater(map: GameMapDef, seed: number): GameMapDef {
   const rng = createRng(seed + 14_000_029);
   const box = map.home!;
@@ -1370,28 +1431,7 @@ function withWater(map: GameMapDef, seed: number): GameMapDef {
   const toLine = (p: Point, line: Point[]) => Math.min(...line.slice(1).map((q, k) => toSegment(p, line[k]!, q)));
 
   // The big river widened beyond the home box.
-  const pts = big.r.points;
-  const old = widthsOf(big.r);
-  const along = cum(big.r);
-  const total = along.at(-1)!;
-  const fifth = Math.max(1, Math.floor(pts.length / 5));
-  const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length;
-  const mouthAtEnd = mean(old.slice(-fifth)) >= mean(old.slice(0, fifth));
-  // Where each road crosses it: its line within the water there.
-  const crossAt = roadLines.map((line) => along.filter((_, k) => toLine({ x: pts[k]![0], y: pts[k]![1] }, line) <= old[k]! / 2 + 0.5));
-  const widths = old.map((w0, k) => {
-    const want = (mouthAtEnd ? total - along[k]! : along[k]!) <= total / 2 ? BIG_BOAT : SMALL_BOAT;
-    if (w0 >= want) return w0;
-    const p = { x: pts[k]![0], y: pts[k]![1] };
-    if (toBox(p, box) < want / 2 + 2) return w0;
-    if (map.towns.some((t) => distance(t, p) < want / 2 + WATER_CLEARANCE)) return w0;
-    const blocked = roadLines.some((line, r) => toLine(p, line) < want / 2 + 0.7 && !crossAt[r]!.some((c) => Math.abs(c - along[k]!) <= want * 2));
-    return blocked ? w0 : want;
-  });
-  // No step: at most 0.3 cells of width a cell of river, either way, never narrower than drawn.
-  for (let k = 1; k < pts.length; k += 1) widths[k] = Math.max(old[k]!, Math.min(widths[k]!, widths[k - 1]! + 0.3 * (along[k]! - along[k - 1]!)));
-  for (let k = pts.length - 2; k >= 0; k -= 1) widths[k] = Math.max(old[k]!, Math.min(widths[k]!, widths[k + 1]! + 0.3 * (along[k + 1]! - along[k]!)));
-  const wide: GameRiverDef = { ...big.r, widths: widths.map((w) => Math.round(w * 100) / 100) };
+  const wide = widenedRiver(map, big.r, false);
   let next: GameMapDef = { ...map, terrain: { ...map.terrain, rivers: rivers.map((r, i) => (i === big.i ? wide : r)) } };
   let terrain: TerrainField;
   try {
