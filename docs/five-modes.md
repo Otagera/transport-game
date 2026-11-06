@@ -233,6 +233,12 @@ it changes where demand goes.
 
 # 5. Water — last, and not delegated
 
+> **Rescoped 2026-11-06 in [water.md](water.md)** (proposed): a probe found today's maps give water
+> nothing to carry -- the generator keeps towns 3+ cells off the water, the seaport 7-9 cells
+> inland, the goods away from the rivers -- so water starts with the map (version 14: river
+> towns, waterfronts, a harbour, a river a boat can use, fishing grounds), then jetties and boats
+> (passenger and cargo), the crossings, and fishing. The scope below is kept as it was.
+
 ## What it is
 
 The river and the coast become something that carries, instead of only something that costs.

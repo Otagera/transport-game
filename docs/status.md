@@ -168,7 +168,10 @@ last; light rail's trams share the street and stop in a strike (engine.md, The u
 Light rail's trams take no road: measured, the prompt's 12% street share was its whole cost
 (engine.md, The urban ladder); whether it wants an upside is open. **The intercity coach is
 shelved** (five-modes.md §3): fares by distance already make a long bus line pay -- 15 of 15 probed,
-to the far clusters too -- and a coach's end-to-end riders are few.
+to the far clusters too -- and a coach's end-to-end riders are few. **Water is scoped** (proposed,
+[water.md](water.md)): today's maps keep towns, the seaport and the goods off the water, so it
+starts with map version 14 -- river towns, waterfronts, a harbour, a river a boat can use, fishing
+grounds -- before jetties, boats (passengers and cargo), the crossings and fishing's chain.
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

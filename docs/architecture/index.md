@@ -98,6 +98,7 @@ scripts/verify-look.ts      The look's checks (look.md §9): no literals, four r
 scripts/test-parallel.ts    The tests across the machine's cores (verify runs it)
 scripts/game-probe.ts, corridor-probe.ts, game-lever-audit.ts   Calibration probes
 scripts/coach-probe.ts      Long pairs: end-to-end riders, a bus's net, a coach's (why the coach is shelved)
+scripts/water-probe.ts      The water as a waterway: what's near it, what it could carry, the fords in the way (water.md)
 docs/
   brief.md        The design contract
   principles.md   Design premise, scope, Findings (the "why")
