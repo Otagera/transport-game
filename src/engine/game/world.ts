@@ -28,6 +28,7 @@ import { openLane } from "./pushback";
 import { createSitesState } from "./workers";
 import { createSweepState } from "./sweep";
 import { vehiclePrice } from "./assembly";
+import { forgetLink, isBoatRoute, onWater } from "./boats";
 
 export const BUS_DEF_ID = "slice-bus";
 
@@ -644,10 +645,12 @@ export function removeBus(world: GameWorld, routeId: string): number {
   if (!id) return 0;
   world.simulation.vehicles = world.simulation.vehicles.filter((vehicle) => vehicle.id !== id);
   world.railVehicles.delete(id);
+  world.boatVehicles?.delete(id);
   const resale = sellVehicle(world.economy, id);
   if (route.vehicleIds.length === 0) {
     world.routes = world.routes.filter((candidate) => candidate !== route);
     world.plans = null;
+    forgetLink(world, routeId); // a boat line's way off the water (boats.ts)
   }
   return resale;
 }
@@ -836,7 +839,7 @@ export function diagnoseRoute(world: GameWorld, routeId: string): RouteDiagnosis
     if (!routesOnTrip(world, pair.from, pair.to).has(routeId)) continue;
     carried.add(pairKey(pair.from, pair.to));
     demand += pair.rate;
-    fares += pair.rate * legFare(world, pair.from, pair.to, isRailRoute(routeId));
+    fares += pair.rate * legFare(world, pair.from, pair.to, isBoatRoute(routeId) ? "boat" : isRailRoute(routeId));
   }
   const outcomes = sumOutcomes(world, (from, to) => carried.has(pairKey(from, to)));
   const total = outcomes.player + outcomes.poached + outcomes.gaveUp + outcomes.lost;
@@ -877,7 +880,8 @@ export function diagnoseRoute(world: GameWorld, routeId: string): RouteDiagnosis
     diagnosis.verdict = "overcapacity";
   }
   // Track has no traffic: a slow train is worn track under a slow order, not a jam.
-  else if (!isRailRoute(routeId) && route.speedEMA < JAMMED_SPEED) diagnosis.verdict = "jammed";
+  // Nor has the water.
+  else if (!isRailRoute(routeId) && !isBoatRoute(routeId) && route.speedEMA < JAMMED_SPEED) diagnosis.verdict = "jammed";
   else if (fullButLosing) {
     diagnosis.verdict = "long";
     diagnosis.shorter = trips?.shorter ?? null;
@@ -929,7 +933,8 @@ export function routeSegments(world: GameWorld, routeId: string): Set<string> {
   const route = [...world.routes, ...world.lorryRoutes].find((candidate) => candidate.id === routeId);
   const vehicle = route && world.simulation.vehicles.find((candidate) => candidate.id === route.vehicleIds[0]);
   const segments = new Set<string>();
-  if (!vehicle) return segments;
+  // A boat's line is on the water: no road or track of it to pave, fix or upgrade (boats.ts).
+  if (!vehicle || onWater(world, vehicle.id)) return segments;
   // On the network it runs on: a train's track, not the road between the same towns.
   const { graph } = routingFor(world, vehicle);
   for (let i = 0; i < vehicle.path.length; i += 1) {
@@ -1259,8 +1264,8 @@ const THROUGH_ROUTE_PAY_MARGIN = 1.5;
  */
 export function throughRoute(world: GameWorld, routeId: string): ThroughRoute | null {
   const route = world.routes.find((candidate) => candidate.id === routeId);
-  // Roads only for now: running a train on is a track decision, not a bus one.
-  if (!route || isRailRoute(routeId)) return null;
+  // Roads only for now: running a train on is a track decision, not a bus one; a boat's, the water's.
+  if (!route || isRailRoute(routeId) || isBoatRoute(routeId)) return null;
   const perDay = (from: string, to: string) => faresAlong(world, from, to) * SECONDS_PER_GAME_DAY;
   const lengthOf = (from: string, to: string) => roadPath(world, from, to)?.distance ?? Infinity;
   const current = perDay(route.a, route.b);

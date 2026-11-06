@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**866 tests passing** across the files (`bun test`). Typecheck / test / build /
+**875 tests passing** across the files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Next: a game around the simulation (2026-10-24)
@@ -106,8 +106,11 @@ maps (C48). The strategist carries more on four of five maps and never stalls in
 lake basin carries a fifth less. **The default for new games from 2026-11-06** (`mapVersion: 16`);
 old runs keep theirs. Its bigger road network made a tick half again as dear, so the tick was sped
 up a quarter with the same figures to the bit (engine.md, Speed). The far seaport up the old
-railway no longer comes up on a new map (water.md: the home city is the seaport on every coast). Next: water's step 2, jetties and
-boats.
+railway no longer comes up on a new map (water.md: the home city is the seaport on every coast).
+**Step 2, jetties and boats** (branch `boats`, 2026-11-06; water.md, Step 2): a jetty at a waterside
+town (J), water buses (W) and barges (V) between jetties on a waterway drawn from the rivers, a
+third network no road system sees; a water bus beats buses on every busy pair, loses on thin ones;
+barges pay on long hauls. Next: step 3, the crossings.
 
 **The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
 you aim and The network): from your "to click on some things are difficult ... between tick the

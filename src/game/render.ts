@@ -24,6 +24,8 @@ import { segmentRung } from "@engine/game/roads";
 import { OBSTACLE, PRIORITY, Placer, drawsAt, tierOf as zoomTierOf, type Box, type Chip, type Tier as ZoomTier } from "./density";
 import { bundleLines, type BundleItem } from "./bundle";
 import { trunkSet } from "@engine/game/trunks";
+import { jettyLanding } from "@engine/game/boats";
+import { waterway } from "@engine/game/waterways";
 
 // The game's map, ported from the information lab (since discarded; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -316,6 +318,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   if (drawsAt(zoomTier, "hamlet")) drawHamlets(ctx, world, view);
   drawRoads(ctx, world, view, overlay !== "none", network);
   drawPipes(ctx, world, view, overlay !== "none", state.focusPipe ?? null);
+  drawWater(ctx, world, view, overlay !== "none");
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
@@ -372,6 +375,12 @@ function drawnLine(world: GameWorld, segment: Segment): Point[] {
 /** The road (or, on `routing` = the rail network, the track) between two adjacent nodes, oriented from `from` to `to`. */
 function edgeLine(world: GameWorld, from: string, to: string, routing: RoutingContext = world.simulation.routing): Point[] {
   const edge = routing.graph.get(from)?.find((candidate) => candidate.to === to);
+  // A boat's line: its way over the water (boats.ts), from whichever end it set out.
+  const link = edge && world.waterLinks?.find((l) => l.id === edge.segmentId);
+  if (link) {
+    const line = link.points.map(([x, y]) => ({ x, y }));
+    return link.a === from ? line : line.reverse();
+  }
   const segment = edge && world.simulation.map.segments.find((candidate) => candidate.id === edge.segmentId);
   if (!segment) {
     const { positions } = world.simulation.routing;
@@ -787,6 +796,53 @@ export const PIPE_SIDE = 0.9;
 export function pipeLine(line: Point[]): Point[] {
   return offsetPolyline(line, PIPE_SIDE);
 }
+/**
+ * Your boats' lines and jetties (boats.ts): each line along its way over the water in your colour
+ * (a barge's dashed, as goods), and a jetty a short pier from the town to its landing.
+ */
+function drawWater(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, dim: boolean): void {
+  if (!world.waterLinks?.length && !world.jetties?.size) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.globalAlpha = dim ? OVERLAY_BACKDROP : 1;
+  for (const link of world.waterLinks ?? []) {
+    const lit = !focus || focus.routes.has(link.id);
+    ctx.globalAlpha = (dim ? OVERLAY_BACKDROP : 1) * (lit ? 0.9 : FADED);
+    // A light casing under it: the water is the map's darkest value (look.md), and your colour on it alone was lost.
+    const line = link.points.map(([x, y]) => ({ x, y }));
+    ctx.setLineDash([]);
+    ctx.strokeStyle = COLORS.surface;
+    ctx.lineWidth = 3.4 * markScale;
+    strokeLine(ctx, view, line);
+    ctx.strokeStyle = link.kind === "barge" ? COLORS.goods : COLORS.player;
+    ctx.lineWidth = 2 * markScale;
+    ctx.setLineDash(link.kind === "barge" ? [5 * markScale, 3 * markScale] : [3 * markScale, 2.5 * markScale]);
+    strokeLine(ctx, view, line);
+  }
+  ctx.setLineDash([]);
+  ctx.globalAlpha = dim ? OVERLAY_BACKDROP : 1;
+  for (const id of world.jetties ?? []) {
+    const town = world.towns.get(id);
+    const landing = town && jettyLanding(world, id);
+    if (!town || !landing) continue;
+    const n = waterway(world).nodes[landing.node]!;
+    // The pier: from the town toward the water, its end a small square at the landing.
+    const p = toScreen(view, town.x, town.y), q = toScreen(view, n.x, n.y);
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 1.4 * markScale;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(q.x, q.y);
+    ctx.stroke();
+    const r = 2.6 * markScale;
+    ctx.fillStyle = COLORS.surface;
+    ctx.fillRect(q.x - r, q.y - r, 2 * r, 2 * r);
+    ctx.strokeRect(q.x - r, q.y - r, 2 * r, 2 * r);
+  }
+  ctx.restore();
+}
+
 function drawPipes(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, dim: boolean, focusPipe: string | null): void {
   if (!world.pipelines?.length) return;
   const now = world.economy.elapsedSeconds;
@@ -1033,6 +1089,10 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
       else if (mode === "keke") pill(ctx, pose, 4, 3, COLORS.danfo, COLORS.ink, null);
       else if (mode === "okada") pill(ctx, pose, 2.6, 2.6, COLORS.danfo, COLORS.ink, null);
       else pill(ctx, pose, 6, 3.2, COLORS.danfo, COLORS.ink, null);
+    } else if (world.boatVehicles?.has(vehicle.id)) {
+      // A boat (boats.ts): broad in the beam -- a water bus in its line's colour, a barge in goods' brown.
+      if (vehicle.carries === "goods") pill(ctx, pose, 16, 7, COLORS.goods, COLORS.surface, full);
+      else pill(ctx, pose, 13, 6.5, colourOf(route), COLORS.surface, full);
     } else if (vehicle.carries === "goods") {
       // Your freight: brown, filled by its load (a freight train longer, the more wagons it pulls).
       pill(ctx, pose, world.railVehicles.has(vehicle.id) ? trainLength(route) : 12, 5, COLORS.goods, COLORS.goods, full);

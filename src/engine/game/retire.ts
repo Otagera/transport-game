@@ -9,6 +9,7 @@ import { repairCost } from "./wear";
 import { isFreightRoute, removeLorry } from "./goods";
 import { isRailRoute, rebuildNetworks } from "./rail";
 import { findPath } from "../simulation/routing";
+import { isBargeRoute, isBoatRoute } from "./boats";
 
 // Retiring what you built (docs/brief.md, Revision 2: "you asked to remove
 // things"). Routes already go (selling a route's last vehicle closes it);
@@ -93,7 +94,7 @@ export function removeRoads(world: GameWorld, segmentIds: string[]): { sold: num
   let sold = 0;
   let refund = 0;
   for (const route of [...world.routes, ...world.lorryRoutes]) {
-    if (isRailRoute(route.id) || isFreightRoute(route.id)) continue;
+    if (isRailRoute(route.id) || isFreightRoute(route.id) || isBoatRoute(route.id) || isBargeRoute(route.id)) continue;
     if (!roadPath(world, route.a, route.b)) {
       while (route.vehicleIds.length > 0) {
         refund += route.id.startsWith("lorry:") ? removeLorry(world, route.id) : removeBus(world, route.id);

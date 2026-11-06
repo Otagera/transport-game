@@ -1251,6 +1251,10 @@ the home city by the water most of the time (and the home cluster no longer the 
 C21 re-measured, your call); towns, the harbour and fishing villages placed by the water; the checks
 measured afresh on the new maps. Old runs keep their maps. Checks C47-C50 (water.md). Then water's
 steps 2-4: jetties and boats, the crossings, fishing.
+Step 2, jetties and boats (scoped 2026-11-06, water.md: Step 2): a jetty at a waterside town, water
+buses and barges between jetties on a waterway drawn from the rivers, fares by the water's length
+(capped at the road's);
+checks C51-C54.
 
 ### Checks for the remit
 

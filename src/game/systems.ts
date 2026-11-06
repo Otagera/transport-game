@@ -66,7 +66,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   // Who carries
   {
     id: "service", label: "Your vehicles", col: 2, row: 0, feeds: ["noSeat", "growth", "money"], unit: "/day",
-    keys: [/^bus/, /^minibus/, /^brt/, /^train/, /^metro/, /^cityLine/, /^inside/, /^fare/, /^halt/, /^station/, /^lane/, /^oldLine/, /^track/, /^rail/, /^carriage/, /^growthCapLaneShare$/],
+    keys: [/^bus/, /^minibus/, /^brt/, /^train/, /^metro/, /^cityLine/, /^inside/, /^fare/, /^halt/, /^station/, /^lane/, /^oldLine/, /^track/, /^rail/, /^carriage/, /^growthCapLaneShare$/, /^boats/, /^jetty/, /^waterBus/],
     measure: safe((w) => headline(w).yourRidersPerDay),
   },
   {
@@ -76,7 +76,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   },
   {
     id: "hauliers", label: "Hauliers and yards", col: 2, row: 3, feeds: ["cement", "fuel", "steel", "food", "money"], unit: "t/day",
-    keys: [/^trucker/, /^truck/, /^yard/, /^goods/, /^partLoad/, /^lorry/, /^noPlayerLorries$/, /^freight/, /^relayLimestone$/, /^longHaulTail$/, /^wagon/, /^loadingLevy/, /^servedTau/, /^importsOver/, /^seaport/, /^port/, /^border/, /^export/, /^exports/],
+    keys: [/^trucker/, /^truck/, /^yard/, /^goods/, /^partLoad/, /^lorry/, /^noPlayerLorries$/, /^freight/, /^relayLimestone$/, /^longHaulTail$/, /^wagon/, /^loadingLevy/, /^servedTau/, /^importsOver/, /^seaport/, /^port/, /^border/, /^export/, /^exports/, /^barge/],
     measure: safe((w) => [...w.goods.outcomes.values()].reduce((t, o) => t + (o.delivered + (o.trucked ?? 0)) * D, 0)),
   },
   // What's served
@@ -110,11 +110,11 @@ export function placeOf(key: string): { node: string } | { notDrawn: string } | 
 /** The node a move enters by. */
 export function moveNode(action: ActionSpec): string | null {
   switch (action.kind) {
-    case "bus": case "minibus": case "brt": case "train": case "lane": case "metro": case "halt": case "busStation":
+    case "bus": case "minibus": case "brt": case "train": case "lane": case "metro": case "halt": case "busStation": case "jetty": case "boat":
       return "service";
     case "road": case "pave": case "fix": case "retire": case "restore": case "repair": case "bridgeFord": case "track":
       return "roads";
-    case "yard": case "freight": case "freightRate": case "lorry":
+    case "yard": case "freight": case "freightRate": case "lorry": case "barge":
       return "hauliers";
     case "park": case "settle": case "enforce": case "union":
       return "informal";

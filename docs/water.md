@@ -259,6 +259,70 @@ still comes up the coast road (border.ts). Its test runs on version 13. If that 
 back, an inland home city on some coastal seeds (Ibadan's, beside the lagoon's Lagos) would bring
 it -- your call.
 
+## Step 2: jetties and boats (scoped 2026-11-06; asked: "start step 2, jetties and boats")
+
+What gets built, and the choices taken by default (yours to change):
+
+- **The waterway** (`waterways.ts`): a graph of each drawn river's points (its centre, its width
+  at each point), a tributary joined where its end meets another line, the sea one water -- the
+  probe's graph. A reach takes a boat where both its ends are at least the boat's width; the sea
+  takes any. Not on the map's segments: roads and track never see it, and nothing that drives
+  routes over it (principles §3, Two networks: every all-segments loop asks which it means).
+  Lakes wait (a lake is drawn as an outline, not a channel).
+- **A jetty** (the Jetty tool): at a town within 10 cells of water a boat can use, ₦3,000. Its
+  landing is the nearest point of that water; the walk to it is the town's. Only your boats stop.
+- **Water buses** (the Boat tool): a passenger line between two jetties, `boat:a~b` with the
+  routes -- trip plans, transfers and fares as a bus's, riders changing bus <-> boat at the town.
+  60 seats, speed 2.5 (a bus 3, slowed by traffic and wear; a boat neither), ₦6,000, ₦3.5 a
+  second (a bus ₦2.6 for 20 seats: half the cost a seat). Water 1.5 cells wide or more.
+- **Barges** (the same tool on goods, as a freight train is to a train): a goods line between
+  two jetties, `barge:a~b` with the lorry routes, loaded as a lorry is: 200 t, speed 1.5,
+  ₦4,000, ₦3 a second (a freight train 150 t, ₦6; a lorry 30 t, ₦3.6) -- slow, big, cheap a
+  tonne. Water 2.5 cells wide or more.
+- **Fares** by the water's length, as a train's are by the track's -- but never more than the road
+  would charge where there is one (found measuring: riders don't choose a mode, so a winding river
+  made the same trip dearer by boat, and the boat out-earned buses where the water was longer).
+- **Not in step 2**: fords and causeways blocking boats (step 3: boats pass every crossing for
+  now); the rains on the river; informal canoes (step 4); stops along the way (a line is two
+  jetties; a third is another line, riders changing there).
+
+**Checks.**
+
+| # | Check | Passes when |
+|---|---|---|
+| C51 | A boat goes where the water does | No boat line is offered or runs between jetties the water at its width doesn't join; a barge never on water under 2.5 cells |
+| C52 | Boats are never road traffic | A boat between two towns that also share a road adds nothing to that road's flow, wear, roadside growth or danfo budget |
+| C53 | A water bus pays where water is the short way | On the five test maps, a boat line between the two busiest jetty towns the water joins nets more a day, over 40 days, than the same money in buses on the road between them, wherever the water is at most the road's length |
+| C54 | A barge pays on a long haul both ways | One barge on a waterside chain leg (goods both ways, or one way over 80 cells) pays its running cost; a lorry on the same haul doesn't |
+
+**Built 2026-11-06** (branch `boats`; engine.md and render-and-ui.md, Jetties and boats). Measured
+with `scripts/boat-probe.ts` from each test map's start, 40 days, the mean of days 21-40:
+
+| map | pair (trips a day) | water / road, cells | 1 water bus | 2 | on the road: 1 bus / 2 / 4 |
+|---|---|---|---|---|---|
+| 3218 | Ikot Akodo-Ikot Ukabu (258) | 34 / 23 | ₦138 | ₦195 | ₦62 / ₦92 / ₦-29 |
+| 949 | Dikwala-Mela (206) | 30 / 24 | ₦104 | ₦115 | ₦41 / ₦15 / ₦-170 |
+| 8703 | Oboza-Yutoama (217) | 36 / 23 | ₦66 | ₦45 | ₦25 / ₦-26 / ₦-232 |
+| 8703 | Oboza-Fekiri (202) | 103 / none | ₦80 | ₦145 | -- |
+| 7585 | Elosa-Oyudi (139) | 77 / 62 | ₦14 | ₦4 | ₦-15 / ₦-75 / ₦-329 |
+| 7585 | Oyudi-Isido (77) | 34 / none | ₦-26 | ₦-95 | -- |
+| 2418 | Yulima-Widala (85) | 63 / 67 | ₦-21 | ₦-67 | ₦37 / ₦73 / ₦17 |
+
+A water bus beats buses on every busy pair (~140+ trips a day), even where the river is longer than
+the road -- 60 seats at half a bus's cost a seat, never in traffic -- and loses on thin ones, where 60
+seats run empty. Before the fare cap the boats did better still (8703's Oboza-Yutoama ₦109); the cap
+took a third or more off. **C53 as written fails on 2418** (the water shorter, the pair thin): the
+check asked the wrong thing. Volume, not length, decides it -- a real choice, so I'd reword C53 to
+"on a busy pair (150+ trips a day)" rather than tune it away. Your call.
+
+Barges (C54), one on each map's waterside goods leg with the most tonnes, every one long and one
+way: 2418 Gagoram-Yulima (55 t a day, 174 cells of water) ₦599 a day; 949 Dikwala-Menoram (70 t,
+208) ₦629; 7585 Elosa-Oyudi (67 t, 77) ₦618; 8703 Ikot Umono-Oboza (75 t, 121) ₦383; 3218
+Gedema-Ikot Akodo (74 t, 156) ₦250. C54 holds; the lorry comparison it asks for can't be run (road
+freight is the hauliers', `noPlayerLorries`). They may be generous -- a freight train made ₦160-230
+-- but a barge's legs are past the hauliers' 40 cells, which is where your freight belongs (principles
+§3). To watch in play.
+
 ## After the map
 
 - **Step 2, jetties and boats.** A jetty at a waterfront (your build); a waterway network built

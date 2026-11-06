@@ -680,6 +680,22 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   busStationCost: 20000,
   busStationPatience: 3,
   busStationDepotShare: 0.5,
+  // Jetties and boats (boats.ts; water.md, Step 2, scoped 2026-11-06): first guesses, measured by
+  // C53-C54. A water bus half a bus's cost a seat, slower but never in traffic; a barge slow, big
+  // and cheap a tonne (a freight train ₦6 a second for 150 t, a lorry ₦3.6 for 30).
+  boatsEnabled: true,
+  jettyCost: 3000,
+  jettyReach: 10,
+  waterBusCapacity: 60,
+  waterBusSpeed: 2.5,
+  waterBusPurchaseCost: 6000,
+  waterBusOperatingCostPerSecond: 3.5,
+  waterBusMinWidth: 1.5,
+  bargeCapacity: 200,
+  bargeSpeed: 1.5,
+  bargePurchaseCost: 4000,
+  bargeOperatingCostPerSecond: 3,
+  bargeMinWidth: 2.5,
   freightRateCheap: 0.6,
   freightRateDear: 1.6,
   freightHaulierPull: 0.5,

@@ -18,6 +18,7 @@ import { textileFlows } from "./textile";
 import { haulShare } from "./truckers";
 import { haulCost, longHaul, relayed } from "./haulage";
 import { foodActive, foodFlows } from "./food";
+import { boatCostPerDay, forgetLink, isBargeRoute } from "./boats";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -364,9 +365,9 @@ export function freightRouteId(a: string, b: string): string {
   return `freight:${routeKey(a, b)}`;
 }
 
-/** Goods routes: lorries (`lorry:`) on roads, freight trains (`freight:`) on track -- both in `world.lorryRoutes`. */
+/** Goods routes: lorries (`lorry:`) on roads, freight trains (`freight:`) on track, barges (`barge:`) on the water -- all in `world.lorryRoutes`. */
 export function isLorryRoute(routeId: string): boolean {
-  return routeId.startsWith("lorry:") || routeId.startsWith("freight:");
+  return routeId.startsWith("lorry:") || routeId.startsWith("freight:") || isBargeRoute(routeId);
 }
 
 export function isFreightRoute(routeId: string): boolean {
@@ -380,6 +381,7 @@ function goodsPath(world: GameWorld, a: string, b: string, onTrack: boolean) {
 
 /** Running cost a day of one vehicle on a goods route. */
 export function goodsVehicleCostPerDay(world: GameWorld, routeId: string): number {
+  if (isBargeRoute(routeId)) return boatCostPerDay(world, routeId);
   const perSecond = isFreightRoute(routeId) ? world.tuning.freightOperatingCostPerSecond + (carsOn(world, routeId) - 1) * carPrice(world, routeId).perSecond : world.tuning.lorryOperatingCostPerSecond;
   return perSecond * SECONDS_PER_GAME_DAY;
 }
@@ -466,8 +468,12 @@ export function removeLorry(world: GameWorld, routeId: string): number {
   if (!route || !id) return 0;
   world.simulation.vehicles = world.simulation.vehicles.filter((vehicle) => vehicle.id !== id);
   world.railVehicles.delete(id);
+  world.boatVehicles?.delete(id);
   const resale = sellVehicle(world.economy, id);
-  if (route.vehicleIds.length === 0) world.lorryRoutes = world.lorryRoutes.filter((candidate) => candidate !== route);
+  if (route.vehicleIds.length === 0) {
+    world.lorryRoutes = world.lorryRoutes.filter((candidate) => candidate !== route);
+    forgetLink(world, routeId); // a barge line's way off the water (boats.ts)
+  }
   return resale;
 }
 

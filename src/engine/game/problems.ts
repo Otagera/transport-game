@@ -13,6 +13,7 @@ import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { vehiclePrice } from "./assembly";
 import { routesOnTrip } from "./transfers";
 import { epoch } from "./epoch";
+import { isBoatRoute } from "./boats";
 
 // Revision 2, step 1 (docs/brief.md, agreed 2026-10-19): show the problems
 // the late game already has. At day 210 of the R1 7 playtest, 2,865 trips a
@@ -85,7 +86,8 @@ export function seatMove(world: GameWorld, a: string, b: string): NamedMove {
   const pair = `${nameOf(world, a)} ↔ ${nameOf(world, b)}`;
   const t = world.tuning;
   // A route you run between them, of any vehicle: one more of it.
-  const route = world.routes.find((r) => (r.a === a && r.b === b) || (r.a === b && r.b === a)) ?? findRoute(world, a, b);
+  // (Not a boat's: one more of it is the water's decision, on its card.)
+  const route = world.routes.find((r) => !isBoatRoute(r.id) && ((r.a === a && r.b === b) || (r.a === b && r.b === a))) ?? findRoute(world, a, b);
   if (route) {
     const kind = isRailRoute(route.id) ? "train" : isMinibusRoute(route.id) ? "minibus" : isBrtRoute(route.id) ? "brt" : "bus";
     const price = vehiclePrice(world, kind);

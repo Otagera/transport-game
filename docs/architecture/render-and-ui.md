@@ -1193,6 +1193,20 @@ roads had no list (the corridors under More, a road's card only from the map), t
   up, fix now, retire, restore) -- the corridor fold's content in the card's own style. Track
   doesn't wear (wear.ts is roads'), so it's never flagged worn.
 
+### Jetties and boats on the screen (2026-11-06; engine.md, Jetties and boats)
+
+Tools: **Jetty** (J, in Build) is one click on a waterside town; its preview says how far off the
+water is and how many of your jetties the water joins it to. **Boat** (W) and **Barge** (V) are in
+their own group, *On water*, and take two jetty towns. The preview draws the way over the water and
+gives its length against the road's ("no road" where there's none: often the water's best case),
+the riders a day wanting trips between the two towns (a barge: the goods each way), and the
+forecast. On the map (`render.ts drawWater`, after the pipes): each line along its water in your
+colour, dotted (a barge's dashed, in goods' brown); a jetty a short pier from the town to a square
+at its landing; boats broad in the beam, moving along the link's points (`edgeLine` reads a
+`WaterLink` for a boat's edge). In the Network tab, lines are grouped *People by water* and
+*Goods by water* (`lines.ts` mode `water`, with no road or track ways). On a card, + and − add and
+sell a water bus or a barge. Before this, + on a boat line would have bought a bus on the road.
+
 ### Your remit on the screen (2026-10-31; engine.md, Your remit)
 
 - **The map:** land outside your remit under a veil -- the ground's colour at half, a shade of ink

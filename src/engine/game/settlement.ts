@@ -10,6 +10,7 @@ import { growTowns } from "./growth";
 import { applyRailDemand, rebuildNetworks } from "./rail";
 import { backToStation, foundStationTowns, stationPull } from "./stations";
 import { overWater, pointAlong, polylineLength, segmentLength, segmentPolyline, splitPolyline } from "./roads";
+import { offRoad } from "./boats";
 
 // Towns that appear along busy roads, and -- rarely -- fade (step 3 of
 // docs/principles.md §6). True to the setting: a roadside market grows
@@ -128,7 +129,8 @@ export function updateSettlements(world: GameWorld, dt: number): GameEvent[] {
   // People passing, not tonnes: lorries don't grow roadside towns (yet --
   // goods are kept off growth for now, principles §6 step 4c).
   // Nor trains: a town grows beside a road, from the people passing on it.
-  const onRoad = (vehicle: Vehicle) => vehicle.carries === "passengers" && !world.railVehicles.has(vehicle.id);
+  // Nor boats: they pass no roadside (boats.ts).
+  const onRoad = (vehicle: Vehicle) => vehicle.carries === "passengers" && !offRoad(world, vehicle.id);
   const flow = instantaneousFlow(world, onRoad);
   const playerFlow = instantaneousFlow(world, (vehicle) => vehicle.lifecycle === "cyclic" && onRoad(vehicle));
   for (const segment of world.simulation.map.segments) {
@@ -337,8 +339,8 @@ function splitSegment(world: GameWorld, segmentId: string, town: GameTown): void
       { id: second.corridorId, nodeIds: [town.id, b], polyline: secondLine },
     );
 
-  // Road vehicles only: a train running between the same two towns is on its own track.
-  for (const vehicle of simulation.vehicles) if (!world.railVehicles.has(vehicle.id)) insertIntoPath(vehicle, a, b, town.id);
+  // Road vehicles only: a train running between the same two towns is on its own track, a boat on the water.
+  for (const vehicle of simulation.vehicles) if (!offRoad(world, vehicle.id)) insertIntoPath(vehicle, a, b, town.id);
 
   // Informal vehicles already on the road now occupy both halves.
   for (const info of informal.active.values()) {

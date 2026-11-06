@@ -758,6 +758,23 @@ export interface GameTuning {
   busStationCost?: number;
   busStationPatience?: number;
   busStationDepotShare?: number;
+  /** Jetties, water buses and barges (boats.ts; water.md, Step 2). Absent (a run before them): none. */
+  boatsEnabled?: boolean;
+  jettyCost?: number;
+  /** Cells from a town to water a boat can use, at most, for a jetty there. */
+  jettyReach?: number;
+  waterBusCapacity?: number;
+  waterBusSpeed?: number;
+  waterBusPurchaseCost?: number;
+  waterBusOperatingCostPerSecond?: number;
+  /** Cells of water a water bus needs. */
+  waterBusMinWidth?: number;
+  bargeCapacity?: number;
+  bargeSpeed?: number;
+  bargePurchaseCost?: number;
+  bargeOperatingCostPerSecond?: number;
+  /** Cells of water a barge needs. */
+  bargeMinWidth?: number;
   steelPerThousandPerDay: number;
   steelWorksShare: number;
   steelImportShare: number;
@@ -1100,6 +1117,12 @@ export interface GameWorld {
   railOutOfService: Set<string>;
   /** Vehicles that run on rail (trains): road systems skip them. */
   railVehicles: Set<string>;
+  /** Vehicles on the water (boats.ts: water buses and barges): road and rail systems skip them. Absent before boats. */
+  boatVehicles?: Set<string>;
+  /** Towns with a jetty (boats.ts). Absent before boats. */
+  jetties?: Set<string>;
+  /** Your boat lines' ways on the water, one a line (boats.ts), for their vehicles and the map. */
+  waterLinks?: import("./boats").WaterLink[];
   /** segmentId -> rolling trains entering each stretch of track per second (wear.ts). */
   railFlowEMA: Map<string, number>;
   /** Lorry routes (goods.ts) -- apart from `routes`, which every passenger system reads. */

@@ -1530,6 +1530,37 @@ lines, 8% of inside trips a line, ₦120 a line a day), **the monorail** (150k+,
   the depot ₦537, the change ₦218. At Etofo (134 change): +10 trips, +₦350 a day, 57 days. At Ofabo,
   two lines ending and nobody changing: +₦19 a day -- never pays back. C44's shape holds on one map.
 
+### Jetties and boats (2026-11-06; water.md, Step 2; brief, Water first)
+
+`waterways.ts` draws the waterway from the map's water lines once a world (a WeakMap on
+`world.waterLines`, which never change): a node every 2 cells along each line, its width there its
+depth, a line's end joined to another line it lies in (a tributary, a mouth on the sea), lakes left
+out. `landing(world, town, width, reach)` is a town's nearest node a boat of that width can use
+within `reach` cells of its edge, with a reach out of it; `waterRoute` is Dijkstra on a binary heap
+between two towns' landings, through nodes at least that wide (the sea any boat's), cached a world.
+
+`boats.ts` is the mode. A jetty is a town in `world.jetties`. A line is `boat:a~b` in `world.routes`
+(passengers: trip plans, transfers and fares as a bus's) or `barge:a~b` in `world.lorryRoutes`
+(goods, loaded as a lorry). Each line's way is a `WaterLink` in `world.waterLinks` (its length and
+points), and its boats are in `world.boatVehicles`. They run on a third network:
+`waterRouting(world, kind)` builds a routing context from the links (one for water buses, one for
+barges, since two lines between the same towns may take different water), cached on the links'
+list, which is replaced and never edited. `routingFor` sends a boat there.
+
+**Two networks became three: every road system skips boats** (principles §3, Two networks).
+`offRoad(world, id)` (a train or a boat) replaces `railVehicles.has` wherever it meant "not on a
+road": `congestion.ts currentSegment` (a boat between two towns that share a road was counted on
+that road; caught reading the code before it ran), the segment loads, `settlement.ts`'s roadside
+flow and the new-town insertion into paths, the danfos' road space in `dispatchInformal`, and the
+bus's shorter-road check at a terminus. `routeSegments` returns nothing for a boat line, so no
+paving, fixing or line upgrade is offered for it. The seat move (`problems.ts`), vehicle moves,
+retiring roads and `throughRoute` all skip boat lines. Fares take a `FareWay` (`fares.ts`): road,
+track, or a kind of boat, priced by the line's length over the water but no more than the road's
+where there is one. Riders board whatever comes, so without the cap a winding river charged half
+again for the same trip, and the boat out-earned buses on a river longer than the road. All the new world fields are
+optional, so a save from before boats loads; `boatsEnabled` absent means a run file from before them
+offers none. Tests: `test/boats.test.ts` (C51, C52, selling, replay).
+
 ### The building chain (Revision 3, step 2a)
 
 - **`cement.ts`** — one **cement works** per map, placed at start (`placeCementWorks`, from

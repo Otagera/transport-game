@@ -70,6 +70,7 @@ import { siteProduction } from "@engine/game/production";
 import { stationOf, stationOpen } from "@engine/game/stations";
 import { checkPark, parkLevyGain, parkReport } from "@engine/game/parks";
 import { checkBusStation, stationBoard } from "@engine/game/busstations";
+import { bargeRouteId, boatRouteId, checkBoat, checkJetty, isBargeRoute, isBoatRoute, jettyLanding, waterWay } from "@engine/game/boats";
 import { metroLines, urbanName, urbanRiders, urbanRung } from "@engine/game/metro";
 import { freightLineSplit, freightRate, type FreightRate } from "@engine/game/freightrates";
 import { corridorSummaries } from "@engine/game/corridors";
@@ -115,7 +116,7 @@ import type { View3D } from "./view3d";
 //   F  fix tool  -- click a road: start (or stop) maintaining it.
 //   Space pause, 1/2/3 speed, Esc cancel.
 
-type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "park" | "station" | "track" | "train" | "freight" | "fix" | "pipe";
+type Tool = "road" | "bus" | "minibus" | "brt" | "lorry" | "yard" | "park" | "station" | "track" | "train" | "freight" | "fix" | "pipe" | "jetty" | "boat" | "barge";
 
 // Which systems run (tuning.ts). `?systems=all` turns every one on, for
 // comparing; `?goods=off` and `?wear=off` turn those off, so a playtest can
@@ -741,11 +742,14 @@ function actionFor(current: Tool, a: string, b: string): ActionSpec | null {
     case "lorry":
     case "train":
     case "freight":
+    case "boat":
+    case "barge":
       return { kind: current, a, b };
     case "fix":
     case "yard":
     case "park":
     case "station":
+    case "jetty":
       return null;
   }
 }
@@ -1159,6 +1163,8 @@ function toolOn(candidate: Tool): boolean {
   if (candidate === "yard") return t.goodsEnabled && t.yardsEnabled;
   if (candidate === "park") return t.parksEnabled;
   if (candidate === "station") return !!t.busStationsEnabled;
+  if (candidate === "jetty" || candidate === "boat") return !!t.boatsEnabled;
+  if (candidate === "barge") return !!t.boatsEnabled && t.goodsEnabled;
   if (candidate === "freight") return t.goodsEnabled && t.railEnabled;
   if (candidate === "track" || candidate === "train") return t.railEnabled;
   if (candidate === "fix") return t.wearEnabled;
@@ -1283,6 +1289,15 @@ canvas.addEventListener("click", (event) => {
     renderPanel();
     return;
   }
+  // A jetty is one click on a waterside town (boats.ts): where your water buses and barges stop.
+  if (tool === "jetty") {
+    const result = act({ label: "a jetty", towns: [town] }, { kind: "jetty", townId: town });
+    if (result.ok) say(`Jetty built at ${townName(town)} for ${naira(result.amount ?? world.tuning.jettyCost ?? 0)}: run a water bus (W) or a barge (V) from it to another jetty the water reaches.`);
+    else say(`Can't build a jetty: ${result.reason}`, true);
+    selectedTown = null;
+    renderPanel();
+    return;
+  }
   // Track tool, the same town twice: a halt where a line passes it by.
   if (tool === "track" && selectedTown === town && haltSite(world, town)) {
     const site = haltSite(world, town)!;
@@ -1388,6 +1403,13 @@ canvas.addEventListener("click", (event) => {
     const result = act({ label: addLabel("freight train", count, from, town), towns, routeId: freightRouteId(from, town) }, { kind: "freight", a: from, b: town });
     if (result.ok) say(`Freight train added: ${pair(from, town)}.${later}`);
     else say(`Can't add freight train (${naira(world.tuning.freightPurchaseCost)}): ${result.reason}`, true);
+  } else if (tool === "boat" || tool === "barge") {
+    const routeId = tool === "barge" ? bargeRouteId(from, town) : boatRouteId(from, town);
+    const word = tool === "barge" ? "barge" : "water bus";
+    const count = ([...world.routes, ...world.lorryRoutes].find((r) => r.id === routeId)?.vehicleIds.length ?? 0) + 1;
+    const result = act({ label: addLabel(word, count, from, town), towns, routeId }, { kind: tool, a: from, b: town });
+    if (result.ok) say(`${tool === "barge" ? "Barge" : "Water bus"} added: ${pair(from, town)}.${later}`);
+    else say(`Can't add a ${word} (${naira((tool === "barge" ? world.tuning.bargePurchaseCost : world.tuning.waterBusPurchaseCost) ?? 0)}): ${result.reason}`, true);
   } else if (tool === "train") {
     const count = (world.routes.find((r) => r.id === railRouteId(from, town))?.vehicleIds.length ?? 0) + 1;
     const result = act({ label: addLabel("train", count, from, town), towns, routeId: railRouteId(from, town) }, { kind: "train", a: from, b: town });
@@ -1497,6 +1519,9 @@ window.addEventListener("keydown", (event) => {
   else if ((event.key === "i" || event.key === "I") && toolOn("pipe")) setTool("pipe");
   else if (event.key === "t" || event.key === "T") setTool("train");
   else if (event.key === "g" || event.key === "G") setTool("freight");
+  else if ((event.key === "j" || event.key === "J") && toolOn("jetty")) setTool("jetty");
+  else if ((event.key === "w" || event.key === "W") && toolOn("boat")) setTool("boat");
+  else if ((event.key === "v" || event.key === "V") && toolOn("barge")) setTool("barge");
   else if ((event.key === "e" || event.key === "E") && world.tuning.trunksEnabled && tool === "road") {
     trunkRoad = !trunkRoad;
     say(trunkRoad ? "New roads: a trunk -- no okadas or kekes on it, danfos pay its toll; the union will want it back." : "New roads: a feeder, the informal sector's ground.", false, 4);
@@ -1686,6 +1711,15 @@ function ghost(): Ghost | null {
     const label = `Bus station ${naira(world.tuning.busStationCost ?? 0)} · ${board ? `${board.lines.length} line${board.lines.length === 1 ? "" : "s"} of yours here, ${Math.round(board.changingPerDay)} change a day, ${Math.round(board.givingUpPerDay)} give up changing` : "no line of yours here"}`;
     return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Bus station ${naira(world.tuning.busStationCost ?? 0)}`) };
   }
+  if (tool === "jetty") {
+    if (!hoverTown) return null;
+    const check = checkJetty(world, hoverTown);
+    const at = toScreen(view, world.towns.get(hoverTown)!.x, world.towns.get(hoverTown)!.y);
+    const landing = jettyLanding(world, hoverTown);
+    const reached = landing ? jettyReaches(hoverTown) : 0;
+    const label = `Jetty ${naira(world.tuning.jettyCost ?? 0)} · ${landing ? `the water ${landing.edge.toFixed(1)} cells off · it joins ${reached} other jett${reached === 1 ? "y" : "ies"} of yours` : "no water a boat can use near"}`;
+    return { from: hoverTown, to: at, ok: check.ok, label: refusedOr(check, label, `Jetty ${naira(world.tuning.jettyCost ?? 0)}`) };
+  }
   if (!selectedTown || !mouse) return null;
   // Track tool, back over the selected town: offer the halt if a line passes it.
   if (tool === "track" && hoverTown === selectedTown) {
@@ -1787,6 +1821,19 @@ function ghost(): Ghost | null {
     const ghost = { from: selectedTown, to: end, ok: check.ok, path: shownPath(check, path), rail: true, label: refusedOr(check, label, `Train ${naira(world.tuning.trainPurchaseCost)}`) };
     return withForecast(ghost, { kind: "train", a: selectedTown, b: to }, { label: "a train", towns: [selectedTown, to] });
   }
+  if (tool === "boat" || tool === "barge") {
+    // By water: how long the water is against the road, and what wants to go.
+    const check = checkBoat(world, selectedTown, to, tool);
+    const way = waterWay(world, selectedTown, to, tool);
+    const road = roadPath(world, selectedTown, to)?.distance;
+    const price = naira((tool === "barge" ? world.tuning.bargePurchaseCost : world.tuning.waterBusPurchaseCost) ?? 0);
+    const want = tool === "barge"
+      ? (() => { const g = goodsBetween(selectedTown, to); return `goods between them ${Math.round(g.out)} t/day out, ${Math.round(g.back)} back`; })()
+      : `${Math.round((pairDemand(world, selectedTown, to) + pairDemand(world, to, selectedTown)) * SECONDS_PER_GAME_DAY)} riders/day want trips between them`;
+    const label = `${tool === "barge" ? "Barge" : "Water bus"} ${price} · ${way ? `${Math.round(way.length)} cells by water${road ? `, ${Math.round(road)} by road` : ", no road"}` : "the water doesn't join them"} · ${want}`;
+    const ghost = { from: selectedTown, to: end, ok: check.ok, line: way?.points.map(([x, y]) => ({ x, y })), label: refusedOr(check, label, `${tool === "barge" ? "Barge" : "Water bus"} ${price}`) };
+    return withForecast(ghost, { kind: tool, a: selectedTown, b: to }, { label: tool === "barge" ? "a barge" : "a water bus", towns: [selectedTown, to] });
+  }
   if (tool === "pipe") {
     // From the fuel source to a town: what it costs, and the fuel going its way now.
     const [a, b] = isPipeSource(world, to) && !isPipeSource(world, selectedTown) ? [to, selectedTown] : [selectedTown, to];
@@ -1844,6 +1891,19 @@ function ghost(): Ghost | null {
 // train, it just says I can't afford it"). Short of money, the whole
 // preview stays -- route, riders, price -- with what you have; any other
 // refusal keeps the price and says why.
+/** How many of your other jetties the water reaches from a town, for a water bus. */
+function jettyReaches(townId: string): number {
+  return [...(world.jetties ?? [])].filter((other) => other !== townId && waterWay(world, townId, other, "boat")).length;
+}
+/** Tonnes a day of goods between two places, each way (a barge's preview). */
+function goodsBetween(a: string, b: string): { out: number; back: number } {
+  let out = 0, back = 0;
+  for (const f of goodsFlows(world)) {
+    if (f.from === a && f.to === b) out += f.rate * SECONDS_PER_GAME_DAY;
+    else if (f.from === b && f.to === a) back += f.rate * SECONDS_PER_GAME_DAY;
+  }
+  return { out, back };
+}
 function refusedOr(check: { ok: boolean; reason?: string }, label: string, priced: string): string {
   if (check.ok) return label;
   const reason = (check as { reason: string }).reason;
@@ -1916,7 +1976,16 @@ function renderToolbar(): void {
         ...on(t.goodsEnabled, button("Freight", "G", tool === "freight", () => setTool("freight"))),
       ),
     ),
-    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))), ...on(!!t.busStationsEnabled, button("Station", "S", tool === "station", () => setTool("station"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track"))), ...on(toolOn("pipe"), button("Pipe", "I", tool === "pipe", () => setTool("pipe")))),
+    ...on(
+      toolOn("boat"),
+      group(
+        "On water",
+        "water",
+        button("Boat", "W", tool === "boat", () => setTool("boat")),
+        ...on(toolOn("barge"), button("Barge", "V", tool === "barge", () => setTool("barge"))),
+      ),
+    ),
+    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))), ...on(!!t.busStationsEnabled, button("Station", "S", tool === "station", () => setTool("station"))), ...on(toolOn("jetty"), button("Jetty", "J", tool === "jetty", () => setTool("jetty"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track"))), ...on(toolOn("pipe"), button("Pipe", "I", tool === "pipe", () => setTool("pipe")))),
     ...on(t.straightAlignmentEnabled, group(t.railEnabled ? "Line (road, track)" : "Line", "setting", lineSwitch)),
     ...on(t.wearEnabled, group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix")))),
     group(
@@ -1952,7 +2021,7 @@ function renderStrip(): void {
 let panelTown: string | null = null;
 function renderPanel(): void {
   const town = hoverTown ?? null;
-  const placing = selectedTown !== null && tool !== "fix" && tool !== "yard" && tool !== "park" && tool !== "station";
+  const placing = selectedTown !== null && tool !== "fix" && tool !== "yard" && tool !== "park" && tool !== "station" && tool !== "jetty";
   if (town && town !== panelTown && !placing && world.towns.has(town)) {
     panelTown = town;
     screen.select({ kind: world.towns.get(town)!.industry ? "site" : "town", id: town }, true);
@@ -2940,7 +3009,7 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 // A train route's reasons are a bus route's with the vehicle renamed: the
 // diagnosis is the same passenger model (rail.ts), only the vehicle differs.
 function forVehicle(text: string, routeId: string): string {
-  const [one, many] = isRailRoute(routeId) ? ["train", "trains"] : isMinibusRoute(routeId) ? ["minibus", "minibuses"] : isBrtRoute(routeId) ? ["BRT bus", "BRT buses"] : [null, null];
+  const [one, many] = isBoatRoute(routeId) ? ["water bus", "water buses"] : isRailRoute(routeId) ? ["train", "trains"] : isMinibusRoute(routeId) ? ["minibus", "minibuses"] : isBrtRoute(routeId) ? ["BRT bus", "BRT buses"] : [null, null];
   if (!one || !many) return text;
   return text
     .replace(/\bBuses\b/g, many.charAt(0).toUpperCase() + many.slice(1))
@@ -2951,6 +3020,7 @@ function forVehicle(text: string, routeId: string): string {
 /** "2 buses", "1 minibus", "3 trains". */
 function vehicleCount(routeId: string, n: number): string {
   if (isRailRoute(routeId)) return `${n} train${n === 1 ? "" : "s"}`;
+  if (isBoatRoute(routeId)) return `${n} water bus${n === 1 ? "" : "es"}`;
   if (isMinibusRoute(routeId)) return `${n} minibus${n === 1 ? "" : "es"}`;
   if (isBrtRoute(routeId)) return `${n} BRT bus${n === 1 ? "" : "es"}`;
   return `${n} bus${n === 1 ? "" : "es"}`;
@@ -3019,7 +3089,7 @@ function reasonText(d: RouteDiagnosis, buses: number, costPerDay: number, netPer
 function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
   const index = world.routes.findIndex((route) => route.id === s.id);
   const d = diagnoseRoute(world, s.id);
-  const vehicle = isRailRoute(s.id) ? "train" : isMinibusRoute(s.id) ? "minibus" : isBrtRoute(s.id) ? "BRT bus" : "bus";
+  const vehicle = isBoatRoute(s.id) ? "water bus" : isRailRoute(s.id) ? "train" : isMinibusRoute(s.id) ? "minibus" : isBrtRoute(s.id) ? "BRT bus" : "bus";
   const dirt = d ? dirtRoadsOn(world, s.id)[0] : undefined;
   const through = d?.verdict === "thin" ? throughRoute(world, s.id) : null;
   const verdict = d
@@ -3044,7 +3114,7 @@ function routeCard(s: ReturnType<typeof routeSummaries>[number]): string {
   return `
     <div class="route-card" data-route="${s.id}" title="${long.replace(/"/g, "&quot;")}">
       <div class="top"><span class="k">${vehicleCount(s.id, s.buses)} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</span><span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${signed}/day</span></div>
-      <div class="name"><span class="swatch" style="background:${routeColor(index)}"></span>${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : ""}
+      <div class="name"><span class="swatch" style="background:${routeColor(index)}"></span>${townName(s.a)} ↔ ${townName(s.b)}${isRailRoute(s.id) ? " <span class=\"muted\">by rail</span>" : isBoatRoute(s.id) ? " <span class=\"muted\">by water</span>" : ""}
         <span class="buttons"><button data-add="${s.id}" title="Add one">+</button><button data-remove="${s.id}" title="Sell one">−</button></span></div>
       ${strikeBadge(laneAlongRoute(s.a, s.b))}
       <div class="verdict why-${d?.verdict ?? "healthy"}">${verdict}</div>
@@ -3383,7 +3453,7 @@ function lorryRows(afterBuses: boolean): string {
     return `
       <div class="route" data-route="${s.id}">
         <span class="swatch" style="background:var(--goods)"></span>
-        <div class="name">${townName(s.a)} ↔ ${townName(s.b)}${isFreightRoute(s.id) ? ' <span class="muted">by rail</span>' : ""}<small>${s.lorries} ${isFreightRoute(s.id) ? `freight train${s.lorries === 1 ? "" : "s"}` : `lorr${s.lorries === 1 ? "y" : "ies"}`} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
+        <div class="name">${townName(s.a)} ↔ ${townName(s.b)}${isFreightRoute(s.id) ? ' <span class="muted">by rail</span>' : isBargeRoute(s.id) ? ' <span class="muted">by water</span>' : ""}<small>${s.lorries} ${isBargeRoute(s.id) ? `barge${s.lorries === 1 ? "" : "s"}` : isFreightRoute(s.id) ? `freight train${s.lorries === 1 ? "" : "s"}` : `lorr${s.lorries === 1 ? "y" : "ies"}`} · in ${naira(s.incomePerDay)} · cost ${naira(s.costPerDay)}</small></div>
         <span class="net ${s.netPerDay < 0 ? "bad" : "good"}">${naira(s.netPerDay)}</span>
         <button data-add="${s.id}" title="Add a lorry">+</button>
         <button data-remove="${s.id}" title="Sell a lorry">−</button>
@@ -3835,15 +3905,22 @@ function onPanelClick(event: MouseEvent): void {
     const route = world.lorryRoutes.find((candidate) => candidate.id === addId);
     if (!route) return;
     const freight = isFreightRoute(addId);
-    const vehicle = freight ? "freight train" : "lorry";
+    const barge = isBargeRoute(addId);
+    const vehicle = barge ? "barge" : freight ? "freight train" : "lorry";
     const spec = { label: addLabel(vehicle, route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId };
-    const result = act(spec, { kind: freight ? "freight" : "lorry", a: route.a, b: route.b });
-    const price = freight ? world.tuning.freightPurchaseCost : world.tuning.lorryPurchaseCost;
+    const result = act(spec, { kind: barge ? "barge" : freight ? "freight" : "lorry", a: route.a, b: route.b });
+    const price = barge ? world.tuning.bargePurchaseCost ?? 0 : freight ? world.tuning.freightPurchaseCost : world.tuning.lorryPurchaseCost;
     if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (addId) {
     const route = world.routes.find((candidate) => candidate.id === addId);
     if (!route) return;
     const train = isRailRoute(addId);
+    if (isBoatRoute(addId)) {
+      const result = act({ label: addLabel("water bus", route.vehicleIds.length + 1, route.a, route.b), towns: [route.a, route.b], routeId: addId }, { kind: "boat", a: route.a, b: route.b });
+      if (!result.ok) say(`Can't add a water bus (${naira(world.tuning.waterBusPurchaseCost ?? 0)}): ${result.reason}`, true);
+      renderRoutes();
+      return;
+    }
     const mini = isMinibusRoute(addId);
     const brt = isBrtRoute(addId);
     const vehicle = train ? "train" : mini ? "minibus" : brt ? "BRT bus" : "bus";
@@ -3852,9 +3929,9 @@ function onPanelClick(event: MouseEvent): void {
     const price = vehiclePrice(world, train ? "train" : mini ? "minibus" : brt ? "brt" : "bus");
     if (!result.ok) say(`Can't add ${vehicle} (${naira(price)}): ${result.reason}`, true);
   } else if (removeId && isLorryRoute(removeId)) {
-    sell(removeId, isFreightRoute(removeId) ? "freight train" : "lorry");
+    sell(removeId, isBargeRoute(removeId) ? "barge" : isFreightRoute(removeId) ? "freight train" : "lorry");
   } else if (removeId) {
-    sell(removeId, isRailRoute(removeId) ? "train" : isMinibusRoute(removeId) ? "minibus" : isBrtRoute(removeId) ? "BRT bus" : "bus");
+    sell(removeId, isBoatRoute(removeId) ? "water bus" : isRailRoute(removeId) ? "train" : isMinibusRoute(removeId) ? "minibus" : isBrtRoute(removeId) ? "BRT bus" : "bus");
   }
   renderRoutes();
 }

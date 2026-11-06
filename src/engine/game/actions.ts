@@ -22,6 +22,7 @@ import { restoreTextile } from "./textile";
 import { expandSite } from "./expand";
 import { buildYard } from "./yards";
 import { buildBusStation } from "./busstations";
+import { addBoat, buildJetty } from "./boats";
 import { buildPark } from "./parks";
 import { buildUrban } from "./metro";
 import { setFreightRate } from "./freightrates";
@@ -46,6 +47,9 @@ export type ActionSpec =
   | { kind: "project"; a: string; b: string; rung: ProjectRung }
   | { kind: "track"; a: string; b: string; alignment: Alignment }
   | { kind: "halt"; town: string }
+  /** A jetty at a waterside town; a water bus or a barge between two jetties (boats.ts). */
+  | { kind: "jetty"; townId: string }
+  | { kind: "boat" | "barge"; a: string; b: string }
   | { kind: "fix"; segmentId: string; on: boolean }
   // A road declared a trunk (on), or made a feeder again (trunks.ts).
   | { kind: "trunk"; segmentId: string; on: boolean }
@@ -153,6 +157,13 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
       return buildTrack(world, spec.a, spec.b, spec.alignment);
     case "halt":
       return buildHalt(world, spec.town);
+    case "jetty": {
+      const result = buildJetty(world, spec.townId);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
+    case "boat":
+    case "barge":
+      return addBoat(world, spec.a, spec.b, spec.kind);
     case "fix": {
       const result = setRoadMaintained(world, spec.segmentId, spec.on);
       return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };

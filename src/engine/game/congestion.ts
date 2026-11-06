@@ -8,6 +8,7 @@ import { lineSpeed } from "./wear";
 import { laneEncroachment, struckSegments } from "./pushback";
 import { parkCapacityFactor } from "./parks";
 import { urbanRoadFactor } from "./metro";
+import { offRoad } from "./boats";
 
 // Shared road (docs/principles.md §6, step 2). Your buses and the informal
 // sector slow each other down -- which closes the loop the hook depends on
@@ -86,7 +87,7 @@ export function speedFactor(flow: number, capacity: number, floor: number): numb
 }
 
 function currentSegment(world: GameWorld, vehicle: Vehicle): string | null {
-  if (world.railVehicles.has(vehicle.id)) return null; // trains are never road traffic
+  if (offRoad(world, vehicle.id)) return null; // trains and boats are never road traffic
   const length = vehicle.path.length;
   if (length < 2 || vehicle.pathIndex >= length) return null;
   const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length]!;
@@ -152,7 +153,7 @@ export function updateRoadSpeeds(world: GameWorld, dt: number): void {
 
   const alpha = 1 - Math.exp(-dt / FLOW_TAU_SECONDS);
   world.segmentLoad = computeSegmentLoads(
-    simulation.vehicles.filter((vehicle) => !world.railVehicles.has(vehicle.id)),
+    simulation.vehicles.filter((vehicle) => !offRoad(world, vehicle.id)),
     simulation.routing,
   );
   world.segmentSpeed = new Map();

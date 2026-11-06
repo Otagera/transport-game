@@ -19,9 +19,9 @@ import { privateLoad } from "@engine/game/private";
 import { upkeepPerDay } from "@engine/game/wear";
 import { isYourRoad } from "@engine/game/upkeep";
 
-export type LineKind = "bus" | "minibus" | "brt" | "train" | "lorry" | "freight";
+export type LineKind = "bus" | "minibus" | "brt" | "train" | "lorry" | "freight" | "boat" | "barge";
 export type Family = "people" | "goods";
-export type Mode = "road" | "rail";
+export type Mode = "road" | "rail" | "water";
 
 export interface Line {
   id: string;
@@ -49,17 +49,21 @@ export const KIND_NAME: Record<LineKind, { one: string; many: string; vehicle: s
   train: { one: "Train", many: "Trains", vehicle: "train", vehicles: "trains" },
   lorry: { one: "Lorries", many: "Lorries", vehicle: "lorry", vehicles: "lorries" },
   freight: { one: "Freight", many: "Freight", vehicle: "freight train", vehicles: "freight trains" },
+  boat: { one: "Water bus", many: "Water buses", vehicle: "water bus", vehicles: "water buses" },
+  barge: { one: "Barges", many: "Barges", vehicle: "barge", vehicles: "barges" },
 };
 
-/** The four families of line, in the order the panels show them. */
+/** The families of line, in the order the panels show them. */
 export const GROUPS: Array<{ id: `${Family}-${Mode}`; name: string; family: Family; mode: Mode }> = [
   { id: "people-road", name: "People by road", family: "people", mode: "road" },
   { id: "people-rail", name: "People by rail", family: "people", mode: "rail" },
   { id: "goods-road", name: "Goods by road", family: "goods", mode: "road" },
   { id: "goods-rail", name: "Goods by rail", family: "goods", mode: "rail" },
+  { id: "people-water", name: "People by water", family: "people", mode: "water" },
+  { id: "goods-water", name: "Goods by water", family: "goods", mode: "water" },
 ];
 
-const passengerKind = (id: string): LineKind => (id.startsWith("rail:") ? "train" : id.startsWith("mini:") ? "minibus" : id.startsWith("brt:") ? "brt" : "bus");
+const passengerKind = (id: string): LineKind => (id.startsWith("boat:") ? "boat" : id.startsWith("rail:") ? "train" : id.startsWith("mini:") ? "minibus" : id.startsWith("brt:") ? "brt" : "bus");
 
 export function lines(world: GameWorld): Line[] {
   const D = SECONDS_PER_GAME_DAY;
@@ -68,7 +72,7 @@ export function lines(world: GameWorld): Line[] {
     const kind = passengerKind(r.id);
     const verdict = diagnoseRoute(world, r.id)?.verdict ?? null;
     return {
-      id: r.id, kind, family: "people", mode: kind === "train" ? "rail" : "road", a: r.a, b: r.b, vehicles: r.buses,
+      id: r.id, kind, family: "people", mode: kind === "train" ? "rail" : kind === "boat" ? "water" : "road", a: r.a, b: r.b, vehicles: r.buses,
       carried: (route?.boardingRateEMA ?? 0) * D, full: route?.loadFactorEMA ?? 0,
       incomePerDay: r.incomePerDay, costPerDay: r.costPerDay, netPerDay: r.netPerDay,
       verdict: verdict === "healthy" ? null : verdict,
@@ -77,8 +81,9 @@ export function lines(world: GameWorld): Line[] {
   const goods = lorrySummaries(world).map((g): Line => {
     const d = diagnoseLorryRoute(world, g.id);
     const freight = isFreightRoute(g.id);
+    const barge = g.id.startsWith("barge:");
     return {
-      id: g.id, kind: freight ? "freight" : "lorry", family: "goods", mode: freight ? "rail" : "road", a: g.a, b: g.b, vehicles: g.lorries,
+      id: g.id, kind: barge ? "barge" : freight ? "freight" : "lorry", family: "goods", mode: barge ? "water" : freight ? "rail" : "road", a: g.a, b: g.b, vehicles: g.lorries,
       carried: d ? (d.outbound + d.inbound) * d.delivered : 0, full: d?.loadFactor ?? 0,
       incomePerDay: g.incomePerDay, costPerDay: g.costPerDay, netPerDay: g.netPerDay,
       verdict: !d || d.verdict === "healthy" ? null : d.verdict,
@@ -156,7 +161,8 @@ export function waysOf(world: GameWorld, all: Line[], allWays: Way[]): Map<strin
   for (const way of allWays) for (const piece of way.pieces) wayOf.set(piece.id, way.id);
   const result = new Map<string, string[]>();
   for (const line of all) {
-    const path = line.mode === "rail" ? railPath(world, line.a, line.b) : roadPath(world, line.a, line.b);
+    // A boat's line is on no road or track (boats.ts): no ways.
+    const path = line.mode === "water" ? null : line.mode === "rail" ? railPath(world, line.a, line.b) : roadPath(world, line.a, line.b);
     const on: string[] = [];
     for (const id of path?.segmentIds ?? []) {
       const way = wayOf.get(id);

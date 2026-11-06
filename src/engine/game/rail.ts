@@ -12,6 +12,7 @@ import { planAlignment, polylineLength, segmentLength, segmentPolyline, splitPol
 import { insertIntoPath } from "./settlement";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, routeKey, type ActionResult } from "./world";
 import { removeRoads, retiredRoadBetween } from "./retire";
+import { boatCostPerDay, boatRouting, isBoatRoute, onWater } from "./boats";
 
 // Rail (docs/principles.md §6, step 4: depth, one at a time -- rail last,
 // the user's pick: an inherited line plus new track, passenger trains).
@@ -60,6 +61,7 @@ export function isRailRoute(routeId: string): boolean {
 
 /** The network a vehicle runs on. */
 export function routingFor(world: GameWorld, vehicle: Vehicle): RoutingContext {
+  if (onWater(world, vehicle.id)) return boatRouting(world, vehicle); // a boat on its line's water (boats.ts)
   return world.railVehicles.has(vehicle.id) ? world.railRouting : world.simulation.routing;
 }
 
@@ -487,6 +489,7 @@ export function addTrain(world: GameWorld, a: string, b: string): ActionResult {
 /** Running cost a day of one vehicle on a route: a train's (its cars too) or a bus's. */
 export function vehicleCostPerDay(world: GameWorld, routeId: string, secondsPerDay: number): number {
   const t = world.tuning;
+  if (isBoatRoute(routeId)) return boatCostPerDay(world, routeId) * (secondsPerDay / SECONDS_PER_GAME_DAY);
   const perSecond = isRailRoute(routeId) ? t.trainOperatingCostPerSecond + (carsOn(world, routeId) - 1) * carPrice(world, routeId).perSecond : routeId.startsWith("mini:") ? t.minibusOperatingCostPerSecond : t.busOperatingCostPerSecond;
   return perSecond * secondsPerDay;
 }

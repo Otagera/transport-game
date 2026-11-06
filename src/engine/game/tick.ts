@@ -41,6 +41,8 @@ import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { beginTickFlows, endTickFlows, goodsLoader, produceAndSpoil, recordGoodsDelivered, relayArrivals, relayLoader, updateGoodsOutcomes } from "./goods";
 import { updateAssembly } from "./assembly";
+import { offRoad, onWater } from "./boats";
+import type { FareWay } from "./fares";
 
 // How much longer people wait at a motor park for a danfo to fill than
 // they wait for your bus before giving up.
@@ -240,7 +242,7 @@ function tickBody(world: GameWorld, dt: number): GameEvent[] {
   // loads, so riders board for the stops it will make. (At one end only, half a
   // route's buses crawled back over a flooded ford before they could turn.)
   const atStart = (vehicle: Vehicle, at: string, index: number) => {
-    if (world.railVehicles.has(vehicle.id)) return;
+    if (offRoad(world, vehicle.id)) return; // trains and boats keep their way
     const route = routeById.get(routeOf.get(vehicle.id) ?? "");
     if (route && ((at === route.a && index === 0) || (world.tuning.floodDetour && at === route.b))) takeShortestRoad(world, vehicle, route, at);
   };
@@ -333,7 +335,8 @@ function tickBody(world: GameWorld, dt: number): GameEvent[] {
     // Each leg pays a fare, on getting off (revenue on unload) -- per
     // rider, or per tonne for a lorry.
     // Passengers pay by distance (fares.ts); goods by the tonne and the cell.
-    const rail = world.railVehicles.has(vehicle.id);
+    // By the track, or the water (a boat's line's length: boats.ts), or the road.
+    const rail: FareWay = onWater(world, vehicle.id) ? (vehicle.carries === "goods" ? "barge" : "boat") : world.railVehicles.has(vehicle.id);
     // A freight line earns at the rate you set it (freightrates.ts).
     const revenue = recordFares(world, vehicle.id, vehicle.carries === "goods" ? goodsFares(world, deliveries, rail) * freightFareFactor(world, routeOf.get(vehicle.id)) : passengerFares(world, deliveries, rail));
     revenueThisTick += revenue;
@@ -840,7 +843,7 @@ function dispatchInformal(world: GameWorld, dt: number, lost: Map<string, number
   const laned = new Set(world.laneSpeed.keys()); // lanes in use today (not blocked by a strike)
   const yours = new Map<string, number>();
   for (const vehicle of world.simulation.vehicles) {
-    if (informal.active.has(vehicle.id) || world.railVehicles.has(vehicle.id)) continue;
+    if (informal.active.has(vehicle.id) || offRoad(world, vehicle.id)) continue;
     const leg = world.vehicleSegment.get(vehicle.id);
     if (!leg) continue;
     const segmentId = leg.slice(0, leg.lastIndexOf("#"));

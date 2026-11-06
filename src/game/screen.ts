@@ -1187,7 +1187,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const net = ds.map((d) => d.lorries.find((x) => x.id === l.id)?.netPerDay ?? 0);
       const first = Math.max(0, ds.findIndex((d) => d.lorries.some((x) => x.id === l.id)));
       const d = diagnoseLorryRoute(world, l.id);
-      const stops = (l.mode === "rail" ? railPath(world, l.a, l.b) : roadPath(world, l.a, l.b))?.nodeIds ?? [l.a, l.b];
+      const stops = (l.mode === "water" ? null : l.mode === "rail" ? railPath(world, l.a, l.b) : roadPath(world, l.a, l.b))?.nodeIds ?? [l.a, l.b];
       return `<div class="kicker">${l.kind === "freight" ? "Freight trains" : "Lorries"}${l.verdict ? ` · ${esc(VERDICT_WORDS[l.verdict] ?? l.verdict)}` : ""}</div>
         <div class="head"><div class="title">${esc(lineName(l))}</div><div class="num ${l.netPerDay < 0 ? "down" : "up"}">${naira(l.netPerDay)}/day</div></div>
         ${hooks.goodsWhy(l.id)}

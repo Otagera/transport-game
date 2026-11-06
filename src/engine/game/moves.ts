@@ -4,6 +4,7 @@ import { isDirt } from "./congestion";
 import { isRailRoute } from "./rail";
 import type { ActionSpec } from "./actions";
 import { vehiclePrice } from "./assembly";
+import { isBoatRoute } from "./boats";
 
 // The moves worth forecasting, as data: what the developer view's "best
 // next moves" lists and what the probe's bots choose between
@@ -29,7 +30,7 @@ export function vehicleMoves(world: GameWorld): VehicleMove[] {
   const list: VehicleMove[] = [];
   const price = (kind: "bus" | "minibus" | "brt") => vehiclePrice(world, kind);
   for (const route of world.routes) {
-    if (isRailRoute(route.id)) continue;
+    if (isRailRoute(route.id) || isBoatRoute(route.id)) continue;
     const kind = isMinibusRoute(route.id) ? "minibus" : isBrtRoute(route.id) ? "brt" : "bus";
     list.push({ action: { kind, a: route.a, b: route.b, ...(route.via?.length ? { via: route.via } : {}) }, routeId: route.id, count: route.vehicleIds.length + 1, price: price(kind) });
   }
