@@ -4,7 +4,7 @@ import { createRng, type Rng } from "../map/random";
 import { UnionFind } from "../map/connectivity";
 import { planCorridor } from "../pathing/plan";
 import { buildGameTerrain } from "./terrain";
-import { withFictionalNames } from "./names";
+import { fictionalName, stream, withFictionalNames } from "./names";
 import {
   EDGE_MARGIN,
   MIN_SPACING,
@@ -130,6 +130,9 @@ export function gameMap(base: GameMapDef, seed: number, tuning: { regionEnabled?
     map = laidOverLand(map);
     // Version 9: fictional names, true to the region (names.ts) -- never real towns in places they aren't.
     if (version >= 9) map = withFictionalNames(map, seed);
+    // Version 14 (a first test, not new games' default yet: docs/water.md): places on the water --
+    // the big river widened, river towns and fishing villages on its banks and the coast's.
+    if (version >= 14 && map.home) map = withWater(map, seed);
   }
   // The rivers' valleys (terrain.ts): on the map a game plays, not in the drawing's own checks.
   return tuning.riverValleys ? { ...map, terrain: { ...map.terrain, valleys: true } } : map;
@@ -1322,4 +1325,165 @@ function landForms(map: GameMapDef, seed: number): GameMapDef {
     }
   }
   return Object.keys(features).length ? { ...next, features } : next;
+}
+
+// --- Map version 14: water (docs/water.md, step 1; a first test of its hypothesis) -------------
+// A probe of version 13 (scripts/water-probe.ts): the generator keeps towns 3+ cells off the water
+// and the seaport 7-9 inland, and the goods run where the rivers don't -- boats would have nothing
+// to carry. This adds places on the water and moves nothing: every town and road of version 13
+// stays where it is, the home cluster above all (C21). Drawn last, after the names, from a stream
+// of its own:
+//   - the big river (the longest that isn't a lake or the sea) widened beyond the home box -- the
+//     half nearer its mouth (its wider end) to BIG_BOAT, the rest to SMALL_BOAT -- only where that
+//     stays clear of every town and of every road but one crossing it there, tapering into the
+//     narrows it keeps;
+//   - river towns, 3-6 of 8-30k, on its banks and the sea's, a cell or so off the water, about 20
+//     cells from the nearest town (near enough to trade), each on an old road to one of its three
+//     nearest towns, clear of the other towns and crossing no road;
+//   - fishing villages, 2-4 of 2-4k, on any water -- the coast, a lagoon or creek, a lake, a river --
+//     FISHING_CLEAR from any town, each on an old track the same way.
+// The waterfronts and the harbour (water.md, step 1, 2-3) aren't places yet: the probe takes a town
+// within reach of the water as having one. Kept only if no town lands in the water.
+
+const BIG_BOAT = 3.5; // cells of river a big boat needs (water.md: a reach's width stands for its depth)
+const SMALL_BOAT = 2.5;
+const FISHING_CLEAR = 9;
+
+function withWater(map: GameMapDef, seed: number): GameMapDef {
+  const rng = createRng(seed + 14_000_029);
+  const box = map.home!;
+  const W = map.width, H = map.height;
+  const rivers = [...(map.terrain?.rivers ?? [])];
+  const widthsOf = (r: GameRiverDef) => r.points.map((_, k) => r.widths?.[k] ?? r.width);
+  const isSea = (r: GameRiverDef) => Math.max(r.width, ...(r.widths ?? [])) >= 9;
+  const cum = (r: GameRiverDef) => {
+    const out = [0];
+    for (let k = 1; k < r.points.length; k += 1) out.push(out[k - 1]! + Math.hypot(r.points[k]![0] - r.points[k - 1]![0], r.points[k]![1] - r.points[k - 1]![1]));
+    return out;
+  };
+  const flowing = rivers.map((r, i) => ({ r, i, length: cum(r).at(-1)! })).filter(({ r }) => !r.lake && !isSea(r));
+  if (!flowing.length) return map;
+  const big = [...flowing].sort((a, b) => b.length - a.length)[0]!;
+  const at = new Map(map.towns.map((t) => [t.id, t]));
+  const lineOf = (r: GameRoadDef): Point[] => [at.get(r.a)!, ...(r.via ?? []).map(([x, y]) => ({ x, y })), at.get(r.b)!];
+  const roadLines = [...map.roads, ...(map.rails ?? [])].map(lineOf);
+  const toLine = (p: Point, line: Point[]) => Math.min(...line.slice(1).map((q, k) => toSegment(p, line[k]!, q)));
+
+  // The big river widened beyond the home box.
+  const pts = big.r.points;
+  const old = widthsOf(big.r);
+  const along = cum(big.r);
+  const total = along.at(-1)!;
+  const fifth = Math.max(1, Math.floor(pts.length / 5));
+  const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length;
+  const mouthAtEnd = mean(old.slice(-fifth)) >= mean(old.slice(0, fifth));
+  // Where each road crosses it: its line within the water there.
+  const crossAt = roadLines.map((line) => along.filter((_, k) => toLine({ x: pts[k]![0], y: pts[k]![1] }, line) <= old[k]! / 2 + 0.5));
+  const widths = old.map((w0, k) => {
+    const want = (mouthAtEnd ? total - along[k]! : along[k]!) <= total / 2 ? BIG_BOAT : SMALL_BOAT;
+    if (w0 >= want) return w0;
+    const p = { x: pts[k]![0], y: pts[k]![1] };
+    if (toBox(p, box) < want / 2 + 2) return w0;
+    if (map.towns.some((t) => distance(t, p) < want / 2 + WATER_CLEARANCE)) return w0;
+    const blocked = roadLines.some((line, r) => toLine(p, line) < want / 2 + 0.7 && !crossAt[r]!.some((c) => Math.abs(c - along[k]!) <= want * 2));
+    return blocked ? w0 : want;
+  });
+  // No step: at most 0.3 cells of width a cell of river, either way, never narrower than drawn.
+  for (let k = 1; k < pts.length; k += 1) widths[k] = Math.max(old[k]!, Math.min(widths[k]!, widths[k - 1]! + 0.3 * (along[k]! - along[k - 1]!)));
+  for (let k = pts.length - 2; k >= 0; k -= 1) widths[k] = Math.max(old[k]!, Math.min(widths[k]!, widths[k + 1]! + 0.3 * (along[k + 1]! - along[k]!)));
+  const wide: GameRiverDef = { ...big.r, widths: widths.map((w) => Math.round(w * 100) / 100) };
+  let next: GameMapDef = { ...map, terrain: { ...map.terrain, rivers: rivers.map((r, i) => (i === big.i ? wide : r)) } };
+  let terrain: TerrainField;
+  try {
+    terrain = buildGameTerrain(next);
+  } catch {
+    next = map;
+    terrain = buildGameTerrain(map);
+  }
+  const water = next.terrain?.rivers ?? [];
+
+  // Places on the water: river towns, then fishing villages.
+  const wetAt = (x: number, y: number) => x < 0 || y < 0 || x >= W || y >= H || terrain.water[Math.round(y) * W + Math.round(x)] === 1;
+  const dryRound = (p: Point) => {
+    for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) if (wetAt(p.x + dx, p.y + dy)) return false;
+    return true;
+  };
+  /** Points a little off each line's banks, every `step` cells along it. */
+  const banks = (lines: GameRiverDef[], off: number, step: number): Point[] => {
+    const out: Point[] = [];
+    for (const r of lines) {
+      const ws = widthsOf(r);
+      const len = cum(r);
+      let last = -Infinity;
+      for (let k = 1; k < r.points.length; k += 1) {
+        if (len[k]! - last < step) continue;
+        last = len[k]!;
+        const [ax, ay] = r.points[k - 1]!;
+        const [bx, by] = r.points[k]!;
+        const d = Math.hypot(bx - ax, by - ay) || 1;
+        const [nx, ny] = [-(by - ay) / d, (bx - ax) / d];
+        for (const s of [-1, 1]) out.push({ x: Math.round(bx + s * nx * (ws[k]! / 2 + off)), y: Math.round(by + s * ny * (ws[k]! / 2 + off)) });
+      }
+    }
+    return out;
+  };
+  const used = new Set(map.towns.map((t) => t.id));
+  const names = stream(seed * 2654435761 + 14_000_031);
+  const placed: GameTown[] = [];
+  const roads: GameRoadDef[] = [];
+  const newLines: Point[][] = [];
+  const everyTown = () => [...map.towns, ...placed];
+  const fits = (p: Point, clear: number) =>
+    p.x >= EDGE_MARGIN && p.y >= EDGE_MARGIN && p.x <= W - 1 - EDGE_MARGIN && p.y <= H - 1 - EDGE_MARGIN &&
+    toBox(p, box) >= 8 && dryRound(p) &&
+    everyTown().every((t) => distance(t, p) >= clear) &&
+    [...roadLines, ...newLines].every((line) => toLine(p, line) >= ROAD_CLEARANCE);
+  /** An old road from a new place to one of its three nearest towns: clear of the others, crossing no road. */
+  const joined = (t: GameTown): { road: GameRoadDef; line: Point[] } | null => {
+    for (const o of map.towns.filter((x) => !x.industry).sort((a, b) => distance(t, a) - distance(t, b)).slice(0, 3)) {
+      const plan = planCorridor(terrain, [t, o], "auto", new Set([0, 1]));
+      if (!plan) continue;
+      const line = straightened(terrain, plan.polyline);
+      if (everyTown().some((x) => x !== o && toLine(x, line) < ROAD_CLEARANCE)) continue;
+      const others = [...roadLines, ...newLines];
+      if (others.some((rl) => rl.slice(1).some((q, k) => line.slice(1).some((p2, j) => crosses(rl[k]!, q, line[j]!, p2))))) continue;
+      return { road: { a: t.id, b: o.id, ...(line.length > 2 ? { via: line.slice(1, -1).map((p): [number, number] => [p.x, p.y]) } : {}) }, line };
+    }
+    return null;
+  };
+  const settle = (candidates: Point[], count: number, clear: number, size: [number, number]) => {
+    for (let n = 0; n < count; n += 1) {
+      const fitting = candidates.filter((p) => fits(p, clear));
+      if (!fitting.length) return;
+      // Near the towns there are, a little drawn: about `near` from the nearest (first tried
+      // farthest from all of them -- they went to the empty corners, where nothing travels).
+      const near = clear + 5;
+      const scored = fitting.map((p) => ({ p, s: -Math.abs(Math.min(...everyTown().map((t) => distance(t, p))) - near) * between(rng, 0.85, 1.15) })).sort((a, b) => b.s - a.s);
+      for (const { p } of scored.slice(0, 8)) {
+        const name = fictionalName(map.region ?? "southwest", names, used);
+        const town: GameTown = { id: townId(name), name, x: p.x, y: p.y, population: Math.round(between(rng, ...size)) };
+        const road = joined(town);
+        if (!road) continue;
+        placed.push(town);
+        roads.push(road.road);
+        newLines.push(road.line);
+        break;
+      }
+    }
+  };
+  settle(banks([wide, ...water.filter(isSea)], 1.5, 3), Math.round(between(rng, 3, 6)), MIN_SPACING, [8, 30]);
+  settle(banks(water, 1.2, 4), Math.round(between(rng, 2, 4)), FISHING_CLEAR, [2, 4]);
+
+  const result: GameMapDef = {
+    ...next,
+    towns: [...next.towns, ...placed],
+    roads: [...next.roads, ...roads],
+    ...(next.hamlets ? { hamlets: next.hamlets.filter((h) => !wetAt(h.x, h.y) && placed.every((t) => distance(t, h) >= 4)) } : {}),
+  };
+  try {
+    buildGameTerrain(result);
+  } catch {
+    return map;
+  }
+  return result;
 }

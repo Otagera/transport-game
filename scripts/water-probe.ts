@@ -18,7 +18,7 @@ const seed = Number(process.env.SEED ?? 2418);
 const DEPTHS = [1.5, 2.5, 3.5];
 /** A jetty's reach: a place this far from the water's edge. */
 const REACH = Number(process.env.REACH ?? 7);
-const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, {});
+const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, process.env.MAP_VERSION ? { mapVersion: Number(process.env.MAP_VERSION) } : {});
 const name = (id: string) => w.towns.get(id)?.name ?? id;
 
 // --- The waterway: one node a drawn point.
