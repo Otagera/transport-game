@@ -431,12 +431,26 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   // rates roll over four times as long, or its net swung by more than it
   // earned (probe: +15/day shown against +66/day made).
   const lorryAlpha = emaAlpha(dt, tuning.outcomeTauSeconds * 4);
+  // Each route's vehicles, in the simulation's order, gathered in one pass: walking every vehicle
+  // for every route was a tenth of a late tick (a phone at day 481, render-and-ui.md, On a phone).
+  // The same order as before, so the same sums: runs replay as played.
+  const ownerOf = new Map<string, string>();
+  for (const route of [...world.routes, ...world.lorryRoutes]) for (const id of route.vehicleIds) ownerOf.set(id, route.id);
+  const vehiclesOf = new Map<string, Vehicle[]>();
+  for (const vehicle of world.simulation.vehicles) {
+    const owner = ownerOf.get(vehicle.id);
+    if (owner === undefined) continue;
+    const list = vehiclesOf.get(owner);
+    if (list) list.push(vehicle);
+    else vehiclesOf.set(owner, [vehicle]);
+  }
   for (const route of world.routes) updateRouteRates(route, alpha);
   for (const route of world.lorryRoutes) updateRouteRates(route, lorryAlpha);
   function updateRouteRates(route: GameRoute, alpha: number): void {
+    const vehicles = vehiclesOf.get(route.id) ?? [];
     route.boardingRateEMA += ((boardings.get(route.id) ?? 0) / dt - route.boardingRateEMA) * alpha;
-    route.loadFactorEMA += (routeLoadFactor(world, route.vehicleIds) - route.loadFactorEMA) * alpha;
-    route.speedEMA += (routeSpeed(world, route.vehicleIds) - route.speedEMA) * alpha;
+    route.loadFactorEMA += (routeLoadFactor(vehicles) - route.loadFactorEMA) * alpha;
+    route.speedEMA += (routeSpeed(world, vehicles) - route.speedEMA) * alpha;
   }
   const changeGiveUp = (world.changeGiveUpEMA ??= new Map());
   for (const townId of world.towns.keys()) {
@@ -465,11 +479,10 @@ export function gameTick(world: GameWorld, dt: number): GameEvent[] {
   return events;
 }
 
-function routeLoadFactor(world: GameWorld, vehicleIds: string[]): number {
+function routeLoadFactor(vehicles: Vehicle[]): number {
   let total = 0;
   let count = 0;
-  for (const vehicle of world.simulation.vehicles) {
-    if (!vehicleIds.includes(vehicle.id)) continue;
+  for (const vehicle of vehicles) {
     total += 1 - freeSeats(vehicle) / vehicle.capacity;
     count += 1;
   }
@@ -477,11 +490,10 @@ function routeLoadFactor(world: GameWorld, vehicleIds: string[]): number {
 }
 
 /** Mean speed factor of a route's buses on the segments they're on now. */
-function routeSpeed(world: GameWorld, vehicleIds: string[]): number {
+function routeSpeed(world: GameWorld, vehicles: Vehicle[]): number {
   let total = 0;
   let count = 0;
-  for (const vehicle of world.simulation.vehicles) {
-    if (!vehicleIds.includes(vehicle.id)) continue;
+  for (const vehicle of vehicles) {
     const length = vehicle.path.length;
     const from = vehicle.path[(vehicle.pathIndex - 1 + length) % length]!;
     const to = vehicle.path[vehicle.pathIndex % length]!;

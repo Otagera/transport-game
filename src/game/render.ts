@@ -286,9 +286,17 @@ function yourRidersOnRoads(world: GameWorld): Map<string, number> {
 
 // --- Drawing ------------------------------------------------------------------------
 
+/**
+ * The map's pixels per CSS pixel: the screen's, at most 2 -- a phone's 3x drew 2.25 times the
+ * pixels of 2x for a sharpness nobody sees at arm's length (render-and-ui.md, On a phone).
+ */
+export function canvasDpr(): number {
+  return Math.min(2, window.devicePixelRatio || 1);
+}
+
 export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, state: DrawState): void {
   const { width, height } = ctx.canvas;
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = canvasDpr();
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);

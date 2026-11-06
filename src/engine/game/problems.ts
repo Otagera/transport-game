@@ -12,6 +12,7 @@ import { chainOf } from "./world";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { vehiclePrice } from "./assembly";
 import { routesOnTrip } from "./transfers";
+import { epoch } from "./epoch";
 
 // Revision 2, step 1 (docs/brief.md, agreed 2026-10-19): show the problems
 // the late game already has. At day 210 of the R1 7 playtest, 2,865 trips a
@@ -162,7 +163,21 @@ export function townNoSeat(world: GameWorld, townId: string): TownNoSeat | null 
 }
 
 /** Each corridor's no seat a day (trips along it nobody carried), with the pair most of them want and its move; worst first. */
+// Read once an epoch (epoch.ts): the screen's road rows each asked for the whole map's, every
+// frame -- diagnosing every line once per road -- and a phone at day 481 drew a frame in 5 seconds
+// with the game paused (render-and-ui.md, On a phone). The epoch moves with every tick and action.
+const corridorNoSeatCache = new WeakMap<GameWorld, { epoch: number; value: Map<string, { perDay: number; worst: NoSeatPair; move: NamedMove }> }>();
+
 export function corridorNoSeat(world: GameWorld): Map<string, { perDay: number; worst: NoSeatPair; move: NamedMove }> {
+  const now = epoch(world);
+  const cached = corridorNoSeatCache.get(world);
+  if (cached && cached.epoch === now) return cached.value;
+  const value = corridorNoSeatFresh(world);
+  corridorNoSeatCache.set(world, { epoch: now, value });
+  return value;
+}
+
+function corridorNoSeatFresh(world: GameWorld): Map<string, { perDay: number; worst: NoSeatPair; move: NamedMove }> {
   const byCorridor = new Map<string, { perDay: number; worst: NoSeatPair }>();
   for (const pair of noSeatPairs(world)) {
     const path = roadPath(world, pair.a, pair.b);

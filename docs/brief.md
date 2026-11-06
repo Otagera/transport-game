@@ -1233,6 +1233,14 @@ render-and-ui.md, Upgrading from the cards); then these four, in this order:
    -₦22, 2 buses 49 and +₦57 -- the detour costs more running than Omiga's riders bring there. A
    choice with a price, as it should be: not a better line by default.
 
+### On a phone (asked 2026-11-06: "mobile optimization", "portrait sure, but can we do both?")
+
+The game playable on a phone, both ways round, without changing what it simulates: the map full
+screen, the panel a sheet (bottom in portrait, right in landscape), the left column a drawer, one
+scrolling toolbar; touch to pan and pinch; with no hover, a tap previews a move and its price and
+the next tap does it; and fast enough on a phone's CPU late in a game. Built 2026-11-06
+(render-and-ui.md, On a phone). Next, if play wants it: the full screens at phone width, and 3D.
+
 ### Checks for the remit
 
 | # | Check | Passes when |

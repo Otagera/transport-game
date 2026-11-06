@@ -758,6 +758,33 @@ trip that ends there stands at its bay till it's gone, one that starts there pul
 round trip turns there as a bus does. The airport's park is its bus park, and its air freight's
 lorries use it too.
 
+**On a phone** (2026-11-06; asked for: "mobile optimization", portrait first, then both). Loaded
+as an iPhone 13 it was the desktop squeezed: in portrait the panel's 300px covered all but 80px of
+the map, the left column cut off, the strip a third of the height; no touch (a mouse drag panned,
+the wheel zoomed, a tool's price showed on hover). Now:
+- **Layout** (`styles/phone.css`, look.md §6): under 760px wide or 500px tall the map takes the
+  screen; the strip one line; the left column a drawer (the Map button over the plate; a tap on the
+  map or Esc shuts it); the panel a sheet -- the bottom in portrait, peeking with Waiting on you
+  (`--sheet-peek`, which `resize` leaves clear when fitting the map), the right in landscape, closed
+  to a tab. Its handle names what it holds ("Ewoda · Waiting on you · 2", main.ts `syncSheet`); it
+  doesn't open by itself, since a tap on a town is often the first of a line being drawn.
+- **Touch** (main.ts): one finger pans, two pinch about their middle; a touch that moved isn't a
+  tap (and a finger's drag fires no click after it, so the flag clears at the next touch -- left
+  set, it ate the next tap). With no hover, the second town's tap shows the move and its price
+  ("Bus ₦500 · 14 riders/day want trips along it. Tap Ewoda again to do it.") and the next tap on
+  it does it (`coarsePointer`, `armed`). The first hint says "tap" for "hover".
+- **Speed**, measured on map 8703 at day 481 as an iPhone 13 with the CPU slowed 4x: **0.2 frames a
+  second**, paused or not, a frame up to 5 s. The panel's road rows each asked for the whole map's
+  no-seat by corridor -- every line diagnosed once per road, every redraw. Now `corridorNoSeat` is
+  read once an epoch (epoch.ts), the screen's lines, corridors and no-seat a tenth of a game day
+  apart or at a move (`freshAt`), and the tick gathers each route's vehicles in one pass for its
+  load and speed (the simulation's order kept, so the same sums: runs replay as played). Then:
+  **20 frames a second at 4x, the game managing 0.7x**; paused, 15 (the worst frame ~530 ms, a
+  panel refresh). The map draws at most 2x pixels (`canvasDpr`; a phone's 3x drew 2.25 times the
+  pixels). Desktop gains the same.
+Not yet: the 3D view on a phone (off by default, as everywhere); the full screens (term report,
+revenue) at phone width.
+
 **Upgrading from the cards** (2026-11-05; your map 5059 playtest, "upgrading hurt more"). A rung
 was bought only with the Road tool, town to town, a road and a rung at a time, and a jammed line's
 card said "Pave or a lane" and left you to find its roads. Now (problems.ts): a **road's card**

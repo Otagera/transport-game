@@ -90,7 +90,7 @@ import { goneAt, restoreCost as restoreRoadCost } from "@engine/game/retire";
 import { NO_SEAT_MIN_PER_DAY, corridorNoSeat, lineUpgrade, shrinkCause, townNoSeat, wornRoadAt, type NamedMove } from "@engine/game/problems";
 import { enforcementPerDay, laneOn, lanesBySegment, settlementPrice, type LaneState } from "@engine/game/pushback";
 import { averageBudget, averageNet } from "@engine/game/history";
-import { chipAt, draw, fitView, focusFor, overlayCaption, overlayMarks, pipeLine, routeColor, toScreen, townRadius, type Ghost, type Network, type Overlay, type OverlayMark, type View } from "./render";
+import { canvasDpr, chipAt, draw, fitView, focusFor, overlayCaption, overlayMarks, pipeLine, routeColor, toScreen, townRadius, type Ghost, type Network, type Overlay, type OverlayMark, type View } from "./render";
 import { createHintState, dismissHint, updateHints } from "./hints";
 import { keepSteady, steadyFood, steadyFuel, steadyOver, steadyShortage, steadySite } from "./steady";
 import { createScreen } from "./screen";
@@ -410,7 +410,7 @@ const naira = (n: number) => `${n < 0 ? "−" : ""}₦${Math.abs(Math.round(n)).
 const townName = (id: string) => world.towns.get(id)?.name ?? world.ruins.get(id)?.name ?? id;
 
 function resize(): void {
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = canvasDpr();
   canvas.width = Math.round(window.innerWidth * dpr);
   canvas.height = Math.round(window.innerHeight * dpr);
   canvas.style.width = `${window.innerWidth}px`;
@@ -425,7 +425,8 @@ function resize(): void {
   // controls are in the left column now, never over the plate), measured.
   const toolbarHeight = toolbar?.getBoundingClientRect().height ?? 48;
   root.style.setProperty("--bottom", `${toolbarHeight}px`);
-  const bottomInset = toolbarHeight + 8;
+  // On a phone in portrait, the sheet's peek too (phone.css --sheet-peek; 0 elsewhere).
+  const bottomInset = toolbarHeight + 8 + cssPx("--sheet-peek");
   fitted = fitView(world, window.innerWidth, window.innerHeight, 24, stripEl.offsetHeight, bottomInset, left, right);
   applyZoom();
 }
@@ -542,6 +543,71 @@ window.addEventListener("mouseup", () => {
   if (dragging?.moved) suppressClick = true;
   dragging = null;
 });
+
+// On a phone (render-and-ui.md, On a phone): one finger pans, two pinch to zoom about their
+// middle; a touch that moved isn't a tap. The browser's own pinch and scroll are kept off the map.
+let touch: { x: number; y: number; moved: boolean; pinch: { d: number; mx: number; my: number } | null } | null = null;
+const touchMiddle = (t: TouchList) => ({ mx: (t[0]!.clientX + t[1]!.clientX) / 2, my: (t[0]!.clientY + t[1]!.clientY) / 2, d: Math.hypot(t[0]!.clientX - t[1]!.clientX, t[0]!.clientY - t[1]!.clientY) });
+canvas.addEventListener("touchstart", (event) => {
+  // The drawer open over the map: a tap on the map shuts it, and does nothing else.
+  if (document.body.classList.contains("drawer-open")) {
+    document.body.classList.remove("drawer-open");
+    suppressClick = true;
+    touch = null;
+    return;
+  }
+  const t = event.touches;
+  // A finger's drag fires no click after it (a mouse's does), so its "not a click" ends here, at the next touch.
+  suppressClick = false;
+  if (t.length === 1) touch = { x: t[0]!.clientX, y: t[0]!.clientY, moved: false, pinch: null };
+  else if (t.length === 2) touch = { x: 0, y: 0, moved: true, pinch: touchMiddle(t) };
+}, { passive: true });
+canvas.addEventListener("touchmove", (event) => {
+  if (!touch) return;
+  event.preventDefault();
+  const t = event.touches;
+  if (t.length === 2 && touch.pinch) {
+    const now = touchMiddle(t);
+    if (touch.pinch.d > 0) zoomAt(now.mx, now.my, now.d / touch.pinch.d);
+    panBy(now.mx - touch.pinch.mx, now.my - touch.pinch.my);
+    touch.pinch = now;
+  } else if (t.length === 2) {
+    touch = { x: 0, y: 0, moved: true, pinch: touchMiddle(t) };
+  } else if (t.length === 1 && !touch.pinch) {
+    const dx = t[0]!.clientX - touch.x, dy = t[0]!.clientY - touch.y;
+    if (!touch.moved && Math.hypot(dx, dy) < 8) return;
+    touch = { x: t[0]!.clientX, y: t[0]!.clientY, moved: true, pinch: null };
+    panBy(dx, dy);
+  }
+}, { passive: false });
+canvas.addEventListener("touchend", (event) => {
+  if (event.touches.length > 0) return;
+  if (touch?.moved) suppressClick = true;
+  touch = null;
+});
+
+/** A finger, not a mouse: no hover, so the second tap previews and a third builds (canvas click). */
+const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+/** The town a tap previewed, waiting for the tap that does it. */
+let armed: string | null = null;
+
+// The sheet (the panel, on a phone) and the drawer (the left column): their buttons, and the
+// sheet opening by itself when something is picked, so its card is seen (phone.css).
+const phoneLayout = () => window.matchMedia("(max-width: 760px), (max-height: 500px)").matches;
+document.querySelector("#sheet-handle")?.addEventListener("click", () => document.body.classList.toggle("sheet-open"));
+document.querySelector("#drawer-btn")?.addEventListener("click", () => document.body.classList.toggle("drawer-open"));
+// It doesn't open by itself: a tap on a town is often the first of a line being drawn, and the
+// sheet over the map then would hide the second. The handle names what it holds instead.
+function syncSheet(): void {
+  if (!phoneLayout()) return;
+  const handle = document.querySelector<HTMLElement>("#sheet-handle");
+  if (!handle) return;
+  const selected = screen.selected;
+  const picked = selected && (selected.kind === "town" || selected.kind === "site") ? world.towns.get(selected.id)?.name : null;
+  const waiting = (document.querySelector("#panel .waiting h2")?.textContent ?? "Waiting on you").replace(/\s+/g, " ").trim();
+  const label = picked ? `${picked} · ${waiting}` : selected ? `The card · ${waiting}` : waiting;
+  if (handle.textContent !== label) handle.textContent = label;
+}
 
 // The key is a chip in the controls column, closed until asked for (look.md §6: a manual, not
 // furniture); it never covers the plate, so opening it takes nothing from the map.
@@ -1108,6 +1174,8 @@ function setTool(next: Tool): void {
   selectedTown = null;
   chain = [];
   bends = [];
+  armed = null;
+  document.body.classList.remove("drawer-open");
   // Once a game: how to chain (brief, Tools for building).
   if ((next === "road" || next === "track") && !chainTold) {
     chainTold = true;
@@ -1238,9 +1306,20 @@ canvas.addEventListener("click", (event) => {
   if (!selectedTown || selectedTown === town) {
     selectedTown = selectedTown === town ? null : town;
     bends = [];
+    armed = null;
     return;
   }
   const from = selectedTown;
+  // A finger has no hover (render-and-ui.md, On a phone): the tap on the second town shows what
+  // it would build and its price, held there; the next tap on it does it.
+  if (coarsePointer && armed !== town) {
+    armed = town;
+    hoverTown = town;
+    const quote = ghost();
+    say(`${quote?.label ? `${quote.label}. ` : ""}Tap ${townName(town)} again to do it.`, !(quote?.ok ?? true), 10);
+    return;
+  }
+  armed = null;
   // A move forecast to lose money takes a second click: a red line is easy
   // to miss at 4x (playtest: "whatever the forecast says I don't really pay
   // attention"); a refusal you have to click past isn't.
@@ -1453,7 +1532,8 @@ window.addEventListener("keydown", (event) => {
   }
   else if (event.key === "Escape") {
     // Esc: the revenue screen shut, else a half-made build dropped, else back to the lists.
-    if (screen.verdictOpen()) screen.openVerdict(null);
+    if (document.body.classList.contains("drawer-open")) document.body.classList.remove("drawer-open");
+    else if (screen.verdictOpen()) screen.openVerdict(null);
     else if (screen.revenueOpen()) screen.openRevenue(false);
     else if (bends.length > 0) { bends = []; say("Bends dropped.", false, 3); }
     else if (chain.length > 0) { chain = []; selectedTown = null; say("Chain dropped.", false, 3); }
@@ -1876,9 +1956,11 @@ function renderPanel(): void {
   if (town && town !== panelTown && !placing && world.towns.has(town)) {
     panelTown = town;
     screen.select({ kind: world.towns.get(town)!.industry ? "site" : "town", id: town }, true);
+    syncSheet();
     return;
   }
   screen.renderPanel();
+  syncSheet();
 }
 
 function changingText(townId: string): string {

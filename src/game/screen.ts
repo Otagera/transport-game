@@ -960,7 +960,17 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   let linesAt = "";
   let linesCache: Line[] = [];
   let waysCache: Way[] = [];
-  const freshAt = () => `${world.economy.elapsedSeconds}|${recorder.file.actions.length}`;
+  // Read afresh a tenth of a game day apart, or at a move (render-and-ui.md, On a phone): keyed on
+  // every tick, the lines were diagnosed at each redraw -- four times a second -- and a phone at
+  // day 481 rebuilt the panel in most of a second.
+  const freshAt = () => `${Math.floor(world.economy.elapsedSeconds / (D / 10))}|${recorder.file.actions.length}`;
+  let corridorsAt = "";
+  let corridorsCache: ReturnType<typeof corridorSummaries> = [];
+  let noSeatCache: ReturnType<typeof corridorNoSeat> = new Map();
+  const corridorsNow = () => {
+    if (corridorsAt !== freshAt()) { corridorsAt = freshAt(); corridorsCache = corridorSummaries(world); noSeatCache = corridorNoSeat(world); }
+    return corridorsCache;
+  };
   function linesNow(): Line[] {
     if (linesAt !== freshAt()) {
       linesAt = freshAt();
@@ -995,10 +1005,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const key = w.mode === "road" ? roadLabelKeyOf(world, w.id) : null;
     return (key && labelOf(world, key)?.name) || `${nameOf(w.a)} – ${nameOf(w.b)}`;
   };
-  const corridorOf = (w: Way) => (w.mode === "road" ? corridorSummaries(world).find((c) => (c.a === w.a && c.b === w.b) || (c.a === w.b && c.b === w.a)) ?? null : null);
+  const corridorOf = (w: Way) => (w.mode === "road" ? corridorsNow().find((c) => (c.a === w.a && c.b === w.b) || (c.a === w.b && c.b === w.a)) ?? null : null);
   const noSeatOn = (w: Way) => {
     const c = corridorOf(w);
-    const seat = c ? corridorNoSeat(world).get(c.key) : undefined;
+    const seat = c ? (corridorsNow(), noSeatCache).get(c.key) : undefined;
     return seat && seat.perDay >= NO_SEAT_MIN_PER_DAY ? seat : null;
   };
   /** A way in a line: what it is, how it's holding up, who carries its trips. */

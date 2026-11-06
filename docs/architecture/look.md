@@ -174,6 +174,12 @@ old left column held two log lines and the old right panel held one notice.
 - Pledges move out of the strip into the panel, where they are not truncated. "Halve those
   left without a seat at Ilase: 218 a day to 109" is the most important sentence on the
   screen and the strip was cutting it at thirty characters.
+- **On a phone** (2026-11-06; `styles/phone.css`, render-and-ui.md, On a phone): the same regions,
+  moved. Under 760px wide or 500px tall the map takes the screen; the strip is one line (no small
+  print, no sparklines); the left column is a drawer over the map from a Map button on the plate;
+  the panel is a sheet -- along the bottom in portrait, peeking 148px with what's waiting on you,
+  along the right in landscape, closed to a 44px tab; the toolbar one row that scrolls, its keys
+  and group names hidden (a keyboard's).
 
 ---
 
