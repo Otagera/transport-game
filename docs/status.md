@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**778 tests passing** across the files (`bun test`). Typecheck / test / build /
+**866 tests passing** across the files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Next: a game around the simulation (2026-10-24)
@@ -96,6 +96,18 @@ engine.md, The airport). Replaced on day 361 and nothing changed: parked as stor
 start (brief, Ideas parked). **Your bus station** agreed (brief, same name): people change there,
 the depot, the board of its lines; measured on your replay, 9% of those who give up do so at a
 change, 40% of changers at Odun; on three more saved games 4-19%, about half of changers lost at two to four hub towns. **Built** (busstations.ts; engine.md and render-and-ui.md, Your bus station): the Station tool (S), changing riders 3x as patient, the depot half the rough roads' cost, the board on the town's card with Sell, Waiting on you naming the worst hubs. On your replay a station at Odun paid back in 27 days, at Ofabo (nobody changing) never. Next: the strategist's stations (C44, C45), then your playtest (C46). **Upgrading from the cards** (your "upgrading hurt more"): a road's card names its next rung, a line's card paves its dirt roads or lanes its jammed ones at once (render-and-ui.md). Then your tool items (brief, Tools for building): **draw a chain** (Cmd/Ctrl-click towns with the Road or Track tool, Enter: each leg built or its next rung -- a corridor upgraded at once, the same gesture) and **bend a road** (Alt-click points it passes through), and **lines through towns you choose** (Cmd/Ctrl-click towns with a vehicle tool; measured, a detour costs: Idawo ↔ Otido through Omiga earned less than the plain line). The four tool items are built. **Open for you:** play them. **On a phone** (2026-11-06; render-and-ui.md, On a phone): portrait and landscape layouts (the map full screen, the panel a sheet, the controls a drawer, the toolbar one scrolling row), touch (pan, pinch, tap to preview then tap to do it), and speed -- a day-481 game on a phone-speed CPU from 0.2 to 20 frames a second. **Open for you:** try it on your phone.
+
+**Water, step 1: the map redrawn, water first** (2026-11-06; [water.md](water.md), Step 1
+redrawn; brief, Water first). Map version 16 (waterfirst.ts) draws each region from its water --
+a lagoon coast, a delta, a big river to an estuary, a Y confluence, a dry plain, a lake basin --
+turned by the seed, the home city on it on most seeds, river towns and fishing villages on the
+banks. Your verdict: "it looks better". Goods by water 17-40% and people 13-28% on the five test
+maps (C48). The strategist carries more on four of five maps and never stalls in debt early; 2418's
+lake basin carries a fifth less. **The default for new games from 2026-11-06** (`mapVersion: 16`);
+old runs keep theirs. Its bigger road network made a tick half again as dear, so the tick was sped
+up a quarter with the same figures to the bit (engine.md, Speed). The far seaport up the old
+railway no longer comes up on a new map (water.md: the home city is the seaport on every coast). Next: water's step 2, jetties and
+boats.
 
 **The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
 you aim and The network): from your "to click on some things are difficult ... between tick the

@@ -163,7 +163,9 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   causewaysEnabled: true,
   floodDetour: true,
   riverValleys: true,
-  mapVersion: 13,
+  // Map version 16, water first (waterfirst.ts; water.md, Step 1 redrawn): the default for new games
+  // from 2026-11-06 (asked: "16 default"). A run file keeps the version it was played on.
+  mapVersion: 16,
   fuelPledgeNeedsMove: true,
   seaportImports: true,
   importsOverDirt: 0.6,

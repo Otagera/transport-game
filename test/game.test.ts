@@ -2732,7 +2732,7 @@ describe("cotton and the textile mill (textile.ts; brief, Cotton and the textile
     expect(mill.industry).toBe("textile");
     expect(inHome(south, mill)).toBe(true);
     expect(cottonTowns(south)).toEqual([]);
-    const north = begin(2327);
+    const north = begin(4); // a northern map on version 16 (2327 was one on version 13)
     expect(north.textile?.source).toBe("farms");
     expect(cottonTowns(north).length).toBeGreaterThan(0);
     expect(cottonTowns(north).every((town) => !inHome(north, town))).toBe(true);
@@ -3152,7 +3152,9 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
   }, 30_000);
 
   test("the seaport (gateways, step 1): imports come up from it in part by the old highway, all of it by the old railway restored", () => {
-    const run = (seed: number, overrides = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, ...overrides });
+    // On map version 13: from 16 (water first) the home city is the seaport on every coastal map, so
+    // a far seaport up the old railway is a version-13 map's (water.md, Map version 16 built).
+    const run = (seed: number, overrides = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, mapVersion: 13, ...overrides });
     let far = 0, home = 0, restored = 0;
     for (let seed = 1; seed <= 12; seed += 1) {
       const w = run(seed);

@@ -251,6 +251,14 @@ made cheap, another 13%. v16 is still about half again v13's tick (17.8 s for 10
 7585 against 11.4 s), because it is a bigger game, but it now runs at v13's speed from before these
 changes.
 
+**The default from 2026-11-06** (asked: "16 default"). One thing it changes: on every coastal
+v16 map the home city is the seaport (on 120 seeds, never a far coast town), so the gateways' far
+seaport, with its imports coming up the old dirt highway at a share and all of them by the old
+railway restored (gateways.ts, step 1), no longer comes up in a new game; a landlocked map's trade
+still comes up the coast road (border.ts). Its test runs on version 13. If that pressure is wanted
+back, an inland home city on some coastal seeds (Ibadan's, beside the lagoon's Lagos) would bring
+it -- your call.
+
 ## After the map
 
 - **Step 2, jetties and boats.** A jetty at a waterfront (your build); a waterway network built
