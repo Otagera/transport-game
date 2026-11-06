@@ -69,11 +69,14 @@ body:has(#verdict.open) > :not(#verdict) { pointer-events: none; }
 #loading .saves { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); animation: loading-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 #loading .saves .k { font: 600 var(--fs-caption) var(--label-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 #loading .saves button { text-align: left; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-control); font-size: var(--fs-body); }
-#loading .saves button[data-seed] { background: var(--bg); border: 1px solid var(--line); color: var(--ink); transition: border-color 0.15s ease, translate 0.15s ease; }
-#loading .saves button[data-seed]:hover { border-color: var(--you); translate: 0 -1px; }
-#loading .saves button[data-seed] b { display: block; }
-#loading .saves button[data-seed] span { display: block; font-size: var(--fs-dense); color: var(--muted); }
+#loading .saves button[data-key] { background: var(--bg); border: 1px solid var(--line); color: var(--ink); transition: border-color 0.15s ease, translate 0.15s ease; }
+#loading .saves button[data-key]:hover { border-color: var(--you); translate: 0 -1px; }
+#loading .saves button[data-key] b { display: block; }
+#loading .saves button[data-key] span { display: block; font-size: var(--fs-dense); color: var(--muted); }
 #loading .saves button[data-fresh] { justify-self: start; }
+#loading .saves .save-row { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-2); align-items: stretch; }
+#loading .saves button[data-delete] { align-self: center; font-size: var(--fs-dense); color: var(--muted); }
+#loading .saves button[data-delete][data-sure="1"] { color: var(--bad); border-color: var(--bad); }
 /* Done (main.ts): the card lifts away and the page under it, the map, shows through. */
 #loading.done { opacity: 0; pointer-events: none; }
 #loading.done .box { translate: 0 -16px; opacity: 0; }
@@ -144,3 +147,28 @@ body.arriving #map { animation: map-arrive 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) b
 #revenue .dbar i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
 #revenue .dbar i.pos { background: var(--good); }
 #revenue .dbar i.neg { background: var(--bad); }
+
+/* The welcome page and the tour (welcome.ts; brief, The screen, again, 5): a card over the dimmed
+   game, as the verdict is; the tour a ring round one part of the screen and a card beside it. */
+#welcome {
+  position: fixed; inset: var(--sp-6) 0 auto; margin: 0 auto; width: min(640px, calc(100% - 2 * var(--sp-4))); max-height: calc(100% - 2 * var(--sp-6));
+  background: var(--bg); border-radius: var(--radius); z-index: 12; display: none; overflow-y: auto; padding: var(--sp-5) var(--sp-6) var(--sp-5); font-size: var(--fs-body);
+  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--ink) 45%, transparent), 0 24px 64px var(--shadow);
+}
+#welcome.open { display: block; }
+#welcome .title { font-size: var(--fs-headline); font-weight: 700; margin-bottom: var(--sp-3); }
+#welcome .lede { margin: 0 0 var(--sp-3); }
+#welcome ul { margin: 0 0 var(--sp-3); padding-left: var(--sp-4); }
+#welcome li { margin-bottom: var(--sp-2); }
+#welcome .buttons, #tour .buttons { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-3); }
+#tour { position: fixed; inset: 0; z-index: 12; display: none; pointer-events: none; }
+#tour.open { display: block; }
+#tour .ring { position: absolute; border: 2px solid var(--you); border-radius: var(--radius); box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--ink) 35%, transparent); transition: all 0.25s ease; }
+#tour .card, #tour .help { position: absolute; pointer-events: auto; background: var(--bg); border-radius: var(--radius); box-shadow: 0 12px 40px var(--shadow); padding: var(--sp-3) var(--sp-4); }
+#tour .card { width: min(360px, calc(100% - 2 * var(--sp-4))); }
+#tour .card .k, #tour .help .k { font: 600 var(--fs-caption) var(--label-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+#tour .card .title { font-size: var(--fs-headline); font-weight: 700; margin: var(--sp-1) 0 var(--sp-2); }
+#tour .card p { margin: 0; font-size: var(--fs-body); }
+#tour .help { display: grid; gap: var(--sp-1); min-width: 220px; }
+#tour .help .k { margin-top: var(--sp-2); }
+#tour .help button { text-align: left; }

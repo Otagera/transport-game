@@ -178,8 +178,10 @@ export interface DrawState {
   problems?: ReadonlySet<string>;
   /** The overlay on the map, one at a time. */
   overlay?: Overlay;
-  /** Which of the network shows (the layer buttons, main.ts): roads and rail, or one without the other. */
+  /** Which of the network shows (the layer buttons, main.ts): roads and rail, one without the other, or neither. */
   network?: Network;
+  /** The water and pipes layers, each on or off. */
+  layers?: Layers;
   /** A pipeline whose card is open: drawn heavier. */
   focusPipe?: string | null;
   /** Places a card's button is about, for a few seconds after it's pressed (main.ts pointAt): a pulsing ring. */
@@ -187,11 +189,18 @@ export interface DrawState {
 }
 
 /** The layer buttons' choice, the 2D map's and the 3D view's alike: roads and track, or one alone. */
-export type Network = "both" | "roads" | "rail";
+export type Network = "both" | "roads" | "rail" | "none";
+/** Whether a layer setting shows roads, or track (brief, The screen, again, 2: each its own toggle). */
+export const showsRoads = (n: Network): boolean => n === "both" || n === "roads";
+export const showsRail = (n: Network): boolean => n === "both" || n === "rail";
+/** The water and pipes layers (boats.ts, pipelines.ts): shown unless switched off. */
+export interface Layers { water: boolean; pipes: boolean }
 
 // --- Frame state ------------------------------------------------------------------
 
 /** How much bigger marks draw than at the whole-map view (the square root of the zoom). */
+/** This frame's water and pipes layers (draw sets it). */
+let layers: Layers = { water: true, pipes: true };
 let markScale = 1;
 const FADED = 0.18;
 export interface Focus { segments: Set<string>; routes: Set<string>; towns: Set<string> }
@@ -312,13 +321,14 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   const oneByOne = drawsAt(zoomTier, "vehiclesOneByOne") || (state.gameSpeed ?? 1) < 4;
   const overlay = state.overlay ?? "none";
   const network = state.network ?? "both";
+  layers = state.layers ?? { water: true, pipes: true };
 
   bundleNetwork(world, view, network);
   drawGround(ctx, world, view);
   if (drawsAt(zoomTier, "hamlet")) drawHamlets(ctx, world, view);
   drawRoads(ctx, world, view, overlay !== "none", network);
-  drawPipes(ctx, world, view, overlay !== "none", state.focusPipe ?? null);
-  drawWater(ctx, world, view, overlay !== "none");
+  if (layers.pipes) drawPipes(ctx, world, view, overlay !== "none", state.focusPipe ?? null);
+  if (layers.water) drawWater(ctx, world, view, overlay !== "none");
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
@@ -334,7 +344,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     else drawTown(ctx, world, view, town, state);
   }
   for (const ruin of world.ruins.values()) if (placed.has(`ruin:${ruin.id}`)) drawRuin(ctx, view, ruin);
-  if (drawsAt(zoomTier, "wardens") && network !== "rail") drawWardens(ctx, world, view);
+  if (drawsAt(zoomTier, "wardens") && showsRoads(network)) drawWardens(ctx, world, view);
   // The rest, the least important first, so the most important paints on top.
   for (const p of paints.filter((x) => placed.has(x.id)).sort((a, b) => b.priority - a.priority)) p.paint(slots.get(p.id) ?? 0);
   for (const chip of chips) drawChip(ctx, chip);
@@ -353,7 +363,7 @@ let bundled = new Map<string, Point[]>();
 let bundledFor = "";
 function bundleNetwork(world: GameWorld, view: View, network: Network): void {
   const segments = world.simulation.map.segments;
-  const shows = (s: Segment) => s.retiredAt === undefined && (network === "both" || (s.type === "rail") === (network === "rail"));
+  const shows = (s: Segment) => s.retiredAt === undefined && (s.type === "rail" ? showsRail(network) : showsRoads(network));
   const pipes = (world.pipelines ?? []).map((p) => `${p.id}:${p.line.length}`).join(",");
   // Worked out again only as the zoom passes a step of 15% (a wheel's zoom would ask every frame).
   const scale = Math.pow(1.15, Math.round(Math.log(view.scale) / Math.log(1.15)));
@@ -692,7 +702,7 @@ function drawRoads(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
   const alphaFor = (id: string) => (focus && !focus.segments.has(id) ? FADED : dim ? OVERLAY_BACKDROP : 1);
   const colors = { free: COLORS.free, busy: COLORS.busy, jammed: COLORS.jammed };
   // The layer buttons: roads alone, or track alone, the other left off the map.
-  const shows = (s: Segment) => network === "both" || (s.type === "rail") === (network === "rail");
+  const shows = (s: Segment) => (s.type === "rail" ? showsRail(network) : showsRoads(network));
   const items = map.segments.filter(shows).map((s) => {
     const rung = segmentRung(s);
     const rail = s.type === "rail";
@@ -1066,7 +1076,8 @@ function drawVehicles(ctx: CanvasRenderingContext2D, world: GameWorld, view: Vie
   for (const vehicle of world.simulation.vehicles) {
     const informal = vehicle.lifecycle === "one-shot";
     if (informal && !oneByOne) continue;
-    if (network !== "both" && world.railVehicles.has(vehicle.id) !== (network === "rail")) continue;
+    // Each on its layer: a boat on the water's, a train on track's, the rest on the roads'.
+    if (world.boatVehicles?.has(vehicle.id) ? !layers.water : world.railVehicles.has(vehicle.id) ? !showsRail(network) : !showsRoads(network)) continue;
     const pose = vehiclePose(world, view, vehicle);
     if (!pose) continue;
     if (crowded(pose, informal ? "informal" : vehicle.carries === "goods" ? "goods" : world.railVehicles.has(vehicle.id) ? "train" : "bus")) continue;

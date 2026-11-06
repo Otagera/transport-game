@@ -35,6 +35,10 @@
 .stat svg { display: block; margin-top: 0; }
 #strip .spacer { flex: 1; }
 #strip .actions { display: flex; gap: var(--sp-2); align-items: center; }
+/* The time controls, up from the toolbar (brief, The screen, again, 1). */
+#strip .time { display: flex; gap: 0; align-items: center; margin-right: var(--sp-3); }
+#strip .time button { white-space: nowrap; padding: var(--sp-1) var(--sp-2); }
+#strip .time kbd { font: var(--fs-caption) ui-monospace, monospace; opacity: 0.6; margin-left: var(--sp-1); }
 #log, #panel { font-size: var(--fs-body); }
 #log { border-top: 1px solid var(--line); padding-top: var(--sp-3); }
 #tip {

@@ -152,8 +152,11 @@ old left column held two log lines and the old right panel held one notice.
 └──────────┴────────────────────────────────────┴──────────────┘
 ```
 
-- **The strip** is ink, and holds the term, exactly three numbers (people, trips made, money)
-  and the Revenue button. The other three stats live behind Revenue. Sparklines stay.
+- **The strip** is ink, and holds the term, exactly three numbers (people, trips made, money),
+  the time controls (pause and the three speeds, up from the toolbar, 2026-11-06), the Revenue
+  button and Help. The other three stats live behind Revenue. Sparklines stay.
+- **The welcome page and the tour** (`#welcome`, `#tour`, 2026-11-06) are full-screen regions,
+  like the verdict: a card over the dimmed game, and the tour's ring round one part of it.
 - **Controls** holds everything that acts on the map: zoom, 3D, the overlay set, the log,
   and the key as a collapsed chip. This is what makes the column worth its width and the
   plate clear at the same time.

@@ -1193,6 +1193,28 @@ roads had no list (the corridors under More, a road's card only from the map), t
   up, fix now, retire, restore) -- the corridor fold's content in the card's own style. Track
   doesn't wear (wear.ts is roads'), so it's never flagged worn.
 
+### The screen, again (2026-11-06; brief, The screen, again)
+
+After your map 1692 game to day 524. **The toolbar** is two groups, *Vehicles* and *Build*
+(`main.ts renderToolbar`); the line switch (Cheapest / Straight) shows only while the road or track
+tool is in hand. **The time controls** are in the strip (`timeHtml`, passed to `screen.renderStrip`,
+clicks caught on the strip); on a portrait phone the strip wraps to two lines (`phone.css`), since
+the controls had squeezed the numbers into each other. **The layers** are four toggles -- roads,
+rail, water, pipes (`shown`, `networkOf` -> `Network`, now with `"none"`; `render.ts showsRoads`,
+`showsRail`, and `Layers` for water and pipes, which `draw` reads). Each vehicle is on its own
+layer's toggle, a boat on water's. **Advice** never offers a yard where one is built:
+`screen.ts sourceWhy` asks `carryWhy` what's really in the way (the cement, steel and fuel items,
+and the town card). **The loading card** deletes a saved game in two clicks (the first asks). Its
+rows' CSS had targeted `data-seed`, which the buttons no longer carry: fixed with it.
+
+**The welcome page, the tour and Help** (`welcome.ts`): on a first game in this browser
+(`game:welcomed` in localStorage; never with `?dev=1`) the welcome page opens, paused, before the
+handover note: what the game is, then *Take the tour* or *Just play*. The tour is seven steps
+(`TOUR`), each a ring round one part of the screen (the first of its `targets` that's visible) and a
+card beside it, with Next, Back and Skip. Escape closes it. **Help ?** in the strip opens a menu:
+the welcome page, the tour, or any one step alone. `#welcome` and `#tour` are page regions (look.md
+§6; `verify-look` FIXED_OK).
+
 ### Jetties and boats on the screen (2026-11-06; engine.md, Jetties and boats)
 
 Tools: **Jetty** (J, in Build) is one click on a waterside town; its preview says how far off the

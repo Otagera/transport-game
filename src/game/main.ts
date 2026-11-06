@@ -56,7 +56,8 @@ import { applyAction, remitRefusal, type ActionOutcome, type ActionSpec } from "
 import { createRunRecorder, forkRun, recordAction, recordTick, replayRunSteps, runFile, startRunSteps, type RunRecorder, type RunSwitches } from "@engine/game/runlog";
 import { restoreSnapshot, snapshotOf } from "@engine/game/snapshot";
 import type { GameTown, GameWorld, UrbanKind } from "@engine/game/types";
-import { ago, listSaves, loadSave, saveKey, writeSave, type SaveKey, type SavedGame } from "./saves";
+import { createWelcome, welcomed } from "./welcome";
+import { ago, deleteSave, listSaves, loadSave, saveKey, writeSave, type SaveKey, type SavedGame } from "./saves";
 import { vehicleMoves } from "@engine/game/moves";
 import { paveUpkeepPerDay, upkeepFor } from "@engine/game/upkeep";
 import { isDirt } from "@engine/game/congestion";
@@ -175,15 +176,30 @@ async function chooseStart(map: number | null): Promise<SavedGame | null> {
   list.className = "saves";
   const line = (s: (typeof saves)[number]) => `${s.term ? `Term ${s.term}, ` : ""}day ${s.day} · ${Math.round(s.people).toLocaleString()}k people · ₦${Math.round(s.funds).toLocaleString()} · saved ${ago(s.savedAt)}`;
   list.innerHTML = `<div class="k">${map === null ? "Continue a game" : `You've a game on map ${map}`}</div>
-    ${saves.map((s) => `<button data-key="${String(saveKey(s)).replace(/[&<>"]/g, "")}"><b>${s.city.replace(/[&<>"]/g, "")} · map ${s.seed}${s.forkOf ? ` · fork from day ${s.forkOf.day}` : ""}</b><span>${line(s)}</span></button>`).join("")}
+    ${saves.map((s) => { const key = String(saveKey(s)).replace(/[&<>"]/g, ""); return `<div class="save-row"><button data-key="${key}"><b>${s.city.replace(/[&<>"]/g, "")} · map ${s.seed}${s.forkOf ? ` · fork from day ${s.forkOf.day}` : ""}</b><span>${line(s)}</span></button><button class="quiet" data-delete="${key}" title="Delete this saved game">Delete</button></div>`; }).join("")}
     <button class="quiet" data-fresh="1">${map === null ? "Start a new map" : "Start this map again (it replaces the save)"}</button>`;
   box.classList.add("choosing");
   box.insertBefore(list, box.querySelector(".bar"));
+  const asKey = (key: string): SaveKey => (/^\d+$/.test(key) ? Number(key) : key);
   const picked = await new Promise<SaveKey | null>((resolve) => list.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
+    // Delete an old game (asked 2026-11-06): twice, so a slip doesn't lose one -- the first click asks.
+    const doomed = button?.dataset.delete;
+    if (button && doomed) {
+      if (button.dataset.sure !== "1") {
+        button.dataset.sure = "1";
+        button.textContent = "Delete?";
+        return;
+      }
+      void deleteSave(asKey(doomed)).then(() => {
+        button.closest(".save-row")?.remove();
+        if (!list.querySelector("[data-key]")) resolve(null);
+      });
+      return;
+    }
     const key = button?.dataset.key;
     // A map's own game is kept under its seed, a fork under its id.
-    if (button) resolve(key ? (/^\d+$/.test(key) ? Number(key) : key) : null);
+    if (button) resolve(key ? asKey(key) : null);
   }));
   list.remove();
   box.classList.remove("choosing");
@@ -1958,60 +1974,64 @@ function renderToolbar(): void {
   lineSwitch.append(Object.assign(document.createElement("kbd"), { textContent: "A" }));
   const t = world.tuning;
   const on = <T,>(enabled: boolean, ...items: T[]): T[] => (enabled ? items : []);
+  // Two groups (brief, The screen, again, 1): what runs, and what you build. It had grown to six
+  // groups and 19 buttons and ran off the edge; the time controls went up into the strip.
   toolbar.replaceChildren(
     group(
-      "On roads",
-      "road",
+      "Vehicles",
+      "vehicles",
       button("Bus", "B", tool === "bus", () => setTool("bus")),
       button("Minibus", "M", tool === "minibus", () => setTool("minibus")),
       ...on(world.lanes.length > 0, button("BRT", "X", tool === "brt", () => setTool("brt"))),
       ...on(t.goodsEnabled && !t.noPlayerLorries, button("Lorry", "L", tool === "lorry", () => setTool("lorry"))),
+      ...on(t.railEnabled, button("Train", "T", tool === "train", () => setTool("train"))),
+      ...on(t.railEnabled && t.goodsEnabled, button("Freight", "G", tool === "freight", () => setTool("freight"))),
+      ...on(toolOn("boat"), button("Boat", "W", tool === "boat", () => setTool("boat"))),
+      ...on(toolOn("barge"), button("Barge", "V", tool === "barge", () => setTool("barge"))),
     ),
-    ...on(
-      t.railEnabled,
-      group(
-        "On rail",
-        "rail",
-        button("Train", "T", tool === "train", () => setTool("train")),
-        ...on(t.goodsEnabled, button("Freight", "G", tool === "freight", () => setTool("freight"))),
-      ),
-    ),
-    ...on(
-      toolOn("boat"),
-      group(
-        "On water",
-        "water",
-        button("Boat", "W", tool === "boat", () => setTool("boat")),
-        ...on(toolOn("barge"), button("Barge", "V", tool === "barge", () => setTool("barge"))),
-      ),
-    ),
-    group("Build", "build", button("Road", "R", tool === "road", () => setTool("road")), ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))), ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))), ...on(!!t.busStationsEnabled, button("Station", "S", tool === "station", () => setTool("station"))), ...on(toolOn("jetty"), button("Jetty", "J", tool === "jetty", () => setTool("jetty"))), ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track"))), ...on(toolOn("pipe"), button("Pipe", "I", tool === "pipe", () => setTool("pipe")))),
-    ...on(t.straightAlignmentEnabled, group(t.railEnabled ? "Line (road, track)" : "Line", "setting", lineSwitch)),
-    ...on(t.wearEnabled, group("Upkeep", "setting", button("Fix", "F", tool === "fix", () => setTool("fix")))),
     group(
-      "Time",
-      "time",
-      button(paused ? "Paused" : "Pause", "Space", paused, () => {
-        paused = !paused;
-        renderToolbar();
-      }),
-      ...[1, 2, 4].map((s, i) =>
-        button(!paused && speed === s && shownRunningAt ? `${s}× (${shownRunningAt}×)` : `${s}×`, String(i + 1), !paused && speed === s, () => {
-          speed = s;
-          paused = false;
-          renderToolbar();
-        }),
-      ),
+      "Build",
+      "build",
+      button("Road", "R", tool === "road", () => setTool("road")),
+      ...on(t.railEnabled, button("Track", "K", tool === "track", () => setTool("track"))),
+      ...on(toolOn("pipe"), button("Pipe", "I", tool === "pipe", () => setTool("pipe"))),
+      ...on(toolOn("jetty"), button("Jetty", "J", tool === "jetty", () => setTool("jetty"))),
+      ...on(t.goodsEnabled && t.yardsEnabled, button("Yard", "Y", tool === "yard", () => setTool("yard"))),
+      ...on(t.parksEnabled, button("Park", "O", tool === "park", () => setTool("park"))),
+      ...on(!!t.busStationsEnabled, button("Station", "S", tool === "station", () => setTool("station"))),
+      ...on(t.wearEnabled, button("Fix", "F", tool === "fix", () => setTool("fix"))),
     ),
+    // The line is a setting of the road and track tools: shown while one of them is in hand.
+    ...on(t.straightAlignmentEnabled && (tool === "road" || tool === "track"), group("Line", "setting", lineSwitch)),
   );
+  renderStrip();
 }
+
+/** The time controls, in the strip (brief, The screen, again, 1): pause and the three speeds. */
+function timeHtml(): string {
+  const speedLabel = (s: number) => (!paused && speed === s && shownRunningAt ? `${s}× (${shownRunningAt}×)` : `${s}×`);
+  return `<div class="time">
+    <button class="tool${paused ? " active" : ""}" data-time="pause">${paused ? "Paused" : "Pause"} <kbd>Space</kbd></button>
+    ${[1, 2, 4].map((s, i) => `<button class="tool${!paused && speed === s ? " active" : ""}" data-time="${s}">${speedLabel(s)} <kbd>${i + 1}</kbd></button>`).join("")}
+  </div>`;
+}
+stripEl.addEventListener("click", (event) => {
+  const which = (event.target as HTMLElement).closest<HTMLElement>("[data-time]")?.dataset.time;
+  if (!which) return;
+  if (which === "pause") paused = !paused;
+  else {
+    speed = Number(which);
+    paused = false;
+  }
+  renderToolbar();
+});
 
 // The headline (docs/brief.md, What doing well means): trips made a day,
 // stayed home split into no road and no seat, your riders, and the budget
 // with its 5-day net. Chips with counts (design lab, "the brief, step 8"):
 // each is its own key, and each carries one number.
 function renderStrip(): void {
-  screen.renderStrip(mapLine);
+  screen.renderStrip(mapLine, timeHtml());
 }
 
 
@@ -4037,18 +4057,26 @@ renderOverlays();
 // one alone, on the map and in 3D alike; in 3D the scenery too -- trees, rocks, hamlets, clouds --
 // so the network reads through the land.
 let network: Network = "both";
+// Each network its own toggle (brief, The screen, again, 2): roads, rail, water, pipes.
+const shown = { roads: true, rail: true, water: true, pipes: true };
+const networkOf = (): Network => (shown.roads && shown.rail ? "both" : shown.roads ? "roads" : shown.rail ? "rail" : "none");
 let scenery = true;
 const NO_MARKS: OverlayMark[] = [];
 const layersEl = document.querySelector<HTMLDivElement>("#layers")!;
 function renderLayers(): void {
-  const opts: Array<[Network, string]> = [["both", "Roads and rail"], ["roads", "Roads"], ["rail", "Rail"]];
-  layersEl.innerHTML = opts.map(([id, label]) => `<button data-network="${id}" class="${network === id ? "on" : ""}">${label}</button>`).join("")
+  const t = world.tuning;
+  const opts: Array<[keyof typeof shown, string, boolean]> = [["roads", "Roads", true], ["rail", "Rail", t.railEnabled], ["water", "Water", !!t.boatsEnabled], ["pipes", "Pipes", !!t.pipelinesEnabled]];
+  layersEl.innerHTML = opts.filter(([, , on]) => on).map(([id, label]) => `<button data-layer="${id}" class="${shown[id] ? "on" : ""}" aria-pressed="${shown[id]}">${label}</button>`).join("")
     + (in3d ? `<button data-scenery="1" class="${scenery ? "on" : ""}" title="Trees, rocks, hamlets and clouds">Scenery</button>` : "");
 }
 layersEl.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLElement>("button");
   if (!button) return;
-  if (button.dataset.network) network = button.dataset.network as Network;
+  const layer = button.dataset.layer as keyof typeof shown | undefined;
+  if (layer) {
+    shown[layer] = !shown[layer];
+    network = networkOf();
+  }
   else if (button.dataset.scenery) scenery = !scenery;
   renderLayers();
 });
@@ -4069,8 +4097,29 @@ function townsWithProblems(now: number): Set<string> {
 
 let revenueTimer = 0;
 let wasPaused = paused;
+// The welcome page, the tour and Help (welcome.ts).
+const help = createWelcome();
+let welcomeAsked = false;
+stripEl.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>("[data-help]");
+  if (button) help.toggleHelp(button);
+});
 function frame(now: number): void {
-  if (!askedFirstPledges && world.term) {
+  // A first game in this browser: the welcome page (and the tour, if asked) before the handover
+  // note, paused while it's open (brief, The screen, again, 5).
+  if (!welcomeAsked) {
+    welcomeAsked = true;
+    if (!welcomed() && !dev) {
+      const was = paused;
+      paused = true;
+      renderToolbar();
+      help.openWelcome(() => {
+        paused = was;
+        renderToolbar();
+      });
+    }
+  }
+  if (!askedFirstPledges && world.term && !help.isOpen()) {
     askedFirstPledges = true;
     if (world.term.number === 1 && world.term.pledges.length > 0 && !world.term.pledges.some((p) => p.committed)) {
       // The handover note first, once a map (brief, Revision 5, step 4): its button leads on to the pledges.
@@ -4128,7 +4177,7 @@ function frame(now: number): void {
     view3d.setOverlay(overlay === "none" ? NO_MARKS : overlayMarks(world, overlay));
     view3d.frame(world, focusFor(world, focusOn.town, focusOn.route), focusOn.route ? null : focusOn.town);
   } else draw(ctx, world, view, {
-    selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay, network,
+    selectedTown, hoverTown, ghost: ghost(), road: roadHover(), gameSpeed: speed, problems: townsWithProblems(now), overlay, network, layers: { water: shown.water, pipes: shown.pipes },
     // A chain being drawn rings its towns (brief, Tools for building).
     pointed: chain.length > 0 ? new Set(chain) : pointed && performance.now() < pointed.until ? pointed.ids : undefined,
     focusTown: focusOn.town,

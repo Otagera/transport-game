@@ -20,7 +20,10 @@
   #strip .stat .v { font-size: var(--fs-body); }
   #strip .stat .k { font-size: var(--fs-caption); }
   #strip .stat .k, #strip .stat .v { white-space: nowrap; }
-  #strip .actions button { padding: 0 var(--sp-1); font-size: var(--fs-caption); }
+  #strip .actions button { padding: 0 var(--sp-1); font-size: var(--fs-caption); white-space: nowrap; }
+  #strip .time { margin-right: var(--sp-1); }
+  #strip .time button { padding: 0 var(--sp-1); font-size: var(--fs-caption); }
+  #strip .time kbd { display: none; }
   /* The toolbar: one row that scrolls; the keys and the group names are a keyboard's. */
   #toolbar { left: 0; right: 0; justify-content: flex-start; overflow-x: auto; padding: var(--sp-1); -webkit-overflow-scrolling: touch; }
   #toolbar .cap, #toolbar kbd { display: none; }
@@ -46,6 +49,11 @@
   #panel-col { top: auto; left: 0; right: 0; width: auto; bottom: var(--bottom); height: var(--sheet-peek); border-left: 0; border-top: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; transition: height 0.25s ease; }
   body.sheet-open #panel-col { height: calc(100% - var(--top) - var(--bottom) - 40px); }
   #plate-overlay { bottom: calc(var(--bottom) + var(--sheet-peek)); }
+  /* The strip in two lines: the numbers, then the time controls and the buttons (they squeezed the numbers into each other). */
+  #strip { flex-wrap: wrap; row-gap: var(--sp-1); }
+  #strip .spacer { display: none; }
+  #strip .time { order: 10; flex: 1; }
+  #strip .actions { order: 11; }
 }
 
 /* Landscape: the sheet along the right, closed to its tab until opened. */

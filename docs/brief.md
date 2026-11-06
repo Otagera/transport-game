@@ -1233,6 +1233,24 @@ render-and-ui.md, Upgrading from the cards); then these four, in this order:
    -₦22, 2 buses 49 and +₦57 -- the detour costs more running than Omiga's riders bring there. A
    choice with a price, as it should be: not a better line by default.
 
+### The screen, again (asked 2026-11-06, after your map 1692 game to day 524)
+
+"The game has grown ... we can keep pushing to maximize the layout and surface the right
+information." Agreed the same day:
+
+1. **The toolbar in two groups**: *Vehicles* (bus, minibus, BRT, train, freight, boat, barge) and
+   *Build* (road, track, pipe, jetty, yard, park, station, fix). The time controls move up into the
+   strip. It had grown to 19 buttons in 6 groups and ran off the edge.
+2. **The networks as layers**: the left column's Roads and rail / Roads / Rail becomes four
+   toggles -- roads, rail, water, pipes -- each shown or hidden on its own.
+3. **Advice never offers what's built**: no "Yard at" a place with a yard (your map: the cement
+   card at a limestone field that had one).
+4. **Old saved games can be deleted** from the loading card.
+5. **A welcome page and a tour** for a first game: the page says what the game is and offers
+   "Take the tour" or "Just play"; the tour highlights each part of the screen in turn, with Next
+   and Skip. A **Help** button (?) reopens either, or explains any one part. Hints stay, but most
+   people skip them; the tour is what a newcomer gets.
+
 ### On a phone (asked 2026-11-06: "mobile optimization", "portrait sure, but can we do both?")
 
 The game playable on a phone, both ways round, without changing what it simulates: the map full

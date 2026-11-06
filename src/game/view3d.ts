@@ -29,7 +29,7 @@ import { MIN_CONDITION } from "@engine/map/decay";
 import { isFlooded } from "@engine/game/floods";
 import { isWater } from "@engine/pathing/terrainAStar";
 import { tierOf, type Tier } from "./icons";
-import { pipeLine, type Focus, type Network, type OverlayMark } from "./render";
+import { pipeLine, showsRail, showsRoads, type Focus, type Network, type OverlayMark } from "./render";
 import { steadyOver, steadyShortage } from "./steady";
 import { treeGeometry, type TreeKind } from "./shapes3d";
 import { paint as tokenPaint, paintAlpha, paintHex } from "./palette3d";
@@ -4488,7 +4488,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const projected = new THREE.Vector3();
   function pickAt(px: number, py: number, ray: THREE.Raycaster): Pick3D | null {
     const w = world;
-    const roadsOn = shown.network !== "rail", railOn = shown.network !== "roads";
+    const roadsOn = showsRoads(shown.network), railOn = showsRail(shown.network);
     // A vehicle: the nearest drawn within a few pixels, of a layer that's showing.
     let best: { id: string; d: number } | null = null;
     for (const v of drawnVehicles) {
@@ -4542,7 +4542,7 @@ function build(world: GameWorld, camera: THREE.PerspectiveCamera, controls: MapC
   const shown: { network: Network } = { network: "both" };
   function layers(network: Network, showScenery: boolean): void {
     shown.network = network;
-    const roadsOn = network !== "rail", railOn = network !== "roads";
+    const roadsOn = showsRoads(network), railOn = showsRail(network);
     for (const road of roads.values()) road.mesh.visible = road.rail ? railOn : roadsOn;
     if (crossings) crossings.visible = roadsOn && railOn;
     for (const [kind, mesh] of fleets) mesh.visible = kind === "train" || kind === "freight" || kind === "coach" || kind === "wagon" ? railOn : roadsOn;

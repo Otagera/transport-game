@@ -80,7 +80,7 @@ for (const p of [...files("src/game").filter((f) => f.endsWith(".ts")), "index.h
 // Only the page's own regions are position: fixed -- the map, the strip, the two columns, the
 // toolbar, the full screens, the pointer's tooltip, and the plate's one overlay container; anything
 // over the map is that container's child (look.md §6).
-const FIXED_OK = new Set(["#map", "#strip", "#controls-col, #panel-col", "#toolbar", "#plate-overlay", "#revenue", "#verdict", "#loading", "#tip", "#revenue, #verdict"]);
+const FIXED_OK = new Set(["#map", "#strip", "#controls-col, #panel-col", "#toolbar", "#plate-overlay", "#revenue", "#verdict", "#loading", "#tip", "#revenue, #verdict", "#welcome", "#tour"]);
 for (const p of files("src/game/styles").filter((f) => f.endsWith(".css"))) {
   const text = code(read(p), true);
   for (const m of text.matchAll(/([^{}]+)\{([^}]*)\}/g)) {

@@ -318,6 +318,15 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return { why: `it's on its way to ${to} by road, slower than ${to} grows; freight track is quicker`, button: toolButton("track", "Track <kbd>K</kbd>", [from, townId]), at: [from, townId] };
   }
   /**
+   * A source not reaching where it should: a yard there if it has none, else what carryWhy says is
+   * in the way. Your map 1692 (day 524): "Yard at Okaeze-Nta Limestone Field" was offered for a
+   * field with a yard -- the shortage items named the quarry sending least, yard or not.
+   */
+  function sourceWhy(what: string, from: string, to: string, fallback: string): { why: string; button: string; at: string[] } {
+    if (!hasYard(world, from)) return { why: fallback, button: toolButton("yard", `Yard at ${nameOf(from)} <kbd>Y</kbd>`, [from]), at: [from] };
+    return carryWhy(what, from, to);
+  }
+  /**
    * Its cement, steel and fuel on their way (haulage.ts goodsOnTheWay): hauled in legs, the
    * goods were invisible between the source and the town -- "they don't get there" (map 949).
    */
@@ -382,7 +391,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const b = cementBreak(world);
       const who = `${int(cement.people)}k people held back in ${plural(cement.towns.length, "town")}`;
       if (b?.kind === "idle") items.push({ id: "cement", text: `The cement works is idle: ${who}`, button: restoreButton("works"), at: [world.cement.worksId], weight: cement.people });
-      else if (b?.kind === "quarry") items.push({ id: "cement", text: `Cement short, ${who}: ${nameOf(b.quarryId)}'s limestone isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`), at: [b.quarryId], weight: cement.people });
+      else if (b?.kind === "quarry") {
+        const q = sourceWhy("limestone", b.quarryId, world.cement.worksId, `${nameOf(b.quarryId)}'s limestone isn't reaching the works`);
+        items.push({ id: "cement", text: `Cement short, ${who}: ${q.why}`, button: q.button, at: q.at, weight: cement.people });
+      }
       else if (b?.kind === "capacity") {
         const f = worksFull(b);
         items.push({ id: "cement", text: `Cement short, ${who}: ${f.why}`, button: f.button, at: [world.cement.worksId], weight: cement.people });
@@ -398,7 +410,10 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const who = `${int(steel.people)}k people held back in ${plural(steel.towns.length, "town")}`;
       const works = world.steel.worksId ?? world.steel.terminalId;
       if (b?.kind === "idle") items.push({ id: "steel", text: `The steel works is idle: ${who}`, button: restoreButton("steel"), at: works ? [works] : [], weight: steel.people });
-      else if (b?.kind === "ore") items.push({ id: "steel", text: `Steel short, ${who}: ${nameOf(b.mineId)}'s ore isn't reaching the works`, button: toolButton("yard", `Yard at ${nameOf(b.mineId)} <kbd>Y</kbd>`), at: [b.mineId], weight: steel.people });
+      else if (b?.kind === "ore" && works) {
+        const o = sourceWhy("ore", b.mineId, works, `${nameOf(b.mineId)}'s ore isn't reaching the works`);
+        items.push({ id: "steel", text: `Steel short, ${who}: ${o.why}`, button: o.button, at: o.at, weight: steel.people });
+      }
       else if (b?.kind === "carry") {
         const port = steelPortShort();
         const c = carryWhy("steel", b.from, mostHeld(steel.towns, (t) => t.steelHeld).id);
@@ -419,7 +434,11 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         const source = world.fuel.sourceId;
         if (refinery.capacity > 0 && refinery.made < 0.6 * refinery.capacity && refinery.limit === "input" && !world.yards.has(source)) {
           items.push({ id: "fuel", text: `${where}: the refinery gets no crude from ${nameOf(source)}`, button: toolButton("yard", `Yard at ${nameOf(source)} <kbd>Y</kbd>`), at: [source], weight });
-        } else items.push({ id: "fuel", text: `${where}: the tank farm's fuel isn't reaching them`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>"), at: [world.fuel.depotId], weight });
+        } else {
+          const worst = fuelShort.reduce((p, q) => ((q.fuel ?? 0) < (p.fuel ?? 0) ? q : p));
+          const f = sourceWhy("fuel", world.fuel.depotId, worst.id, "the tank farm's fuel isn't reaching them");
+          items.push({ id: "fuel", text: `${where}: ${f.why}`, button: f.button, at: f.at, weight });
+        }
       }
     }
     // In debt, or losing money: what's draining it, by name (a game ran to −₦71k with 17 roads'
@@ -635,7 +654,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const b = cementBreak(world);
       const full = b?.kind === "capacity" ? worksFull(b) : null;
       const button = b?.kind === "no-quarry" ? `<span class="muted">Next quarry ~day ${b.nextDay}</span>`
-        : b?.kind === "quarry" ? toolButton("yard", `Yard at ${nameOf(b.quarryId)} <kbd>Y</kbd>`)
+        : b?.kind === "quarry" ? sourceWhy("limestone", b.quarryId, world.cement!.worksId, "").button
         : b?.kind === "idle" ? restoreButton("works")
         : full ? full.button
         : carryWhy("cement", world.cement!.worksId, t.id).button;
@@ -645,14 +664,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     if (t.steelHeld >= Math.max(5, 0.05 * t.population)) {
       const b = steelBreak(world);
       const button = b?.kind === "idle" ? `<button data-restore-steel="1">Restore the steel works · ${nairaK(world.tuning.steelRestoreCost)}</button>`
-        : b?.kind === "ore" ? toolButton("yard", `Yard at ${nameOf(b.mineId)} <kbd>Y</kbd>`)
+        : b?.kind === "ore" ? sourceWhy("ore", b.mineId, world.steel!.worksId ?? world.steel!.terminalId ?? t.id, "").button
         : b?.kind === "carry" ? (steelPortShort()?.button ?? carryWhy("steel", b.from, t.id).button)
         : "";
       return { text: `Short of steel (${pct(t.steel ?? 0)} of what it needs): ${int(t.steelHeld)}k fewer people than your service would grow it to`, button };
     }
     // Short by the network and within a source's reach: else a yard at the tank farm does nothing
     // for it (Ota, with no road at all, was sent there).
-    if (t.fuel !== null && t.fuel < 0.6 && (fuelPlanned(world, t.id) ?? 1) < 0.6 && fuelReachable(world, t.id)) return { text: `Fuel short: ${pct(t.fuel)} supplied`, button: toolButton("yard", "Yard at the tank farm <kbd>Y</kbd>") };
+    if (t.fuel !== null && t.fuel < 0.6 && (fuelPlanned(world, t.id) ?? 1) < 0.6 && fuelReachable(world, t.id)) return { text: `Fuel short: ${pct(t.fuel)} supplied`, button: world.fuel ? sourceWhy("fuel", world.fuel.depotId, t.id, "").button : "" };
     const worn = wornRoadAt(world, t.id);
     if (worn) return { text: `Its road ${nameOf(worn.a)}–${nameOf(worn.b)} is worn: ${pct(worn.speed)} speed, ${naira(worn.roughPerDay)}/day more for your vehicles`, button: moveButton(worn.move, "") };
     const seat = townNoSeat(world, t.id);
@@ -874,7 +893,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     return `<div class="pane pledges-pane"><h2>Term ${term.number}'s pledges${committed < MAX_COMMITTED ? ` · pledge ${MAX_COMMITTED - committed} more` : ""}</h2>${rows}</div>`;
   }
 
-  function renderStrip(mapLine: string): void {
+  function renderStrip(mapLine: string, time = ""): void {
     const ds = days();
     const recent = ds.slice(-30);
     const ten = ds[ds.length - 10] ?? ds[0];
@@ -896,7 +915,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       ${stat("Trips made a day", "Trips between towns that happened, by anyone, a day: 5-day average", int(n.tripsMade), n.tripsMade, ten?.tripsMade, recent.map((d) => d.tripsMade), int, css("--muted"))}
       ${stat("Money", "What you hold", nairaK(n.funds), n.funds, ten?.funds, recent.map((d) => d.funds), nairaK, css("--muted"))}
       <div class="spacer"></div>
-      <div class="actions">${world.term?.history.length ? `<button data-verdict="record">Your record ▸</button> ` : ""}<button data-revenue="open">Revenue ▸</button></div>`);
+      ${time}
+      <div class="actions">${world.term?.history.length ? `<button data-verdict="record">Your record ▸</button> ` : ""}<button data-revenue="open">Revenue ▸</button> <button data-help="1" title="What each part of the screen is">Help ?</button></div>`);
   }
 
   // --- The side panel ----------------------------------------------------------------

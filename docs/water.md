@@ -292,7 +292,7 @@ What gets built, and the choices taken by default (yours to change):
 |---|---|---|
 | C51 | A boat goes where the water does | No boat line is offered or runs between jetties the water at its width doesn't join; a barge never on water under 2.5 cells |
 | C52 | Boats are never road traffic | A boat between two towns that also share a road adds nothing to that road's flow, wear, roadside growth or danfo budget |
-| C53 | A water bus pays where water is the short way | On the five test maps, a boat line between the two busiest jetty towns the water joins nets more a day, over 40 days, than the same money in buses on the road between them, wherever the water is at most the road's length |
+| C53 | A water bus pays on a busy pair | On the five test maps, on every pair the water joins with 150+ trips a day, one water bus nets more a day over 40 days than the best of 1, 2 or 4 buses on the road between them (or the pair has no road); on a thin pair it may lose -- volume decides it, not the water's length (reworded 2026-11-06, agreed) |
 | C54 | A barge pays on a long haul both ways | One barge on a waterside chain leg (goods both ways, or one way over 80 cells) pays its running cost; a lorry on the same haul doesn't |
 
 **Built 2026-11-06** (branch `boats`; engine.md and render-and-ui.md, Jetties and boats). Measured
@@ -311,9 +311,10 @@ with `scripts/boat-probe.ts` from each test map's start, 40 days, the mean of da
 A water bus beats buses on every busy pair (~140+ trips a day), even where the river is longer than
 the road -- 60 seats at half a bus's cost a seat, never in traffic -- and loses on thin ones, where 60
 seats run empty. Before the fare cap the boats did better still (8703's Oboza-Yutoama ₦109); the cap
-took a third or more off. **C53 as written fails on 2418** (the water shorter, the pair thin): the
-check asked the wrong thing. Volume, not length, decides it -- a real choice, so I'd reword C53 to
-"on a busy pair (150+ trips a day)" rather than tune it away. Your call.
+took a third or more off. **C53 holds as reworded** (agreed 2026-11-06): on every pair of 150+ trips a day
+the water bus wins (3218, 949, 8703 twice); 2418's thin pair (85 a day), where it loses with the water
+shorter than the road, is outside it. The first wording -- "wherever the water is at most the road's
+length" -- asked the wrong thing: volume decides it, a real choice left to you.
 
 Barges (C54), one on each map's waterside goods leg with the most tonnes, every one long and one
 way: 2418 Gagoram-Yulima (55 t a day, 174 cells of water) ₦599 a day; 949 Dikwala-Menoram (70 t,

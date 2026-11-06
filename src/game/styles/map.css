@@ -34,9 +34,8 @@ body.in3d #hint, body.in3d #key { display: none !important; }
 #toolbar .group { display: flex; flex-direction: column; align-items: center; gap: 0; padding: var(--sp-1) var(--sp-1) var(--sp-1); border-radius: var(--radius); }
 #toolbar .cap { font-size: var(--fs-caption); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 #toolbar .row { display: flex; gap: 0; align-items: center; }
-#toolbar .group.road, #toolbar .group.rail { background: var(--surface-2); }
+#toolbar .group.vehicles { background: var(--surface-2); }
 #toolbar .group.build { border: 1px dashed var(--line); }
-#toolbar .group.time { margin-left: var(--sp-1); }
 #toolbar .switch { display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-control); padding: 0; }
 #toolbar .switch button { padding: var(--sp-1) var(--sp-2); border-color: transparent; }
 #toolbar .switch kbd { margin: 0 var(--sp-1); }

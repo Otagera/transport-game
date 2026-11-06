@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**875 tests passing** across the files (`bun test`). Typecheck / test / build /
+**876 tests passing** across the files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Next: a game around the simulation (2026-10-24)
