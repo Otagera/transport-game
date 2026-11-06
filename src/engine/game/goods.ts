@@ -1,3 +1,4 @@
+import { epoch } from "./epoch";
 import { forgetRoute, routeExtraCostLastDay, routeIncomeLastDay } from "./ledger";
 import { airportFlows } from "./airport";
 import type { CargoKind, DeliveryEvent, Vehicle } from "../simulation/types";
@@ -108,6 +109,33 @@ function keeps(world: GameWorld, fromId: string): boolean {
  * towns grow no produce -- they're markets on the way, not farms.
  */
 export function goodsFlows(world: GameWorld): GoodsFlow[] {
+  // Within a tick, once (a tick asked for them three times, each the same: profiled on map version
+  // 16, a twelfth of a tick); outside one -- the screen, an action -- read fresh, as ever.
+  const held = tickFlows.get(world);
+  if (held && held.epoch === epoch(world)) {
+    if (CHECK_FLOWS && JSON.stringify(held.flows) !== JSON.stringify(freshGoodsFlows(world))) throw new Error(`goodsFlows changed within a tick (epoch ${held.epoch})`);
+    return [...held.flows];
+  }
+  const flows = freshGoodsFlows(world);
+  if (inTick.has(world)) tickFlows.set(world, { epoch: epoch(world), flows });
+  return [...flows];
+}
+
+// The tick's flows, kept while it runs (tick.ts brackets it: beginTickFlows, endTickFlows). Their
+// objects are shared: read only. GAME_CHECK_FLOWS=1 reads them fresh as well on every call and
+// throws if they differ -- how it was shown that nothing a tick does between its calls moves them.
+const tickFlows = new WeakMap<GameWorld, { epoch: number; flows: GoodsFlow[] }>();
+const inTick = new WeakSet<GameWorld>();
+const CHECK_FLOWS = typeof process !== "undefined" && process.env?.GAME_CHECK_FLOWS === "1";
+export function beginTickFlows(world: GameWorld): void {
+  inTick.add(world);
+}
+export function endTickFlows(world: GameWorld): void {
+  inTick.delete(world);
+  tickFlows.delete(world);
+}
+
+function freshGoodsFlows(world: GameWorld): GoodsFlow[] {
   const { tuning } = world;
   const perSecond = (perThousandPerDay: number, population: number) => (perThousandPerDay * population) / SECONDS_PER_GAME_DAY;
   const towns = [...world.towns.values()];

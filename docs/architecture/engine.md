@@ -1578,6 +1578,33 @@ so every figure is the same to the bit: map 2411's and 2791's run files replay e
 10 days: 5.4 s → 3.3 s. Next in line: the informal sector's pooling (`groupPool`, ~20%)
 and roadPath lookups.
 
+**The pooling (2026-11-06, map version 16).** A tick's cost grows with the town pairs a road
+joins, each with its motor-park pool keys: v16's 7585 joins 1294 pairs at the start against
+v13's 868, and its pools held 1946 keys against 1064 -- the informal sector half again the
+tick. Now `tick.ts groupPool` keeps each pool key's reading between ticks at its place in the
+pool (a `PoolEntry`: parts, road, group slot); a deleted key shifts the rest, which are read
+again, and the road is read again when `world.pathCache` or the routing is replaced. That
+reading relies on the routing being rebuilt whenever the path cache is cleared (both sites
+do, by `rebuildNetworks`). `bestRun` reads towns as numbers (`townInt`, shared by every world)
+and each path's stops as an `Int32Array`, not an index made per call. Groups come in the same
+order with the same riders, and the sums run in the same order, so every figure is the same to
+the bit: 10 days fingerprinted (pools, funds, informal earnings, towns) on 7585 and 8703 v16
+and 2418 v13 before and after. 10 idle days: 13-18% faster. What's left is the pairs
+themselves: arrivals, giving up and the pools are per pair per tick.
+
+**The goods flows and the hauliers' stamp (2026-11-06).** `goods.ts goodsFlows` was built three
+times a tick (produceAndSpoil, runPipelines, updateGoodsOutcomes), the same each time; now once,
+while a tick runs (`gameTick` brackets its body with `beginTickFlows`/`endTickFlows`, keyed on the
+epoch). Outside a tick -- the screen, an action, a test -- it is read fresh, as before. The callers
+get a copy of the list, but its flow objects are shared, so they are read-only. It reads a dozen
+pieces of state (deliveries, fuel, food, staffing...), so `GAME_CHECK_FLOWS=1` reads them fresh as
+well on every in-tick call and throws if they differ: 120 strategist days on 7585 (v16) and 8703
+(v13), with lines, lorries and pipelines built, never threw, and their output matched the commit
+before line for line. **Something that changes what goodsFlows reads, mid-tick, before a later
+call, must run its tests with the check on.** `haulage.ts haulPlans` checked for change by joining
+every town and yard into a string a call; now `sameAs` walks the keys against the lists it was
+built for. 10 idle days on 7585: v16 20.5 → 17.8 s, v13 13.0 → 11.4 s.
+
 ### The region (2026-10-23; brief, The region)
 
 `region.ts` draws the full game's map. `gameMap(base, seed, tuning)` is what a run starts

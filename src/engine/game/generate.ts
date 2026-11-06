@@ -40,7 +40,7 @@ import { variedGameMap, varyTownSizes } from "./variation";
 const WIDTH = 100;
 const HEIGHT = 64;
 /** The hand-made map's sizes, thousands: the dominant city, the second city, the trunk's middle, then the rest. */
-const SIZES = [120, 70, 45, 30, 25, 22, 18, 15, 12];
+export const SIZES = [120, 70, 45, 30, 25, 22, 18, 15, 12];
 /** No two towns closer than this, cells (the hand-made map's closest pair is ~18). */
 export const MIN_SPACING = 15;
 /** Towns keep this far from the map's edge, and from water's edge. */
@@ -53,10 +53,10 @@ export const WATER_CLEARANCE = 3;
  * leg of 32.1 cells put rail at 48 days of surplus, unbuilt by day 160
  * (corridor probe, seed 1).
  */
-const TRUNK_LEGS = [25.5, 38.1] as const;
-const TRUNK_LENGTH_TOLERANCE = 0.25;
+export const TRUNK_LEGS = [25.5, 38.1] as const;
+export const TRUNK_LENGTH_TOLERANCE = 0.25;
 /** The trunk runs on, not back: its two legs at least this straight (end to end over the legs' sum). */
-const TRUNK_STRAIGHTNESS = 0.75;
+export const TRUNK_STRAIGHTNESS = 0.75;
 const MIN_TOWNS_A_BANK = 3;
 /** An inherited road keeps this far from towns it doesn't serve, cells. */
 export const ROAD_CLEARANCE = 3;

@@ -8,7 +8,8 @@
 import { GAME_MAP } from "../src/game/map";
 import { startRun } from "../src/engine/game/runlog";
 import { goodsFlows } from "../src/engine/game/goods";
-import { pairDemand, roadPath } from "../src/engine/game/world";
+import { pairDemand, paveCost, roadPath } from "../src/engine/game/world";
+import { gameMap } from "../src/engine/game/region";
 import { fordBridgeCost } from "../src/engine/game/floods";
 import { SECONDS_PER_GAME_DAY as D } from "../src/engine/economy/state";
 import type { Ford } from "../src/engine/game/floods";
@@ -18,7 +19,7 @@ const seed = Number(process.env.SEED ?? 2418);
 const DEPTHS = [1.5, 2.5, 3.5];
 /** A jetty's reach: a place this far from the water's edge. */
 const REACH = Number(process.env.REACH ?? 7);
-const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, {});
+const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, process.env.MAP_VERSION ? { mapVersion: Number(process.env.MAP_VERSION) } : {});
 const name = (id: string) => w.towns.get(id)?.name ?? id;
 
 // --- The waterway: one node a drawn point.
@@ -137,7 +138,8 @@ for (const depth of DEPTHS) {
   const open = by.filter((x) => x.fords.length === 0);
   const fordSet = new Map<string, Ford>();
   for (const x of by) for (const f of x.fords) fordSet.set(f.id, f);
-  console.log(`  boats needing ${depth}+ cells: goods by water ${Math.round(tonnes)} of ${Math.round(allTonnes)} t/day (${by.length} flows), ${Math.round(open.reduce((s, x) => s + x.f.rate * D, 0))} with no ford in the way; to open the rest raise ${fordSet.size} fords, ₦${Math.round([...fordSet.values()].reduce((s, f) => s + fordBridgeCost(w, f), 0) / 1000)}k`);
+  const direct = by.filter((x) => x.water <= 1.5 * x.road).reduce((s, x) => s + x.f.rate * D, 0);
+  console.log(`  boats needing ${depth}+ cells: goods by water ${Math.round(tonnes)} of ${Math.round(allTonnes)} t/day (${by.length} flows; ${Math.round(direct)} where the water is at most 1.5x the road), ${Math.round(open.reduce((s, x) => s + x.f.rate * D, 0))} with no ford in the way; to open the rest raise ${fordSet.size} fords, ₦${Math.round([...fordSet.values()].reduce((s, f) => s + fordBridgeCost(w, f), 0) / 1000)}k`);
   for (const x of by.sort((p, q) => q.f.rate - p.f.rate).slice(0, 5)) console.log(`      ${name(x.f.from)} -> ${name(x.f.to)} ${x.f.kind} ${(x.f.rate * D).toFixed(0)} t/day: road ${Math.round(x.road)} cells, water ${Math.round(x.water)}${x.fords.length ? `, fords ${x.fords.map((f) => f.name).join(", ")}` : ""}`);
   // People between jetty towns.
   const towns = places.filter((p) => !p.t.industry);
@@ -152,7 +154,8 @@ for (const depth of DEPTHS) {
     pairs.push({ a: a.t.name, b: b.t.name, day, road: roadPath(w, a.t.id, b.t.id)?.distance ?? Infinity, water: r.dist[b.node]!, fords: fordsOn(r.prev, b.node).length });
   }
   const allPeople = w.simulation.demand.reduce((s, p) => s + p.rate, 0) * D;
-  console.log(`    people between jetty towns: ${Math.round(people)} of ${Math.round(allPeople)} a day, ${pairs.length} pairs; busiest: ${pairs.sort((p, q) => q.day - p.day).slice(0, 4).map((p) => `${p.a}-${p.b} ${Math.round(p.day)} (road ${Math.round(p.road)}, water ${Math.round(p.water)}${p.fords ? `, ${p.fords} ford${p.fords > 1 ? "s" : ""}` : ""})`).join("; ")}`);
+  const directPeople = pairs.filter((x) => x.water <= 1.5 * x.road).reduce((s, x) => s + x.day, 0);
+  console.log(`    people between jetty towns: ${Math.round(people)} of ${Math.round(allPeople)} a day (${Math.round(directPeople)} where the water is at most 1.5x the road), ${pairs.length} pairs; busiest: ${pairs.sort((p, q) => q.day - p.day).slice(0, 4).map((p) => `${p.a}-${p.b} ${Math.round(p.day)} (road ${Math.round(p.road)}, water ${Math.round(p.water)}${p.fords ? `, ${p.fords} ford${p.fords > 1 ? "s" : ""}` : ""})`).join("; ")}`);
 }
 
 // The home city, the seaport and each far cluster's regional town: how far from the water, and
@@ -170,4 +173,20 @@ for (const depth of DEPTHS) {
     return `${t.name} ${n.edge.toFixed(1)} off the water${Number.isFinite(d) ? `, ${Math.round(d)} by water from ${home.name}${fordsOn(r.prev, n.node).length ? ` (${fordsOn(r.prev, n.node).length} fords)` : ""}` : ", not joined by water"}`;
   };
   console.log(`  home ${home.name} ${h.edge.toFixed(1)} off the water; seaport: ${port && port.id !== home.id ? to(port) : port ? "the home city" : "none"}; far hubs: ${hubs.map(to).join("; ")}`);
+}
+
+// What it costs the home cluster (C21: its trunk's prices are as measured): the fords on its old
+// roads, their spans and what raising them costs, and what paving all its old roads costs. And the
+// imports: what leaves the import sites a day -- what could come by water if the seaport reached home.
+{
+  const box = w.home;
+  const inBox = (id: string) => { const t = w.towns.get(id); return !!t && !!box && t.x >= box.x && t.x <= box.x + box.width && t.y >= box.y && t.y <= box.y + box.height; };
+  const homeFords = (w.floods?.fords ?? []).filter((f) => inBox(f.a) && inBox(f.b));
+  const def = gameMap(GAME_MAP, seed, w.tuning);
+  const homeRoads = def.roads.filter((r) => inBox(r.a) && inBox(r.b));
+  const pave = homeRoads.reduce((s, r) => s + (Number.isFinite(paveCost(w, r.a, r.b)) ? paveCost(w, r.a, r.b) : 0), 0);
+  console.log(`  home cluster: ${homeFords.length} fords, spans ${homeFords.map((f) => f.span.toFixed(1)).join(" ")}, raising them ₦${Math.round(homeFords.reduce((s, f) => s + fordBridgeCost(w, f), 0) / 1000)}k; paving its ${homeRoads.length} old roads ₦${Math.round(pave / 1000)}k`);
+  const IMPORT = new Set(["depot", "silo", "steelport", "flourmill"]);
+  const imports = flows.filter((f) => IMPORT.has(w.towns.get(f.from)?.industry ?? "")).reduce((s, f) => s + f.rate * D, 0);
+  console.log(`  imports leaving the import sites: ${Math.round(imports)} t/day`);
 }

@@ -1241,6 +1241,17 @@ scrolling toolbar; touch to pan and pinch; with no hover, a tap previews a move 
 the next tap does it; and fast enough on a phone's CPU late in a game. Built 2026-11-06
 (render-and-ui.md, On a phone). Next, if play wants it: the full screens at phone width, and 3D.
 
+### Water first (agreed 2026-11-06: "yes, write it into the brief")
+
+Water's step 1 is the map, redrawn ([water.md](water.md), Step 1, redrawn): the maps' water looked
+alike on every seed -- a fixed skeleton, never redrawn because each map version added to the last.
+A new map version draws the water first, by region (a lagoon coast, a delta, a big river to an
+estuary, a Y confluence, a dry plain and a lake), turned and mirrored by the seed; rivers as a tree;
+the home city by the water most of the time (and the home cluster no longer the pinned slice map:
+C21 re-measured, your call); towns, the harbour and fishing villages placed by the water; the checks
+measured afresh on the new maps. Old runs keep their maps. Checks C47-C50 (water.md). Then water's
+steps 2-4: jetties and boats, the crossings, fishing.
+
 ### Checks for the remit
 
 | # | Check | Passes when |
