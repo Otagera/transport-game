@@ -107,7 +107,7 @@ and C16 afterwards — cars coming off the approaches will move the late game.
 | Mode | Scale | What it needs | Size | Local build? |
 | --- | --- | --- | --- | --- |
 | bus, minibus, BRT, train, freight | trunk | built | — | — |
-| **intercity coach** | trunk | terminals; long pairs only, terminal to terminal | medium | yes, once specified |
+| **intercity coach** | trunk | shelved 2026-11-06: a long bus line already pays (five-modes.md §3) | — | — |
 | **okada permission** | feeder | scope 1's class | small | no — paratransit |
 | **urban ladder** (light rail · monorail · metro) | inside | scope 3 first | medium | no — growth and economy |
 | **water** (jetties, boats) | a new trunk type | pathing on water, generator changes | large | **no** |
@@ -128,7 +128,8 @@ it carries one commodity between two fixed points and touches nothing else.
    from it.
 4. **Urban ladder**, rewritten on top of scope 3 (see below).
 5. **Scope 2, feeder**, then **okada permission** with it.
-6. **Intercity coach.**
+6. ~~**Intercity coach.**~~ Shelved 2026-11-06: fares by distance already make a long bus line
+   pay, and a coach's end-to-end riders are few (five-modes.md §3).
 7. **Water**, last, and together rather than delegated.
 
 ### A correction to `PROMPT-urban-ladder.md`

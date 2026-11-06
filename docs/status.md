@@ -122,8 +122,8 @@ the tank farm or a refinery to a town, its dial what share goes by pipe, the uni
 tonnes, the tankers drifting off its corridor and slow to return when a strike or a tap stops it;
 an inherited line broken up the old railway. **The airport built** (engine.md, The airport): there
 on day 1 on a long dirt road, a few hundred travellers a day each way stranded until you reach it,
-8-10 t of air freight a day by hauliers or your freight train. Next: the coach, the okada rule and
-the urban ladder wait on `SCALES-AND-MODES.md`; water last. The strategist taught both (engine.md,
+8-10 t of air freight a day by hauliers or your freight train. Next: the coach (shelved 2026-11-06), the
+okada rule and the urban ladder wait on `SCALES-AND-MODES.md`; water last. The strategist taught both (engine.md,
 the scope's checks measured): the fuel chain keeps deciding after a pipe on 4 of 5 maps, but the
 union's price is mild when you can pay; the airport is served on day 1-2 everywhere, so its check
 ("rather than always") is open -- a capital decision only if reaching it costs more than a bus.
@@ -165,7 +165,9 @@ ladder** (branch `urban`; brief, Scales): light rail, the monorail and the metro
 out of the More fold, one kind a town -- each taking more of a town's cars off its roads than the
 last; light rail's trams share the street and stop in a strike (engine.md, The urban ladder).
 Light rail's trams take no road: measured, the prompt's 12% street share was its whole cost
-(engine.md, The urban ladder); whether it wants an upside is open.
+(engine.md, The urban ladder); whether it wants an upside is open. **The intercity coach is
+shelved** (five-modes.md §3): fares by distance already make a long bus line pay -- 15 of 15 probed,
+to the far clusters too -- and a coach's end-to-end riders are few.
 
 Deployed: the `Dockerfile` builds the game for the Coolify VPS (architecture/index.md §Deploy),
 live at transport-game.otagera.xyz.

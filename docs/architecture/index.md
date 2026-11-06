@@ -97,6 +97,7 @@ scripts/shots.ts            The five screens at 1600x1000 @2x into shots/ (look.
 scripts/verify-look.ts      The look's checks (look.md §9): no literals, four roles, tokens agree, signal untouched
 scripts/test-parallel.ts    The tests across the machine's cores (verify runs it)
 scripts/game-probe.ts, corridor-probe.ts, game-lever-audit.ts   Calibration probes
+scripts/coach-probe.ts      Long pairs: end-to-end riders, a bus's net, a coach's (why the coach is shelved)
 docs/
   brief.md        The design contract
   principles.md   Design premise, scope, Findings (the "why")

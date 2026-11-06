@@ -128,6 +128,20 @@ exports through them. The airport is the third gateway and should share their ma
 
 # 3. Intercity coach — after Scope 1 (trunk)
 
+> **Shelved 2026-11-06** (brief, decisions log; `scripts/coach-probe.ts`). Its reason is gone:
+> fares by distance already make a long bus line pay. On five maps at day 1, a bus on each map's
+> three busiest pairs 60+ cells apart netted +₦3 to +₦97 a day -- 15 of 15 positive, to the far
+> clusters too (Bewa-Ibakpo, 118 cells, +₦66; Iwimen-Iton, 262 cells, +₦68) -- against +₦58 to
+> +₦145 on a short pair: fewer round trips, each paying more. The weakest lose to empty seats
+> (51-75% full), not distance. And a coach, stopping nowhere between, would carry only the
+> riders going end to end: 43-122 a day on each map's busiest long pair, 20+ on only 6-9 pairs a
+> map, where a bus on the same road takes 140-650 a day along it; only one pair 60+ cells apart
+> a map is trunk all the way. At the numbers below it would have broken the other way: 50 seats
+> at 1.8x the fare, ₦460-970 a day against a bus's ~₦100 of running -- riders here choose on
+> waiting, not price, so the fare costs it none. C31 doesn't fail because a bus can't pay its way
+> to a far cluster. If it comes back, it needs a job a bus can't do; the scope below is kept as
+> it was.
+
 ## What it is
 
 The real Nigerian intercity sector: ABC, GUO, Chisco, The Young Shall Grow. Terminal to
