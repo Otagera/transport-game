@@ -242,6 +242,13 @@ no lines built, starting a game takes 13-14 s against 10-11 s, and 20 idle days 
 30-35 s (8703 +17%, 2418 +42%, 7585 +75%). That slowdown ships to the phone (20 fps at day 481 on
 v13), so it should be profiled before v16 becomes the default.
 
+**Profiled (2026-11-06).** The slowdown isn't the water. More of the region is joined by road
+at the start (7585: 1294 town pairs against 868), and a tick is per pair: arrivals, giving up,
+and the informal sector's pools (twice the keys) and its minibus dispatch. The pooling's reading
+is now kept between ticks (engine.md, Speed), with the same figures to the bit and 13-18% off a
+tick on both versions. v16 stays about a third slower than v13 per tick on the same machine,
+because it is a bigger game.
+
 ## After the map
 
 - **Step 2, jetties and boats.** A jetty at a waterfront (your build); a waterway network built

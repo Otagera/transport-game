@@ -497,6 +497,8 @@ interface PooledRider {
   key: string;
   origin: string;
   destination: string;
+  /** The destination as a number (townInt). */
+  to: number;
   path: PathResult;
 }
 
@@ -519,42 +521,111 @@ function groupPool(
   onDrift: (key: string, trip: string, amount: number) => void,
   gaveUp?: Map<string, number>,
 ): Group[] {
-  const groups = new Map<string, Group>();
+  const out: Group[] = [];
+  const slots = poolSlotsFor(pool);
+  const stamp = (slots.stamp += 1);
+  const entries = slots.entries;
+  let i = 0;
   for (const [key, pooled] of pool) {
+    // Each key's parts, road and group, kept from tick to tick at its place in the pool (a Map
+    // keeps its order; a key deleted -- settlement.ts -- shifts the rest, which are made again).
+    let entry = entries[i];
+    if (!entry || entry.key !== key) {
+      entries.length = i;
+      entries.push((entry = poolEntry(key)));
+    }
+    i += 1;
     if (pooled <= 0) continue;
-    const { at, origin, destination, trip, path: pathKey } = parsePoolKey(key);
-    const path = roadPathByKey(world, pathKey, at, destination);
+    // Its road, read again only when the roads change (pathCache is cleared with the routing rebuilt).
+    if (entry.cache !== world.pathCache || entry.routing !== world.simulation.routing) {
+      entry.cache = world.pathCache;
+      entry.routing = world.simulation.routing;
+      const path = roadPathByKey(world, entry.pathKey, entry.at, entry.destination);
+      entry.rider = path && path.nodeIds.length >= 2 ? { key, origin: entry.origin, destination: entry.destination, to: townInt(entry.destination), path } : null;
+      entry.slot = -1;
+      if (entry.rider) {
+        let groupKey = groupKeys.get(path!);
+        if (groupKey === undefined) groupKeys.set(path!, (groupKey = `${entry.at}>${path!.nodeIds[1]}`));
+        let slot = slots.slotOf.get(groupKey);
+        if (slot === undefined) slots.slotOf.set(groupKey, (slot = slots.slotOf.size));
+        entry.slot = slot;
+      }
+    }
 
     // No road: nobody can take them. They stay home.
-    if (!path || path.nodeIds.length < 2) {
-      bump(lost, trip, pooled);
-      if (gaveUp && isRelayed(key)) bump(gaveUp, trip, -pooled);
+    if (!entry.rider) {
+      bump(lost, entry.trip, pooled);
+      if (gaveUp && isRelayed(key)) bump(gaveUp, entry.trip, -pooled);
       pool.set(key, 0);
       continue;
     }
 
     const drifting = pooled * drift;
     pool.set(key, pooled - drifting);
-    onDrift(key, trip, drifting);
+    onDrift(key, entry.trip, drifting);
 
-    let groupKey = groupKeys.get(path);
-    if (groupKey === undefined) groupKeys.set(path, (groupKey = `${at}>${path.nodeIds[1]}`));
-    let group = groups.get(groupKey);
-    if (!group) {
-      group = { at, riders: [] };
-      groups.set(groupKey, group);
+    // Groups in the order their first rider comes, as ever (a Map of them, once).
+    if (slots.seen[entry.slot] !== stamp) {
+      slots.seen[entry.slot] = stamp;
+      out.push((slots.group[entry.slot] = { at: entry.at, riders: [] }));
     }
-    group.riders.push({ key, origin, destination, path });
+    slots.group[entry.slot]!.riders.push(entry.rider);
   }
-  return [...groups.values()];
+  entries.length = i;
+  return out;
 }
 
-/** A path's stops as a set, made once a path (paths are cached, so this is once a road). */
-const stopsOf = new WeakMap<PathResult, Set<string>>();
-function stopsOn(path: PathResult): Set<string> {
-  let stops = stopsOf.get(path);
-  if (!stops) stopsOf.set(path, (stops = new Set(path.nodeIds)));
+/**
+ * A pool key's reading, kept per pool between ticks: its parts, its road while the roads stand,
+ * and its group's slot. Profiled on map version 16's 7585 (2026-11-06), parsing, the path lookup
+ * and the group lookup per key per tick were a sixth of a tick; the riders and groups made from
+ * them are the same, in the same order, so the loads are the same to the last bit.
+ */
+interface PoolEntry {
+  key: string; at: string; origin: string; destination: string; trip: string; pathKey: string;
+  cache: unknown; routing: unknown; rider: PooledRider | null; slot: number;
+}
+interface PoolSlots { entries: PoolEntry[]; slotOf: Map<string, number>; seen: number[]; group: Group[]; stamp: number }
+const poolSlots = new WeakMap<Map<string, number>, PoolSlots>();
+function poolSlotsFor(pool: Map<string, number>): PoolSlots {
+  let slots = poolSlots.get(pool);
+  if (!slots) poolSlots.set(pool, (slots = { entries: [], slotOf: new Map(), seen: [], group: [], stamp: 0 }));
+  return slots;
+}
+function poolEntry(key: string): PoolEntry {
+  const { at, origin, destination, trip, path } = parsePoolKey(key);
+  return { key, at, origin, destination, trip, pathKey: path, cache: null, routing: null, rider: null, slot: -1 };
+}
+
+// Towns as numbers, once a name (shared by every world: a number is only ever an identity here),
+// and each path's stops as those numbers, once a path (paths are cached, so once a road).
+const townInts = new Map<string, number>();
+function townInt(id: string): number {
+  let k = townInts.get(id);
+  if (k === undefined) townInts.set(id, (k = townInts.size));
+  return k;
+}
+const pathInts = new WeakMap<PathResult, Int32Array>();
+function stopsAsInts(path: PathResult): Int32Array {
+  let stops = pathInts.get(path);
+  if (!stops) pathInts.set(path, (stops = Int32Array.from(path.nodeIds, townInt)));
   return stops;
+}
+// Scratch, sized to the towns named so far: a mark per town on the path tried, and the
+// destinations tried (stamped, so never cleared).
+let passes = new Uint8Array(64);
+let tried = new Uint32Array(64);
+let tryStamp = 0;
+function markStops(stops: Int32Array, on: 0 | 1): void {
+  // Grown keeping what's marked: it can grow mid-search, a path naming a town for the first time.
+  if (passes.length < townInts.size) {
+    const morePasses = new Uint8Array(townInts.size * 2), moreTried = new Uint32Array(townInts.size * 2);
+    morePasses.set(passes);
+    moreTried.set(tried);
+    passes = morePasses;
+    tried = moreTried;
+  }
+  for (let k = 0; k < stops.length; k += 1) passes[stops[k]!] = on;
 }
 
 /**
@@ -562,40 +633,37 @@ function stopsOn(path: PathResult): Set<string> {
  * Each destination is tried once (riders bound the same way share its path, so its load: a
  * later one never beat the first), and the riders are summed in the same order as ever, so the
  * loads are the same to the last bit -- run files replay as played. Profiled on the region, the
- * set made per rider and the filter were a quarter of a tick.
+ * set made per rider and the filter were a quarter of a tick; on map version 16 (2026-11-06) the
+ * destinations' index made per call a further eighth: towns are numbers once, paths' stops too.
  */
 function bestRun(group: Group, pool: Map<string, number>): { run: PooledRider; aboard: PooledRider[]; load: number } | null {
-  // The riders' destinations as numbers and their counts read once, so the inner loop is
-  // array reads, not a string lookup per rider per candidate.
   const { riders } = group;
-  const index = new Map<string, number>();
-  const bound = new Int32Array(riders.length);
-  const waiting = new Float64Array(riders.length);
-  riders.forEach((rider, i) => {
-    let k = index.get(rider.destination);
-    if (k === undefined) index.set(rider.destination, (k = index.size));
-    bound[i] = k;
-    waiting[i] = pool.get(rider.key) ?? 0;
-  });
-  const passes = new Uint8Array(index.size);
-  let best: { run: PooledRider; stops: Set<string>; load: number } | null = null;
-  const tried = new Set<string>();
+  const n = riders.length;
+  const bound = new Int32Array(n);
+  const waiting = new Float64Array(n);
+  for (let i = 0; i < n; i += 1) {
+    bound[i] = riders[i]!.to;
+    waiting[i] = pool.get(riders[i]!.key) ?? 0;
+  }
+  markStops(stopsAsInts(riders[0]!.path), 0); // sizes the scratch before the first stamp
+  tryStamp += 1;
+  let best: { run: PooledRider; load: number } | null = null;
   for (const candidate of riders) {
-    if (tried.has(candidate.destination)) continue;
-    tried.add(candidate.destination);
-    const stops = stopsOn(candidate.path);
-    passes.fill(0);
-    for (const node of candidate.path.nodeIds) {
-      const k = index.get(node);
-      if (k !== undefined) passes[k] = 1;
-    }
+    if (tried[candidate.to] === tryStamp) continue;
+    tried[candidate.to] = tryStamp;
+    const stops = stopsAsInts(candidate.path);
+    markStops(stops, 1);
     let load = 0;
-    for (let i = 0; i < riders.length; i += 1) if (passes[bound[i]!]) load += waiting[i]!;
-    if (!best || load > best.load) best = { run: candidate, stops, load };
+    for (let i = 0; i < n; i += 1) if (passes[bound[i]!]) load += waiting[i]!;
+    markStops(stops, 0);
+    if (!best || load > best.load) best = { run: candidate, load };
   }
   if (!best) return null;
-  const { stops } = best;
-  return { run: best.run, aboard: group.riders.filter((rider) => stops.has(rider.destination)), load: best.load };
+  const stops = stopsAsInts(best.run.path);
+  markStops(stops, 1);
+  const aboard = riders.filter((rider) => passes[rider.to] === 1);
+  markStops(stops, 0);
+  return { run: best.run, aboard, load: best.load };
 }
 
 /**
