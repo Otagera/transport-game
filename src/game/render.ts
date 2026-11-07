@@ -343,7 +343,10 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
     if (town.industry) drawSite(ctx, world, view, town, state, flows);
     else drawTown(ctx, world, view, town, state);
   }
-  for (const ruin of world.ruins.values()) if (placed.has(`ruin:${ruin.id}`)) drawRuin(ctx, view, ruin);
+  for (const ruin of world.ruins.values()) {
+    if (placed.has(`ruin:${ruin.id}`)) drawRuin(ctx, view, ruin);
+    else if (ruin.industry && drawsAt(zoomTier, "ruin")) drawRuinMark(ctx, view, ruin);
+  }
   if (drawsAt(zoomTier, "wardens") && showsRoads(network)) drawWardens(ctx, world, view);
   // The rest, the least important first, so the most important paints on top.
   for (const p of paints.filter((x) => placed.has(x.id)).sort((a, b) => b.priority - a.priority)) p.paint(slots.get(p.id) ?? 0);
@@ -1497,9 +1500,11 @@ function claimLabels(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
       });
     }
   }
-  // 8. Ruins, zoomed in.
+  // 8. Ruins, zoomed in -- an emptied town by name; a closed site only under the pointer (your map
+  // 1692, day 524: a dozen "Limestone (closed)" over the map, quarries long worked out).
   if (drawsAt(zoomTier, "ruin")) {
     for (const ruin of world.ruins.values()) {
+      if (ruin.industry && state.hoverTown !== ruin.id) continue;
       const p = toScreen(view, ruin.x, ruin.y);
       ctx.font = `italic ${FS.caption} system-ui, sans-serif`;
       const half = ctx.measureText(`${ruin.name} (${ruin.industry ? "closed" : "empty"})`).width / 2 + 2;
@@ -1658,6 +1663,16 @@ function vehiclePose(world: GameWorld, view: View, vehicle: Vehicle): { x: numbe
   // Keep right: opposite directions on one road don't overlap (nearer the line from afar, the vehicles smaller there).
   const side = 5 * markScale * (zoomTier === "near" ? 1 : 0.75);
   return { x: p.x - Math.sin(angle) * side, y: p.y + Math.cos(angle) * side, angle };
+}
+/** A closed site, unnamed: a small faint dot where it was. */
+function drawRuinMark(ctx: CanvasRenderingContext2D, view: View, town: GameTown): void {
+  const p = toScreen(view, town.x, town.y);
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = COLORS.home;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 function drawRuin(ctx: CanvasRenderingContext2D, view: View, town: GameTown): void {
   const p = toScreen(view, town.x, town.y);

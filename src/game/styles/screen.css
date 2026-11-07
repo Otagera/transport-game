@@ -97,6 +97,12 @@ tr.row:hover td { background: var(--surface-2); }
 @keyframes flowdash { to { stroke-dashoffset: -22; } }
 .waiting { padding-bottom: var(--sp-1); margin-bottom: var(--sp-2); border-bottom: 1px solid var(--line); }
 .waiting .problem { margin: var(--sp-2) 0; }
+/* Each item at most three lines, the whole of it under the pointer (screen.ts sets the title): at
+   day 524 four items took half the panel, and the card you'd opened fell below the fold. */
+.waiting .problem > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.waiting .problem:hover > span { -webkit-line-clamp: unset; }
+/* A wide screen gives the panel more of its width: fewer lines an item. */
+@media (min-width: 1700px) { :root { --right: 420px; } }
 [data-back] { margin-bottom: var(--sp-2); }
 .bar3 { display: flex; height: 8px; border-radius: var(--radius-control); overflow: hidden; gap: 0; background: var(--surface); }
 .bar3 i { display: block; height: 100%; }
@@ -141,3 +147,6 @@ td .kind { display: block; font-size: var(--fs-caption); color: var(--muted); }
 #panel table.network tr.sec td { text-align: left; color: var(--muted); font-size: var(--fs-caption); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
 #panel table.network tr.sec button { margin-left: var(--sp-2); padding: 0 var(--sp-2); font-size: var(--fs-caption); text-transform: none; letter-spacing: 0; }
 .problem .actions { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); }
+/* A section folded to its heading while a picked card leads the panel (screen.ts folded). */
+#panel .pane.folded button { display: block; width: 100%; text-align: left; font-size: var(--fs-caption); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: var(--sp-2) var(--sp-2); }
+#panel .pane.folded button:hover { color: var(--ink); }

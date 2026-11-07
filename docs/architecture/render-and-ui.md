@@ -1215,6 +1215,17 @@ card beside it, with Next, Back and Skip. Escape closes it. **Help ?** in the st
 the welcome page, the tour, or any one step alone. `#welcome` and `#tour` are page regions (look.md
 §6; `verify-look` FIXED_OK).
 
+**From your game at day 524** (2026-11-07; replayed in Bun, the world loaded into the page as a save
+of the dev server's build). A card **picked on purpose** -- a Show, Its card, a list row: `select`
+with `fromMap` false -- leads the panel, Waiting on you and the pledges folded to their headings
+(`folded`, opened by a click, cleared when the pick changes), the panel scrolled to its top. A town
+hovered on the map keeps the old order, so the panel doesn't jump under a moving pointer. Waiting on
+you's items are clamped to three lines, whole on hover, and the panel is 420 px on a screen 1700 px
+or wider. **Closed sites** draw as a faint unnamed dot (`drawRuinMark`); an emptied town keeps its
+name. **The log** shows the latest dozen, with Show older; the same line on one day is one entry,
+counted, and the union's chairmen saying the same words merge ("3 union chairmen: ..."; `said` on a
+log entry). **carryWhy**'s Track button names both ends, and a site isn't said to "grow".
+
 ### Jetties and boats on the screen (2026-11-06; engine.md, Jetties and boats)
 
 Tools: **Jetty** (J, in Build) is one click on a waterside town; its preview says how far off the

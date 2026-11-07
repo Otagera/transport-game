@@ -112,6 +112,11 @@ town (J), water buses (W) and barges (V) between jetties on a waterway drawn fro
 third network no road system sees; a water bus beats buses on every busy pair, loses on thin ones;
 barges pay on long hauls. Next: step 3, the crossings.
 
+**Open: a live game and its replay part** (found 2026-11-07 replaying your map 1692 run): the run
+replays exactly to day 92 and differs on day 93 by ₦49, just after a bus to the assembly plant, on the
+very code it was played on (51bb65d) -- so not boats or the screen work. A run file of that game
+isn't evidence of what was played after day 92 until it's found.
+
 **The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
 you aim and The network): from your "to click on some things are difficult ... between tick the
 information is changing" -- the presentation, not the engine: lists re-sorted four times a second,

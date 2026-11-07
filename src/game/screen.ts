@@ -312,10 +312,12 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const b = haulBreak(world, from, townId);
     if (b?.kind === "road") return { why: `no road joins ${to} to ${nameOf(from)}`, button: toolButton("road", "Road <kbd>R</kbd>", [townId]), at: [townId] };
     if (b?.kind === "gap" && b.yardAt) return { why: `hauliers can't get ${what} as far as ${to}; a yard at ${nameOf(b.yardAt)} would carry it on`, button: toolButton("yard", `Yard at ${nameOf(b.yardAt)} <kbd>Y</kbd>`, [b.yardAt, townId]), at: [b.yardAt, townId] };
-    if (b?.kind === "gap") return { why: `hauliers can't get ${what} as far as ${to}, even from your yards; freight track can`, button: toolButton("track", "Track <kbd>K</kbd>", [from, townId]), at: [from, townId] };
+    if (b?.kind === "gap") return { why: `hauliers can't get ${what} as far as ${to}, even from your yards; freight track can`, button: toolButton("track", `Track ${nameOf(from)}–${nameOf(townId)} <kbd>K</kbd>`, [from, townId]), at: [from, townId] };
     if (!hasYard(world, from)) return { why: `it isn't reaching ${to} from ${nameOf(from)}`, button: toolButton("yard", `Yard at ${nameOf(from)} <kbd>Y</kbd>`, [from]), at: [from] };
-    if (b?.kind === "legs" && b.legs >= 3) return { why: `it reaches ${to} in ${b.legs} legs by road, slowly; freight track is quicker`, button: toolButton("track", "Track <kbd>K</kbd>", [from, townId]), at: [from, townId] };
-    return { why: `it's on its way to ${to} by road, slower than ${to} grows; freight track is quicker`, button: toolButton("track", "Track <kbd>K</kbd>", [from, townId]), at: [from, townId] };
+    if (b?.kind === "legs" && b.legs >= 3) return { why: `it reaches ${to} in ${b.legs} legs by road, slowly; freight track is quicker`, button: toolButton("track", `Track ${nameOf(from)}–${nameOf(townId)} <kbd>K</kbd>`, [from, townId]), at: [from, townId] };
+    // A site doesn't grow: it needs its input faster than the road brings it.
+    const slower = world.towns.get(townId)?.industry ? "slower than it's needed there" : `slower than ${to} grows`;
+    return { why: `it's on its way to ${to} by road, ${slower}; freight track is quicker`, button: toolButton("track", `Track ${nameOf(from)}–${nameOf(townId)} <kbd>K</kbd>`, [from, townId]), at: [from, townId] };
   }
   /**
    * A source not reaching where it should: a yard there if it has none, else what carryWhy says is
@@ -564,7 +566,7 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       const days = today - (waitingSince.get(item.id) ?? today);
       return days >= 10 ? ` <span class="age">· ${days} days now</span>` : "";
     };
-    return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"${item.at.length > 0 ? ` data-at="${esc(item.at.join(","))}"` : ""}><span>${esc(item.text)}${age(item)}</span>${item.button}</div>`).join("")}</div>`;
+    return `<div class="pane waiting"><h2>Waiting on you · ${items.length}</h2>${items.map((item) => `<div class="problem"${item.at.length > 0 ? ` data-at="${esc(item.at.join(","))}"` : ""}><span title="${esc(item.text)}">${esc(item.text)}${age(item)}</span>${item.button}</div>`).join("")}</div>`;
   }
 
   // --- Where next (brief, Where next; map 8703: "difficult knowing what to connect") ---------
@@ -955,13 +957,27 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     const scroll = panelEl.scrollTop;
     if (selected && !exists(selected)) selected = null;
     if (selected) {
-      patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}<div class="pane"><button data-back="1">◂ ${TAB_NAME[tab]}</button>${detailHtml(selected)}</div>`);
+      const card = `<div class="pane"><button data-back="1">◂ ${TAB_NAME[tab]}</button>${detailHtml(selected)}</div>`;
+      // Picked on purpose (a Show, Its card, a row), its card first and what's waiting folded to a
+      // line each (brief, The screen, again; your map 1692, day 524: a picked town's card began at
+      // the panel's foot, under 800 px of waiting and pledges). Hovered on the map, as it was, so
+      // the panel doesn't jump about under a moving pointer.
+      if (!selectedFromMap) patchHtml(panelEl, `${card}${folded("waiting", waitingHtml())}${folded("pledges", pledgesHtml())}`);
+      else patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${card}`);
     } else {
       const tabs = `<div class="tabs">${TABS.map((t) => `<button data-tab="${t}" class="${tab === t ? "on" : ""}">${TAB_NAME[t]}</button>`).join("")}</div>`;
       const list = tab === "network" ? hooks.moneyNote() + networkList() + pipesList() + fold("forecasts", "More: the forecasts", hooks.routesMore()) : tab === "towns" ? townsTable() : sitesTable();
       patchHtml(panelEl, `${waitingHtml()}${pledgesHtml()}${whereNextHtml()}${tabs}<div class="pane">${list}</div>`);
     }
     panelEl.scrollTop = scroll;
+  }
+  /** Sections unfolded by a click while a picked card leads the panel; cleared when the pick changes. */
+  const unfolded = new Set<string>();
+  /** A section as its heading alone, a click opening it -- or whole, once opened. */
+  function folded(id: string, html: string): string {
+    if (!html || unfolded.has(id)) return html;
+    const heading = /<h2>(.*?)<\/h2>/.exec(html)?.[1] ?? id;
+    return `<div class="pane folded"><button class="quiet" data-unfold="${id}">${heading} ▸</button></div>`;
   }
   function exists(sel: NonNullable<Selection>): boolean {
     if (sel.kind === "town" || sel.kind === "site") return world.towns.has(sel.id);
@@ -1401,7 +1417,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
 
   // --- The log -----------------------------------------------------------------------
 
-  interface LogEntry { day: number; text: string; tone: "good" | "bad" | ""; group: string; select: Selection }
+  /** `said`: a chairman's line without his name, so the same words from several on one day are one entry. */
+  interface LogEntry { day: number; text: string; tone: "good" | "bad" | ""; group: string; select: Selection; said?: string }
   function logEntry(e: GameEvent): Omit<LogEntry, "day"> | null {
     const ab = (x: { a: string; b: string }) => `${nameOf(x.a)}–${nameOf(x.b)}`;
     switch (e.kind) {
@@ -1425,10 +1442,13 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       case "flood-warning": return { text: `The rains in ${e.inDays} days: ${e.fords.map((f) => f.name).join(", ")} will flood`, tone: "bad", group: "trouble", select: null };
       case "flood-rose": return { text: `Flooded: ${e.fords.map((f) => f.name).join(", ")}, for ${e.days} days`, tone: "bad", group: "trouble", select: null };
       case "flood-fell": return { text: `The water's down at ${e.fords.map((f) => f.name).join(", ")}`, tone: "good", group: "trouble", select: null };
-      case "union-demand": return { text: `${e.chairman}: "${e.text}"`, tone: "bad", group: "trouble", select: null };
+      case "union-demand": return { text: `${e.chairman}: "${e.text}"`, tone: "bad", group: "trouble", select: null, said: `"${e.text}"` };
       case "pipe-out": return { text: `${ab(e)}: the pipeline ${e.reason === "tap" ? "tapped" : "shut by a strike"}, ${e.days} days`, tone: "bad", group: "trouble", select: { kind: "town", id: e.b } };
       case "pipe-back": return { text: `${ab(e)}: the pipeline running again`, tone: "good", group: "trouble", select: { kind: "town", id: e.b } };
-      case "union-answered": return { text: `${e.chairman}: ${{ pay: "you paid his members", concede: "you eased the lane", coop: "you handed him the route", refuse: "you refused him", ignored: "you ignored him: he strikes" }[e.answer]}`, tone: e.answer === "refuse" || e.answer === "ignored" ? "bad" : "good", group: "trouble", select: null };
+      case "union-answered": {
+        const said = { pay: "you paid their members", concede: "you eased the lane", coop: "you handed them the route", refuse: "you refused them", ignored: "you ignored them: they strike" }[e.answer];
+        return { text: `${e.chairman}: ${{ pay: "you paid his members", concede: "you eased the lane", coop: "you handed him the route", refuse: "you refused him", ignored: "you ignored him: he strikes" }[e.answer]}`, tone: e.answer === "refuse" || e.answer === "ignored" ? "bad" : "good", group: "trouble", select: null, said };
+      }
       case "union-stance": return { text: `${e.chairman}'s union is ${e.stance} now`, tone: e.stance === "with you" ? "good" : e.stance === "against you" ? "bad" : "", group: "trouble", select: null };
       case "term-started": return { text: `Term ${e.number} began: ${e.pledges.length} pledges on offer`, tone: "", group: "growth", select: null };
       case "pledge-kept": return { text: `Pledge kept: ${e.text}`, tone: "good", group: "growth", select: { kind: "town", id: e.townId } };
@@ -1439,6 +1459,9 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
   }
   let logShown: LogEntry[] = [];
+  /** How many lines the log shows before "Show older" (brief, The screen, again). */
+  const LOG_SHOWN = 12;
+  let logAll = false;
   let logSize = -1;
   function renderLog(force = false): void {
     const entries: LogEntry[] = [];
@@ -1456,9 +1479,22 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     // Each line by its place in the whole log, which only grows: a log held under the pointer
     // (patch.ts) still opens the line clicked.
     logShown = entries;
-    const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => logFilter === "all" || e.group === logFilter).reverse();
+    const filtered = entries.map((e, i) => ({ e, i, n: 1 })).filter(({ e }) => logFilter === "all" || e.group === logFilter);
+    // The same line on the same day once, counted (your map 1692: three chairmen's "Our members are
+    // suffering" on one day, and the strikes' called / on / over, filled the column).
+    const merged: Array<{ e: LogEntry; i: number; n: number }> = [];
+    for (const x of filtered) {
+      const same = merged.find((m) => m.e.day === x.e.day && (m.e.text === x.e.text || (!!m.e.said && m.e.said === x.e.said)));
+      if (same) same.n += 1;
+      else merged.push({ ...x });
+    }
+    const all = merged.reverse();
+    // The latest dozen; the rest a click away.
+    const shown = logAll ? all : all.slice(0, LOG_SHOWN);
+    const older = all.length - shown.length;
     const drawn = patchHtml(logEl, `<h2>What happened</h2><div id="logfilter">${groups.map(([id, label]) => `<button data-log="${id}" class="${logFilter === id ? "on" : ""}">${label}</button>`).join("")}</div>
-      ${shown.map(({ e, i }) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}`);
+      ${shown.map(({ e, i, n }) => `<div class="event ${e.tone}" data-event="${i}"><span class="day">${e.day}</span><span class="what">${esc(n > 1 ? (e.said ? `${n} union chairmen: ${e.said}` : `${e.text} (${n}×)`) : e.text)}</span></div>`).join("") || `<div class="muted">Nothing yet.</div>`}
+      ${older > 0 ? `<button class="quiet" data-log-more="1">Show ${older} older</button>` : logAll && all.length > LOG_SHOWN ? `<button class="quiet" data-log-more="1">Show fewer</button>` : ""}`);
     // Held under the pointer, it's drawn again once the pointer leaves.
     if (drawn) logSize = entries.length;
   }
@@ -1768,16 +1804,20 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
   // --- Clicks and hovers: the screen's own (tabs, sorting, picking); the rest is the page's ---
 
   function select(sel: Selection, fromMap = false): void {
+    const picked = !fromMap && sel !== null && JSON.stringify(sel) !== JSON.stringify(selected);
     selected = sel;
     selectedFromMap = fromMap;
+    if (picked) unfolded.clear();
     renderPanel();
+    // A card picked on purpose leads the panel: seen from its top.
+    if (picked) panelEl.scrollTop = 0;
   }
 
   /** A click the screen handles itself: true when it did. Moves and old-card buttons are the page's. */
   function onClick(target: HTMLElement): boolean {
     // A button inside a pickable row (the board's Sell) is its own: main.ts takes it.
     if (target.closest("[data-remove],[data-upgrade-line]")) return false;
-    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename],[data-chip]");
+    const el = target.closest<HTMLElement>("[data-tab],[data-back],[data-sort],[data-pick],[data-log],[data-log-more],[data-unfold],[data-event],[data-range],[data-revenue],[data-verdict],[data-rename],[data-chip]");
     if (!el || el.closest("details.more .panel-body")) return false;
     if (el.dataset.rename) {
       renaming = el.dataset.rename;
@@ -1815,6 +1855,8 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
       return true;
     }
     if (el.dataset.log) { logFilter = el.dataset.log; renderLog(true); return true; }
+    if (el.dataset.logMore) { logAll = !logAll; renderLog(true); return true; }
+    if (el.dataset.unfold) { unfolded.add(el.dataset.unfold); renderPanel(); return true; }
     if (el.dataset.event !== undefined) {
       const e = logShown[Number(el.dataset.event)];
       if (e?.select && world.towns.has(e.select.id)) select(e.select);

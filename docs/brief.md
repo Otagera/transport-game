@@ -1250,6 +1250,10 @@ information." Agreed the same day:
    "Take the tour" or "Just play"; the tour highlights each part of the screen in turn, with Next
    and Skip. A **Help** button (?) reopens either, or explains any one part. Hints stay, but most
    people skip them; the tour is what a newcomer gets.
+6. **From your game replayed to day 524** (2026-11-07): a card you pick leads the panel, with what's
+   waiting and the pledges folded to a line each (a picked town's card had begun at the panel's
+   foot); closed sites unnamed on the map (a dozen "Limestone (closed)"); the log the latest dozen,
+   the same line on one day once; Track buttons naming both ends; the panel wider on a wide screen.
 
 ### On a phone (asked 2026-11-06: "mobile optimization", "portrait sure, but can we do both?")
 
