@@ -234,6 +234,33 @@ export function* replayRunSteps(base: GameMapDef, file: RunFile, untilTick = fil
   return world;
 }
 
+/**
+ * replayRunSteps, checked against the run's own days as it goes: at the end of each day the file
+ * recorded, the money must be what it recorded, or the replay stops there and says on which day.
+ * A saved game opened by another build is replayed so it runs on the new code; if the new code
+ * plays it differently, the replay isn't the game you had -- your map 1692 run (2026-11-07) parted on
+ * day 93, and the replayed term 5 had none of the pledges you'd made. The loader then opens the
+ * world as you left it instead (main.ts). Money moves every tick, so a difference shows the day it starts.
+ */
+export function* replayRunCheckedSteps(base: GameMapDef, file: RunFile, untilTick = file.ticks): Generator<number, { world: GameWorld; partedOn: number | null }, void> {
+  const world = startRunWith(base, file.seed, file.tuning ?? { ...runTuning(file.switches), regionEnabled: false }, file.devFunds);
+  const ends = new Map<number, RunDay>();
+  for (const day of file.days) if (day.endTick !== undefined) ends.set(day.endTick, day);
+  let next = 0;
+  for (let tick = 0; ; tick += 1) {
+    while (next < file.actions.length && file.actions[next]!.tick === tick) {
+      applyAction(world, file.actions[next]!.action);
+      next += 1;
+    }
+    if (tick >= untilTick) break;
+    gameTick(world, SIM_DT);
+    const recorded = ends.get(tick + 1);
+    if (recorded && Number(world.economy.funds.toFixed(0)) !== recorded.funds) return { world, partedOn: recorded.day };
+    if (tick % 300 === 0) yield tick / Math.max(1, untilTick);
+  }
+  return { world, partedOn: null };
+}
+
 export function replayRun(
   base: GameMapDef,
   file: RunFile,

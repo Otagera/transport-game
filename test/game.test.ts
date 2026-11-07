@@ -84,7 +84,7 @@ import { GAME_MAP } from "../src/game/map";
 import { averageBudget, averageHeadline, averageNet } from "@engine/game/history";
 import { applyAction } from "@engine/game/actions";
 import { whatIf } from "@engine/game/whatif";
-import { createRunRecorder, forkRun, recordAction, recordTick, replayRun, runFile, startRunSteps, type RunFile } from "@engine/game/runlog";
+import { createRunRecorder, forkRun, recordAction, recordTick, replayRun, replayRunCheckedSteps, runFile, startRunSteps, type RunFile } from "@engine/game/runlog";
 import { createReceiptBook, perform, tickReceipts, RECEIPT_SECONDS, SETTLE_SECONDS, type Receipt } from "@engine/game/receipts";
 import { SECONDS_PER_GAME_DAY } from "@engine/economy/state";
 import { insertIntoPath } from "@engine/game/settlement";
@@ -3708,6 +3708,23 @@ describe("run files: a played game saved, read and replayed (runlog.ts)", () => 
     expect(replayed.economy.funds).toBe(world.economy.funds);
     expect(headline(replayed)).toEqual(headline(world));
     expect([...replayed.towns.values()].map((t) => t.population)).toEqual([...world.towns.values()].map((t) => t.population));
+    // Checked against its own days (a saved game opened by another build, main.ts): exact, it runs
+    // through; a day's money that differs from what was recorded -- a build that plays it otherwise
+    // -- stops it there, on that day, for the loader to open the world as it was left.
+    const run = (f: RunFile) => {
+      const steps = replayRunCheckedSteps(GAME_MAP, f);
+      for (;;) {
+        const step = steps.next();
+        if (step.done) return step.value;
+      }
+    };
+    const through = run(file);
+    expect(through.partedOn).toBeNull();
+    expect(through.world.economy.funds).toBe(world.economy.funds);
+    const altered = JSON.parse(JSON.stringify(file)) as RunFile;
+    const third = altered.days[2]!;
+    third.funds += 1;
+    expect(run(altered).partedOn).toBe(third.day);
   }, 90_000);
 });
 

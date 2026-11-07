@@ -53,7 +53,7 @@ import { GAME_MAP } from "./map";
 import { DEFAULT_GAME_TUNING } from "@engine/game/tuning";
 import type { ForecastLine } from "./render";
 import { applyAction, remitRefusal, type ActionOutcome, type ActionSpec } from "@engine/game/actions";
-import { createRunRecorder, forkRun, recordAction, recordTick, replayRunSteps, runFile, startRunSteps, type RunRecorder, type RunSwitches } from "@engine/game/runlog";
+import { createRunRecorder, forkRun, recordAction, recordTick, replayRunCheckedSteps, replayRunSteps, runFile, startRunSteps, type RunRecorder, type RunSwitches } from "@engine/game/runlog";
 import { restoreSnapshot, snapshotOf } from "@engine/game/snapshot";
 import type { GameTown, GameWorld, UrbanKind } from "@engine/game/types";
 import { createWelcome, welcomed } from "./welcome";
@@ -216,7 +216,7 @@ const devFunds = dev && params.has("funds") && Number.isFinite(fundsParam) ? fun
 // The world runs its week before you arrive (start.ts) -- on a region, seconds of work: a
 // loading screen says so and shows how far it's got, the warm-up run a slice at a time
 // between frames (startRunSteps: the same world, tick for tick).
-const opened = await (async (): Promise<{ world: GameWorld; recorder: RunRecorder | null }> => {
+const opened = await (async (): Promise<{ world: GameWorld; recorder: RunRecorder | null; partedOn?: number | null }> => {
   const loading = document.querySelector<HTMLElement>("#loading")!;
   loading.querySelector<HTMLElement>(".map")!.textContent = `Map ${seed}`;
   const bar = loading.querySelector<HTMLElement>(".bar i")!;
@@ -243,28 +243,39 @@ const opened = await (async (): Promise<{ world: GameWorld; recorder: RunRecorde
   // A saved game this build saved: the world as it was, at once.
   if (saved?.snapshot && saved.summary.build === BUILD) {
     arrive();
-    return { world: restoreSnapshot(saved.snapshot), recorder: saved.recorder };
+    return { world: restoreSnapshot(saved.snapshot), recorder: saved.recorder, partedOn: null };
   }
   // Saved by another build: its run replayed from the start (a run file replays as played),
   // counted here; else a new game's week before you arrive.
   const days = saved ? saved.summary.day : DEFAULT_GAME_TUNING.warmUpDays;
-  const steps = saved ? replayRunSteps(GAME_MAP, saved.recorder.file, saved.recorder.ticks) : startRunSteps(GAME_MAP, seed, switches, devFunds);
+  // A save with its world: replayed checked against its own days, so a build that plays it
+  // differently is caught (runlog.ts replayRunCheckedSteps) and the world as you left it opens instead.
+  const checked = saved?.snapshot ? replayRunCheckedSteps(GAME_MAP, saved.recorder.file, saved.recorder.ticks) : null;
+  const steps = checked ?? (saved ? replayRunSteps(GAME_MAP, saved.recorder.file, saved.recorder.ticks) : startRunSteps(GAME_MAP, seed, switches, devFunds));
   if (saved) loading.querySelector<HTMLElement>("p")!.textContent = !saved.snapshot && saved.summary.forkOf
     ? `A fork of this map's game from day ${saved.summary.forkOf.day}: played through to there, every move made before it, at the moment it was made.`
     : "The game has changed since you saved, so your game is played through again from its first day: every move you made, at the moment you made it.";
   let since = performance.now();
   for (;;) {
     const step = steps.next();
+    if (step.done && checked) {
+      arrive();
+      const done = step.value as { world: GameWorld; partedOn: number | null };
+      if (done.partedOn === null) return { world: done.world, recorder: saved!.recorder, partedOn: null };
+      // This build plays your game differently from that day: the world as you left it, on the new code.
+      return { world: restoreSnapshot(saved!.snapshot!), recorder: saved!.recorder, partedOn: done.partedOn };
+    }
     if (step.done) {
       arrive();
+      const world = step.value as GameWorld;
       // A fork's days run on from the day it was cut at, as the world replayed it.
       if (saved && !saved.snapshot) {
-        saved.recorder.lastDay = gameDay(step.value);
+        saved.recorder.lastDay = gameDay(world);
         saved.recorder.file.days = saved.recorder.file.days.filter((d) => d.day < saved.recorder.lastDay);
       }
-      return { world: step.value, recorder: saved ? saved.recorder : null };
+      return { world, recorder: saved ? saved.recorder : null, partedOn: null };
     }
-    if (performance.now() - since > 40) {
+    if (performance.now() - since > 40 && typeof step.value === "number") {
       bar.style.width = `${Math.round(step.value * 100)}%`;
       rider.style.left = `${step.value * 100}%`;
       label.textContent = saved
@@ -4238,5 +4249,7 @@ if (opened.recorder) {
   paused = true;
   renderToolbar();
   say(`Welcome back to map ${seed}: day ${gameDay(world)}${world.term ? `, term ${world.term.number}` : ""}. Paused where you left it; it saves itself as you play.`, false, 7);
+  // The new version played your moves differently from that day: opened as you left it instead.
+  if (opened.partedOn != null) say(`The game has changed since you saved, and it played your moves differently from day ${opened.partedOn}, so your game opened as you left it. Its saved run (Save run) replays exactly only on the version it was played on.`, false, 14);
 }
 requestAnimationFrame(frame);

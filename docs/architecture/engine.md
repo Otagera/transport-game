@@ -714,7 +714,12 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   tick: the sim is deterministic (the seed is its only randomness), and a test pins that a
   saved run replays to the same funds, headline and towns. `scripts/game-run.ts` reads one.
   `replayRunSteps` is the same replay a step at a time, for a loading card (a saved game opened
-  by another build, below).
+  by another build, below). `replayRunCheckedSteps` (2026-11-07) checks it against the file's
+  own days as it goes: at each recorded day's end the money must be what was recorded, or it
+  stops and returns the day it parted on. The page replays a save that has its world this way,
+  and opens that world instead where the new build plays the game differently (main.ts, and a
+  note on arriving). Your map 1692 run, recorded on uncommitted code (`-dirty`), parted on day 93,
+  and the replay had become another game. A build marked `-dirty` may not replay on any commit.
 - **`snapshot.ts`** — a saved game's world (2026-11-01; the page's saves.ts keeps it in IndexedDB).
   The world is plain data, structured-cloneable (the receipts' and forecasts' copies already
   relied on it), and the caches keyed on a world refill the same; one thing kept off it isn't a

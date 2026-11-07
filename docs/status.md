@@ -112,10 +112,17 @@ town (J), water buses (W) and barges (V) between jetties on a waterway drawn fro
 third network no road system sees; a water bus beats buses on every busy pair, loses on thin ones;
 barges pay on long hauls. Next: step 3, the crossings.
 
-**Open: a live game and its replay part** (found 2026-11-07 replaying your map 1692 run): the run
-replays exactly to day 92 and differs on day 93 by ₦49, just after a bus to the assembly plant, on the
-very code it was played on (51bb65d) -- so not boats or the screen work. A run file of that game
-isn't evidence of what was played after day 92 until it's found.
+**A saved game that a new build plays differently opens as you left it** (2026-11-07). Your map
+1692 run replays exactly to day 92 and differs on day 93 by ₦49. Its build was `f145f6d-dirty`
+(uncommitted code). On the committed code the game is deterministic: played live in the page from
+day 88 (the moves at their ticks, untouched, and again with the pointer previewing every tool) it
+ends day 93 as the replay does, ₦1,200 against the ₦1,249 recorded. Ruled out one by one: the
+changes since, the speed work (reverted), the screen's reads between ticks, a save's copy of the
+world, randomness. So the game ran on code that isn't in the repo, and its run file replays only
+on that. What it cost you: a save opened by another build is replayed, and the replay quietly
+became another game (term 5 without your pledges). Now that replay is checked against the save's
+own days (`runlog.ts replayRunCheckedSteps`, money at each day's end), and where it parts the world
+as you left it opens instead, with a note saying so (engine.md, runlog).
 
 **The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
 you aim and The network): from your "to click on some things are difficult ... between tick the
