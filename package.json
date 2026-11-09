@@ -22,7 +22,8 @@
     "verify:look": "bun scripts/verify-look.ts",
     "verify": "bun run typecheck && bun run test:parallel && bun run build && bun run verify:bundle && bun run verify:look",
     "shots": "bun scripts/shots.ts",
-    "gym": "bun gym/run.ts"
+    "gym": "bun gym/run.ts",
+    "run-file": "bun build scripts/game-run.ts --target=node --outfile=.cache/game-run.mjs --log-level=error && node .cache/game-run.mjs"
   },
   "type": "module"
 }

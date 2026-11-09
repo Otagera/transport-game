@@ -151,6 +151,13 @@ blow-by-blow; this section is the distilled rule.
   ticked straight through, the same seed ticked in uneven frames with the screen read between,
   ending identical (test/game.test.ts, "frame budgets").
 
+- **Deterministic on one JavaScript engine, not across engines** (2026-11-07). A run recorded in
+  the browser (V8) replays exactly in Chrome and in Node, and parts in Bun (JavaScriptCore) after a
+  few dozen days: Math.exp, Math.pow and the like aren't correctly rounded, and two engines differ
+  in the last bit, which the simulation grows until the money shows it (map 1692: ₦49 on day 93).
+  A day was spent blaming the code first. Check a browser's run on V8 (`bun run run-file`); a probe
+  that starts from a world one engine replayed carries that engine's history, whatever runs it next.
+
 ### Demand
 
 - **Passenger demand must be reciprocal by construction.** Commuting is round-trip.

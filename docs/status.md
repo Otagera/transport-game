@@ -112,17 +112,17 @@ town (J), water buses (W) and barges (V) between jetties on a waterway drawn fro
 third network no road system sees; a water bus beats buses on every busy pair, loses on thin ones;
 barges pay on long hauls. Next: step 3, the crossings.
 
-**A saved game that a new build plays differently opens as you left it** (2026-11-07). Your map
-1692 run replays exactly to day 92 and differs on day 93 by ₦49. Its build was `f145f6d-dirty`
-(uncommitted code). On the committed code the game is deterministic: played live in the page from
-day 88 (the moves at their ticks, untouched, and again with the pointer previewing every tool) it
-ends day 93 as the replay does, ₦1,200 against the ₦1,249 recorded. Ruled out one by one: the
-changes since, the speed work (reverted), the screen's reads between ticks, a save's copy of the
-world, randomness. So the game ran on code that isn't in the repo, and its run file replays only
-on that. What it cost you: a save opened by another build is replayed, and the replay quietly
-became another game (term 5 without your pledges). Now that replay is checked against the save's
-own days (`runlog.ts replayRunCheckedSteps`, money at each day's end), and where it parts the world
-as you left it opens instead, with a note saying so (engine.md, runlog).
+**Deterministic on one engine, not across them** (2026-11-07). Your map 1692 run, replayed in Bun,
+parted from its recording on day 93 (₦49). It isn't the game: replayed in Chrome, and in Node (both
+V8, as the browser it was played in), it matches its recording exactly -- through day 120 in Node,
+day 95 in the page. Bun runs JavaScriptCore, whose Math.exp, Math.pow and the like differ from V8's in
+the last bit, and the difference grows until the money shows it. (A first conclusion, "recorded on
+uncommitted code", was wrong: the probes that seemed to show the page playing it like Bun had started
+from a world Bun had replayed.) So: replay a browser's run on V8 -- `bun run run-file -- run.json
+--verify` bundles game-run.ts and runs it on Node (principles §3, Determinism). Built on the way, and
+kept: a save opened by another build is replayed checked against its own days, and where the new
+build plays it differently the world as you left it opens instead, with a note (`runlog.ts
+replayRunCheckedSteps`; engine.md, runlog). On your save it doesn't trigger: the page replays it exactly.
 
 **The info layer, first pass** (2026-11-02, merged 2026-11-03; render-and-ui.md, Held still while
 you aim and The network): from your "to click on some things are difficult ... between tick the

@@ -8,13 +8,20 @@
 //   bun scripts/game-run.ts run.json --verify    # replay it and check it reproduces exactly
 //
 // For anything the day rows don't hold, replayRun (runlog.ts) rebuilds the
-// world at any tick: the sim is deterministic.
+// world at any tick: the sim is deterministic -- on one JavaScript engine. A run
+// recorded in the browser (V8) replays exactly on V8, so replay it with
+//   bun run run-file -- run.json --verify    # bundled, then run on Node (V8)
+// Under Bun (JavaScriptCore) Math.exp, Math.pow and the like differ in the last bit,
+// and a run parts after a few dozen days (your map 1692: day 93; engine.md, runlog).
 import { readFileSync } from "node:fs";
 import { GAME_MAP } from "../src/game/map";
 import { RUN_FORMAT, daySummary, replayRun, type RunDay, type RunFile } from "../src/engine/game/runlog";
 import { gameDay } from "../src/engine/game/world";
 
 const [path, ...flags] = process.argv.slice(2);
+if (flags.includes("--verify") && typeof (globalThis as { Bun?: unknown }).Bun !== "undefined") {
+  console.warn("Note: under Bun a run recorded in the browser parts after a few dozen days (another engine's Math). Replay with: bun run run-file -- <run.json> --verify");
+}
 if (!path) {
   console.error("usage: bun scripts/game-run.ts <run.json> [--every N] [--day N] [--verify]");
   process.exit(2);

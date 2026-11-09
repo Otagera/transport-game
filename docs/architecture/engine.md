@@ -718,8 +718,11 @@ speed congestion.ts publishes for track: `oldLineSpeed` on inherited track (narr
   own days as it goes: at each recorded day's end the money must be what was recorded, or it
   stops and returns the day it parted on. The page replays a save that has its world this way,
   and opens that world instead where the new build plays the game differently (main.ts, and a
-  note on arriving). Your map 1692 run, recorded on uncommitted code (`-dirty`), parted on day 93,
-  and the replay had become another game. A build marked `-dirty` may not replay on any commit.
+  note on arriving). **Replays are exact on one JavaScript engine**: a run recorded in the browser
+  (V8) replays exactly in Chrome or Node and parts in Bun (JavaScriptCore), whose transcendental
+  Math differs in the last bit -- your map 1692 run, on day 93. Scripts that check a browser's run
+  replay it on Node: `bun run run-file -- run.json --verify` (game-run.ts bundled with `bun build
+  --target=node`). Bun's own tests record and replay in Bun, so they stay exact.
 - **`snapshot.ts`** — a saved game's world (2026-11-01; the page's saves.ts keeps it in IndexedDB).
   The world is plain data, structured-cloneable (the receipts' and forecasts' copies already
   relied on it), and the caches keyed on a world refill the same; one thing kept off it isn't a
