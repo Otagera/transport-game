@@ -1239,6 +1239,10 @@ at its landing; boats broad in the beam, moving along the link's points (`edgeLi
 `WaterLink` for a boat's edge). In the Network tab, lines are grouped *People by water* and
 *Goods by water* (`lines.ts` mode `water`, with no road or track ways). On a card, + and − add and
 sell a water bus or a barge. Before this, + on a boat line would have bought a bus on the road.
+**The crossings** (2026-11-09): the Road tool's preview over water says when a causeway there would
+cut a boat line of yours (`linesACausewayCuts`, from the planned line's `wetCrossings`), beside
+the high bridge's price; a cut line is drawn in the strike red, and Waiting on you names it with
+Raise a bridge on the crossing that cuts it; a barge refused past a ford names the ford and its price.
 
 ### Your remit on the screen (2026-10-31; engine.md, Your remit)
 

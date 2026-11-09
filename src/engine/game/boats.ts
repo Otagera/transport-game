@@ -4,7 +4,9 @@ import { canAfford, registerPurchase, SECONDS_PER_GAME_DAY } from "../economy/st
 import { forgetRoute } from "./ledger";
 import type { GameRoute, GameWorld } from "./types";
 import { SWITCHED_OFF } from "./tuning";
-import { landing, waterRoute, type WaterRoute } from "./waterways";
+import { landing, nodeNear, waterRoute, waterway, type WaterRoute } from "./waterways";
+import { fordBridgeCost, type Ford } from "./floods";
+import type { Point } from "./roads";
 import { cycleFraction, largestGapMidpoint, placeAtCycleFraction, routeKey, type ActionResult } from "./world";
 
 // Jetties and boats (docs/water.md, Step 2; brief, Water first): water's first mode.
@@ -111,9 +113,118 @@ export function buildJetty(world: GameWorld, townId: string): ActionResult & { c
 
 // --- The water between two jetties ------------------------------------------
 
-/** The way over the water between two towns for a kind of boat, whether or not they have jetties. */
+// --- The crossings (water.md, Step 3, agreed 2026-11-09) ---------------------------------
+// A ford is shallow water with a road across it: a water bus crosses it, a laden barge can't. A
+// causeway you build blocks every boat. Raised, either lets every boat through. Under the rains'
+// flood, the river runs high over it and every boat passes.
+
+/** Each ford's place on the waterway: the node it lies on, if it's on the water at all. Kept while the fords are the same. */
+const fordNodes = new WeakMap<object, { count: number; at: Map<string, number> }>();
+function fordsOnWater(world: GameWorld): Map<string, number> {
+  const fords = world.floods?.fords ?? [];
+  let held = fordNodes.get(fords);
+  if (!held || held.count !== fords.length) {
+    const at = new Map<string, number>();
+    const way = waterway(world);
+    for (const ford of fords) {
+      const near = nodeNear(world, ford.x, ford.y);
+      if (near.node >= 0 && near.distance <= way.nodes[near.node]!.width / 2 + 1.5) at.set(ford.id, near.node);
+    }
+    fordNodes.set(fords, (held = { count: fords.length, at }));
+  }
+  return held.at;
+}
+
+/** Whether a ford stops a kind of boat now. */
+export function fordBlocks(world: GameWorld, ford: Ford, kind: BoatKind): boolean {
+  if (!world.tuning.boatsBlockedByFords || ford.bridged) return false;
+  const floods = world.floods;
+  if (floods?.phase === "flood" && floods.under.includes(ford.id)) return false; // the rains: the river over it
+  return ford.built || kind === "barge";
+}
+
+/** The nodes a kind of boat can't pass now, and a name for them (the routes' cache key). */
+function blockers(world: GameWorld, kind: BoatKind): { nodes: Set<number>; signature: string } {
+  const nodes = new Set<number>();
+  const ids: string[] = [];
+  const at = fordsOnWater(world);
+  for (const ford of world.floods?.fords ?? []) {
+    const node = at.get(ford.id);
+    if (node === undefined || !fordBlocks(world, ford, kind)) continue;
+    nodes.add(node);
+    ids.push(ford.id);
+  }
+  return { nodes, signature: ids.join(",") };
+}
+
+/** The way over the water between two towns for a kind of boat, past only the crossings it can pass; whether or not they have jetties. */
 export function waterWay(world: GameWorld, a: string, b: string, kind: BoatKind): WaterRoute | null {
-  return waterRoute(world, a, b, minWidth(world, kind), reachOf(world));
+  const block = blockers(world, kind);
+  return waterRoute(world, a, b, minWidth(world, kind), reachOf(world), block.nodes, block.signature);
+}
+
+/** The crossings that keep a kind of boat off the water between two towns: on the way it would take with none in it. */
+export function crossingsInTheWay(world: GameWorld, a: string, b: string, kind: BoatKind): Ford[] {
+  const open = waterRoute(world, a, b, minWidth(world, kind), reachOf(world));
+  return open ? fordsOn(world, open.points, kind) : [];
+}
+
+/** The fords that stop a kind of boat among a way's points (its nodes). */
+function fordsOn(world: GameWorld, points: Array<[number, number]>, kind: BoatKind): Ford[] {
+  const at = fordsOnWater(world);
+  const byNode = new Map<number, Ford>();
+  for (const ford of world.floods?.fords ?? []) {
+    const node = at.get(ford.id);
+    if (node !== undefined && fordBlocks(world, ford, kind)) byNode.set(node, ford);
+  }
+  if (byNode.size === 0) return [];
+  const index = pointIndex(world);
+  const out: Ford[] = [];
+  // Between the landings: a ford at a landing is where the boat ties up, not one it crosses
+  // (waterways.ts lets a route start and end there). Counted, a line could open and never sail.
+  for (const [x, y] of points.slice(2, -2)) {
+    const ford = byNode.get(index.get(`${x},${y}`) ?? -1);
+    if (ford && !out.includes(ford)) out.push(ford);
+  }
+  return out;
+}
+
+/** A way's points are the waterway's nodes exactly: each one's index by its coordinates, built once a waterway. */
+const pointIndexes = new WeakMap<object, Map<string, number>>();
+function pointIndex(world: GameWorld): Map<string, number> {
+  const way = waterway(world);
+  let index = pointIndexes.get(way);
+  if (!index) pointIndexes.set(way, (index = new Map(way.nodes.map((n, j) => [`${n.x},${n.y}`, j]))));
+  return index;
+}
+
+/** A line's way cut by a crossing its boats can't pass (a causeway built across it): the crossings, or none. */
+export function lineCutBy(world: GameWorld, link: WaterLink): Ford[] {
+  return fordsOn(world, link.points, link.kind);
+}
+
+/** Your lines cut now, by route id: their boats wait at the bank (tick.ts). Read again only when a crossing or a line changes. */
+const cutKept = new WeakMap<object, { key: string; cut: Set<string> }>();
+export function cutLines(world: GameWorld): Set<string> {
+  const links = world.waterLinks ?? [];
+  const key = `${blockers(world, "boat").signature}|${blockers(world, "barge").signature}`;
+  const held = cutKept.get(links);
+  if (held && held.key === key) return held.cut;
+  const cut = new Set<string>();
+  for (const link of links) if (lineCutBy(world, link).length > 0) cut.add(link.id);
+  cutKept.set(links, { key, cut });
+  return cut;
+}
+
+/** The lines of yours a road on this line would cut, built low: a causeway across their way. */
+export function linesACausewayCuts(world: GameWorld, crossings: Array<{ at: Point }>): WaterLink[] {
+  if (!world.tuning.boatsBlockedByFords || crossings.length === 0) return [];
+  return (world.waterLinks ?? []).filter((link) => link.points.some(([x, y]) => crossings.some((c) => Math.hypot(c.at.x - x, c.at.y - y) <= 3)));
+}
+
+/** "the Oboza ford (₦4,800)": crossings named with their price, for a refusal or a card. */
+export function namedCrossings(world: GameWorld, fords: Ford[]): string {
+  return fords.slice(0, 3).map((f) => `${f.name} (₦${fordBridgeCost(world, f).toLocaleString()})`).join(", ") + (fords.length > 3 ? ` and ${fords.length - 3} more` : "");
 }
 
 /** Cells along the water between two towns on a line of this kind (a fare's length, as track's for a train). */
@@ -165,7 +276,12 @@ export function checkBoat(world: GameWorld, a: string, b: string, kind: BoatKind
   if (a === b) return { ok: false, reason: "pick two different towns" };
   const missing = [a, b].filter((id) => !hasJetty(world, id));
   if (missing.length > 0) return { ok: false, reason: `no jetty at ${missing.map((id) => world.towns.get(id)?.name ?? id).join(" or ")}: build one (Jetty tool)` };
-  if (!waterWay(world, a, b, kind)) return { ok: false, reason: kind === "barge" ? `the water between them is too narrow for a barge (${minWidth(world, kind)} cells)` : "the water doesn't join them" };
+  if (!waterWay(world, a, b, kind)) {
+    // Past a crossing it can't pass: which, and what raising them costs (Raise a bridge, on the ford).
+    const inWay = crossingsInTheWay(world, a, b, kind);
+    if (inWay.length > 0) return { ok: false, reason: `${kind === "barge" ? "a barge" : "a boat"} can't pass ${namedCrossings(world, inWay)}: raise a bridge there` };
+    return { ok: false, reason: kind === "barge" ? `the water between them is too narrow for a barge (${minWidth(world, kind)} cells)` : "the water doesn't join them" };
+  }
   const cost = kind === "barge" ? world.tuning.bargePurchaseCost ?? 0 : world.tuning.waterBusPurchaseCost ?? 0;
   if (!canAfford(world.economy, cost)) return { ok: false, reason: kind === "barge" ? "can't afford a barge" : "can't afford a water bus" };
   return { ok: true };

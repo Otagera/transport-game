@@ -146,18 +146,39 @@ export interface WaterRoute {
 
 const routes = new WeakMap<GameWorld, Map<string, WaterRoute | null>>();
 
-/** The water route between two towns' landings for a boat needing `width` cells; null if the water doesn't join them. */
-export function waterRoute(world: GameWorld, a: string, b: string, width: number, reach: number): WaterRoute | null {
+/**
+ * The water route between two towns' landings for a boat needing `width` cells; null if the water
+ * doesn't join them. `blocked`: nodes no boat of this kind passes (a ford or causeway on the water,
+ * boats.ts blockers), with `signature` naming them for the cache.
+ */
+export function waterRoute(world: GameWorld, a: string, b: string, width: number, reach: number, blocked: ReadonlySet<number> = NONE, signature = ""): WaterRoute | null {
   let cache = routes.get(world);
   if (!cache) routes.set(world, (cache = new Map()));
-  const key = `${a}|${b}|${width}|${reach}`;
+  const key = `${a}|${b}|${width}|${reach}|${signature}`;
   if (cache.has(key)) return cache.get(key)!;
-  const route = findWaterRoute(world, a, b, width, reach);
+  const route = findWaterRoute(world, a, b, width, reach, blocked);
   cache.set(key, route);
   return route;
 }
 
-function findWaterRoute(world: GameWorld, a: string, b: string, width: number, reach: number): WaterRoute | null {
+const NONE: ReadonlySet<number> = new Set();
+
+/** The node a point lies on: the nearest, for a ford's place on the water (and a route's points, which are nodes). */
+export function nodeNear(world: GameWorld, x: number, y: number): { node: number; distance: number } {
+  const way = waterway(world);
+  let node = -1;
+  let distance = Infinity;
+  for (let j = 0; j < way.nodes.length; j += 1) {
+    const d = Math.hypot(way.nodes[j]!.x - x, way.nodes[j]!.y - y);
+    if (d < distance) {
+      distance = d;
+      node = j;
+    }
+  }
+  return { node, distance };
+}
+
+function findWaterRoute(world: GameWorld, a: string, b: string, width: number, reach: number, blocked: ReadonlySet<number>): WaterRoute | null {
   if (a === b) return null;
   const from = landing(world, a, width, reach);
   const to = landing(world, b, width, reach);
@@ -206,6 +227,7 @@ function findWaterRoute(world: GameWorld, a: string, b: string, width: number, r
     if (u === to.node) break;
     for (const { to: v, len } of way.edges[u]!) {
       if (!passes(way, u, v, width)) continue;
+      if (blocked.has(v) && v !== to.node) continue; // a crossing this boat can't pass
       const nd = d + len;
       if (nd < dist[v]!) {
         dist[v] = nd;

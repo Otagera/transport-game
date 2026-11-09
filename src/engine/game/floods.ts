@@ -234,6 +234,11 @@ export function highBridgeCost(world: GameWorld, line: Point[]): number {
   return wetRuns(world, line).reduce((sum, run) => sum + Math.round(Math.max(1, run.span) * (world.tuning.fordBridgePerCell ?? 1200)), 0);
 }
 
+/** Where a planned road's line crosses water, and how wide (the Road tool's preview: a causeway there would cut a boat line). */
+export function wetCrossings(world: GameWorld, line: Point[]): Array<{ at: Point; span: number }> {
+  return causeways(world) ? wetRuns(world, line) : [];
+}
+
 /** A road you've just built (world.ts buildRoad), not high: each of its crossings a causeway the rains can take. */
 export function addCauseways(world: GameWorld, segment: Segment): void {
   if (!causeways(world)) return;

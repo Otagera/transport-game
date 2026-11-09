@@ -1277,6 +1277,9 @@ Step 2, jetties and boats (scoped 2026-11-06, water.md: Step 2): a jetty at a wa
 buses and barges between jetties on a waterway drawn from the rivers, fares by the water's length
 (capped at the road's);
 checks C51-C54.
+Step 3, the crossings (agreed 2026-11-09, water.md: Step 3): a ford blocks a barge, not a water bus; a causeway
+you build blocks every boat and cuts your own line until raised; the rains let boats over the fords they
+flood; checks C55-C57.
 
 ### Checks for the remit
 

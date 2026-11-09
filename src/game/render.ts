@@ -24,7 +24,7 @@ import { segmentRung } from "@engine/game/roads";
 import { OBSTACLE, PRIORITY, Placer, drawsAt, tierOf as zoomTierOf, type Box, type Chip, type Tier as ZoomTier } from "./density";
 import { bundleLines, type BundleItem } from "./bundle";
 import { trunkSet } from "@engine/game/trunks";
-import { jettyLanding } from "@engine/game/boats";
+import { cutLines, jettyLanding } from "@engine/game/boats";
 import { waterway } from "@engine/game/waterways";
 
 // The game's map, ported from the information lab (since discarded; brief, the carry-over plan:
@@ -819,6 +819,7 @@ function drawWater(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.globalAlpha = dim ? OVERLAY_BACKDROP : 1;
+  const cut = cutLines(world);
   for (const link of world.waterLinks ?? []) {
     const lit = !focus || focus.routes.has(link.id);
     ctx.globalAlpha = (dim ? OVERLAY_BACKDROP : 1) * (lit ? 0.9 : FADED);
@@ -828,7 +829,8 @@ function drawWater(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, 
     ctx.strokeStyle = COLORS.surface;
     ctx.lineWidth = 3.4 * markScale;
     strokeLine(ctx, view, line);
-    ctx.strokeStyle = link.kind === "barge" ? COLORS.goods : COLORS.player;
+    // Cut by a causeway (boats.ts): in the bad colour, its boats at the bank.
+    ctx.strokeStyle = cut.has(link.id) ? COLORS.strike : link.kind === "barge" ? COLORS.goods : COLORS.player;
     ctx.lineWidth = 2 * markScale;
     ctx.setLineDash(link.kind === "barge" ? [5 * markScale, 3 * markScale] : [3 * markScale, 2.5 * markScale]);
     strokeLine(ctx, view, line);

@@ -102,6 +102,8 @@ import { waysFor } from "@engine/game/crossings";
 import { labelOf } from "@engine/game/labels";
 import { highBridgeCost } from "@engine/game/floods";
 import type { View3D } from "./view3d";
+import { linesACausewayCuts } from "@engine/game/boats";
+import { wetCrossings } from "@engine/game/floods";
 
 // The slice's bootstrap (docs/principles.md §6, step 1). Two tools, one
 // list, one strip:
@@ -1804,7 +1806,10 @@ function ghost(): Ghost | null {
     // and earned nothing).
     const keep = naira(upkeepFor(world.tuning, plan.length, plan.bridgeCells, false));
     // Over water: which kind of crossing, and the other's price (C).
-    const crossing = raise <= 0 ? "" : high ? ` · a high bridge, open in the rains (a causeway ${naira(raise)} less, C)` : ` · a causeway: floods in the rains (a high bridge +${naira(raise)}, C)`;
+    // ...and a causeway across a boat line of yours cuts it (water.md, Step 3): said before it's built.
+    const cuts = raise > 0 && !high ? linesACausewayCuts(world, wetCrossings(world, plan.polyline)) : [];
+    const cutWord = cuts.length ? ` -- and cuts your ${cuts.map((l) => `${l.kind === "barge" ? "barges" : "water bus"} ${townName(l.a)}–${townName(l.b)}`).join(", ")}: its boats would wait at the bank` : "";
+    const crossing = raise <= 0 ? "" : high ? ` · a high bridge, open in the rains, boats pass under (a causeway ${naira(raise)} less, C)` : ` · a causeway: floods in the rains${cutWord} (a high bridge +${naira(raise)}, C)`;
     // A trunk (E): its signs and wardens on top, and what it means.
     const trunk = trunkRoad && world.tuning.trunksEnabled;
     const trunkCost = trunk ? Math.round(plan.length * (world.tuning.trunkCostPerCell ?? 50)) : 0;

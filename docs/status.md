@@ -6,7 +6,7 @@ the code is shaped, see [architecture/index.md](architecture/index.md); for *why
 Everything older -- step-by-step measurements, bot runs, handoffs, earlier "what's next"
 lists -- is in [status-archive.md](status-archive.md); a reference elsewhere to "status.md, step N" or "status.md, R1 N" from before 2026-10-19 now resolves there.
 
-**876 tests passing** across the files (`bun test`). Typecheck / test / build /
+**880 tests passing** across the files (`bun test`). Typecheck / test / build /
 verify:bundle all green.
 
 ## Next: a game around the simulation (2026-10-24)
@@ -110,7 +110,11 @@ railway no longer comes up on a new map (water.md: the home city is the seaport 
 **Step 2, jetties and boats** (branch `boats`, 2026-11-06; water.md, Step 2): a jetty at a waterside
 town (J), water buses (W) and barges (V) between jetties on a waterway drawn from the rivers, a
 third network no road system sees; a water bus beats buses on every busy pair, loses on thin ones;
-barges pay on long hauls. Next: step 3, the crossings.
+barges pay on long hauls. **Step 3, the crossings** (2026-11-09; water.md, Step 3): a ford stops a
+barge, not a water bus (your call, measured: fords lie on 8-9 of every map's 10 busiest water routes);
+a causeway you build stops every boat and cuts your own line until raised, the Road tool warning
+first; the rains let boats over the fords they flood. Jetties and boats now keep to your remit.
+Next: step 4, fishing.
 
 **Deterministic on one engine, not across them** (2026-11-07). Your map 1692 run, replayed in Bun,
 parted from its recording on day 93 (₦49). It isn't the game: replayed in Chrome, and in Node (both

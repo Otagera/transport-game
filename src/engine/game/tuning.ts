@@ -696,6 +696,7 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   bargePurchaseCost: 4000,
   bargeOperatingCostPerSecond: 3,
   bargeMinWidth: 2.5,
+  boatsBlockedByFords: true,
   freightRateCheap: 0.6,
   freightRateDear: 1.6,
   freightHaulierPull: 0.5,

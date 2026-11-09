@@ -41,7 +41,7 @@ import { chargeRoughRoads, segmentConditions, updateRoadWear } from "./wear";
 import { routingFor } from "./rail";
 import { beginTickFlows, endTickFlows, goodsLoader, produceAndSpoil, recordGoodsDelivered, relayArrivals, relayLoader, updateGoodsOutcomes } from "./goods";
 import { updateAssembly } from "./assembly";
-import { offRoad, onWater } from "./boats";
+import { cutLines, offRoad, onWater } from "./boats";
 import type { FareWay } from "./fares";
 
 // How much longer people wait at a motor park for a danfo to fill than
@@ -303,7 +303,10 @@ function tickBody(world: GameWorld, dt: number): GameEvent[] {
   // Your road vehicles run free on a bus lane (Revision 1); everyone else sees the traffic.
   const yourSpeed = yourSpeeds(world);
   let revenueThisTick = 0;
+  // Your boat lines cut by a causeway (boats.ts, water.md Step 3): their boats wait at the bank.
+  const cut = world.waterLinks?.length ? cutLines(world) : null;
   for (const vehicle of simulation.vehicles) {
+    if (cut && cut.size > 0 && onWater(world, vehicle.id) && cut.has(routeOf.get(vehicle.id) ?? "")) continue;
     const isDanfo = vehicle.lifecycle === "one-shot";
     const deliveries: DeliveryEvent[] = tickVehicle(
       vehicle,

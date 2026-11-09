@@ -775,6 +775,8 @@ export interface GameTuning {
   bargeOperatingCostPerSecond?: number;
   /** Cells of water a barge needs. */
   bargeMinWidth?: number;
+  /** Fords and causeways stop boats (water.md, Step 3): a ford a barge, a causeway you built every boat. Absent before it: nothing stops a boat. */
+  boatsBlockedByFords?: boolean;
   steelPerThousandPerDay: number;
   steelWorksShare: number;
   steelImportShare: number;

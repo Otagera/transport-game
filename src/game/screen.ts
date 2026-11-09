@@ -43,6 +43,7 @@ import type { RunDay, RunRecorder } from "@engine/game/runlog";
 import type { GameEvent } from "@engine/game/settlement";
 import { assemblyGeneration } from "@engine/game/assembly";
 import { siteChain, siteProduction } from "@engine/game/production";
+import { lineCutBy } from "@engine/game/boats";
 
 // The information lab's three layers (agreed 2026-10-23; the lab since discarded), on the live game:
 //
@@ -477,6 +478,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
         const road = named ? `the road to ${nameOf(named === ford.a ? ford.b : ford.a)}` : `the ${nameOf(ford.a)} – ${nameOf(ford.b)} road`;
         items.push({ id: `ford:${ford.id}`, text: `${ford.name} ${when}: everything on ${road} waits at the bank`, button: `<button data-ford="${ford.id}">Raise a bridge · ${nairaK(fordBridgeCost(world, ford))}</button>`, at: [ford.a, ford.b], weight: 8e7 });
       }
+    }
+    // A boat line of yours cut by a causeway (boats.ts, water.md Step 3): its boats wait at the bank.
+    for (const link of world.waterLinks ?? []) {
+      const by = lineCutBy(world, link);
+      if (by.length === 0) continue;
+      const ford = by[0]!;
+      const what = link.kind === "barge" ? "barges" : "water buses";
+      items.push({ id: `cut:${link.id}`, text: `Your ${what} ${nameOf(link.a)}–${nameOf(link.b)} can't pass ${ford.name}${by.length > 1 ? ` (and ${by.length - 1} more)` : ""}: they wait at the bank, and cost as they wait`, button: `<button data-ford="${ford.id}">Raise a bridge · ${nairaK(fordBridgeCost(world, ford))}</button>`, at: [link.a, link.b], weight: 6e7 });
     }
     // Your remit (remit.ts): a verdict's opening, the clusters on offer, each with what it brings.
     const offers = remitOffers(world);

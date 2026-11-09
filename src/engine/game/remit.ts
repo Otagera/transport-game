@@ -177,12 +177,13 @@ export function remitRefusal(world: GameWorld, spec: ActionSpec): string | null 
   switch (spec.kind) {
     case "bus": case "minibus": case "brt": case "lorry": case "train": case "freight":
     case "lane": case "enforce": case "settle": case "project":
+    case "boat": case "barge": // boats.ts: missed when they came in (2026-11-06), found measuring the crossings
       return placesOutsideRemit(world, spec.a, spec.b);
     case "road": case "pave": case "track":
       return linkOutsideRemit(world, spec.a, spec.b);
     case "halt":
       return placesOutsideRemit(world, spec.town);
-    case "yard": case "park": case "metro": case "busStation":
+    case "yard": case "park": case "metro": case "busStation": case "jetty":
       return placesOutsideRemit(world, spec.townId);
     case "expand":
       return placesOutsideRemit(world, spec.siteId);

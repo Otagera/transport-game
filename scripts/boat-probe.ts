@@ -12,7 +12,8 @@ import { SIM_DT } from "../src/engine/loop";
 import { SECONDS_PER_GAME_DAY as D } from "../src/engine/economy/state";
 import { pairDemand, roadPath, routeSummaries } from "../src/engine/game/world";
 import { goodsFlows, lorrySummaries } from "../src/engine/game/goods";
-import { jettyLanding, waterWay } from "../src/engine/game/boats";
+import { crossingsInTheWay, jettyLanding, waterWay } from "../src/engine/game/boats";
+import { fordBridgeCost } from "../src/engine/game/floods";
 import type { GameWorld } from "../src/engine/game/types";
 
 const seed = Number(process.env.SEED ?? 7585);
@@ -55,7 +56,7 @@ const routesNet = (pred: (id: string) => boolean) => (w: GameWorld) => routeSumm
 
 // C53: a water bus between the busiest pair, against buses on the road.
 const shortWay = pairs.find((p) => p.water <= p.road) ?? null;
-for (const p of [pairs[0], shortWay].filter((x, i, all): x is (typeof pairs)[number] => !!x && all.indexOf(x) === i)) {
+for (const p of process.env.ONLY === "barge" ? [] : [pairs[0], shortWay].filter((x, i, all): x is (typeof pairs)[number] => !!x && all.indexOf(x) === i)) {
   const jetties: ActionSpec[] = [{ kind: "jetty", townId: p.a }, { kind: "jetty", townId: p.b }];
   const boat = play([...jetties, { kind: "boat", a: p.a, b: p.b }], routesNet((id) => id.startsWith("boat:")));
   const boat2 = play([...jetties, { kind: "boat", a: p.a, b: p.b }, { kind: "boat", a: p.a, b: p.b }], routesNet((id) => id.startsWith("boat:")));
@@ -79,11 +80,15 @@ for (const f of flows) {
   legs.set(key, leg);
 }
 const barged = [...legs.values()]
-  .filter((l) => !w0.towns.get(l.a)?.industry && !w0.towns.get(l.b)?.industry && waterWay(w0, l.a, l.b, "barge"))
+  .filter((l) => !w0.towns.get(l.a)?.industry && !w0.towns.get(l.b)?.industry && (waterWay(w0, l.a, l.b, "barge") || crossingsInTheWay(w0, l.a, l.b, "barge").length > 0))
   .sort((p, q) => q.out + q.back - (p.out + p.back));
-console.log(`  goods legs between waterside towns a barge can reach: ${barged.length}; most: ${barged.slice(0, 4).map((l) => `${name(l.a)}-${name(l.b)} ${Math.round(l.out)}+${Math.round(l.back)} t/day, water ${Math.round(waterWay(w0, l.a, l.b, "barge")!.length)} road ${Math.round(roadPath(w0, l.a, l.b)?.distance ?? Infinity)}`).join("; ")}`);
+console.log(`  goods legs between waterside towns a barge can reach: ${barged.length}; most: ${barged.slice(0, 4).map((l) => `${name(l.a)}-${name(l.b)} ${Math.round(l.out)}+${Math.round(l.back)} t/day, water ${Math.round((waterWay(w0, l.a, l.b, "barge") ?? { length: NaN }).length)} road ${Math.round(roadPath(w0, l.a, l.b)?.distance ?? Infinity)}`).join("; ")}`);
 const leg = barged[0];
 if (leg) {
-  const barge = play([{ kind: "jetty", townId: leg.a }, { kind: "jetty", townId: leg.b }, { kind: "barge", a: leg.a, b: leg.b }], (w) => lorrySummaries(w).filter((r) => r.id.startsWith("barge:")).reduce((s, r) => s + r.netPerDay, 0));
+  // Its fords raised first, where any are in the way (water.md, Step 3): what opening the leg costs.
+  const fords = crossingsInTheWay(w0, leg.a, leg.b, "barge");
+  const raise = fords.reduce((s, f) => s + fordBridgeCost(w0, f), 0);
+  console.log(`  C54 leg ${name(leg.a)}-${name(leg.b)}: ${fords.length} ford${fords.length === 1 ? "" : "s"} in a barge's way, raising them ₦${raise}`);
+  const barge = play([...fords.map((f) => ({ kind: "bridgeFord" as const, fordId: f.id })), { kind: "jetty", townId: leg.a }, { kind: "jetty", townId: leg.b }, { kind: "barge", a: leg.a, b: leg.b }], (w) => lorrySummaries(w).filter((r) => r.id.startsWith("barge:")).reduce((s, r) => s + r.netPerDay, 0));
   console.log(`  C54 a barge ${name(leg.a)}-${name(leg.b)}: ₦${Math.round(barge.net ?? 0)}/day${barge.refused.length ? ` (refused: ${barge.refused.join("; ")})` : ""}`);
 }

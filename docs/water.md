@@ -324,6 +324,46 @@ freight is the hauliers', `noPlayerLorries`). They may be generous -- a freight 
 -- but a barge's legs are past the hauliers' 40 cells, which is where your freight belongs (principles
 §3). To watch in play.
 
+## Step 3: the crossings (scoped 2026-11-09; asked: "continue with the water work")
+
+**What crosses where, measured first** (`scripts/crossing-probe.ts`, each test map at the start):
+of the 10 busiest pairs the water joins, 8-9 have an old road's ford on the way -- 8-11 fords a map,
+₦27-43k to raise them all. A line from the home city crosses 4-6: the city's roads to its own sites
+cross the river again and again. Were every ford to block every boat, a ₦6k water bus earning
+₦66-199 a day would need ₦20k+ of bridges first.
+
+**Agreed** (2026-11-09, your call between three): **a ford blocks a barge, not a water bus.** A ford
+is shallow water with a road across it: a shallow-draft water bus crosses it, a laden barge can't.
+
+- **An old ford** blocks barges. **A causeway you build** (a new road over water, not built high)
+  blocks every boat: a cheap road across a river your boats use cuts your own line. **Raised** (the
+  Raise a bridge you already have, ₦1,200 a cell of water), either lets every boat through, and
+  never floods again: raising pays twice.
+- **The rains** raise the river while they close the fords: a ford or causeway under the flood
+  lets boats over it for the flood's days. The same season hurts the roads and helps the water.
+- **A line cut** by a causeway you build stands at the bank (its boats wait, and cost as they wait)
+  until you raise it; Waiting on you names it, with the bridge and its price. The Road tool's
+  preview says so before you build: the causeway, the line it would cut, and the price of building
+  high instead.
+- Opening a line the water joins only past a ford a barge can't cross is refused with the ford's
+  name and its price.
+- No third kind: the measurements didn't ask for one once fords stopped blocking water buses.
+
+| # | Check | Passes when |
+|---|---|---|
+| C55 | A barge never passes an unraised ford or causeway, a water bus never a causeway | No line is opened, and no boat moves, past one (save under the rains) |
+| C56 | Your causeway cuts your own line | Building one across a boat line of yours stops its boats until you raise it, and the Road tool said so first |
+| C57 | The rains help the water | While a ford is under the flood, a barge line past it runs |
+
+**Built 2026-11-09** (engine.md, Jetties and boats: the crossings). C55-C57 are tests. Measured
+again with the fords in the way (`ONLY=barge bun scripts/boat-probe.ts`): each map's busiest
+waterside goods leg needs 4-6 fords raised for a barge, ₦17-27k. Raised, the barge earns what it
+did -- 7585 Elosa-Oyudi ₦618 a day, 8703 Ikot Umono-Oboza ₦383, 3218 Gedema-Ikot Akodo ₦250 --
+so a barge leg pays back its fords, jetties and barge in 50-110 days, and the fords stop flooding.
+On 2418 and 949 the leg's fords lie in a far cluster, outside your remit: no bridge there until it
+opens. That showed jetties and boats had never been held to the remit (missed in step 2): now they
+are, as every other line and site is. Step 2's water-bus measurements included pairs outside it.
+
 ## After the map
 
 - **Step 2, jetties and boats.** A jetty at a waterfront (your build); a waterway network built

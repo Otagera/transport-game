@@ -1569,6 +1569,19 @@ again for the same trip, and the boat out-earned buses on a river longer than th
 optional, so a save from before boats loads; `boatsEnabled` absent means a run file from before them
 offers none. Tests: `test/boats.test.ts` (C51, C52, selling, replay).
 
+**The crossings** (2026-11-09; water.md, Step 3). Every ford in `world.floods.fords` -- the old
+roads', and the causeways you build (`built`) -- is placed on the waterway once (the node it lies
+on, `fordsOnWater`). `fordBlocks(world, ford, kind)`: an old ford stops a barge, a causeway every
+boat, a raised one (`bridged`) none, and none while the rains have it under (`floods.under`, phase
+`flood`). `waterWay` routes past only what a kind can pass (`waterRoute`'s `blocked` nodes, its
+cache keyed on their ids); where none gets through, `crossingsInTheWay` names the fords on the open
+way and `checkBoat` refuses with them and their price. A line's stored way can be cut later: a
+causeway built across it. `cutLines` (cached until a crossing or a line changes) lists the lines
+whose way passes a crossing their boats can't, and the tick skips their boats, which wait and cost
+as they wait. A ford at a landing doesn't count: that's where the boat ties up, and counted, a line
+could open and never sail (caught by the barge test). `boatsBlockedByFords` absent: nothing stops a
+boat, as before. Tests: C55-C57 in `test/boats.test.ts`.
+
 ### The building chain (Revision 3, step 2a)
 
 - **`cement.ts`** — one **cement works** per map, placed at start (`placeCementWorks`, from
