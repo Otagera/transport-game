@@ -33,6 +33,9 @@ describe("fishing (fishing.ts)", () => {
       expect(roadPath(w, l.siteId, l.townId)).not.toBeNull();
     }
     expect(start({ fishingEnabled: undefined }).fishing).toBeUndefined();
+    // A jetty can go at a landing: where its smoked fish waits for a barge.
+    const l = landings.find((x) => jettyLanding(w, x.siteId))!;
+    expect(applyAction(w, { kind: "jetty", townId: l.siteId }).ok).toBe(true);
   }, 120_000);
 
   test("C58: fresh fish only to the markets near its landing; a smokehouse sends the rest to the markets further off", () => {

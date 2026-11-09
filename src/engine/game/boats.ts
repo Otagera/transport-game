@@ -95,7 +95,8 @@ export function checkJetty(world: GameWorld, townId: string): ActionResult {
   if (!boatsOn(world)) return { ok: false, reason: SWITCHED_OFF };
   const town = world.towns.get(townId);
   if (!town) return { ok: false, reason: "pick a town" };
-  if (town.industry) return { ok: false, reason: "a jetty goes at a town" };
+  // At a town, or at a fishing landing (fishing.ts): where its smoked fish waits for a barge.
+  if (town.industry && town.industry !== "landing") return { ok: false, reason: "a jetty goes at a town or a fish landing" };
   if (hasJetty(world, townId)) return { ok: false, reason: "it has a jetty" };
   if (!jettyLanding(world, townId)) return { ok: false, reason: `no water a boat can use within ${reachOf(world)} cells` };
   if (!canAfford(world.economy, world.tuning.jettyCost ?? 0)) return { ok: false, reason: "can't afford a jetty" };

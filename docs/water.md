@@ -421,6 +421,32 @@ different world does to the bot's own choices. **Fishing left alone changes noth
 does only what you carry, which the bot can't. What's left to know -- whether carrying it pays --
 needs the strategist taught jetties, barges and smokehouses, or your own play.
 
+**The strategist taught water** (2026-11-09, 250 days). Every five days it adds a boat to a full
+line that pays, opens a water bus between the busiest jetty pair in its remit (150+ trips a day),
+and -- unless `NO_FISH=1` -- builds a smokehouse at the biggest catch, then raises the fords and
+builds the jetties and barge to carry its smoked fish to a town that wants it. Trips a day, mean of
+days 201-250, against the bot that knew no water (the fishing-on column above):
+
+| map | no water | boats only | boats and fish | people, boats only → and fish |
+|---|---|---|---|---|
+| 8703 | 1956 | 2091 | 1811 | 1077k → 1050k |
+| 2418 | 2136 | 2136 (built none) | 2119 | 1109k → 1149k |
+| 949 | 1766 | 1766 (built none) | 2237 | 1023k → 1121k |
+| 3218 | 2370 | 4345 | 3891 | 1349k → 1330k |
+| 7585 | 2185 | 2626 | 2615 | 1149k → 1162k |
+
+**Water buses pay**: where the bot opens them (8703, 3218, 7585), trips rise 7-83%, the lines
+netting ₦231-2982 a day. **Carrying fish doesn't, as tuned.** The bot builds 1-7 smokehouses and
+1-22 barges a map and raises 5-9 fords, and gets back less than it spends: barge-and-boat lines
+lose money on 8703 and 2418, money at day 250 falls on every map (₦14k → ₦7k on 8703, ₦193k → ₦56k
+on 2418), and the fishing towns are the same size either way (369k against 374k on 3218). Worse,
+the smokehouse cuts what's sold: the hauliers already sell a third of the catch fresh to the near
+towns, and smoking 70% of it leaves them less to carry while the smoked fish waits for the long
+hauls -- 38% of the catch sold to 6% on 3218, 32% to 11% on 8703. 949's gain comes from the two
+water bus lines its new jetties opened, not the fish (one barge, 1% of the want served). For the
+balance pass: a smokehouse should smoke only what the fresh trade can't sell (the catch beyond the
+near towns' want), not a fixed share; and a smoked-fish barge should pay its fords back.
+
 | # | Check | Passes when |
 |---|---|---|
 | C58 | Fresh stays near; smoked travels | Fresh fish flows only to towns within reach of its landing; with a smokehouse the rest reaches towns further off |

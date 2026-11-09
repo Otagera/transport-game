@@ -117,8 +117,10 @@ first; the rains let boats over the fords they flood. Jetties and boats now keep
 **Step 4, fishing** (2026-11-09; water.md, Step 4): a landing at every waterside town, fresh fish at a
 premium to the towns near it, a smokehouse to smoke the rest for the far ones; every town eats fish,
 and fish only adds to growth; tuned so a smokehouse smokes most of a catch and a fishing town grows
-from what it sells. Its effect shows only where you carry fish: to measure with the strategist or
-in play. Next: informal canoes.
+from what it sells. The strategist now builds water (water buses, smokehouses, barges, raising
+fords): water buses pay (trips up 7-83% where it opens them), carrying fish doesn't as tuned -- the
+smokehouse takes fish from the fresh trade the hauliers already ran, and barges don't pay back their
+fords (water.md). Next: the fish balance (smoke only what fresh can't sell), then informal canoes.
 
 **Deterministic on one engine, not across them** (2026-11-07). Your map 1692 run, replayed in Bun,
 parted from its recording on day 93 (₦49). It isn't the game: replayed in Chrome, and in Node (both

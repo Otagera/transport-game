@@ -1547,7 +1547,7 @@ out. `landing(world, town, width, reach)` is a town's nearest node a boat of tha
 within `reach` cells of its edge, with a reach out of it; `waterRoute` is Dijkstra on a binary heap
 between two towns' landings, through nodes at least that wide (the sea any boat's), cached a world.
 
-`boats.ts` is the mode. A jetty is a town in `world.jetties`. A line is `boat:a~b` in `world.routes`
+`boats.ts` is the mode. A jetty is a town in `world.jetties` (a town, or a fish landing, where smoked fish waits for a barge). A line is `boat:a~b` in `world.routes`
 (passengers: trip plans, transfers and fares as a bus's) or `barge:a~b` in `world.lorryRoutes`
 (goods, loaded as a lorry). Each line's way is a `WaterLink` in `world.waterLinks` (its length and
 points), and its boats are in `world.boatVehicles`. They run on a third network:
