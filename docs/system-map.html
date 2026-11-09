@@ -1,0 +1,320 @@
+<title>Transport Game System Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a map-room sheet -- three plates stacked (the loop, the chains, one tick), each a drawing with a
+   detail card beside it; the game's own ink-and-cream, its family colours the only hues. */
+:root {
+  --bg: #e6decf; --sheet: #f9f4ea; --sheet-2: #f1e9da; --ink: #16130e; --ink-2: #4a4335; --muted: #7d7464; --line: #d3c8b4;
+  --you: #1c6ca8; --informal: #c99700; --informal-fill: #f7dd85; --goods: #a8673a; --fuel: #c0392b; --building: #6b4fa8;
+  --food: #1e7a4f; --trade: #1c6ca8; --home: #9a917f; --bad: #c0392b; --good: #1e7a4f; --water: #2c4a57;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12100c; --sheet: #1c1914; --sheet-2: #252119; --ink: #f1eadc; --ink-2: #cfc4af; --muted: #9a8f7c; --line: #3a342a;
+  --you: #5aa3dc; --informal: #e8b82a; --informal-fill: #4a3d12; --goods: #d08a58; --fuel: #e2604f; --building: #a58ae0;
+  --food: #4cb383; --trade: #5aa3dc; --home: #8a826f; --bad: #e2604f; --good: #4cb383; --water: #7fb0c4; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12100c; --sheet: #1c1914; --sheet-2: #252119; --ink: #f1eadc; --ink-2: #cfc4af; --muted: #9a8f7c; --line: #3a342a;
+  --you: #5aa3dc; --informal: #e8b82a; --informal-fill: #4a3d12; --goods: #d08a58; --fuel: #e2604f; --building: #a58ae0;
+  --food: #4cb383; --trade: #5aa3dc; --home: #8a826f; --bad: #e2604f; --good: #4cb383; --water: #7fb0c4; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 800 clamp(30px, 5vw, 46px)/1.02 var(--display); letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.lede { max-width: 68ch; margin: 0; color: var(--ink-2); }
+nav { display: flex; flex-wrap: wrap; gap: 8px; }
+nav a { font: 600 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); text-decoration: none; border: 1px solid var(--line); background: var(--sheet); padding: 9px 12px; border-radius: 6px; }
+nav a:hover, nav a:focus-visible { border-color: var(--ink); outline: none; }
+.key { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 12px/1.4 var(--mono); color: var(--ink-2); }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.key i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+section.plate { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding-block: 22px 24px; padding-inline: clamp(14px, 3vw, 28px); display: grid; gap: 16px; scroll-margin-top: 16px; }
+.plate-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 18px; }
+h2 { font: 700 24px/1.1 var(--display); margin: 0; letter-spacing: -.01em; }
+.plate-head p { margin: 0; color: var(--muted); font-size: 13px; max-width: 62ch; }
+.body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+@media (max-width: 980px) { .body { grid-template-columns: minmax(0, 1fr); } }
+figure { margin: 0; min-width: 0; display: grid; gap: 8px; }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; background: var(--sheet-2); }
+.scroll svg { display: block; min-width: 880px; width: 100%; height: auto; color: var(--ink); }
+figcaption { font-size: 13px; color: var(--muted); max-width: 80ch; }
+aside.card { background: var(--sheet-2); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 8px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); min-width: 0; }
+@media (max-width: 980px) { aside.card { position: static; } }
+aside.card .eyebrow { display: flex; align-items: center; gap: 8px; }
+aside.card .eyebrow i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; background: var(--muted); }
+aside.card h3 { margin: 0; font: 700 18px/1.2 var(--display); }
+aside.card p { margin: 0; font-size: 14px; color: var(--ink-2); }
+aside.card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 13px; }
+aside.card dt { font: 600 11px/1.6 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+aside.card dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+aside.card code { font: 12px var(--mono); }
+.hint { font: 12px var(--mono); color: var(--muted); }
+/* SVG nodes */
+.node { cursor: pointer; }
+.node rect { fill: var(--sheet); stroke: var(--line); stroke-width: 1.2; transition: stroke .15s; }
+.node:hover rect, .node:focus-visible rect, .node.on rect { stroke: var(--ink); stroke-width: 2; }
+.node:focus-visible { outline: none; }
+.node .bar { stroke: none; }
+.node text { fill: var(--ink); }
+.t { font: 700 14px var(--display); }
+.s { font: 11.5px var(--body); fill: var(--ink-2) !important; }
+.lab { font: 600 10.5px var(--mono); letter-spacing: .03em; fill: var(--muted); }
+.col { font: 600 10.5px var(--mono); letter-spacing: .14em; fill: var(--muted); }
+.wire { fill: none; stroke: var(--ink-2); stroke-width: 1.4; }
+.wire.dash { stroke-dasharray: 5 4; }
+.wire.you { stroke: var(--you); } .wire.inf { stroke: var(--informal); } .wire.goods { stroke: var(--goods); } .wire.bad { stroke: var(--bad); } .wire.good { stroke: var(--good); }
+.band rect { fill: none; stroke: var(--line); stroke-dasharray: 4 4; }
+/* One tick */
+.tick { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: step; }
+.tick li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.tick li:first-child { border-top: 0; }
+.tick li:hover h4, .tick li.on h4, .tick li:focus-visible h4 { text-decoration: underline; text-underline-offset: 3px; }
+.tick li:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+.num { font: 800 22px/1 var(--display); color: var(--muted); padding-top: 2px; font-variant-numeric: tabular-nums; }
+.tick h4 { margin: 0 0 2px; font: 700 15px/1.3 var(--display); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.tick p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 70ch; }
+.chip { font: 600 10.5px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 6px; border-radius: 4px; border: 1px solid currentColor; }
+.ruler { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ruler div { background: var(--sheet-2); border-radius: 8px; padding: 12px; }
+.ruler b { display: block; font: 800 24px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.ruler span { font-size: 12px; color: var(--muted); }
+@media (max-width: 520px) { .ruler { grid-template-columns: minmax(0, 1fr); } }
+footer { font-size: 13px; color: var(--muted); max-width: 80ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Transport game · how it works · map version 16</div>
+    <h1>The whole game on one page</h1>
+    <p class="lede">Three drawings: what you do and what it moves (the loop), every goods chain and what it holds back (the chains), and what happens in each of the 900 ticks of a game day (one tick). Click any box for its rule and where it lives in the code.</p>
+    <nav aria-label="Views"><a href="#loop">The loop</a><a href="#chains">The chains</a><a href="#tick">One tick</a></nav>
+    <div class="key" aria-label="Colours">
+      <span><i style="background:var(--you)"></i>you</span><span><i style="background:var(--informal)"></i>the informal sector</span><span><i style="background:var(--home)"></i>stayed home</span><span><i style="background:var(--goods)"></i>goods and hauliers</span><span><i style="background:var(--fuel)"></i>fuel</span><span><i style="background:var(--building)"></i>building (cement, steel)</span><span><i style="background:var(--food)"></i>food and growth</span><span><i style="background:var(--water)"></i>water</span>
+    </div>
+  </header>
+
+  <!-- ============================== THE LOOP ============================== -->
+  <section class="plate" id="loop">
+    <div class="plate-head"><h2>The loop</h2><p>You build ways and run lines; each trip is carried by you, by the danfos, or not at all; carried trips grow the towns, which want more trips. Money comes back from fares and from the growth you caused.</p></div>
+    <div class="body">
+      <figure>
+        <div class="scroll">
+          <svg viewBox="0 0 1200 660" role="img" aria-label="The game loop: your moves feed lines and ways; trips split between you, the informal sector and staying home; carried trips grow towns, which make more trips; shortages hold growth back; money returns to fund more moves.">
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            </defs>
+            <text class="col" x="24" y="22">YOU</text>
+            <text class="col" x="300" y="22">THE TRIPS</text>
+            <text class="col" x="1000" y="22">THE SCORE</text>
+
+            <!-- you -->
+            <g class="node" data-id="build" tabindex="0"><rect x="24" y="40" width="210" height="60" rx="6"/><rect class="bar" x="24" y="40" width="5" height="60" fill="var(--you)"/><text class="t" x="40" y="64">Build ways</text><text class="s" x="40" y="84">roads · track · jetties · pipes</text></g>
+            <g class="node" data-id="run" tabindex="0"><rect x="24" y="130" width="210" height="60" rx="6"/><rect class="bar" x="24" y="130" width="5" height="60" fill="var(--you)"/><text class="t" x="40" y="154">Run lines</text><text class="s" x="40" y="174">bus · minibus · BRT · train · boat</text></g>
+            <g class="node" data-id="sites" tabindex="0"><rect x="24" y="420" width="210" height="60" rx="6"/><rect class="bar" x="24" y="420" width="5" height="60" fill="var(--you)"/><text class="t" x="40" y="444">Restore and place sites</text><text class="s" x="40" y="464">works · refinery · yards · parks</text></g>
+            <g class="node" data-id="term" tabindex="0"><rect x="24" y="520" width="210" height="60" rx="6"/><rect class="bar" x="24" y="520" width="5" height="60" fill="var(--you)"/><text class="t" x="40" y="544">The term</text><text class="s" x="40" y="564">pledges · 120 days · the verdict</text></g>
+
+            <!-- trips -->
+            <g class="node" data-id="demand" tabindex="0"><rect x="420" y="40" width="300" height="60" rx="6"/><text class="t" x="436" y="64">Trips wanted</text><text class="s" x="436" y="84">every town to every town, both ways</text></g>
+            <g class="node" data-id="yours" tabindex="0"><rect x="300" y="160" width="200" height="60" rx="6"/><rect class="bar" x="300" y="160" width="5" height="60" fill="var(--you)"/><text class="t" x="316" y="184">Your lines</text><text class="s" x="316" y="204">board, change, pay by distance</text></g>
+            <g class="node" data-id="informal" tabindex="0"><rect x="520" y="160" width="200" height="60" rx="6"/><rect class="bar" x="520" y="160" width="5" height="60" fill="var(--informal)"/><text class="t" x="536" y="184">Danfos · kekes · okadas</text><text class="s" x="536" y="204">whoever gives up on you</text></g>
+            <g class="node" data-id="home" tabindex="0"><rect x="740" y="160" width="180" height="60" rx="6"/><rect class="bar" x="740" y="160" width="5" height="60" fill="var(--home)"/><text class="t" x="756" y="184">Stay home</text><text class="s" x="756" y="204">no road, or no seat</text></g>
+            <g class="node" data-id="growth" tabindex="0"><rect x="420" y="300" width="300" height="60" rx="6"/><rect class="bar" x="420" y="300" width="5" height="60" fill="var(--food)"/><text class="t" x="436" y="324">Towns grow</text><text class="s" x="436" y="344">from the trips they make; new towns on busy roads</text></g>
+            <g class="node" data-id="goods" tabindex="0"><rect x="300" y="420" width="210" height="60" rx="6"/><rect class="bar" x="300" y="420" width="5" height="60" fill="var(--goods)"/><text class="t" x="316" y="444">Goods to move</text><text class="s" x="316" y="464">sites to towns: the chains</text></g>
+            <g class="node" data-id="carriers" tabindex="0"><rect x="550" y="420" width="220" height="60" rx="6"/><rect class="bar" x="550" y="420" width="5" height="60" fill="var(--goods)"/><text class="t" x="566" y="444">Hauliers · your freight</text><text class="s" x="566" y="464">trucks, yards, trains, barges, pipes</text></g>
+            <g class="node" data-id="short" tabindex="0"><rect x="810" y="420" width="160" height="60" rx="6"/><rect class="bar" x="810" y="420" width="5" height="60" fill="var(--bad)"/><text class="t" x="826" y="444">Shortages</text><text class="s" x="826" y="464">cement · steel · fuel · food</text></g>
+
+            <!-- score -->
+            <g class="node" data-id="people" tabindex="0"><rect x="1000" y="40" width="176" height="60" rx="6"/><rect class="bar" x="1000" y="40" width="5" height="60" fill="var(--food)"/><text class="t" x="1016" y="64">People</text><text class="s" x="1016" y="84">your score: the first towns</text></g>
+            <g class="node" data-id="money" tabindex="0"><rect x="1000" y="300" width="176" height="74" rx="6"/><rect class="bar" x="1000" y="300" width="5" height="74" fill="var(--you)"/><text class="t" x="1016" y="324">Money</text><text class="s" x="1016" y="344">fares, tolls, levies,</text><text class="s" x="1016" y="360">allocation, less running</text></g>
+
+            <!-- wires -->
+            <path class="wire you" d="M234,70 H416" marker-end="url(#ah)" style="color:var(--you)"/><text class="lab" x="250" y="62">joins towns</text>
+            <path class="wire you" d="M234,170 C270,170 270,190 296,190" marker-end="url(#ah)" style="color:var(--you)"/><text class="lab" x="240" y="214">adds seats</text>
+            <path class="wire" d="M500,100 V156" marker-end="url(#ah)"/><path class="wire" d="M600,100 V156" marker-end="url(#ah)"/><path class="wire" d="M700,100 C700,130 830,130 830,156" marker-end="url(#ah)"/>
+            <text class="lab" x="728" y="124">each trip, one of three</text>
+            <path class="wire you" d="M420,220 C420,262 470,262 470,296" marker-end="url(#ah)" style="color:var(--you)"/><text class="lab" x="330" y="262">develops ×1</text>
+            <path class="wire inf" d="M600,220 C600,262 640,262 640,296" marker-end="url(#ah)" style="color:var(--informal)"/><text class="lab" x="650" y="262">sustains ×½</text>
+            <path class="wire good" d="M720,330 H960 V70 H724" marker-end="url(#ah)" style="color:var(--good)"/><text class="lab" x="790" y="322">more people, more trips</text>
+            <path class="wire good" d="M960,70 H996" marker-end="url(#ah)" style="color:var(--good)"/>
+            <path class="wire you" d="M400,220 V392 H996" marker-end="url(#ah)" style="color:var(--you)"/><text class="lab" x="740" y="408">fares, by distance</text>
+            <path class="wire dash inf" d="M640,220 C660,240 980,240 996,318" marker-end="url(#ah)" style="color:var(--informal)"/><text class="lab" x="840" y="236">levies, tolls</text>
+            <path class="wire good" d="M720,350 H996" marker-end="url(#ah)" style="color:var(--good)"/><text class="lab" x="738" y="344">allocation grows with your growth</text>
+            <path class="wire goods" d="M234,450 H296" marker-end="url(#ah)" style="color:var(--goods)"/><text class="lab" x="240" y="440">supply</text>
+            <path class="wire goods" d="M510,450 H546" marker-end="url(#ah)" style="color:var(--goods)"/>
+            <path class="wire goods" d="M770,450 H806" marker-end="url(#ah)" style="color:var(--goods)"/><text class="lab" x="772" y="440">unserved</text>
+            <path class="wire bad" d="M890,420 C890,380 760,360 724,352" marker-end="url(#ah)" style="color:var(--bad)"/><text class="lab" x="880" y="404">holds back</text>
+            <path class="wire you" d="M1088,374 V604 H256 V160 H238" marker-end="url(#ah)" style="color:var(--you)"/><text class="lab" x="600" y="598">funds every move · debt allowed, spending blocked</text>
+            <path class="wire dash" d="M570,360 C570,540 300,550 238,550" marker-end="url(#ah)"/><text class="lab" x="330" y="520">pledges judged on it</text>
+
+            <!-- pressures -->
+            <g class="band"><rect x="24" y="616" width="1152" height="36" rx="6"/></g>
+            <text class="col" x="38" y="639">PRESSURE</text>
+            <g class="node" data-id="congestion" tabindex="0"><text class="lab" x="128" y="639" style="fill:var(--informal)">● congestion</text></g>
+            <g class="node" data-id="wear" tabindex="0"><text class="lab" x="250" y="639" style="fill:var(--goods)">● wear</text></g>
+            <g class="node" data-id="unions" tabindex="0"><text class="lab" x="330" y="639" style="fill:var(--bad)">● unions and strikes</text></g>
+            <g class="node" data-id="rains" tabindex="0"><text class="lab" x="490" y="639" style="fill:var(--water)">● the rains</text></g>
+            <g class="node" data-id="fuelshort" tabindex="0"><text class="lab" x="590" y="639" style="fill:var(--fuel)">● fuel short</text></g>
+            <g class="node" data-id="treasury" tabindex="0"><text class="lab" x="700" y="639" style="fill:var(--ink-2)">● the treasury</text></g>
+            <g class="node" data-id="remit" tabindex="0"><text class="lab" x="820" y="639" style="fill:var(--you)">● your remit</text></g>
+          </svg>
+        </div>
+        <figcaption>Blue is you, yellow the informal sector, green growth. A rider carried by you develops a town; one carried by a danfo only sustains it, at half weight. The dashed band holds the pressures that push back; click one.</figcaption>
+      </figure>
+      <aside class="card" aria-live="polite" data-for="loop"></aside>
+    </div>
+  </section>
+
+  <!-- ============================== THE CHAINS ============================== -->
+  <section class="plate" id="chains">
+    <div class="plate-head"><h2>The chains</h2><p>Each chain from its source to who needs it, the site you restore in the middle, and what a shortage holds back. Goods ride whatever reaches: hauliers by road, or your freight on track, water or pipe.</p></div>
+    <div class="body">
+      <figure>
+        <div class="scroll">
+          <svg viewBox="0 0 1200 700" role="img" aria-label="Eight goods chains: fuel, cement, steel, food, cotton, power, the assembly plant and air freight, each from source through a site to the towns, with what a shortage holds back.">
+            <defs>
+              <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            </defs>
+            <text class="col" x="24" y="24">SOURCE</text><text class="col" x="330" y="24">SITE YOU RESTORE</text><text class="col" x="640" y="24">GOES TO</text><text class="col" x="930" y="24">SHORT MEANS</text>
+            <!-- rows: y = 40 + 80k -->
+            <g id="rows"></g>
+            <!-- carriers band -->
+            <g class="band"><rect x="24" y="660" width="1152" height="32" rx="6"/></g>
+            <text class="col" x="38" y="681">CARRIED BY</text>
+            <g class="node" data-id="c-haul" tabindex="0"><text class="lab" x="150" y="681" style="fill:var(--goods)">● hauliers ≤40 cells, yards to 120</text></g>
+            <g class="node" data-id="c-rail" tabindex="0"><text class="lab" x="420" y="681" style="fill:var(--ink-2)">● your freight train</text></g>
+            <g class="node" data-id="c-barge" tabindex="0"><text class="lab" x="590" y="681" style="fill:var(--water)">● barge, water 2.5+ cells</text></g>
+            <g class="node" data-id="c-pipe" tabindex="0"><text class="lab" x="800" y="681" style="fill:var(--fuel)">● pipeline, fuel only</text></g>
+            <g class="node" data-id="c-relay" tabindex="0"><text class="lab" x="980" y="681" style="fill:var(--goods)">● relayed in legs</text></g>
+          </svg>
+        </div>
+        <figcaption>Every chain is one-way (principles §3: goods stay one-way; reverse flows are different cargo). Restoring a site costs money once and staff to run: its workers commute to it by road. Imports land at the seaport and reach the home city by its link.</figcaption>
+      </figure>
+      <aside class="card" aria-live="polite" data-for="chains"></aside>
+    </div>
+  </section>
+
+  <!-- ============================== ONE TICK ============================== -->
+  <section class="plate" id="tick">
+    <div class="plate-head"><h2>One tick</h2><p>The order is the model: everything happens in this sequence, every 1/30 of a game second, deterministically. A change to one step can change every step after it.</p></div>
+    <div class="ruler">
+      <div><b>1/30 s</b><span>one tick (<code>SIM_DT</code>)</span></div>
+      <div><b>900</b><span>ticks in a game day of 30 s</span></div>
+      <div><b>7.5 s</b><span>a game day on screen at 4×</span></div>
+    </div>
+    <div class="body">
+      <ol class="tick" id="ticklist"></ol>
+      <aside class="card" aria-live="polite" data-for="tick"></aside>
+    </div>
+  </section>
+
+  <footer>Read from the code on 9 November 2026 (main at 4f2cd10): <code>tick.ts gameTick</code> for one tick, <code>systems.ts</code> for the loop's chain of causes, the chain files under <code>src/engine/game</code>. The docs are the reasons: docs/brief.md, docs/principles.md §3, docs/architecture/engine.md.</footer>
+</div>
+
+<script>
+const D = {
+  // ---- the loop
+  build: { c: "--you", k: "You", t: "Build ways", p: "A road between two towns makes their trips possible: with no road, people stay home. Dirt first; pave it, add a bus lane, declare a trunk. Track for trains, jetties for boats, pipes for fuel. A road's price is its plan over the land: hills, rivers, bridges.", r: "roads only: what drives", f: "Trips wanted (reachable), road speed", d: "world.ts buildRoad · roads.ts · rail.ts · boats.ts · pipelines.ts" },
+  run: { c: "--you", k: "You", t: "Run lines", p: "Pick a vehicle, click two towns (or a chain of them). A line's vehicles spread out around it, never a convoy. Riders change lines at any town and pay a fare each leg, so feeders earn from the riders they hand on.", r: "Funds", f: "Your lines: seats and frequency", d: "world.ts addBus · rail.ts addTrain · boats.ts addBoat · transfers.ts" },
+  sites: { c: "--you", k: "You", t: "Restore and place sites", p: "Restore the idle cement works, refinery, steel works, mill, power station or textile mill; expand a full one. Place haulage yards (hauliers reach further), motor parks (levies, the union likes them), bus stations (changing riders wait longer).", r: "Funds", f: "Goods to move, hauliers' reach", d: "cement.ts · fuel.ts · steel.ts · yards.ts · parks.ts · busstations.ts" },
+  term: { c: "--you", k: "You", t: "The term", p: "Every 120 days a term ends with a verdict on the pledges you chose: problems from the world itself (a shortage, a stranded town, a crowded road). Keep them and the grant follows; fail two terms and you're replaced. Kept pledges open the far clusters to you.", r: "People, growth, the problems", f: "Your remit, the grant", d: "term.ts · remit.ts · correspondent.ts" },
+  demand: { c: "--ink-2", k: "The trips", t: "Trips wanted", p: "Gravity between every pair of towns, both ways by construction: bigger and nearer towns want more trips. Every inhabited place makes trips, villages too. A rail line induces a little more.", r: "Town sizes, distance", f: "Your lines, the informal sector, staying home", d: "world.ts gravityDemand · settlement.ts refreshDemand" },
+  yours: { c: "--you", k: "The trips", t: "Your lines", p: "A rider boards a vehicle whose plan gets them off at a stop ahead (before it next comes back through here). Riders who wait too long give up: frequency is what keeps them. Fares are by distance in stages; a train's by its track, a boat's by the water (never more than the road).", r: "Seats, frequency, road speed", f: "Towns grow (×1), money (fares)", d: "tick.ts busLoader · fares.ts · transfers.ts" },
+  informal: { c: "--informal", k: "The other side", t: "Danfos · kekes · okadas", p: "Everyone who gives up waiting for you goes to the motor park. Danfos run corridors, grouped by first road, and fill before they leave; people who won't wait take a keke or an okada. They share the road with your buses and congest it, and you collect their levies and your tolls.", r: "Riders who gave up, road space", f: "Towns grow (×½), money (levies, tolls), congestion", d: "tick.ts dispatchInformal · principles.md §3 Paratransit" },
+  home: { c: "--home", k: "The trips", t: "Stay home", p: "A trip nobody makes: no road joins the towns, or the road is there and no seat came (the danfos' road space was full, or the riders out-waited even the okadas). 'No seat' on the strip and the No seat overlay show where.", r: "Missing roads, full roads", f: "Nothing: lost growth", d: "world.ts headline · problems.ts noSeatPairs" },
+  growth: { c: "--food", k: "The score", t: "Towns grow", p: "A town grows toward what its trips support: your riders count fully, the informal sector's at half. Growth needs cement past its first 40%, steel past +80%, fuel and food; short of them, the people it would have grown are 'held back'. Busy roads grow new roadside towns; a town nobody serves shrinks.", r: "Trips made, shortages", f: "More trips, People, the allocation", d: "growth.ts townGrowth · settlement.ts" },
+  goods: { c: "--goods", k: "Goods", t: "Goods to move", p: "Every site makes goods for somewhere: limestone to the works, cement and fuel to the towns, crops to the mill and the port. They wait at the source's yard and spoil if they wait too long (fuel, cement and steel keep). The chains below have them all.", r: "Sites working, staffed", f: "Hauliers and your freight", d: "goods.ts goodsFlows · produceAndSpoil" },
+  carriers: { c: "--goods", k: "Goods", t: "Hauliers · your freight", p: "Private hauliers take what waits, keenest on short hauls, none past 40 cells, unless a yard stretches it to 120. Cement, steel and fuel go in legs town to town. Long hauls are yours: freight trains on track, barges on water, pipelines for fuel.", r: "Goods waiting, roads, yards", f: "Served shares in every town", d: "truckers.ts · haulage.ts · goods.ts · boats.ts · pipelines.ts" },
+  short: { c: "--bad", k: "Goods", t: "Shortages", p: "A town's cement, steel, fuel and food served share. Short of building goods it can't grow; short of fuel, danfos are parked and dearer, and riders wait longer for you. Waiting on you names the worst, with the move that answers it.", r: "Served shares", f: "Holds growth back", d: "cement.ts cementBreak · steel.ts · fuel.ts · food.ts · screen.ts waitingOnYou" },
+  people: { c: "--food", k: "The score", t: "People", p: "The headline: how many live in the towns you started with. The strip shows it with trips made a day and your money, each with its last 30 days.", r: "Towns grow", f: "The term's verdict", d: "screen.ts renderStrip" },
+  money: { c: "--you", k: "The score", t: "Money", p: "In: fares, goods fares by the tonne and cell, tolls on your roads, park and loading levies, and the state's allocation (a base plus a share of the growth you caused), exports. Out: every vehicle's running cost, road upkeep, worn roads, the fuel premium, enforcement, bonds, and the treasury's share. Debt is allowed: spending stops, billing doesn't.", r: "Everything", f: "Every move", d: "tick.ts (money) · budget.ts · ledger.ts" },
+  congestion: { c: "--informal", k: "Pressure", t: "Congestion", p: "Road speed falls with the flow entering it (the BPR curve), counting danfos, trucks, cars and your vehicles. Your buses slow, make fewer trips, and riders give up. A bus lane takes your vehicles out of it, until a strike.", r: "Flow on each road", f: "Your lines' speed", d: "congestion.ts updateRoadSpeeds" },
+  wear: { c: "--goods", k: "Pressure", t: "Wear", p: "Roads wear with the traffic on them, lorries hardest. A worn road raises your vehicles' running cost (up to +70%) and slows them. Maintain the roads your lines use: whose road it is is the decision.", r: "Traffic", f: "Running cost, speed", d: "wear.ts · upkeep.ts" },
+  unions: { c: "--bad", k: "Pressure", t: "Unions and strikes", p: "Each cluster's danfo union has a chairman with a stance and a memory. A bus lane angers them; a strike stops danfos and blocks your lane. Pay, ease the lane, hand them the route, or refuse. Tanker drivers strike against your pipelines.", r: "Lanes, corridors you take, pipes", f: "Strikes", d: "union.ts · pushback.ts" },
+  rains: { c: "--water", k: "Pressure", t: "The rains", p: "Twice a year two fords flood for 20 days, named two weeks ahead. A flooded road crawls at 8% speed. Raise a bridge there, or build high to begin with. (Next for water: fords and causeways will block boats.)", r: "The season", f: "Road speed", d: "floods.ts" },
+  fuelshort: { c: "--fuel", k: "Pressure", t: "Fuel short", p: "Where fuel runs short, danfos are parked and charge more, riders wait longer for you, your vehicles pay above the pump price, and towns stop growing. It builds with your success: towns start supplied.", r: "Fuel supplied", f: "Informal sector, running cost, growth", d: "fuel.ts" },
+  treasury: { c: "--ink-2", k: "Pressure", t: "The treasury", p: "Once a period the treasury takes its share of a surplus; money saved for a named project is kept from it until the project lapses.", r: "Your surplus", f: "Money", d: "budget.ts remit · sweep.ts · project.ts" },
+  remit: { c: "--you", k: "Pressure", t: "Your remit", p: "You start with the home cluster. Each far cluster opens at a term's verdict that keeps its pledges; until then you can't build there.", r: "Kept pledges", f: "Where you may build", d: "remit.ts · clusters.ts" },
+  // ---- carriers
+  "c-haul": { c: "--goods", k: "Carried by", t: "Hauliers", p: "Private, informal freight: they pick up what waits at a yard, short hauls fastest, none past 40 cells unless a haulage yard stretches it to 120. You take a levy on what they load at your yards.", r: "", f: "", d: "truckers.ts · yards.ts" },
+  "c-rail": { c: "--ink-2", k: "Carried by", t: "Your freight train", p: "A goods line on track, loaded like a lorry: volume over distance. Wagons add tonnes. Its rate (cheap, standard, dear) moves goods off the hauliers or not.", r: "", f: "", d: "goods.ts addFreightTrain · freightrates.ts" },
+  "c-barge": { c: "--water", k: "Carried by", t: "Barge", p: "A goods line between two jetties on water at least 2.5 cells wide: 200 t, slow, cheap a tonne. Measured to pay on long one-way hauls (₦250-629 a day on the five test maps).", r: "", f: "", d: "boats.ts · waterways.ts" },
+  "c-pipe": { c: "--fuel", k: "Carried by", t: "Pipeline", p: "Refined fuel only, from the tank farm or a refinery to a town. Its dial is the share that goes by pipe: each tenth is a tenth off the tanker drivers, and their union hears of it. Taps and strikes shut it.", r: "", f: "", d: "pipelines.ts" },
+  "c-relay": { c: "--goods", k: "Carried by", t: "Relayed in legs", p: "Cement, steel, fuel, limestone and air freight go town to town in legs, waiting between, so connected roads get them anywhere eventually. Three legs or more is slow: freight track is quicker.", r: "", f: "", d: "haulage.ts nextStop · haulBreak" },
+  // ---- the tick
+  t1: { c: "--ink-2", k: "Riders", t: "Arrivals", p: "Every demand pair adds its rate × dt riders to its origin town's queue, keyed by destination and origin, so a rider changing lines is still counted against the trip they're on.", d: "tick.ts §1" },
+  t2: { c: "--informal", k: "Riders", t: "Giving up", p: "A share of every queue gives up (patience 12 s; longer where fuel is short, longer still for riders changing at your bus station) and goes to the motor park's pool. This bounds every queue and makes frequency worth paying for.", d: "tick.ts §2 · busstations.ts changePatience" },
+  t3: { c: "--goods", k: "Roads · goods", t: "Roads and goods", p: "Private cars once a day; every road's speed from this tick's flow, before anything moves. Goods arrive at yards and some spoil; pipelines take their share; hauliers pick up, short hauls first.", d: "private.ts · congestion.ts · goods.ts produceAndSpoil · pipelines.ts · truckers.ts" },
+  t4: { c: "--you", k: "Vehicles", t: "Everything moves", p: "Each vehicle on its network: roads, track or water. A bus boards riders whose plan gets off ahead and pays a fare per leg on unloading; a danfo passing takes anyone going its way, your riders included. Arriving at an end, a bus takes a shorter road built since, or round a flood.", d: "tick.ts §3 · simulation/vehicle.ts tickVehicle · rail.ts routingFor" },
+  t5: { c: "--goods", k: "Goods", t: "Goods outcomes", p: "Deliveries roll into every flow's served rate; fuel shortages update; the assembly plant learns and its discount follows.", d: "goods.ts updateGoodsOutcomes · fuel.ts · assembly.ts" },
+  t6: { c: "--informal", k: "Informal", t: "The informal sector", p: "The park pools: danfos first (grouped by where riders are and their first road, sent where most are going if the road has space and isn't jammed), then kekes and okadas for those who won't wait. Tolls and levies to you; the agberos keep their cut.", d: "tick.ts dispatchInformal · parks.ts" },
+  t7: { c: "--you", k: "Money", t: "Money", p: "The allocation and exports; road wear and upkeep; bus lanes, encroachment and strikes; the unions; rough roads and the fuel premium; every vehicle's running cost; projects; the treasury's share; bonds. The ledger records it all per route.", d: "tick.ts · wear.ts · pushback.ts · union.ts · budget.ts · bonds.ts" },
+  t8: { c: "--ink-2", k: "Rates", t: "Rolling rates", p: "Every smoothed rate updates exactly once a tick: route boardings, load and speed (lorry routes four times slower, as they deliver in lumps), transfers, pair outcomes. Then the per-town index of outcomes.", d: "tick.ts (EMAs) · world.ts indexOutcomes" },
+  t9: { c: "--food", k: "Events", t: "Events", p: "Settlements and growth, milestones, corridors judged (taken from the danfos or lost), industries opening and closing, sites, retired roads, the term, the rains, a private refinery, the treasury's sweep. At a day's turn, the day is recorded for the strip and the run file.", d: "settlement.ts · growth.ts · corridors.ts · industries.ts · term.ts · floods.ts · history.ts" },
+};
+const CHAINS = [
+  { id: "fuel", c: "--fuel", src: ["Oilfield or terminal", "crude"], site: ["Refinery", "restore · a private one opens later"], to: ["Every town", "and the tank farm's imports"], short: ["Danfos parked, dearer", "riders wait longer"], note: "Imports land at the seaport and fill the tank farm first; the refinery fills what's short, nearest it, so it can only add. Fuel comes over the border too where there's a crossing. Pipelines carry refined fuel." },
+  { id: "cement", c: "--building", src: ["Limestone quarries", "open and close over time"], site: ["Cement works", "restore · expand when full"], to: ["Towns that build", "split by want, not nearest"], short: ["Growth held back", "past the first 40%"], note: "Quarries open and close; a far cluster's limestone field is offered as a pledge. A short works splits its cement over every town by want, so the far towns' share waits for you to carry it." },
+  { id: "steel", c: "--building", src: ["Iron-ore mine", "or the steel terminal's imports"], site: ["Steel works", "restore"], to: ["The big towns", "their last growth"], short: ["Growth held back", "past +80%"], note: "Steel is what the cities need to keep growing late in the game; without a works it's imported from the terminal." },
+  { id: "food", c: "--food", src: ["Farm towns", "staple and cash crops"], site: ["Garri mill · flour mill", "restore · wheat imported"], to: ["Market towns", "cash crops to port or border"], short: ["Markets underfed", "export pay lost"], note: "Each farm town's staple goes to the mill and its cash crop to whichever gateway pays more (the home city for the seaport, or the border). The state pays for exports. The flour mill turns imported wheat into flour." },
+  { id: "textile", c: "--trade", src: ["Cotton", "northern farm towns, else the border"], site: ["Textile mill", "restore"], to: ["Market towns", "cloth, and some for export"], short: ["Fewer trips", "cloth lifts trips"], note: "On a northern map the far farm towns grow the cotton; elsewhere it comes over the border or through the port." },
+  { id: "power", c: "--goods", src: ["Coal mine", "bulk: short hauls or your train"], site: ["Power station", "restore"], to: ["Sites", "they make more"], short: ["Sites run slower", ""], note: "Power lifts every powered site's output. Coal is bulk: hauliers take it only on short hauls, so a long one is your freight train's." },
+  { id: "assembly", c: "--you", src: ["Steel and fuel", "both delivered"], site: ["Assembly plant", "it learns as it runs"], to: ["Your buses", "and minibuses, cheaper"], short: ["Full price", ""], note: "The one two-input site: fed steel and fuel, it assembles your buses and minibuses and the discount grows as it runs." },
+  { id: "air", c: "--trade", src: ["Airport", "there from day 1"], site: ["Your lines to it", "a road, a train, then service"], to: ["Travellers · air freight", "freight to market towns"], short: ["Travellers stranded", "until you serve it"], note: "A few hundred travellers a day each way, stranded until you carry them, and high-value air freight by hauliers or your freight train." },
+];
+for (const ch of CHAINS) D["ch-" + ch.id] = { c: ch.c, k: "Chain", t: ch.site[0], p: ch.note, r: ch.src.join(", "), f: ch.to.join(", "), d: ch.id === "air" ? "airport.ts" : ch.id === "assembly" ? "assembly.ts" : ch.id === "textile" ? "textile.ts" : ch.id + ".ts" };
+const TICK = ["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9"];
+
+// Chains drawn into the SVG.
+const NS = "http://www.w3.org/2000/svg";
+const rows = document.getElementById("rows");
+const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text) e.textContent = text; return e; };
+const box = (g, x, y, w, color, [t, s]) => {
+  g.append(el("rect", { x, y, width: w, height: 60, rx: 6 }), el("rect", { class: "bar", x, y, width: 5, height: 60, fill: `var(${color})` }), el("text", { class: "t", x: x + 16, y: y + 25 }, t));
+  if (s) g.append(el("text", { class: "s", x: x + 16, y: y + 45 }, s));
+};
+CHAINS.forEach((ch, k) => {
+  const y = 40 + k * 78;
+  const g = el("g", { class: "node", "data-id": "ch-" + ch.id, tabindex: 0 });
+  box(g, 24, y, 250, ch.c, ch.src);
+  box(g, 330, y, 250, ch.c, ch.site);
+  box(g, 640, y, 240, ch.c, ch.to);
+  const s = el("g", {});
+  s.append(el("rect", { x: 930, y, width: 246, height: 60, rx: 6, style: "fill:none;stroke:var(--line);stroke-dasharray:4 4" }), el("text", { class: "t", x: 946, y: y + 25, style: "fill:var(--bad)" }, ch.short[0]));
+  if (ch.short[1]) s.append(el("text", { class: "s", x: 946, y: y + 45 }, ch.short[1]));
+  g.append(s);
+  for (const [x1, x2] of [[274, 326], [580, 636], [880, 926]]) g.append(el("path", { class: "wire", d: `M${x1},${y + 30} H${x2}`, "marker-end": "url(#ah2)", style: `color:var(--ink-2)` }));
+  rows.append(g);
+});
+
+// The tick list.
+const list = document.getElementById("ticklist");
+TICK.forEach((id, i) => {
+  const d = D[id];
+  const li = document.createElement("li");
+  li.dataset.id = id; li.tabIndex = 0;
+  li.innerHTML = `<div class="num">${i + 1}</div><div><h4>${d.t} <span class="chip" style="color:var(${d.c})">${d.k}</span></h4><p>${d.p.split(". ")[0].replace(/\.$/, "")}.</p></div>`;
+  list.append(li);
+});
+
+// Detail cards.
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function show(id, scope) {
+  const d = D[id]; if (!d) return;
+  const card = document.querySelector(`aside.card[data-for="${scope}"]`);
+  card.innerHTML = `<div class="eyebrow"><i style="background:var(${d.c})"></i>${esc(d.k)}</div><h3>${esc(d.t)}</h3><p>${esc(d.p)}</p><dl>${d.r ? `<dt>Reads</dt><dd>${esc(d.r)}</dd>` : ""}${d.f ? `<dt>Feeds</dt><dd>${esc(d.f)}</dd>` : ""}<dt>Code</dt><dd><code>${esc(d.d)}</code></dd></dl>`;
+  document.querySelectorAll(`#${scope} [data-id]`).forEach((n) => n.classList.toggle("on", n.dataset.id === id));
+}
+for (const scope of ["loop", "chains", "tick"]) {
+  const root = document.getElementById(scope);
+  const pick = (e) => { const n = e.target.closest("[data-id]"); if (n && root.contains(n)) show(n.dataset.id, scope); };
+  root.addEventListener("click", pick);
+  root.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { const n = e.target.closest("[data-id]"); if (n) { e.preventDefault(); show(n.dataset.id, scope); } } });
+}
+show("demand", "loop"); show("ch-cement", "chains"); show("t4", "tick");
+</script>
