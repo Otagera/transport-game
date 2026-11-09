@@ -131,7 +131,11 @@ export function fishFlows(world: GameWorld): GoodsFlow[] {
     const want = new Map(markets.map((m) => [m.id, wantOf(world, m.population)]));
     const near = markets.filter((m) => (roadPath(world, l.siteId, m.id)?.distance ?? Infinity) <= reach);
     const nearWant = near.reduce((sum, m) => sum + want.get(m.id)!, 0);
-    const fresh = Math.min(caught, nearWant);
+    // With a smokehouse most of the catch is smoked (smokeShare), the rest still fresh at its premium:
+    // fresh fish mostly spoiled before a haulier lifted it (8703: 61 t a day sent, ~5 arriving), and
+    // a smokehouse that smoked only what the near towns had no room for smoked almost nothing.
+    const freshShare = l.smokehouse ? 1 - (world.tuning.smokeShare ?? 0.7) : 1;
+    const fresh = Math.min(caught * freshShare, nearWant);
     for (const m of near) {
       const rate = nearWant > 0 ? (want.get(m.id)! * fresh) / nearWant : 0;
       if (rate <= 0) continue;
@@ -140,7 +144,9 @@ export function fishFlows(world: GameWorld): GoodsFlow[] {
     }
     if (!l.smokehouse) continue;
     const rest = caught - fresh;
-    const takers = markets.filter((m) => want.get(m.id)! > 0).sort((p, q) => want.get(q.id)! - want.get(p.id)! || (p.id < q.id ? -1 : 1)).slice(0, SMOKED_TOWNS);
+    // Smoked keeps: the near towns' want left first (fresh couldn't reach them in time), then the far ones wanting most.
+    const nearIds = new Set(near.map((m) => m.id));
+    const takers = markets.filter((m) => want.get(m.id)! > 0).sort((p, q) => Number(nearIds.has(q.id)) - Number(nearIds.has(p.id)) || want.get(q.id)! - want.get(p.id)! || (p.id < q.id ? -1 : 1)).slice(0, SMOKED_TOWNS);
     const left = takers.reduce((sum, m) => sum + want.get(m.id)!, 0);
     if (rest <= 0 || left <= 0) continue;
     const smoked = Math.min(rest, left);
@@ -173,12 +179,34 @@ export function fishServed(world: GameWorld, townId: string): number {
   return Math.min(1, got / want);
 }
 
-/** Thousands of people of room a town's fish gives it (growth.ts): on top of its food, never instead. */
+/** Of a landing's catch, the share carried away and sold (fresh and smoked, anyone's), 0..1: its trade. */
+export function fishSold(world: GameWorld, l: FishLanding): number {
+  if (l.catchPerDay <= 0) return 0;
+  // Its own flows only, a lookup a town and kind: growth reads this every tick, and a scan of every
+  // outcome in the world would undo the fix that kept fishing to 4% of a tick.
+  let carried = 0;
+  for (const town of eaters(world)) {
+    for (const kind of ["produce", "supplies"] as const) {
+      const o = world.goods.outcomes.get(flowKey({ from: l.siteId, to: town.id, kind }));
+      if (o) carried += (o.delivered ?? 0) + (o.trucked ?? 0);
+    }
+  }
+  return Math.min(1, (carried * SECONDS_PER_GAME_DAY) / l.catchPerDay);
+}
+
+/**
+ * Thousands of people of room fish gives a town (growth.ts), on top of its food, never instead:
+ * what it eats (fishCapShare of its start at full want), and for a fishing town what it sells
+ * (fishTradeCap of its start when its whole catch is carried away) -- its catch is its trade.
+ */
 export function fishGrowth(world: GameWorld, townId: string): number {
   if (!fishingOn(world)) return 0;
   const base = world.basePopulation.get(townId);
   if (base === undefined) return 0;
-  return base * (world.tuning.fishCapShare ?? 0.08) * fishServed(world, townId);
+  const eaten = base * (world.tuning.fishCapShare ?? 0.08) * fishServed(world, townId);
+  const landing = world.fishing!.landings.find((l) => l.townId === townId);
+  const traded = landing ? base * (world.tuning.fishTradeCap ?? 0.25) * fishSold(world, landing) : 0;
+  return eaten + traded;
 }
 
 /** Tonnes a day a landing lands, sends fresh, and smokes (its card). */

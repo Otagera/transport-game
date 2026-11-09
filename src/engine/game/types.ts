@@ -795,6 +795,10 @@ export interface GameTuning {
   /** Tonnes a day of fish a market wants a thousand people, and the room full fish gives it, a share of its start. */
   fishPerThousandPerDay?: number;
   fishCapShare?: number;
+  /** Of a landing's catch, the share a smokehouse smokes; the rest still goes fresh. */
+  smokeShare?: number;
+  /** A fishing town's room to grow when its whole catch is sold, a share of its start. */
+  fishTradeCap?: number;
   steelPerThousandPerDay: number;
   steelWorksShare: number;
   steelImportShare: number;

@@ -1593,7 +1593,9 @@ within `fishFreshReachCells` by road, by want -- every town you started with eat
 smokehouse the rest smoked to the 8 towns further off wanting most (`SMOKED_TOWNS`: to all of them it
 multiplied the flows a tick carries). `goods.ts produceAndSpoil` spoils fresh fish at `fishSpoilSeconds` and
 lets smoked keep (`isFreshFish`, `isSmokedFish`); `fares.ts goodsFares` puts `fishFreshRate` on
-fresh. `fishGrowth` adds to a market's room in `growth.ts`, beside `foodGrowth`, and `marketFed`
+fresh. A smokehouse smokes `smokeShare` of the catch, the near towns' want first. `fishGrowth` adds to a
+town's room in `growth.ts`, beside `foodGrowth` -- what it eats, and for a fishing town what it
+sells (`fishSold`: its own flows' carried share, a lookup a town and kind) -- and `marketFed`
 doesn't read fish: it only adds. A landing has no jobs, so it needs no staff; its icon is short when
 some of its catch has no buyer, and its card offers the smokehouse. Tests: `test/fishing.test.ts`.
 

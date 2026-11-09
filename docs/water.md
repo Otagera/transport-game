@@ -393,7 +393,16 @@ landings land 24-72 t a day; nearly all of it has a fresh buyer within reach (0-
 reaches only the 4-6 towns nearest the landings, 2-8% of all the towns' want, and most of the fresh
 fish spoils waiting for a haulier (8703: 61 t a day sent, about 5 arriving). Room to grow moves by
 about 1k a map; a smokehouse changes little, since fresh fish takes nearly all the catch first. It
-works and only adds, but it's weak: **to tune next, your call.**
+works and only adds, but it's weak.
+
+**Tuned** (your call, 2026-11-09): a smokehouse smokes 70% of the catch (`smokeShare`), the rest
+still fresh; smoked fish goes to the near towns' want first (it keeps where fresh rotted), then the
+far ones; and a fishing town grows from the fish it sells -- room up to 25% of its start
+(`fishTradeCap`) by the share of its catch carried away (`fishSold`). Measured 80 days with no move
+of yours: nobody grows in any run, fishing or not -- without your lines nothing carries a town past
+where it is, so fish's room, which raises the ceiling, can't show; and smokehouses everywhere lower
+what's served (10% to 5% on 2418), the smoked fish waiting for the longer hauls nobody runs. Fish
+shows only where you carry it: **to measure with the strategist, or in play.**
 
 | # | Check | Passes when |
 |---|---|---|

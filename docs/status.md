@@ -116,8 +116,9 @@ a causeway you build stops every boat and cuts your own line until raised, the R
 first; the rains let boats over the fords they flood. Jetties and boats now keep to your remit.
 **Step 4, fishing** (2026-11-09; water.md, Step 4): a landing at every waterside town, fresh fish at a
 premium to the towns near it, a smokehouse to smoke the rest for the far ones; every town eats fish,
-and fish only adds to growth. Built and measured weak: most fresh fish spoils before it's carried.
-To tune next; then informal canoes.
+and fish only adds to growth; tuned so a smokehouse smokes most of a catch and a fishing town grows
+from what it sells. Its effect shows only where you carry fish: to measure with the strategist or
+in play. Next: informal canoes.
 
 **Deterministic on one engine, not across them** (2026-11-07). Your map 1692 run, replayed in Bun,
 parted from its recording on day 93 (₦49). It isn't the game: replayed in Chrome, and in Node (both

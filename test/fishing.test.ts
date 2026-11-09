@@ -5,9 +5,10 @@ import { applyAction } from "@engine/game/actions";
 import { gameTick } from "@engine/game/tick";
 import { SIM_DT } from "@engine/loop";
 import { SECONDS_PER_GAME_DAY as D } from "@engine/economy/state";
-import { fishFlows, fishGrowth, landingAt, landingSplit } from "@engine/game/fishing";
+import { fishFlows, fishGrowth, fishSold, landingAt, landingSplit } from "@engine/game/fishing";
 import { marketFed, marketTowns } from "@engine/game/food";
 import { goodsFares } from "@engine/game/fares";
+import { flowKey } from "@engine/game/goods";
 import { jettyLanding } from "@engine/game/boats";
 import { roadPath } from "@engine/game/world";
 import type { GameTuning, GameWorld } from "@engine/game/types";
@@ -62,13 +63,14 @@ describe("fishing (fishing.ts)", () => {
     applyAction(w, { kind: "smokehouse", siteId: l.siteId });
     days(w, 2);
     const spoiled = (kind: "produce" | "supplies") => {
-      const outs = [...w.goods.outcomes].filter(([k]) => k.startsWith(`${l.siteId}|`) && k.endsWith(`|${kind}`)).map(([, o]) => o.spoiled);
-      return outs.reduce((s, x) => s + x, 0);
+      return fishFlows(w).filter((f) => f.from === l.siteId && f.kind === kind).reduce((s, f) => s + (w.goods.outcomes.get(flowKey(f))?.spoiled ?? 0), 0);
     };
     const flows = fishFlows(w).filter((f) => f.from === l.siteId);
     const rate = (kind: string) => flows.filter((f) => f.kind === kind).reduce((s, f) => s + f.rate, 0);
     // The share of what's made that's lost: fresh's far above smoked's.
-    if (rate("produce") > 0 && rate("supplies") > 0) expect(spoiled("produce") / rate("produce")).toBeGreaterThan(5 * (spoiled("supplies") / rate("supplies")));
+    expect(rate("produce")).toBeGreaterThan(0);
+    expect(rate("supplies")).toBeGreaterThan(0);
+    expect(spoiled("produce") / rate("produce")).toBeGreaterThan(5 * (spoiled("supplies") / rate("supplies")));
   }, 120_000);
 
   test("C60: fish only adds -- it's no part of a market's food basket, and its room to grow is never less than none", () => {
@@ -83,5 +85,19 @@ describe("fishing (fishing.ts)", () => {
       expect(fishGrowth(w, m.id)).toBe(0);
     }
     expect(fishGot).toBeGreaterThanOrEqual(0);
+  }, 120_000);
+
+  test("a fishing town grows from the fish it sells; a smokehouse smokes most of its catch", () => {
+    const w = start();
+    const l = w.fishing!.landings[0]!;
+    applyAction(w, { kind: "smokehouse", siteId: l.siteId });
+    const split = landingSplit(w, l.siteId)!;
+    expect(split.fresh).toBeLessThanOrEqual(split.caught * (1 - w.tuning.smokeShare!) + 1e-9);
+    expect(split.smoked).toBeGreaterThan(0);
+    days(w, 4);
+    const sold = fishSold(w, l);
+    expect(sold).toBeGreaterThan(0);
+    const base = w.basePopulation.get(l.townId)!;
+    expect(fishGrowth(w, l.townId)).toBeGreaterThanOrEqual(base * w.tuning.fishTradeCap! * sold - 1e-9);
   }, 120_000);
 });

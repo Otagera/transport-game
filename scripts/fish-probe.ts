@@ -14,15 +14,15 @@ import { townGrowth } from "../src/engine/game/growth";
 import type { GameWorld } from "../src/engine/game/types";
 
 const seed = Number(process.env.SEED ?? 8703);
-const DAYS = Number(process.env.DAYS ?? 40);
+const DAYS = Number(process.env.DAYS ?? 80);
 const play = (fishing: boolean, smoke: boolean) => {
   const w = startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, fishing ? {} : { fishingEnabled: undefined });
   w.economy.funds = 1e7;
   let smoked = "";
   if (smoke && w.fishing?.landings.length) {
-    const worst = [...w.fishing.landings].sort((p, q) => (landingSplit(w, q.siteId)?.wasted ?? 0) - (landingSplit(w, p.siteId)?.wasted ?? 0))[0]!;
-    smoked = w.towns.get(worst.siteId)!.name;
-    applyAction(w, { kind: "smokehouse", siteId: worst.siteId });
+    // A smokehouse at every landing: what smoking does, at its most.
+    for (const l of w.fishing.landings) applyAction(w, { kind: "smokehouse", siteId: l.siteId });
+    smoked = "every landing";
   }
   const t0 = performance.now();
   for (let i = 0; i < Math.round((DAYS * D) / SIM_DT); i += 1) gameTick(w, SIM_DT);
@@ -39,6 +39,9 @@ const read = (w: GameWorld) => {
     eaters: eaters.length,
     room: eaters.reduce((s, t) => s + (townGrowth(w, t.id)?.cap ?? 0), 0),
     people: eaters.reduce((s, t) => s + t.population, 0),
+    // The fishing towns themselves: their size, and their room to grow.
+    fishers: (w.fishing?.landings ?? []).reduce((s, l) => s + (w.towns.get(l.townId)?.population ?? 0), 0),
+    fishRoom: (w.fishing?.landings ?? []).reduce((s, l) => s + (townGrowth(w, l.townId)?.cap ?? 0), 0),
   };
 };
 const off = play(false, false), on = play(true, false), smoked = play(true, true);
@@ -48,3 +51,6 @@ const sum = (k: "caught" | "fresh" | "smoked" | "wasted") => Math.round(split.re
 const [a, b, c] = [read(off.w), read(on.w), read(smoked.w)];
 console.log(`map ${seed}: ${landings.length} landings (${landings.map((l) => on.w.towns.get(l.townId)!.name).join(", ")}): catch ${sum("caught")} t/day, fresh ${sum("fresh")}, no buyer ${sum("wasted")}`);
 console.log(`  day ${DAYS}: markets fed ${(a.fed * 100).toFixed(1)}% off, ${(b.fed * 100).toFixed(1)}% on; fish served ${(b.fish * 100).toFixed(0)}% on average, ${b.reached} of ${b.eaters} towns getting some (smokehouse at ${smoked.smoked || "none"}: ${(c.fish * 100).toFixed(0)}%, ${c.reached} towns); room to grow ${Math.round(a.room)}k off, ${Math.round(b.room)}k on, ${Math.round(c.room)}k smoked; people ${Math.round(a.people)}k / ${Math.round(b.people)}k / ${Math.round(c.people)}k; ticks ${Math.round(off.ms / 1000)} s / ${Math.round(on.ms / 1000)} s`);
+const fishers = (on.w.fishing?.landings ?? []).map((l) => l.townId);
+const sizeOff = fishers.reduce((s, id) => s + (off.w.towns.get(id)?.population ?? 0), 0);
+console.log(`  the fishing towns: ${Math.round(sizeOff)}k off, ${Math.round(b.fishers)}k on, ${Math.round(c.fishers)}k with smokehouses; room ${Math.round(b.fishRoom)}k on, ${Math.round(c.fishRoom)}k with smokehouses`);

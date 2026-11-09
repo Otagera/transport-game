@@ -709,6 +709,8 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   smokehouseCost: 4000,
   fishPerThousandPerDay: 0.25,
   fishCapShare: 0.08,
+  smokeShare: 0.7,
+  fishTradeCap: 0.25,
   freightRateCheap: 0.6,
   freightRateDear: 1.6,
   freightHaulierPull: 0.5,
