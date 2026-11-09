@@ -404,6 +404,23 @@ where it is, so fish's room, which raises the ceiling, can't show; and smokehous
 what's served (10% to 5% on 2418), the smoked fish waiting for the longer hauls nobody runs. Fish
 shows only where you carry it: **to measure with the strategist, or in play.**
 
+**The strategist with fishing on and off** (2026-11-09, 250 days; it doesn't build jetties, barges or
+smokehouses, so fish moved only by the hauliers and any freight train passing). Trips a day are the
+mean of days 201-250; the off runs reproduce the version-16 runs above exactly:
+
+| map | trips/day off → on | people day 250 off → on | money day 250 off → on |
+|---|---|---|---|
+| 8703 | 1780 → 1956 | 1025k → 1062k | ₦21k → ₦34k |
+| 2418 | 2019 → 2136 | 1104k → 1109k | ₦139k → ₦193k |
+| 949 | 1903 → 1766 | 1071k → 1023k | ₦177k → ₦222k |
+| 3218 | 2788 → 2370 | 1231k → 1146k | ₦165k → ₦193k |
+| 7585 | 1981 → 2185 | 1051k → 1085k | ₦88k → ₦15k |
+
+Up on three maps, down on two, about level on average (trips -12 a day, people -11k): within what a
+different world does to the bot's own choices. **Fishing left alone changes nothing measurable**; it
+does only what you carry, which the bot can't. What's left to know -- whether carrying it pays --
+needs the strategist taught jetties, barges and smokehouses, or your own play.
+
 | # | Check | Passes when |
 |---|---|---|
 | C58 | Fresh stays near; smoked travels | Fresh fish flows only to towns within reach of its landing; with a smokehouse the rest reaches towns further off |
