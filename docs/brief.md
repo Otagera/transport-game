@@ -1280,6 +1280,9 @@ checks C51-C54.
 Step 3, the crossings (agreed 2026-11-09, water.md: Step 3): a ford blocks a barge, not a water bus; a causeway
 you build blocks every boat and cuts your own line until raised; the rains let boats over the fords they
 flood; checks C55-C57.
+Step 4, fishing (agreed 2026-11-09, water.md: Step 4): a landing at each waterside town; every town eats fish; fresh fish to the near
+towns at a premium, spoiling in a day; a smokehouse at a landing smokes the rest to keep and travel far;
+fish only adds to a market's room to grow; checks C58-C60. Informal canoes later.
 
 ### Checks for the remit
 

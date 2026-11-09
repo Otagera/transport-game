@@ -3820,6 +3820,14 @@ function onPanelClick(event: MouseEvent): void {
     renderPanel();
     return;
   }
+  if (target.dataset.smokehouse) {
+    const siteId = target.dataset.smokehouse;
+    const result = act({ label: `a smokehouse at ${townName(siteId)}`, towns: [siteId] }, { kind: "smokehouse", siteId });
+    if (result.ok) say(`Smokehouse built at ${townName(siteId)} for ${naira(result.amount ?? 0)}: the catch the near markets don't take is smoked, keeps, and goes to the markets further off.`);
+    else say(`Can't build a smokehouse: ${result.reason}`, true);
+    renderPanel();
+    return;
+  }
   if (target.dataset.restoreTextile) {
     const result = act({ label: "restoring the textile mill", towns: world.textile ? [world.textile.millId] : [] }, { kind: "restoreTextile" });
     say(result.ok ? `Textile mill restored for ${naira(result.amount ?? 0)}. Its shift comes back; get cotton to it, and its cloth to the markets.` : `Can't restore it: ${result.reason}`, !result.ok, 8);

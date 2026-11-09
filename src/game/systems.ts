@@ -76,7 +76,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   },
   {
     id: "hauliers", label: "Hauliers and yards", col: 2, row: 3, feeds: ["cement", "fuel", "steel", "food", "money"], unit: "t/day",
-    keys: [/^trucker/, /^truck/, /^yard/, /^goods/, /^partLoad/, /^lorry/, /^noPlayerLorries$/, /^freight/, /^relayLimestone$/, /^longHaulTail$/, /^wagon/, /^loadingLevy/, /^servedTau/, /^importsOver/, /^seaport/, /^port/, /^border/, /^export/, /^exports/, /^barge/],
+    keys: [/^trucker/, /^truck/, /^yard/, /^goods/, /^partLoad/, /^lorry/, /^noPlayerLorries$/, /^freight/, /^relayLimestone$/, /^longHaulTail$/, /^wagon/, /^loadingLevy/, /^servedTau/, /^importsOver/, /^seaport/, /^port/, /^border/, /^export/, /^exports/, /^barge/, /^fish/, /^smokehouse/],
     measure: safe((w) => [...w.goods.outcomes.values()].reduce((t, o) => t + (o.delivered + (o.trucked ?? 0)) * D, 0)),
   },
   // What's served
@@ -114,7 +114,7 @@ export function moveNode(action: ActionSpec): string | null {
       return "service";
     case "road": case "pave": case "fix": case "retire": case "restore": case "repair": case "bridgeFord": case "track":
       return "roads";
-    case "yard": case "freight": case "freightRate": case "lorry": case "barge":
+    case "yard": case "freight": case "freightRate": case "lorry": case "barge": case "smokehouse":
       return "hauliers";
     case "park": case "settle": case "enforce": case "union":
       return "informal";

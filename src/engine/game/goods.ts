@@ -19,6 +19,7 @@ import { haulShare } from "./truckers";
 import { haulCost, longHaul, relayed } from "./haulage";
 import { foodActive, foodFlows } from "./food";
 import { boatCostPerDay, forgetLink, isBargeRoute } from "./boats";
+import { fishFlows, isFreshFish, isSmokedFish } from "./fishing";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -187,6 +188,8 @@ function freshGoodsFlows(world: GameWorld): GoodsFlow[] {
   flows.push(...airportFlows(world));
   // Cotton and the textile mill (textile.ts): cotton in, cloth to the markets and out.
   flows.push(...textileFlows(world));
+  // Fish from the landings (fishing.ts): fresh to the markets near, smoked to the rest.
+  flows.push(...fishFlows(world));
   return flows;
 }
 
@@ -196,6 +199,7 @@ export function produceAndSpoil(world: GameWorld, dt: number): void {
   const spoil = 1 - Math.exp(-dt / tuning.goodsSpoilSeconds);
   // Fuel and crude don't rot: what waits is lost far slower (sold off, tanks full).
   const leak = 1 - Math.exp(-dt / tuning.fuelLossSeconds);
+  const fishSpoil = 1 - Math.exp(-dt / (tuning.fishSpoilSeconds ?? SECONDS_PER_GAME_DAY));
   const alpha = 1 - Math.exp(-dt / tuning.outcomeTauSeconds);
   const spoiled = new Map<string, number>();
   for (const flow of goodsFlows(world)) {
@@ -203,8 +207,8 @@ export function produceAndSpoil(world: GameWorld, dt: number): void {
     const yard = goods.yards.get(flow.from)!;
     const key = yardKey(flow.to, flow.kind);
     const waiting = (yard.get(key) ?? 0) + flow.rate * dt;
-    // Bagged cement keeps, as fuel does (a week, not two days).
-    const lost = waiting * (keeps(world, flow.from) ? leak : spoil);
+    // Bagged cement keeps, as fuel does (a week, not two days); fresh fish spoils in a day (fishing.ts).
+    const lost = waiting * (isFreshFish(world, flow.from, flow.kind) ? fishSpoil : keeps(world, flow.from) || isSmokedFish(world, flow.from, flow.kind) ? leak : spoil);
     yard.set(key, waiting - lost);
     spoiled.set(flowKey(flow), lost);
   }
@@ -213,7 +217,7 @@ export function produceAndSpoil(world: GameWorld, dt: number): void {
     for (const [key, amount] of waits) {
       if (amount <= 0) continue;
       const { to, kind, origin } = parseRelayKey(key);
-      const lost = amount * (keeps(world, origin) ? leak : spoil);
+      const lost = amount * (isFreshFish(world, origin, kind) ? fishSpoil : keeps(world, origin) || isSmokedFish(world, origin, kind) ? leak : spoil);
       waits.set(key, amount - lost);
       const k = flowKey({ from: origin, to, kind });
       spoiled.set(k, (spoiled.get(k) ?? 0) + lost);

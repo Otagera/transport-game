@@ -174,17 +174,17 @@ footer { font-size: 13px; color: var(--muted); max-width: 80ch; }
     <div class="body">
       <figure>
         <div class="scroll">
-          <svg id="chainsvg" viewBox="0 0 1200 700" role="img" aria-label="The goods chains as one flow: sources and imports feed the sites you restore; the sites feed the towns, the markets, the gateways, your buses and each other; a shortage at each end holds something back.">
+          <svg id="chainsvg" viewBox="0 0 1200 760" role="img" aria-label="The goods chains as one flow: sources and imports feed the sites you restore; the sites feed the towns, the markets, the gateways, your buses and each other; a shortage at each end holds something back.">
             <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
             <text class="col" x="24" y="24">SOURCE</text><text class="col" x="330" y="24">SITE YOU RESTORE</text><text class="col" x="660" y="24">GOES TO</text><text class="col" x="960" y="24">SHORT MEANS</text>
             <g id="flows"></g><g id="rows"></g>
-            <g class="band"><rect x="24" y="660" width="1152" height="32" rx="6"/></g>
-            <text class="col" x="38" y="681">CARRIED BY</text>
-            <g class="node" data-id="c-haul" tabindex="0"><text class="lab" x="150" y="681" style="fill:var(--goods)">● hauliers ≤40 cells, yards to 120</text></g>
-            <g class="node" data-id="c-rail" tabindex="0"><text class="lab" x="420" y="681" style="fill:var(--ink-2)">● your freight train</text></g>
-            <g class="node" data-id="c-barge" tabindex="0"><text class="lab" x="590" y="681" style="fill:var(--water)">● barge, water 2.5+ cells</text></g>
-            <g class="node" data-id="c-pipe" tabindex="0"><text class="lab" x="800" y="681" style="fill:var(--fuel)">● pipeline, fuel only</text></g>
-            <g class="node" data-id="c-relay" tabindex="0"><text class="lab" x="980" y="681" style="fill:var(--goods)">● relayed in legs</text></g>
+            <g class="band"><rect x="24" y="720" width="1152" height="32" rx="6"/></g>
+            <text class="col" x="38" y="741">CARRIED BY</text>
+            <g class="node" data-id="c-haul" tabindex="0"><text class="lab" x="150" y="741" style="fill:var(--goods)">● hauliers ≤40 cells, yards to 120</text></g>
+            <g class="node" data-id="c-rail" tabindex="0"><text class="lab" x="420" y="741" style="fill:var(--ink-2)">● your freight train</text></g>
+            <g class="node" data-id="c-barge" tabindex="0"><text class="lab" x="590" y="741" style="fill:var(--water)">● barge, water 2.5+ cells</text></g>
+            <g class="node" data-id="c-pipe" tabindex="0"><text class="lab" x="800" y="741" style="fill:var(--fuel)">● pipeline, fuel only</text></g>
+            <g class="node" data-id="c-relay" tabindex="0"><text class="lab" x="980" y="741" style="fill:var(--goods)">● relayed in legs</text></g>
           </svg>
         </div>
         <figcaption>Every chain is one-way (principles §3: goods stay one-way; reverse flows are different cargo). Restoring a site costs money once and staff to run: its workers commute to it by road. Imports land at the seaport and reach the home city by its link.</figcaption>
@@ -263,6 +263,7 @@ const N = [
   { id: "s-farm", col: 0, row: 4, c: "--food", t: "Farm towns", s: "staple · cash crops", p: "Each farm town grows a staple for the mill and a cash crop for export, by its farmland.", d: "food.ts" },
   { id: "s-cotton", col: 0, row: 5, c: "--trade", t: "Cotton", s: "the north's farm towns, or the border", p: "On a northern map the far farm towns grow cotton; elsewhere it comes over the border or through the port.", d: "textile.ts" },
   { id: "s-coal", col: 0, row: 6, c: "--goods", t: "Coal mine", s: "bulk: short hauls, or your train", p: "Coal is bulk: hauliers take it only on short hauls; a long one is your freight train's.", d: "power.ts" },
+  { id: "s-fish", col: 0, row: 8, c: "--water", t: "Fish", s: "the catch, by the water", p: "Every town at the water's edge lands fish at its landing: 8 t a day on a narrow river, 16 on wide water. The rains don't change it.", d: "fishing.ts" },
   { id: "s-air", col: 0, row: 7, c: "--trade", t: "Airport", s: "travellers · air freight", p: "There from day 1 on a long dirt road: a few hundred travellers a day each way, stranded until you carry them, and high-value air freight for the market towns.", d: "airport.ts" },
   // sites
   { id: "k-refinery", col: 1, row: 0, c: "--fuel", t: "Refinery", s: "restore · a private one later", p: "Restored, it turns crude into fuel and fills what the tank farm's imports leave short, nearest it first, so it can only add. A private refinery opens later in the game.", d: "fuel.ts restoreRefinery" },
@@ -273,11 +274,12 @@ const N = [
   { id: "k-flour", col: 1, row: 5, c: "--food", t: "Flour mill", s: "imported wheat in", p: "Imported wheat into flour for the markets: a market's food basket includes it.", d: "food.ts" },
   { id: "k-textile", col: 1, row: 6, c: "--trade", t: "Textile mill", s: "restore", p: "Cotton into cloth for the market towns, which lifts their trips, and some for export.", d: "textile.ts" },
   { id: "k-power", col: 1, row: 7, c: "--goods", t: "Power station", s: "restore", p: "Coal into power: every powered site makes more.", d: "power.ts" },
+  { id: "k-landing", col: 1, row: 9, c: "--water", t: "Landing · smokehouse", s: "fresh near · smoked far", p: "Every town you started with eats fish. Fresh fish pays half again but spoils in a day, so it reaches only the towns within 40 cells. A smokehouse (₦4,000) smokes the rest: it keeps and goes to the towns further off that want most. Fish only adds to a town's room to grow.", d: "fishing.ts" },
   { id: "k-assembly", col: 1, row: 8, c: "--you", t: "Assembly plant", s: "steel and fuel in", p: "The one two-input site: fed steel and fuel, it assembles your buses and minibuses, and its discount grows as it runs.", d: "assembly.ts" },
   // destinations
-  { id: "d-towns", col: 2, row: 0, c: "--fuel", t: "Every town", s: "fuel", short: ["Danfos parked, dearer", "riders wait; towns stall"], p: "Every town burns fuel. Short, the danfos are parked and charge more, riders wait longer for you, your vehicles pay above the pump price, and the town stops growing.", d: "fuel.ts fuelSupply" },
+  { id: "d-towns", col: 2, row: 0, c: "--fuel", t: "Every town", s: "fuel · fish", short: ["Danfos parked, dearer", "riders wait; towns stall"], p: "Every town burns fuel. Short, the danfos are parked and charge more, riders wait longer for you, your vehicles pay above the pump price, and the town stops growing.", d: "fuel.ts fuelSupply" },
   { id: "d-build", col: 2, row: 1, c: "--building", t: "Towns that build", s: "cement, then steel", short: ["Growth held back", "cement past 40%, steel past +80%"], p: "A growing town needs cement once past its first 40% of growth, and steel for its last, past +80%. Short, the people it would have grown are held back: Waiting on you counts them.", d: "growth.ts · cement.ts · steel.ts" },
-  { id: "d-markets", col: 2, row: 2, c: "--food", t: "Market towns", s: "food · flour · cloth · air freight", short: ["Markets underfed", "fewer trips"], p: "The bigger towns are markets: food from the mill, flour, cloth and air freight reach them.", d: "food.ts marketFed · textile.ts · airport.ts" },
+  { id: "d-markets", col: 2, row: 2, c: "--food", t: "Market towns", s: "food · flour · cloth · fish · air", short: ["Markets underfed", "fewer trips"], p: "The bigger towns are markets: food from the mill, flour, cloth and air freight reach them.", d: "food.ts marketFed · textile.ts · airport.ts" },
   { id: "d-gate", col: 2, row: 3, c: "--trade", t: "Port or border", s: "cash crops, cloth: exported", short: ["Export pay lost", "the state pays for exports"], p: "Cash crops go to whichever gateway nets more a tonne, the home city for the seaport or the border crossing; the state pays for exports.", d: "gateways.ts exportGateway · food.ts payExports" },
   { id: "d-buses", col: 2, row: 4, c: "--you", t: "Your buses", s: "and minibuses, cheaper", short: ["Full price", ""], p: "While the assembly plant runs, your buses and minibuses cost less.", d: "assembly.ts vehiclePrice" },
   { id: "d-sites", col: 2, row: 5, c: "--goods", t: "Every powered site", s: "makes more", short: ["Sites run slower", ""], p: "Power lifts what every powered site makes.", d: "power.ts powerLift" },
@@ -289,9 +291,10 @@ const E = [
   ["k-refinery", "d-towns", "--fuel"], ["k-tank", "d-towns", "--fuel"], ["k-cement", "d-build", "--building"], ["k-steel", "d-build", "--building"],
   ["k-mill", "d-markets", "--food"], ["k-flour", "d-markets", "--food"], ["k-textile", "d-markets", "--trade"], ["k-textile", "d-gate", "--trade"],
   ["k-assembly", "d-buses", "--you"], ["k-power", "d-sites", "--goods", "dash"],
+  ["s-fish", "k-landing", "--water"], ["k-landing", "d-towns", "--water"],
   ["k-refinery", "k-assembly", "--fuel", "side"], ["k-steel", "k-assembly", "--building", "side"],
 ];
-const COL = [{ x: 24, w: 200, h: 50, gap: 76 }, { x: 330, w: 210, h: 50, gap: 68 }, { x: 660, w: 210, h: 56, gap: 104 }];
+const COL = [{ x: 24, w: 200, h: 50, gap: 74 }, { x: 330, w: 210, h: 50, gap: 66 }, { x: 660, w: 210, h: 56, gap: 112 }];
 const at = (n) => { const c = COL[n.col]; const y = 40 + n.row * c.gap; return { x: c.x, y, w: c.w, h: c.h, cy: y + c.h / 2 }; };
 for (const n of N) D[n.id] = { c: n.c, k: ["Source", "Site", "Goes to"][n.col], t: n.t, p: n.p, r: E.filter((e) => e[1] === n.id).map((e) => N.find((m) => m.id === e[0]).t).join(", "), f: E.filter((e) => e[0] === n.id).map((e) => N.find((m) => m.id === e[1]).t).join(", "), d: n.d };
 
@@ -306,7 +309,7 @@ for (const [a, b, color, kind] of E) {
   if (kind === "side") { const x = p.x + p.w, lane = x + (a === "k-refinery" ? 10 : 16), y2 = q.cy + (a === "k-refinery" ? -8 : 8); d = `M${x},${p.cy} H${lane} V${y2} H${x + 4}`; }
   // Source straight to a destination: through the gap between two sites nearest it, never behind one.
   else if (kind === "long") {
-    const c = COL[1], gaps = Array.from({ length: 8 }, (_, r) => 40 + r * c.gap + c.h + (c.gap - c.h) / 2);
+    const c = COL[1], gaps = Array.from({ length: 9 }, (_, r) => 40 + r * c.gap + c.h + (c.gap - c.h) / 2);
     const gy = gaps.reduce((best, g) => (Math.abs(g - p.cy) < Math.abs(best - p.cy) ? g : best));
     const x1 = p.x + p.w, x2 = q.x - 4, xa = c.x - 20, xb = c.x + c.w + 22, mid = (xb + x2) / 2;
     d = `M${x1},${p.cy} C${xa - 30},${p.cy} ${xa - 30},${gy} ${xa},${gy} H${xb} C${mid},${gy} ${mid},${q.cy} ${x2},${q.cy}`;

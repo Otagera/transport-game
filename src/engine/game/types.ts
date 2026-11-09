@@ -52,7 +52,7 @@ export interface GameTown {
 
 /** The kinds of industrial site (brief, Revision 2: one kind first, the quarry). */
 /** A quarry opens and closes (industries.ts); the fuel chain's sites are there from the start (fuel.ts). */
-export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly" | "coalmine" | "powerstation" | "airport" | "textile";
+export type IndustryKind = "quarry" | "depot" | "refinery" | "newrefinery" | "oilfield" | "terminal" | "works" | "silo" | "mill" | "flourmill" | "ironmine" | "steelworks" | "steelport" | "border" | "gateway" | "station" | "assembly" | "coalmine" | "powerstation" | "airport" | "textile" | "landing";
 
 export interface GameRoadDef {
   a: string;
@@ -777,6 +777,24 @@ export interface GameTuning {
   bargeMinWidth?: number;
   /** Fords and causeways stop boats (water.md, Step 3): a ford a barge, a causeway you built every boat. Absent before it: nothing stops a boat. */
   boatsBlockedByFords?: boolean;
+  /** Fishing (fishing.ts; water.md, Step 4). Absent (a run before it): no landings. */
+  fishingEnabled?: boolean;
+  /** Cells from a town to water, at most, for it to have a landing. */
+  fishLandingEdge?: number;
+  /** Tonnes a day a landing lands: on a narrow river, on wide water (a lake, lagoon, the sea, a river this wide or more). */
+  fishCatchRiver?: number;
+  fishCatchBig?: number;
+  fishBigWidth?: number;
+  /** Cells by road a landing's fresh fish reaches before it spoils. */
+  fishFreshReachCells?: number;
+  /** Fresh fish's fare a tonne-cell, times goods'. */
+  fishFreshRate?: number;
+  /** Seconds fresh fish keeps, waiting. */
+  fishSpoilSeconds?: number;
+  smokehouseCost?: number;
+  /** Tonnes a day of fish a market wants a thousand people, and the room full fish gives it, a share of its start. */
+  fishPerThousandPerDay?: number;
+  fishCapShare?: number;
   steelPerThousandPerDay: number;
   steelWorksShare: number;
   steelImportShare: number;
@@ -1123,6 +1141,8 @@ export interface GameWorld {
   boatVehicles?: Set<string>;
   /** Towns with a jetty (boats.ts). Absent before boats. */
   jetties?: Set<string>;
+  /** Fishing (fishing.ts): each waterside town's landing, its catch and smokehouse. Absent before it. */
+  fishing?: import("./fishing").FishingState;
   /** Your boat lines' ways on the water, one a line (boats.ts), for their vehicles and the map. */
   waterLinks?: import("./boats").WaterLink[];
   /** segmentId -> rolling trains entering each stretch of track per second (wear.ts). */

@@ -30,6 +30,7 @@ import { issueBond, type BondPurpose } from "./bonds";
 import { bridgeFord } from "./floods";
 import { setLabel } from "./labels";
 import { openCluster, remitRefusal } from "./remit";
+import { buildSmokehouse } from "./fishing";
 export { remitRefusal } from "./remit";
 
 // Every player action as plain data. Data, not a closure, so it can be
@@ -50,6 +51,8 @@ export type ActionSpec =
   /** A jetty at a waterside town; a water bus or a barge between two jetties (boats.ts). */
   | { kind: "jetty"; townId: string }
   | { kind: "boat" | "barge"; a: string; b: string }
+  /** A smokehouse at a landing (fishing.ts): its spare catch smoked, to keep and travel. */
+  | { kind: "smokehouse"; siteId: string }
   | { kind: "fix"; segmentId: string; on: boolean }
   // A road declared a trunk (on), or made a feeder again (trunks.ts).
   | { kind: "trunk"; segmentId: string; on: boolean }
@@ -164,6 +167,10 @@ function apply(world: GameWorld, spec: ActionSpec): ActionOutcome {
     case "boat":
     case "barge":
       return addBoat(world, spec.a, spec.b, spec.kind);
+    case "smokehouse": {
+      const result = buildSmokehouse(world, spec.siteId);
+      return result.ok ? { ok: true, amount: result.charged ?? 0 } : { ok: false, reason: result.reason };
+    }
     case "fix": {
       const result = setRoadMaintained(world, spec.segmentId, spec.on);
       return result.ok ? { ok: true, amount: result.charged } : { ok: false, reason: result.reason };

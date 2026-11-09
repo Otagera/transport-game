@@ -3185,7 +3185,7 @@ describe("the region: the seed's map as the home cluster of a wider map (brief, 
     expect(far).toBeGreaterThan(0);
     expect(restored).toBeGreaterThan(0);
     expect(home).toBeGreaterThan(0);
-  }, 30_000);
+  }, 60_000); // twelve games started: near 30 s before fishing's landings, past it after
 
   test("the border crossing (gateways, step 2): one a map on its region's edge, on the network; each farm's crop out the way that nets more", () => {
     const run = (seed: number, overrides = {}) => startRun(GAME_MAP, seed, { all: false, goodsOff: false, wearOff: false }, null, { warmUpDays: 0, ...overrides });

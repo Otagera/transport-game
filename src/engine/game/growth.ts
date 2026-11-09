@@ -10,6 +10,7 @@ import { foodGrowth } from "./food";
 import { stationTowns } from "./rail";
 import { urbanGrowthShare } from "./metro";
 import { segmentRung } from "./roads";
+import { fishGrowth } from "./fishing";
 
 // The original towns grow (docs/principles.md §6, step 4: depth, one at a
 // time -- growth second, after decay). Served well, a town draws people;
@@ -134,7 +135,7 @@ export function townGrowth(world: GameWorld, townId: string): TownGrowth | null 
   // Revision 2: station towns grow) -- bounded, like every share, by its start.
   const station = (tuning.railEnabled && stationTowns(world).has(townId) ? tuning.stationCapShare : 0) + urbanGrowthShare(world, townId);
   // Jobs at sites its people reach draw more (workers.ts, step 2c); new housing needs cement like any.
-  const roadCap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone + station)) + jobsGrowth(world, townId) + foodGrowth(world, townId);
+  const roadCap = base * (1 + tuning.townGrowthCap * (carriedShare(world, townId) + tuning.stoneCapShare * stone + station)) + jobsGrowth(world, townId) + foodGrowth(world, townId) + fishGrowth(world, townId);
   // Cement holds growth back past a free stretch (brief, Revision 3, step
   // 2a): a town builds its first `cementFreeShare` of its start with local
   // materials; above that, its room is scaled by the cement it gets.

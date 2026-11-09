@@ -185,7 +185,7 @@ export function remitRefusal(world: GameWorld, spec: ActionSpec): string | null 
       return placesOutsideRemit(world, spec.town);
     case "yard": case "park": case "metro": case "busStation": case "jetty":
       return placesOutsideRemit(world, spec.townId);
-    case "expand":
+    case "expand": case "smokehouse":
       return placesOutsideRemit(world, spec.siteId);
     case "restoreRefinery":
       return world.fuel ? placesOutsideRemit(world, world.fuel.refineryId) : null;

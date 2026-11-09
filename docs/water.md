@@ -364,6 +364,43 @@ On 2418 and 949 the leg's fords lie in a far cluster, outside your remit: no bri
 opens. That showed jetties and boats had never been held to the remit (missed in step 2): now they
 are, as every other line and site is. Step 2's water-bus measurements included pairs outside it.
 
+## Step 4: fishing (agreed 2026-11-09)
+
+Your calls: **fresh and smoked, with a premium on fresh**; the catch **by the water**, the rains not
+changing it; **informal canoes later**, a step of their own.
+
+- **A landing** (`fishing.ts`) is a site on the bank beside every town at the water's edge (within 3
+  cells of water a boat can use), on an old track to it, placed at the start after every other site:
+  3-9 a map. It lands 8 t of fish a day on a narrow river, 16 on wide water (a lake, a lagoon, the
+  sea, a river 4 cells wide).
+- **Every town you started with eats fish** (0.25 t a day a thousand people). First built for the 40k
+  market towns alone, it reached none on two of five maps (no market within fresh fish's reach of a
+  landing) and 0-23% of the want on the rest: widened, your call, 2026-11-09.
+- **Fresh fish** goes to the towns within 40 cells of the landing by road, its own town among them,
+  by what each wants; it pays half again on its fare, and spoils in about a day where it waits: the
+  hauliers' short hauls, or your barge if it's quick.
+- **A smokehouse** (₦4,000, at a landing; within your remit) smokes what the near towns don't take:
+  it keeps, as milled food does, and goes to the 8 towns further off that want most (to every town,
+  it would multiply the goods a tick carries) -- the hauliers' tail, a barge, a freight train.
+  Without one, the rest has no buyer.
+- **Fish only adds** (principles §3: a second source must only add): a town's fish adds room to
+  grow (up to 8% of its start), on top of its food basket, which fish never makes short.
+- **Its cost**: about 4% on a tick (10 days on 8703: 15.3 s to 16.0 s), after a fix -- the want had
+  rebuilt the market list on every call.
+
+**Measured** (`scripts/fish-probe.ts`, 40 days from each test map's start, no move of yours): 3-9
+landings land 24-72 t a day; nearly all of it has a fresh buyer within reach (0-16 t none), but it
+reaches only the 4-6 towns nearest the landings, 2-8% of all the towns' want, and most of the fresh
+fish spoils waiting for a haulier (8703: 61 t a day sent, about 5 arriving). Room to grow moves by
+about 1k a map; a smokehouse changes little, since fresh fish takes nearly all the catch first. It
+works and only adds, but it's weak: **to tune next, your call.**
+
+| # | Check | Passes when |
+|---|---|---|
+| C58 | Fresh stays near; smoked travels | Fresh fish flows only to towns within reach of its landing; with a smokehouse the rest reaches towns further off |
+| C59 | Fresh pays more and spoils faster | Its fare is half again smoked fish's; waiting, it's lost far faster |
+| C60 | Fish only adds | No market's food basket depends on it, and its room to grow is never less with fishing than without |
+
 ## After the map
 
 - **Step 2, jetties and boats.** A jetty at a waterfront (your build); a waterway network built

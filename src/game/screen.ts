@@ -44,6 +44,7 @@ import type { GameEvent } from "@engine/game/settlement";
 import { assemblyGeneration } from "@engine/game/assembly";
 import { siteChain, siteProduction } from "@engine/game/production";
 import { lineCutBy } from "@engine/game/boats";
+import { landingAt, landingSplit } from "@engine/game/fishing";
 
 // The information lab's three layers (agreed 2026-10-23; the lab since discarded), on the live game:
 //
@@ -718,6 +719,14 @@ export function createScreen(world: GameWorld, recorder: RunRecorder, hooks: Scr
     }
     if (world.towns.get(s.id)?.industry === "powerstation" && world.power && !world.power.working) {
       return { text: "Idle: shut down and left. Restore it and the works in its reach make more", button: `<button data-restore-power="1">Restore it · ${nairaK(world.tuning.powerRestoreCost ?? 0)}</button>` };
+    }
+    // A landing (fishing.ts): catch with no buyer near, and no smokehouse to keep it for the far markets.
+    if (world.towns.get(s.id)?.industry === "landing") {
+      const split = landingSplit(world, s.id);
+      const l = landingAt(world, s.id);
+      if (!split || !l) return null;
+      if (!l.smokehouse && split.wasted >= 1) return { text: `${int(split.wasted)} of its ${int(split.caught)} t of fish a day has no buyer near before it spoils: smoked, it keeps for the markets further off`, button: `<button data-smokehouse="${esc(s.id)}">Build a smokehouse · ${nairaK(world.tuning.smokehouseCost ?? 0)}</button>` };
+      return null;
     }
     if (world.towns.get(s.id)?.industry === "textile" && world.textile && !world.textile.working) {
       return { text: `Idle: run down and shut. Restore it: ${int((world.tuning.jobsTextile ?? 0) * 1000)} jobs, cloth for the markets, the rest exported`, button: `<button data-restore-textile="1">Restore it · ${nairaK(world.tuning.textileRestoreCost ?? 0)}</button>` };

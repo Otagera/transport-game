@@ -43,7 +43,8 @@ export type Glyph =
   | "border" | "gateway" | "station" | "assembly" | "airport"
   // The chains agreed next.
   | "steelport"
-  | "ironmine" | "steelworks" | "plantation" | "palmmill" | "cottonfarm" | "textilemill" | "ranch" | "abattoir" | "cocoa" | "coalmine" | "powerstation" | "warehouse";
+  | "ironmine" | "steelworks" | "plantation" | "palmmill" | "cottonfarm" | "textilemill" | "ranch" | "abattoir" | "cocoa" | "coalmine" | "powerstation" | "warehouse"
+  | "landing";
 
 export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }> = {
   oilfield: { family: "energy", name: "Oilfield" },
@@ -68,6 +69,7 @@ export const GLYPHS: Record<Glyph, { family: Family; name: string; next?: true }
   palmmill: { family: "food", name: "Palm-oil mill", next: true },
   cottonfarm: { family: "food", name: "Cotton farms", next: true },
   textilemill: { family: "trade", name: "Textile mill" },
+  landing: { family: "food", name: "Fish landing (and smokehouse)" },
   ranch: { family: "food", name: "Cattle market (herds)", next: true },
   abattoir: { family: "food", name: "Abattoir", next: true },
   cocoa: { family: "food", name: "Cocoa farms", next: true },
@@ -247,6 +249,10 @@ function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, ink: string): vo
     case "palmmill": // a drop of oil over a press
       drop(ctx, 0, -3, 0.65);
       ctx.fillRect(-7, 4, 14, 3);
+      break;
+    case "landing": // a fish
+      path(() => ctx.ellipse(-1.5, 0, 6, 3.6, 0, 0, Math.PI * 2));
+      path(() => { ctx.moveTo(3.5, 0); ctx.lineTo(8, -4); ctx.lineTo(8, 4); ctx.closePath(); });
       break;
     case "textilemill": // a spool
       ctx.fillRect(-6, -8, 12, 2.6);

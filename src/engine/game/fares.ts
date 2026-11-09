@@ -4,6 +4,7 @@ import type { GameTuning, GameWorld } from "./types";
 import { roadPath } from "./world";
 import { railPath } from "./rail";
 import { waterLength, type BoatKind } from "./boats";
+import { isFreshFish } from "./fishing";
 
 // Fares by distance (docs/brief.md, Fares): a boarding fare plus a price
 // per stage, rounded up to the next stage -- danfo fares are called by
@@ -85,7 +86,9 @@ export function goodsFares(world: GameWorld, deliveries: DeliveryEvent[], rail: 
     const cells = wayLength(world, entry.from, entry.to, rail) ?? (a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0);
     // Air freight is high value: its tonne pays airFreightRate times (airport.ts).
     const air = isAirCargo(world, entry.trip?.origin ?? entry.from) ? world.tuning.airFreightRate ?? 1 : 1;
-    total += amount * cells * world.tuning.goodsFarePerTonneCell * air;
+    // Fresh fish fetches a premium (fishing.ts): it has to be there within a day.
+    const fresh = isFreshFish(world, entry.trip?.origin ?? entry.from, entry.kind) ? world.tuning.fishFreshRate ?? 1 : 1;
+    total += amount * cells * world.tuning.goodsFarePerTonneCell * air * fresh;
   }
   return total;
 }

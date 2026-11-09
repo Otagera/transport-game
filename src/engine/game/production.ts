@@ -11,6 +11,7 @@ import { siteJobs, staffFactor, staffing } from "./workers";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { assemblyArriving, assemblyNeeds, assemblyShare } from "./assembly";
 import { coalArriving, coalOutput, coalWanted, powerLift, powerShare } from "./power";
+import { landingSplit } from "./fishing";
 
 // What a site makes and what holds it back (playtest, map 2411: "we need
 // indications for the factories in terms of production"). One reading for
@@ -171,6 +172,14 @@ export function siteProduction(world: GameWorld, siteId: string, flows: GoodsFlo
       idle = !world.power?.working;
       break;
     // Cotton and the textile mill (textile.ts).
+    case "landing": {
+      // A landing (fishing.ts): its catch, and what of it has a buyer -- fresh near, smoked far.
+      const split = landingSplit(world, siteId);
+      product = "fish";
+      capacity = (split?.caught ?? 0) / SECONDS_PER_GAME_DAY;
+      made = ((split?.fresh ?? 0) + (split?.smoked ?? 0)) / SECONDS_PER_GAME_DAY;
+      break;
+    }
     case "textile":
       product = "cloth";
       capacity = textileCapacity(world);

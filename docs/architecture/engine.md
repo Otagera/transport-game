@@ -1582,6 +1582,21 @@ as they wait. A ford at a landing doesn't count: that's where the boat ties up, 
 could open and never sail (caught by the barge test). `boatsBlockedByFords` absent: nothing stops a
 boat, as before. Tests: C55-C57 in `test/boats.test.ts`.
 
+### Fishing (2026-11-09; water.md, Step 4)
+
+`fishing.ts`. `placeLandings` (start.ts, after every other site) puts a site of kind `landing`
+(`landing-<town>`) on the bank of each town within `fishLandingEdge` of boat water, with an old
+track to it, and `world.fishing.landings` holds each one's catch (by the water's width) and
+smokehouse. A landing is a site of its own so its flows never share a key with a town's: fresh fish
+is its `produce`, smoked fish its `supplies`. `fishFlows` (in `goodsFlows`): fresh to the markets
+within `fishFreshReachCells` by road, by want -- every town you started with eats fish; with a
+smokehouse the rest smoked to the 8 towns further off wanting most (`SMOKED_TOWNS`: to all of them it
+multiplied the flows a tick carries). `goods.ts produceAndSpoil` spoils fresh fish at `fishSpoilSeconds` and
+lets smoked keep (`isFreshFish`, `isSmokedFish`); `fares.ts goodsFares` puts `fishFreshRate` on
+fresh. `fishGrowth` adds to a market's room in `growth.ts`, beside `foodGrowth`, and `marketFed`
+doesn't read fish: it only adds. A landing has no jobs, so it needs no staff; its icon is short when
+some of its catch has no buyer, and its card offers the smokehouse. Tests: `test/fishing.test.ts`.
+
 ### The building chain (Revision 3, step 2a)
 
 - **`cement.ts`** — one **cement works** per map, placed at start (`placeCementWorks`, from
