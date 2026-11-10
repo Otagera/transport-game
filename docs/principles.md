@@ -372,6 +372,12 @@ blow-by-blow; this section is the distilled rule.
   road, a jam, danfos parked by a fuel shortage) and not as a day-1 tax. And a site whose
   workers can't commute by road at all — a crude source fed by your freight line — mustn't
   depend on them: measured, it starved the refinery to a quarter.
+- **Read a small flow over days, not a day** (slice, steel then fish). Hauliers hold a part
+  load until a truck fills or a week passes, so a tonne a day arrives as a truck a week: on a
+  day's roll a town getting all it wanted read 17% served and grew as if starved (949's Saki),
+  and a landing's fish "sold" 21%, 23%, 42% on days 20, 40, 60 with nothing changed. Anything
+  growth or a choice reads from a small flow goes through `servedRate`'s 10-day roll -- and so
+  does any probe measuring it, or it measures the lumps.
 
 ### Decay (slice, §6 step 4)
 

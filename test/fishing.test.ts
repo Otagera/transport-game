@@ -58,7 +58,8 @@ describe("fishing (fishing.ts)", () => {
   }, 120_000);
 
   test("C59: fresh fish pays a premium on its fare, and spoils faster where it waits than smoked fish", () => {
-    const w = start({ truckersEnabled: false }); // nobody lifts it: what waits, spoils
+    // Nobody lifts it: what waits, spoils. The fixed-share smokehouse, which lets fresh fish rot where it waits.
+    const w = start({ truckersEnabled: false, smokeWhatSpoils: undefined });
     const l = w.fishing!.landings[0]!;
     const town = marketTowns(w)[0]!.id;
     const entry = (kind: "produce" | "supplies") => [{ entry: { from: l.siteId, to: town, kind, amount: 10 }, amount: 10 }] as never;
@@ -90,14 +91,23 @@ describe("fishing (fishing.ts)", () => {
     expect(fishGot).toBeGreaterThanOrEqual(0);
   }, 120_000);
 
-  test("a fishing town grows from the fish it sells; a smokehouse smokes most of its catch", () => {
+  test("a fishing town grows from the fish it sells; a smokehouse smokes what would spoil, and takes nothing from fresh", () => {
     const w = start();
     const l = w.fishing!.landings[0]!;
+    const freshFlows = () => fishFlows(w).filter((f) => f.from === l.siteId && f.kind === "produce").map((f) => `${f.to}:${f.rate}`);
+    const before = freshFlows();
     applyAction(w, { kind: "smokehouse", siteId: l.siteId });
-    const split = landingSplit(w, l.siteId)!;
-    expect(split.fresh).toBeLessThanOrEqual(split.caught * (1 - w.tuning.smokeShare!) + 1e-9);
-    expect(split.smoked).toBeGreaterThan(0);
+    // The fresh trade is what it was: the same towns, the same tonnes.
+    expect(freshFlows()).toEqual(before);
     days(w, 4);
+    // What would have rotted at the landing is smoked instead: little fresh is lost, only on the
+    // road between a relayed haul's legs, far less than it sends.
+    const split = landingSplit(w, l.siteId)!;
+    expect(split.smoked).toBeGreaterThan(0);
+    expect(l.smokedFromFresh!).toBeGreaterThan(0);
+    const fresh = fishFlows(w).filter((x) => x.from === l.siteId && x.kind === "produce");
+    const lost = fresh.reduce((sum, f) => sum + (w.goods.outcomes.get(flowKey(f))?.spoiled ?? 0), 0);
+    expect(lost).toBeLessThan(0.1 * fresh.reduce((sum, f) => sum + f.rate, 0));
     const sold = fishSold(w, l);
     expect(sold).toBeGreaterThan(0);
     const base = w.basePopulation.get(l.townId)!;

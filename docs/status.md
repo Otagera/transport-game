@@ -120,7 +120,10 @@ and fish only adds to growth; tuned so a smokehouse smokes most of a catch and a
 from what it sells. The strategist now builds water (water buses, smokehouses, barges, raising
 fords): water buses pay (trips up 7-83% where it opens them), carrying fish doesn't as tuned -- the
 smokehouse takes fish from the fresh trade the hauliers already ran, and barges don't pay back their
-fords (water.md). Next: the fish balance (smoke only what fresh can't sell), then informal canoes.
+fords (water.md). Balanced: fish served and sold read over 10 days (it comes in part loads), and a
+smokehouse leaves the fresh trade alone and smokes what would rot -- it can only add (3218: 43% of the
+catch sold to 50%). A smoked-fish barge still doesn't repay its fords: the game's answer. Next:
+informal canoes.
 
 **Deterministic on one engine, not across them** (2026-11-07). Your map 1692 run, replayed in Bun,
 parted from its recording on day 93 (₦49). It isn't the game: replayed in Chrome, and in Node (both

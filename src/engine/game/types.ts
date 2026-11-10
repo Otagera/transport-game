@@ -797,6 +797,10 @@ export interface GameTuning {
   fishCapShare?: number;
   /** Of a landing's catch, the share a smokehouse smokes; the rest still goes fresh. */
   smokeShare?: number;
+  /** A smokehouse smokes the fresh fish that would spoil at its landing, and the catch with no fresh buyer; fresh is sent as without one. Absent: smokeShare's fixed rule. */
+  smokeWhatSpoils?: boolean;
+  /** Fish served and sold read over servedTauDays (goods.ts servedRate), not a day's roll. Absent in runs before it. */
+  fishSteadyServed?: boolean;
   /** A fishing town's room to grow when its whole catch is sold, a share of its start. */
   fishTradeCap?: number;
   steelPerThousandPerDay: number;

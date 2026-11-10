@@ -19,7 +19,7 @@ import { haulShare } from "./truckers";
 import { haulCost, longHaul, relayed } from "./haulage";
 import { foodActive, foodFlows } from "./food";
 import { boatCostPerDay, forgetLink, isBargeRoute } from "./boats";
-import { fishFlows, isFreshFish, isSmokedFish } from "./fishing";
+import { fishFlows, isFreshFish, isSmokedFish, landingAt } from "./fishing";
 
 // Goods (docs/principles.md §6, step 4: depth, one at a time -- goods
 // third, the user's pick: produce and supplies, freight fares only, no
@@ -48,6 +48,8 @@ export interface GoodsFlow {
   to: string;
   kind: GoodsKind;
   rate: number;
+  /** Smoked fish (fishing.ts, smokeWhatSpoils): this town's share of the fresh fish smoked before it spoils. */
+  smokedShare?: number;
 }
 
 /** Where a flow's goods ended up, rolling tonnes per second. */
@@ -202,15 +204,33 @@ export function produceAndSpoil(world: GameWorld, dt: number): void {
   const fishSpoil = 1 - Math.exp(-dt / (tuning.fishSpoilSeconds ?? SECONDS_PER_GAME_DAY));
   const alpha = 1 - Math.exp(-dt / tuning.outcomeTauSeconds);
   const spoiled = new Map<string, number>();
-  for (const flow of goodsFlows(world)) {
+  const flows = goodsFlows(world);
+  // A smokehouse smoking what spoils (fishing.ts): each landing's smoked towns, by share.
+  const smokeTo = new Map<string, GoodsFlow[]>();
+  for (const flow of flows) if (flow.smokedShare !== undefined) smokeTo.set(flow.from, [...(smokeTo.get(flow.from) ?? []), flow]);
+  const smokedNow = new Map<string, number>();
+  for (const flow of flows) {
     if (!goods.yards.has(flow.from)) goods.yards.set(flow.from, new Map());
     const yard = goods.yards.get(flow.from)!;
     const key = yardKey(flow.to, flow.kind);
     const waiting = (yard.get(key) ?? 0) + flow.rate * dt;
     // Bagged cement keeps, as fuel does (a week, not two days); fresh fish spoils in a day (fishing.ts).
-    const lost = waiting * (isFreshFish(world, flow.from, flow.kind) ? fishSpoil : keeps(world, flow.from) || isSmokedFish(world, flow.from, flow.kind) ? leak : spoil);
+    const fresh = isFreshFish(world, flow.from, flow.kind);
+    const lost = waiting * (fresh ? fishSpoil : keeps(world, flow.from) || isSmokedFish(world, flow.from, flow.kind) ? leak : spoil);
     yard.set(key, waiting - lost);
+    const smokers = fresh ? smokeTo.get(flow.from) : undefined;
+    if (smokers) {
+      // Smoked before it rots, for the smoked towns: none of it lost.
+      for (const s of smokers) yard.set(yardKey(s.to, s.kind), (yard.get(yardKey(s.to, s.kind)) ?? 0) + lost * s.smokedShare!);
+      smokedNow.set(flow.from, (smokedNow.get(flow.from) ?? 0) + lost);
+      spoiled.set(flowKey(flow), 0);
+      continue;
+    }
     spoiled.set(flowKey(flow), lost);
+  }
+  for (const id of smokeTo.keys()) {
+    const l = landingAt(world, id);
+    if (l) l.smokedFromFresh = (l.smokedFromFresh ?? 0) + ((smokedNow.get(id) ?? 0) / dt - (l.smokedFromFresh ?? 0)) * alpha;
   }
   // Goods waiting between legs (haulage.ts) keep or spoil as at their source.
   for (const [, waits] of goods.relay ?? []) {

@@ -1593,9 +1593,18 @@ within `fishFreshReachCells` by road, by want -- every town you started with eat
 smokehouse the rest smoked to the 8 towns further off wanting most (`SMOKED_TOWNS`: to all of them it
 multiplied the flows a tick carries). `goods.ts produceAndSpoil` spoils fresh fish at `fishSpoilSeconds` and
 lets smoked keep (`isFreshFish`, `isSmokedFish`); `fares.ts goodsFares` puts `fishFreshRate` on
-fresh. A smokehouse smokes `smokeShare` of the catch, the near towns' want first. `fishGrowth` adds to a
+fresh. A smokehouse leaves the fresh trade as it was and smokes what would rot (`smokeWhatSpoils`):
+`produceAndSpoil` moves the fresh fish spoiling in the landing's yard into its smoked towns' yards by
+`smokedShare` (rolled into `smokedFromFresh` for its card), with the catch the near towns have no room
+for; smoked goes to the near towns' want left first. It can only add -- the hauliers see the same
+fresh fish either way; a split made beforehand took fish they were selling, as they lift a share of
+whatever waits. A run played before `smokeWhatSpoils` keeps the fixed `smokeShare` rule, so its file
+replays. `fishGrowth` adds to a
 town's room in `growth.ts`, beside `foodGrowth` -- what it eats, and for a fishing town what it
-sells (`fishSold`: its own flows' carried share, a lookup a town and kind) -- and `marketFed`
+sells (`fishSold`: its own flows' carried share, a lookup a town and kind; both read through
+`fishRate`, which with `fishSteadyServed` is `servedRate`'s 10-day roll -- fish comes in held part
+loads, a truck a week for a tonne a day, and on a day's roll a landing's "sold" read 21%, 23%, 42% on
+days 20, 40 and 60 with nothing changed, Saki's trap again) -- and `marketFed`
 doesn't read fish: it only adds. A landing has no jobs, so it needs no staff; its icon is short when
 some of its catch has no buyer, and its card offers the smokehouse. Tests: `test/fishing.test.ts`.
 

@@ -447,6 +447,30 @@ water bus lines its new jetties opened, not the fish (one barge, 1% of the want 
 balance pass: a smokehouse should smoke only what the fresh trade can't sell (the catch beyond the
 near towns' want), not a fixed share; and a smoked-fish barge should pay its fords back.
 
+**The balance pass** (2026-11-09/10). Three things found, two fixed:
+
+- *Fish was measured on a day's roll.* Hauliers hold a part load until a truck fills or a week
+  passes, so a fish flow of a tonne a day arrives as a truck a week, and on a day's average a
+  landing's "sold" read 21%, 23%, 42% on days 20, 40, 60 with nothing changed -- map 949's Saki trap
+  (principles §3, Economy). Fish served and sold, which growth reads, now go through `servedRate`'s
+  10-day roll (`fishSteadyServed`).
+- *Every split of the catch made beforehand cost sales.* Hauliers lift a share of whatever fresh
+  fish waits, whatever the amount, so fish moved off fresh is fresh not sold. A fixed share smoked
+  sold 38% of 3218's catch at day 60 against 43% with no smokehouse; smoking the share that spoiled
+  (as measured) sold 31% against 44% in the strategist. Now (`smokeWhatSpoils`) the fresh trade is
+  what it was, and the smokehouse smokes the fresh fish that would rot at the landing, with the
+  catch the near towns have no room for. It can only add. In the probe (`scripts/smoke-probe.ts`,
+  60 days, no lines of yours, a smokehouse at every landing), fresh carried is the same to the
+  decimal and smoked comes on top: 3218 43% → 50% of the catch sold, 8703 39% → 41%.
+- *A smoked-fish barge doesn't pay its fords back.* Taught to build only a barge whose fares
+  repay its jetties, fords and barge in 60 days, the strategist passed over 50-292 a map and
+  built 4, still losing money: one landing's smoked fish is a few tonnes a day. Left as it is --
+  that's the game's answer, not a bug. Smoked fish goes by the hauliers to the near towns and,
+  further, rides a barge or train you run for other freight.
+
+Not yet measured with the strategist: the last rule (the run was stopped overnight, the machine
+short of memory). The probe answers what it was for -- a smokehouse can only add.
+
 | # | Check | Passes when |
 |---|---|---|
 | C58 | Fresh stays near; smoked travels | Fresh fish flows only to towns within reach of its landing; with a smokehouse the rest reaches towns further off |

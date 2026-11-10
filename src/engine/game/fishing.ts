@@ -3,7 +3,7 @@ import { addSite, dry, nearestDistance } from "./fuel";
 import { inheritedRoad } from "./cement";
 import { rebuildNetworks } from "./rail";
 import { refreshDemand } from "./settlement";
-import { flowKey, type GoodsFlow } from "./goods";
+import { flowKey, servedRate, type GoodsFlow, type GoodsOutcome } from "./goods";
 import { landing, waterway as wayOf } from "./waterways";
 import { roadPath, type ActionResult } from "./world";
 import type { GameWorld } from "./types";
@@ -33,6 +33,8 @@ export interface FishLanding {
   /** Tonnes a day it lands. */
   catchPerDay: number;
   smokehouse: boolean;
+  /** Tonnes a second of fresh fish smoked before it spoiled, rolling (smokeWhatSpoils): its card. */
+  smokedFromFresh?: number;
 }
 
 export interface FishingState {
@@ -131,11 +133,7 @@ export function fishFlows(world: GameWorld): GoodsFlow[] {
     const want = new Map(markets.map((m) => [m.id, wantOf(world, m.population)]));
     const near = markets.filter((m) => (roadPath(world, l.siteId, m.id)?.distance ?? Infinity) <= reach);
     const nearWant = near.reduce((sum, m) => sum + want.get(m.id)!, 0);
-    // With a smokehouse most of the catch is smoked (smokeShare), the rest still fresh at its premium:
-    // fresh fish mostly spoiled before a haulier lifted it (8703: 61 t a day sent, ~5 arriving), and
-    // a smokehouse that smoked only what the near towns had no room for smoked almost nothing.
-    const freshShare = l.smokehouse ? 1 - (world.tuning.smokeShare ?? 0.7) : 1;
-    const fresh = Math.min(caught * freshShare, nearWant);
+    const fresh = Math.min(caught * freshShare(world, l), nearWant);
     for (const m of near) {
       const rate = nearWant > 0 ? (want.get(m.id)! * fresh) / nearWant : 0;
       if (rate <= 0) continue;
@@ -148,11 +146,32 @@ export function fishFlows(world: GameWorld): GoodsFlow[] {
     const nearIds = new Set(near.map((m) => m.id));
     const takers = markets.filter((m) => want.get(m.id)! > 0).sort((p, q) => Number(nearIds.has(q.id)) - Number(nearIds.has(p.id)) || want.get(q.id)! - want.get(p.id)! || (p.id < q.id ? -1 : 1)).slice(0, SMOKED_TOWNS);
     const left = takers.reduce((sum, m) => sum + want.get(m.id)!, 0);
-    if (rest <= 0 || left <= 0) continue;
-    const smoked = Math.min(rest, left);
-    for (const m of takers) flows.push({ from: l.siteId, to: m.id, kind: "supplies", rate: (want.get(m.id)! * smoked) / left });
+    if (left <= 0) continue;
+    // Smoking what spoils (smokeWhatSpoils), its towns stand even when nothing's left over: the fresh
+    // fish that would rot at the landing is smoked for them as it goes (goods.ts produceAndSpoil).
+    const spoils = !!world.tuning.smokeWhatSpoils;
+    if (rest <= 0 && !spoils) continue;
+    const smoked = Math.max(0, Math.min(rest, left));
+    for (const m of takers) flows.push({ from: l.siteId, to: m.id, kind: "supplies", rate: (want.get(m.id)! * smoked) / left, ...(spoils ? { smokedShare: want.get(m.id)! / left } : {}) });
   }
   return flows;
+}
+
+/**
+ * Of what a landing could send fresh, the share it does. Without a smokehouse, all of it. With one,
+ * by the rule its run was played under:
+ *   - smokeWhatSpoils (agreed 2026-11-09, after the strategist): all of it still -- the fresh trade is
+ *     what it was, and the smokehouse takes the fresh fish that would rot at the landing instead
+ *     (goods.ts produceAndSpoil), and the catch the near towns have no room for. It can only add:
+ *     the hauliers see the same fresh fish either way. Every split made beforehand took fish they
+ *     were selling -- a fixed share (38% of 3218's catch sold to 6%), and the share measured as
+ *     carried rather than spoiled too (44% to 31%: hauliers lift a share of whatever waits, so
+ *     less sent fresh is less sold fresh).
+ *   - smokeShare (runs before it): a fixed share smoked.
+ */
+function freshShare(world: GameWorld, l: FishLanding): number {
+  if (!l.smokehouse || world.tuning.smokeWhatSpoils) return 1;
+  return 1 - (world.tuning.smokeShare ?? 0.7);
 }
 
 /** Whether goods from a place are fresh fish: a landing's produce (goods.ts spoils it fast; fares.ts adds the premium). */
@@ -165,6 +184,18 @@ export function isSmokedFish(world: GameWorld, fromId: string, kind: string): bo
   return kind === "supplies" && fromId.startsWith(LANDING_PREFIX) && !!landingAt(world, fromId);
 }
 
+/**
+ * Tonnes a second a fish flow brings, rolled over servedTauDays (goods.ts servedRate) when
+ * fishSteadyServed is set: fish comes in held part loads, a truck a week for a tonne a day, and on a
+ * day's roll a town or landing read as a spike and then nothing (3218: "sold" 21%, 23%, 42% on days
+ * 20, 40, 60 with nothing changed) -- the trap map 949's Saki fell into with steel. Runs before it
+ * keep the day's roll, so their files replay.
+ */
+function fishRate(world: GameWorld, o: GoodsOutcome | undefined): number {
+  if (!o) return 0;
+  return world.tuning.fishSteadyServed ? servedRate(world, o) : o.delivered + (o.trucked ?? 0);
+}
+
 /** Of the fish a town wants, the share reaching it (fresh and smoked, anyone's), 0..1. */
 export function fishServed(world: GameWorld, townId: string): number {
   const want = fishWant(world, townId);
@@ -172,8 +203,7 @@ export function fishServed(world: GameWorld, townId: string): number {
   let got = 0;
   for (const l of world.fishing!.landings) {
     for (const kind of ["produce", "supplies"] as const) {
-      const o = world.goods.outcomes.get(flowKey({ from: l.siteId, to: townId, kind }));
-      got += (o?.delivered ?? 0) + (o?.trucked ?? 0);
+      got += fishRate(world, world.goods.outcomes.get(flowKey({ from: l.siteId, to: townId, kind })));
     }
   }
   return Math.min(1, got / want);
@@ -187,8 +217,7 @@ export function fishSold(world: GameWorld, l: FishLanding): number {
   let carried = 0;
   for (const town of eaters(world)) {
     for (const kind of ["produce", "supplies"] as const) {
-      const o = world.goods.outcomes.get(flowKey({ from: l.siteId, to: town.id, kind }));
-      if (o) carried += (o.delivered ?? 0) + (o.trucked ?? 0);
+      carried += fishRate(world, world.goods.outcomes.get(flowKey({ from: l.siteId, to: town.id, kind })));
     }
   }
   return Math.min(1, (carried * SECONDS_PER_GAME_DAY) / l.catchPerDay);
@@ -217,7 +246,9 @@ export function landingSplit(world: GameWorld, siteId: string): { caught: number
   const D = SECONDS_PER_GAME_DAY;
   const fresh = flows.filter((f) => f.kind === "produce").reduce((s, f) => s + f.rate, 0) * D;
   const smoked = flows.filter((f) => f.kind === "supplies").reduce((s, f) => s + f.rate, 0) * D;
-  return { caught: l.catchPerDay, fresh, smoked, wasted: Math.max(0, l.catchPerDay - fresh - smoked) };
+  // Fresh that would have spoiled, smoked instead: out of what was sent fresh, so counted once.
+  const fromFresh = (l.smokedFromFresh ?? 0) * D;
+  return { caught: l.catchPerDay, fresh: fresh - fromFresh, smoked: smoked + fromFresh, wasted: Math.max(0, l.catchPerDay - fresh - smoked) };
 }
 
 export function checkSmokehouse(world: GameWorld, siteId: string): ActionResult {

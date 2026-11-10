@@ -63,6 +63,7 @@ import { privateLoad } from "../src/engine/game/private";
 import { crossingsInTheWay, hasJetty, jettyLanding, waterWay } from "../src/engine/game/boats";
 import { fishFlows, fishServed, fishSold } from "../src/engine/game/fishing";
 import { fordBridgeCost } from "../src/engine/game/floods";
+import { goodsFares } from "../src/engine/game/fares";
 
 const SEEDS = (process.env.SEEDS ?? "0,543,2411").split(",").map(Number);
 const DAYS = Number(process.env.DAYS ?? 250);
@@ -576,7 +577,8 @@ function jettiesFor(world: GameWorld, places: string[]): { missing: string[]; pr
  * line that pays. Fish: a smokehouse at the landing that lands most, then a barge from it to the town
  * its smoked fish is bound for that's furthest by water, the fords in a barge's way raised first.
  */
-const waterBuilt = { jetties: 0, boatLines: 0, boats: 0, smokehouses: 0, barges: 0, fords: 0 };
+const waterBuilt = { jetties: 0, boatLines: 0, boats: 0, smokehouses: 0, barges: 0, fords: 0, bargesPassed: 0 };
+const BARGE_PAYBACK = 60;
 function water(world: GameWorld, day: number, did: (ok: boolean) => boolean): void {
   const ok = (spec: ActionSpec) => !remitRefusal(world, spec);
   // A boat more on a full line that pays.
@@ -618,11 +620,20 @@ function water(world: GameWorld, day: number, did: (ok: boolean) => boolean): vo
       const fords = crossingsInTheWay(world, l.siteId, f.to, "barge");
       return fords.length > 0 && fords.every((fd) => ok({ kind: "bridgeFord", fordId: fd.id })) ? [{ to: f.to, fords, rate: f.rate }] : [];
     });
-    const pick = options.sort((p, q) => q.rate - p.rate)[0];
-    if (!pick) continue;
+    // Only a barge whose fares pay back its jetties, fords and barge within BARGE_PAYBACK days: one
+    // smoked flow is a few tonnes a day, and raising five fords for it never paid (water.md).
+    const priced = options.map((o) => {
+      // Its smoked fish: the catch left over, and the fresh fish smoked before it spoiled (smokeWhatSpoils).
+      const share = fishFlows(world).find((f) => f.from === l.siteId && f.to === o.to && f.kind === "supplies")?.smokedShare ?? 0;
+      const t = (o.rate + (l.smokedFromFresh ?? 0) * share) * D;
+      const perDay = goodsFares(world, [{ entry: { from: l.siteId, to: o.to, kind: "supplies", amount: t }, amount: t }] as never);
+      const cost = jettiesFor(world, [l.siteId, o.to]).price + o.fords.reduce((sum, fd) => sum + fordBridgeCost(world, fd), 0) + (world.tuning.bargePurchaseCost ?? 0);
+      return { ...o, perDay, cost };
+    }).filter((o) => o.cost <= o.perDay * BARGE_PAYBACK);
+    const pick = priced.sort((p, q) => p.cost / p.perDay - q.cost / q.perDay)[0];
+    if (!pick) { waterBuilt.bargesPassed += 1; continue; }
     const j = jettiesFor(world, [l.siteId, pick.to]);
-    const raise = pick.fords.reduce((sum, fd) => sum + fordBridgeCost(world, fd), 0);
-    if (!spend(world, j.price + raise + (world.tuning.bargePurchaseCost ?? 0))) break;
+    if (!spend(world, pick.cost)) break;
     for (const fd of pick.fords) if (act(world, day, { kind: "bridgeFord", fordId: fd.id }, `raise ${fd.name} for a barge`)) waterBuilt.fords += 1;
     for (const id of j.missing) if (act(world, day, { kind: "jetty", townId: id }, `a jetty at ${world.towns.get(id)?.name}`)) waterBuilt.jetties += 1;
     if (did(act(world, day, { kind: "barge", a: l.siteId, b: pick.to }, `a barge for smoked fish: ${world.towns.get(l.siteId)?.name} to ${world.towns.get(pick.to)?.name}`))) waterBuilt.barges += 1;
@@ -835,7 +846,7 @@ for (const seed of SEEDS) {
     const served = towns.reduce((sum, t) => sum + fishServed(world, t.id), 0) / Math.max(1, towns.length);
     const fishers = world.fishing.landings.reduce((sum, l) => sum + (world.towns.get(l.townId)?.population ?? 0), 0);
     const boatNet = [...routeSummaries(world), ...lorrySummaries(world)].filter((r) => r.id.startsWith("boat:") || r.id.startsWith("barge:"));
-    console.log(`  water: built ${waterBuilt.jetties} jetties, ${waterBuilt.boatLines} water bus lines (+${waterBuilt.boats} boats), ${waterBuilt.smokehouses} smokehouses, ${waterBuilt.barges} barges, ${waterBuilt.fords} fords raised; boat and barge lines net ₦${Math.round(boatNet.reduce((sum, r) => sum + r.netPerDay, 0))}/day | fish sold ${Math.round((sold.reduce((a, b) => a + b, 0) / Math.max(1, sold.length)) * 100)}% of the catch, served ${Math.round(served * 100)}% of the want; the ${world.fishing.landings.length} fishing towns ${Math.round(fishers)}k`);
+    console.log(`  water: built ${waterBuilt.jetties} jetties, ${waterBuilt.boatLines} water bus lines (+${waterBuilt.boats} boats), ${waterBuilt.smokehouses} smokehouses, ${waterBuilt.barges} barges (${waterBuilt.bargesPassed} passed over, not paying back in ${BARGE_PAYBACK} days), ${waterBuilt.fords} fords raised; boat and barge lines net ₦${Math.round(boatNet.reduce((sum, r) => sum + r.netPerDay, 0))}/day | fish sold ${Math.round((sold.reduce((a, b) => a + b, 0) / Math.max(1, sold.length)) * 100)}% of the catch, served ${Math.round(served * 100)}% of the want; the ${world.fishing.landings.length} fishing towns ${Math.round(fishers)}k`);
   }
   Object.assign(waterBuilt, { jetties: 0, boatLines: 0, boats: 0, smokehouses: 0, barges: 0, fords: 0 });
   const air = airportSummary(world);

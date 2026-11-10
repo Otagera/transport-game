@@ -710,6 +710,8 @@ export const DEFAULT_GAME_TUNING: GameTuning = {
   fishPerThousandPerDay: 0.25,
   fishCapShare: 0.08,
   smokeShare: 0.7,
+  smokeWhatSpoils: true,
+  fishSteadyServed: true,
   fishTradeCap: 0.25,
   freightRateCheap: 0.6,
   freightRateDear: 1.6,
