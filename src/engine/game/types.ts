@@ -803,6 +803,17 @@ export interface GameTuning {
   fishSteadyServed?: boolean;
   /** A fishing town's room to grow when its whole catch is sold, a share of its start. */
   fishTradeCap?: number;
+  /** The informal canoes (canoes.ts): on, the narrowest water they take, how far off the water a town may be. */
+  canoesEnabled?: boolean;
+  canoeMinWidth?: number;
+  canoeLandingReach?: number;
+  /** Mean seconds a canoe takes to lift those waiting (riders or fish); its reach for riders and for fish, cells by water. */
+  canoePickupSeconds?: number;
+  canoeReachCells?: number;
+  canoeFishReachCells?: number;
+  /** Riders a day a stretch of water carries by canoe at most; a canoe's speed, cells a second. */
+  canoeRidersPerDay?: number;
+  canoeSpeed?: number;
   steelPerThousandPerDay: number;
   steelWorksShare: number;
   steelImportShare: number;
@@ -1151,6 +1162,8 @@ export interface GameWorld {
   jetties?: Set<string>;
   /** Fishing (fishing.ts): each waterside town's landing, its catch and smokehouse. Absent before it. */
   fishing?: import("./fishing").FishingState;
+  /** The informal canoes (canoes.ts): absent in runs before them. */
+  canoes?: import("./canoes").CanoeState;
   /** Your boat lines' ways on the water, one a line (boats.ts), for their vehicles and the map. */
   waterLinks?: import("./boats").WaterLink[];
   /** segmentId -> rolling trains entering each stretch of track per second (wear.ts). */

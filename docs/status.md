@@ -122,8 +122,13 @@ fords): water buses pay (trips up 7-83% where it opens them), carrying fish does
 smokehouse takes fish from the fresh trade the hauliers already ran, and barges don't pay back their
 fords (water.md). Balanced: fish served and sold read over 10 days (it comes in part loads), and a
 smokehouse leaves the fresh trade alone and smokes what would rot -- it can only add (3218: 43% of the
-catch sold to 50%). A smoked-fish barge still doesn't repay its fords: the game's answer. Next:
-informal canoes.
+catch sold to 50%). A smoked-fish barge still doesn't repay its fords: the game's answer.
+
+**Step 5, the informal canoes** (2026-11-10; water.md, Step 5; brief, Open item 4). Water's informal
+sector: canoes take the riders who'd otherwise go home (no road, or the rains on a ford) wherever the
+water joins two towns, any width, and canoe traders carry fish from the landings. They only add:
+on 949 those staying home fell from 84% to 80%, and fish sold rose 37% to 45%. Drawn on the map as
+canoes gliding on the stretches they work.
 
 **Deterministic on one engine, not across them** (2026-11-07). Your map 1692 run, replayed in Bun,
 parted from its recording on day 93 (₦49). It isn't the game: replayed in Chrome, and in Node (both

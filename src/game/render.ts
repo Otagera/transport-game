@@ -26,6 +26,7 @@ import { bundleLines, type BundleItem } from "./bundle";
 import { trunkSet } from "@engine/game/trunks";
 import { cutLines, jettyLanding } from "@engine/game/boats";
 import { waterway } from "@engine/game/waterways";
+import { canoeWay } from "@engine/game/canoes";
 
 // The game's map, ported from the information lab (since discarded; brief, the carry-over plan:
 // information design, settled 2026-10-23). The map answers "where": roads by their traffic and
@@ -329,6 +330,7 @@ export function draw(ctx: CanvasRenderingContext2D, world: GameWorld, view: View
   drawRoads(ctx, world, view, overlay !== "none", network);
   if (layers.pipes) drawPipes(ctx, world, view, overlay !== "none", state.focusPipe ?? null);
   if (layers.water) drawWater(ctx, world, view, overlay !== "none");
+  if (layers.water) drawCanoes(ctx, world, view, overlay !== "none");
   if (state.road) drawRoadHighlight(ctx, world, view, state.road.segmentId);
   drawOverlay(ctx, world, view, overlay);
   if (state.ghost) drawGhostLine(ctx, world, view, state.ghost);
@@ -809,6 +811,54 @@ export const PIPE_SIDE = 0.9;
 export function pipeLine(line: Point[]): Point[] {
   return offsetPolyline(line, PIPE_SIDE);
 }
+/**
+ * The informal canoes (canoes.ts): on each stretch of water they work, a canoe or three in the
+ * informal sector's colour gliding along it -- more the busier it is (riders and fish together).
+ * Drawn from the world's rolling rates, as the danfos' corridors are; nothing here is simulated.
+ */
+function drawCanoes(ctx: CanvasRenderingContext2D, world: GameWorld, view: View, dim: boolean): void {
+  const canoes = world.canoes;
+  if (!canoes || (!canoes.riders.size && !canoes.fish.size)) return;
+  const busy = new Map<string, number>();
+  // A tonne of fish counts as a few riders: a trader's canoe is as busy as a ferryman's.
+  for (const [k, v] of canoes.riders) busy.set(k, (busy.get(k) ?? 0) + v * SECONDS_PER_GAME_DAY);
+  for (const [k, v] of canoes.fish) busy.set(k, (busy.get(k) ?? 0) + v * SECONDS_PER_GAME_DAY * 4);
+  const now = world.economy.elapsedSeconds;
+  ctx.save();
+  ctx.globalAlpha = dim ? OVERLAY_BACKDROP : 0.95;
+  ctx.fillStyle = COLORS.danfo;
+  ctx.strokeStyle = COLORS.surface;
+  ctx.lineWidth = 0.8 * markScale;
+  for (const [stretch, perDay] of busy) {
+    if (perDay < 5) continue;
+    const [a, b] = stretch.split("~") as [string, string];
+    const way = canoeWay(world, a, b);
+    if (!way || way.points.length < 2) continue;
+    const count = perDay >= 80 ? 3 : perDay >= 25 ? 2 : 1;
+    // Each canoe's place along the way, out and back, its own phase: a crossing every ~2 days.
+    const lengths = way.points.slice(1).map((p, i) => Math.hypot(p[0] - way.points[i]![0], p[1] - way.points[i]![1]));
+    const total = lengths.reduce((s, l) => s + l, 0);
+    if (total <= 0) continue;
+    for (let i = 0; i < count; i += 1) {
+      const phase = (now / (2 * SECONDS_PER_GAME_DAY) + i / count + (stretch.length % 7) / 7) % 1;
+      let along = (phase < 0.5 ? phase * 2 : 2 - phase * 2) * total;
+      let j = 0;
+      while (j < lengths.length - 1 && along > lengths[j]!) along -= lengths[j++]!;
+      const p0 = way.points[j]!, p1 = way.points[j + 1]!;
+      const f = lengths[j]! > 0 ? along / lengths[j]! : 0;
+      const p = toScreen(view, p0[0] + (p1[0] - p0[0]) * f, p0[1] + (p1[1] - p0[1]) * f);
+      // A canoe: long and narrow, along the water (its heading on the screen).
+      const s0 = toScreen(view, p0[0], p0[1]), s1 = toScreen(view, p1[0], p1[1]);
+      const angle = Math.atan2(s1.y - s0.y, s1.x - s0.x);
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, 3.2 * markScale, 1.1 * markScale, angle, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 /**
  * Your boats' lines and jetties (boats.ts): each line along its way over the water in your colour
  * (a barge's dashed, as goods), and a jetty a short pier from the town to its landing.

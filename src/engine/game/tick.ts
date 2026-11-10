@@ -19,6 +19,7 @@ import { updateSweep } from "./sweep";
 import { updateMilestones } from "./score";
 import { sampleTowns } from "./problems";
 import { dispatchTrucks, truckersPickUp } from "./truckers";
+import { canoeFish, dispatchCanoes, intoCanoes } from "./canoes";
 import { updateRetired } from "./retire";
 import { updateIndustries } from "./industries";
 import { agberoCutAt, rollParkTakings } from "./parks";
@@ -364,6 +365,8 @@ function tickBody(world: GameWorld, dt: number): GameEvent[] {
   }
 
   for (const [key, amount] of piped) goodsDelivered.set(key, (goodsDelivered.get(key) ?? 0) + amount);
+  // Canoe traders take some of the fish the hauliers left at the landings; what lands now is anyone's (canoes.ts).
+  if (tuning.goodsEnabled) canoeFish(world, dt, goodsTrucked);
   updateGoodsOutcomes(world, goodsDelivered, dt, goodsTrucked);
   updateFuelShortage(world);
   updateAssembly(world, dt); // the plant learns as it runs, and its discount follows (assembly.ts)
@@ -579,8 +582,10 @@ function groupPool(
       }
     }
 
-    // No road: nobody can take them. They stay home.
+    // No road: nobody can take them -- but a canoe, where the water joins them (canoes.ts). Else they stay home.
     if (!entry.rider) {
+      pool.set(key, 0);
+      if (intoCanoes(world, key, pooled)) continue;
       bump(lost, entry.trip, pooled);
       if (gaveUp && isRelayed(key)) bump(gaveUp, entry.trip, -pooled);
       pool.set(key, 0);
@@ -896,6 +901,8 @@ function dispatchInformal(world: GameWorld, dt: number, lost: Map<string, number
 
   // Out-waited even the okadas, they go home -- a relayed rider's trip moved from the informal count to the lost.
   const smallGroups = groupPool(world, informal.smallPool, drift, lost, (key, trip, amount) => {
+    // Rather than home, a canoe, wherever the water joins them (canoes.ts).
+    if (intoCanoes(world, key, amount)) return;
     bump(lost, trip, amount);
     if (isRelayed(key)) bump(gaveUp, trip, -amount);
   }, gaveUp);
@@ -924,6 +931,9 @@ function dispatchInformal(world: GameWorld, dt: number, lost: Map<string, number
     const waiting = single ? informal.smallPool.get(single.key) ?? 0 : 0;
     if (single && waiting >= tuning.okadaCapacity && !refuses(single.path.segmentIds[0]!, "okada")) sendInformal(world, "okada", group, single, [single], waiting, informal.smallPool, gaveUp, yours, lost, takings, cutAt(single.path.segmentIds));
   }
+
+  // The canoes, on the water: their share of those waiting for one; the rest, out-waiting them, home (canoes.ts).
+  dispatchCanoes(world, dt, tuning.patienceSeconds * PARK_PATIENCE_MULTIPLIER, lost, gaveUp);
 
   // Truckers, on the same road budget (truckers.ts).
   if (tuning.goodsEnabled) {

@@ -477,6 +477,43 @@ short of memory). The probe answers what it was for -- a smokehouse can only add
 | C59 | Fresh pays more and spoils faster | Its fare is half again smoked fish's; waiting, it's lost far faster |
 | C60 | Fish only adds | No market's food basket depends on it, and its room to grow is never less with fishing than without |
 
+## Step 5: the informal canoes
+
+**Built 2026-11-10** (brief, Open item 4: "the informal sector there too (canoe and boat
+operators)"). Your calls: they carry **people and fish**; they run on **any water, the rains too**;
+and they stand against your lines **as the danfos do**.
+
+- *People.* Riders who gave up on you and would go home -- no road, or out-waiting even the
+  okadas (the rains on a ford: no informal vehicle sets off on a road that slow) -- take a canoe
+  wherever the water joins the two towns, any width, creeks and tributaries no boat of yours can
+  use among it. A share of those waiting goes each moment, short crossings fastest (to 80 cells
+  by water); each stretch carries at most 150 a day; whoever out-waits the canoes goes home.
+  They're the informal sector's, as a danfo's riders, and count toward growth at its discount.
+  First built to take everyone who wouldn't wait for a danfo where the water was shorter, more
+  people went home (3218: 74.2% to 74.6%) -- those who out-waited the canoes, whom an okada would
+  have taken. So they're last: they can only add.
+- *Fish.* Canoe traders take a share of what waits at each landing for a town on the water,
+  short trips fastest (to 50 cells), after the hauliers; it lands when the canoe does (2 cells a
+  second), the town's and the landing's, as the hauliers' fish is.
+- *On the map,* one to three canoes glide on each stretch they work, in the informal colour.
+
+Measured (`scripts/canoe-probe.ts`, no lines of yours, canoes off then on):
+
+| map, day | stayed home | informal | canoes a day | fish sold | tick |
+|---|---|---|---|---|---|
+| 3218, 40 | 74.2% → 72.4% | 25.8% → 27.6% | 66 riders, 10 t fish, 26 stretches | 41% → 54% | +34% (before batching) |
+| 949, 20 | 84.4% → 79.6% | 15.6% → 20.4% | 180 riders, 3.8 t fish, 29 stretches | 37% → 45% | +6% |
+
+The tick's cost: first +58%, the canoes asked for every rider leaving a park every tick; kept a
+world by the pair and by the pool key, and run every second for the second's ticks, +6% over 20
+days on 949, part of it the routes found once.
+
+| # | Check | Passes when |
+|---|---|---|
+| C61 | Canoes only add | With canoes, fewer go home and more go informal than without, and no less fish is sold |
+| C62 | A stretch has its cap | No stretch of water carries more riders a day by canoe than its cap |
+| C63 | Any water, only water | A canoe joins two places only where the water does, at any width -- narrower than any boat of yours needs |
+
 ## After the map
 
 - **Step 2, jetties and boats.** A jetty at a waterfront (your build); a waterway network built

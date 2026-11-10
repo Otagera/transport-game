@@ -28,6 +28,7 @@ import { createSweepState } from "./sweep";
 import { SIM_DT } from "../loop";
 import { SECONDS_PER_GAME_DAY } from "../economy/state";
 import { placeLandings } from "./fishing";
+import { placeCanoes } from "./canoes";
 
 // A game as the player meets it: the world already running (docs/brief.md,
 // Slice zero: warm-up; principles §1, brownfield). createGameWorld makes a
@@ -90,6 +91,7 @@ export function* startGameSteps(map: GameMapDef, tuning: GameTuning = DEFAULT_GA
   placeTextile(world, map.region);
   // And a landing at each town on the water's edge (fishing.ts): after every other site, so they sit where they did.
   placeLandings(world);
+  placeCanoes(world);
   const ticks = Math.round((tuning.warmUpDays * SECONDS_PER_GAME_DAY) / SIM_DT);
   for (let i = 0; i < ticks; i += 1) {
     gameTick(world, SIM_DT);

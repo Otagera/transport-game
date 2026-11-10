@@ -76,7 +76,7 @@ export const SYSTEM_NODES: SystemNode[] = [
   },
   {
     id: "hauliers", label: "Hauliers and yards", col: 2, row: 3, feeds: ["cement", "fuel", "steel", "food", "money"], unit: "t/day",
-    keys: [/^trucker/, /^truck/, /^yard/, /^goods/, /^partLoad/, /^lorry/, /^noPlayerLorries$/, /^freight/, /^relayLimestone$/, /^longHaulTail$/, /^wagon/, /^loadingLevy/, /^servedTau/, /^importsOver/, /^seaport/, /^port/, /^border/, /^export/, /^exports/, /^barge/, /^fish/, /^smoke/],
+    keys: [/^trucker/, /^truck/, /^yard/, /^goods/, /^partLoad/, /^lorry/, /^noPlayerLorries$/, /^freight/, /^relayLimestone$/, /^longHaulTail$/, /^wagon/, /^loadingLevy/, /^servedTau/, /^importsOver/, /^seaport/, /^port/, /^border/, /^export/, /^exports/, /^barge/, /^fish/, /^smoke/, /^canoe/],
     measure: safe((w) => [...w.goods.outcomes.values()].reduce((t, o) => t + (o.delivered + (o.trucked ?? 0)) * D, 0)),
   },
   // What's served

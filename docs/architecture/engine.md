@@ -1608,6 +1608,22 @@ days 20, 40 and 60 with nothing changed, Saki's trap again) -- and `marketFed`
 doesn't read fish: it only adds. A landing has no jobs, so it needs no staff; its icon is short when
 some of its catch has no buyer, and its card offers the smokehouse. Tests: `test/fishing.test.ts`.
 
+`canoes.ts` is water's informal sector (water.md, Step 5). `canoeWay(world, a, b)` is the water
+between two places at any width (`canoeMinWidth`), each within `canoeLandingReach` of it, kept a
+world by the pair -- asked for every rider leaving a park. Riders reach `world.canoes.pool` only
+where they'd otherwise go home: `dispatchInformal`'s no-road branch, and the small pool's drift
+(out-waiting the okadas, as in the rains on a ford, where none sets off). Offered to everyone who
+wouldn't wait for a danfo where the water was shorter, more went home (3218: 74.2% to 74.6%), so
+last, they only add. `dispatchCanoes` runs every second for the second's ticks (`CANOE_STEP`; every
+tick it was a sixth of the tick): a share of those waiting taken, short crossings fastest
+(`haulShare` to `canoeReachCells`), each stretch to `canoeRidersPerDay`, the rest drifting home at
+the park's patience; taken, they're the informal sector's (`gaveUp`), as a danfo's riders. A pool
+key's reading (trip, stretch, way, fare) is kept a world. `canoeFish`, after the hauliers, takes a
+share of each landing's waiting fish for a town on the water and lands it `canoeSpeed` later in
+`trucked` (anyone's). `world.canoes.riders`/`fish` roll each stretch's rate, which `render.ts
+drawCanoes` reads to draw one to three canoes gliding on it. Absent before `canoesEnabled`. Tests:
+`test/canoes.test.ts`; probe: `scripts/canoe-probe.ts`.
+
 ### The building chain (Revision 3, step 2a)
 
 - **`cement.ts`** — one **cement works** per map, placed at start (`placeCementWorks`, from
